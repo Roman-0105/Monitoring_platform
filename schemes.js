@@ -169,19 +169,6 @@ var Schemes = (function() {
       return Promise.resolve(_imgCache[weekKey]);
     }
     var scheme = getByWeek(weekKey);
-    // Если список ещё не загружен — пробуем перезагрузить один раз
-    if (!scheme && _list.length === 0) {
-      return load().then(function() {
-        var s2 = getByWeek(weekKey);
-        if (!s2 || !s2.driveFileId) return null;
-        return Api.getImage(s2.driveFileId).then(function(data) {
-          if (!data || !data.base64) return null;
-          var dataUrl = 'data:' + data.mimeType + ';base64,' + data.base64;
-          _imgCache[weekKey] = dataUrl;
-          return dataUrl;
-        }).catch(function() { return null; });
-      });
-    }
     if (!scheme || !scheme.driveFileId) {
       return Promise.resolve(null);
     }
@@ -199,15 +186,6 @@ var Schemes = (function() {
     return getImage(active.weekKey);
   }
 
-  function preloadCurrent() {
-    var latest = getLatest ? getLatest() : getCurrent ? getCurrent() : null;
-    if (latest && latest.weekKey) {
-      setTimeout(function() {
-        getImage(latest.weekKey).catch(function(){});
-      }, 500);
-    }
-  }
-
   return {
     currentWeekKey:  currentWeekKey,
     formatWeekKey:   formatWeekKey,
@@ -218,7 +196,6 @@ var Schemes = (function() {
     getCurrent:      getCurrent,
     upload:          upload,
     getImage:        getImage,
-    preloadCurrent:  preloadCurrent,
     getCurrentImage: getCurrentImage,
   };
 })();

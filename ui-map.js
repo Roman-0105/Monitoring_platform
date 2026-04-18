@@ -800,9 +800,6 @@ function openAddPointModal(xLocal, yLocal) {
   Photos.clearInput('e-photo', 'e-new-photo-preview');
   var delBtn = document.getElementById('e-delete-photo-btn');
   if (delBtn) delBtn.style.display = 'none';
-  // Сбрасываем текст кнопки фото для новой точки
-  var ePhotoBtn = document.getElementById('e-photo-btn');
-  if (ePhotoBtn) ePhotoBtn.textContent = '📷 Загрузить фото';
 
   var form = document.getElementById('edit-form');
   form._mapCoords = { xLocal: xLocal, yLocal: yLocal };

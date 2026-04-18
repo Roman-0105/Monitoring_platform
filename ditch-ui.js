@@ -678,23 +678,27 @@ function saveDitch() {
       DitchState.list = (resp && resp.ditches) ? resp.ditches : [];
 
       // Если есть фото — находим только что созданную канаву по имени и грузим фото
-      if (photoFile) {
-        // Находим канаву: для новой — по имени, для редактирования — по id
-        var targetDitch = isNew
-          ? DitchState.list.find(function(d) { return d.ditchName === ditch.ditchName; })
-          : DitchState.list.find(function(d) { return d.id === ditch.id; });
-
-        if (targetDitch && targetDitch.id) {
+      if (photoFile && isNew) {
+        var newDitch = DitchState.list.find(function(d) {
+          return d.ditchName === ditch.ditchName;
+        });
+        if (newDitch && newDitch.id) {
           Toast.progress('save-ditch', 'Загрузка фото...', 70);
-          return Photos.uploadDitch(photoFile, targetDitch.id)
+          return Photos.upload(photoFile, newDitch.id)
+            .then(function(url) {
+              return Api.post({ action: 'updateDitch', ditch: { id: newDitch.id, photoUrls: [url] }});
+            })
+            .then(function() {
+              return new Promise(function(r){ setTimeout(r, 1500); });
+            })
             .then(function() {
               return Api.getDitches('');
             })
             .then(function(resp2) {
               DitchState.list = (resp2 && resp2.ditches) ? resp2.ditches : [];
             })
-            .catch(function(err) {
-              Toast.show('Канава сохранена, фото не загрузилось: ' + (err && err.message || ''), 'warning');
+            .catch(function() {
+              Toast.show('Канава сохранена, фото не загрузилось', 'warning');
             });
         }
       }

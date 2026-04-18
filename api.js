@@ -131,26 +131,6 @@ var Api = (function() {
       .then(function(d) { return d.history || []; });
   }
 
-  // ── Фото канав ─────────────────────
-  function uploadDitchPhoto(ditchId, base64, mimeType) {
-    // no-cors POST — Apps Script обрабатывает асинхронно
-    // Ждём 4 сек и перезагружаем список канав
-    return post({
-      action:   'uploadDitchPhoto',
-      ditchId:  ditchId,
-      fileData: base64,
-      mimeType: mimeType || 'image/jpeg',
-    }).then(function() {
-      return new Promise(function(resolve){ setTimeout(resolve, 4000); });
-    }).then(function() {
-      return getDitches('').then(function(resp) {
-        var list = (resp && resp.ditches) ? resp.ditches : [];
-        var d = list.find(function(x){ return x.id === ditchId; });
-        return (d && d.photoUrls && d.photoUrls[0]) ? d.photoUrls[0] : null;
-      });
-    });
-  }
-
   // ── Запись точек ─────────────────────────────────────────
 
   function createPoint(point) {
@@ -222,16 +202,14 @@ var Api = (function() {
     });
   }
 
-  function getDitches(pointNumber) {
-    return jsonpGet({ action: 'getDitches', pointNumber: pointNumber||'' })
-      .then(function(d){ return d || { ditches:[] }; });
-  }
-
   return {
     getPoints: getPoints, getPoint: getPoint,
     getWorkers: getWorkers, getSchemes: getSchemes,
     getHistory:  getHistory,
-    getDitches:  getDitches,
+    getDitches:  function(pointNumber) {
+      return jsonpGet({ action: 'getDitches', pointNumber: pointNumber||'' })
+        .then(function(d){ return d || { ditches:[] }; });
+    },
     getDitchHistory: function(ditchName) {
       return jsonpGet({ action: 'getDitchHistory', ditchName: ditchName })
         .then(function(d){ return d || { history:[] }; });
@@ -241,7 +219,6 @@ var Api = (function() {
     createPoint: createPoint, updatePoint: updatePoint, deletePoint: deletePoint,
     saveWorker: saveWorker, deleteWorker: deleteWorker,
     uploadPhotoConfirmed: uploadPhotoConfirmed,
-    uploadDitchPhoto:      uploadDitchPhoto,
     deletePhoto: deletePhoto, uploadScheme: uploadScheme,
   };
 })();

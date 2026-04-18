@@ -75,23 +75,6 @@ var Photos = (function() {
       throw err; // не глотаем ошибку
     });
   }
-  // Загрузка фото для КАНАВЫ — использует uploadDitchPhoto вместо uploadPhotoConfirmed
-  function uploadDitch(file, ditchId) {
-    if (!file)    return Promise.reject(new Error('Файл не выбран'));
-    if (!ditchId) return Promise.reject(new Error('ditchId не задан'));
-
-    Diagnostics.set('photoStatus', 'uploading');
-    return compress(file).then(function(base64) {
-      return Api.uploadDitchPhoto(ditchId, base64, 'image/jpeg');
-    }).then(function(driveUrl) {
-      Diagnostics.set('photoStatus', 'uploaded');
-      return driveUrl;
-    }).catch(function(err) {
-      Diagnostics.set('photoStatus', 'error');
-      Diagnostics.setError('photo', err && err.message || 'ошибка загрузки');
-      throw err;
-    });
-  }
 
   // ── Отображение через прокси ─────────────────────────────
 
@@ -165,7 +148,6 @@ var Photos = (function() {
   return {
     compress:       compress,
     upload:         upload,
-    uploadDitch:    uploadDitch,
     loadForDisplay: loadForDisplay,
     setImageSrc:    setImageSrc,
     initPhotoInput: initPhotoInput,

@@ -115,7 +115,13 @@ document.addEventListener('DOMContentLoaded', function() {
   initEditModal();
   initDiagButtons();
   Photos.initPhotoInput('f-photo', 'f-photo-preview');
-  // f-photo-btn: обработчик через onclick в HTML
+  // Кнопка "Загрузить фото" — открывает выбор источника
+  var fPhotoBtn = document.getElementById('f-photo-btn');
+  if (fPhotoBtn) {
+    fPhotoBtn.addEventListener('click', function() {
+      showPhotoSourceModal('f-photo', 'f-photo-preview', 'f-photo-progress', false);
+    });
+  }
   initSettings();
   Diagnostics.render();
 
@@ -130,9 +136,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Загрузка данных
   Promise.all([Workers.load(), Points.load(), Schemes.load()]).then(function() {
-    if (typeof Schemes !== 'undefined' && typeof Schemes.preloadCurrent === 'function') {
-      Schemes.preloadCurrent();
-    }
     renderWorkers();
     renderPointsList();
     initMapFilters();
@@ -141,8 +144,6 @@ document.addEventListener('DOMContentLoaded', function() {
     Diagnostics.clearError();
     Diagnostics.set('queueSize', Storage.getQueue().length);
     hideLoader();
-    // Рендерим дашборд (главная страница)
-    if (typeof renderDashboard === 'function') renderDashboard();
     // Инициализируем модуль канав
     if (typeof initDitchModule === 'function') {
       initDitchModule(function() {
@@ -231,13 +232,12 @@ function switchTab(name) {
   // Скрываем карточку канавы (класс ditch-map-card)
   document.querySelectorAll('.ditch-map-card').forEach(function(el){ el.remove(); });
 
-  if (name === 'home')     renderDashboard();
   if (name === 'add')      resetAddForm();
   if (name === 'diag')     Diagnostics.render();
   if (name === 'map')      { _mapSchemeImg = null; initMapFilters(); renderMap(); initMapLegend(); updateMapLegendPoints(); }
   if (name === 'settings') { refreshSchemesData(); renderSettingsColors(); switchSettingsTab('main'); }
   if (name === 'workers')  renderWorkerManageList();
-  if (name === 'stats')    { renderStatsPage(); switchStatsTab('summary'); }
+  if (name === 'stats')    { renderStatsPage(); initStatsSubTabs(); }
 }
 
 // ── Диагностика ───────────────────────────────────────────
