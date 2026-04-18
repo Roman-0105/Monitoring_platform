@@ -144,7 +144,6 @@ document.addEventListener('DOMContentLoaded', function() {
     Diagnostics.clearError();
     Diagnostics.set('queueSize', Storage.getQueue().length);
     hideLoader();
-    if (typeof renderDashboard === 'function') renderDashboard();
     // Инициализируем модуль канав
     if (typeof initDitchModule === 'function') {
       initDitchModule(function() {
@@ -233,7 +232,6 @@ function switchTab(name) {
   // Скрываем карточку канавы (класс ditch-map-card)
   document.querySelectorAll('.ditch-map-card').forEach(function(el){ el.remove(); });
 
-  if (name === 'home')     { if (typeof renderDashboard==='function') renderDashboard(); }
   if (name === 'add')      resetAddForm();
   if (name === 'diag')     Diagnostics.render();
   if (name === 'map')      { _mapSchemeImg = null; initMapFilters(); renderMap(); initMapLegend(); updateMapLegendPoints(); }
