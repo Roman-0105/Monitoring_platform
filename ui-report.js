@@ -10,6 +10,7 @@ var ReportState = {
   dtsA: [], dtsB: [],
   history:    {},
   photoCache: {},
+  photoAnalysis: {},
   mapImgs:    { imgA: null, imgB: null },
   imgs3d:     {},
   aiText:     {},
@@ -27,6 +28,15 @@ var ReportState = {
 };
 
 // ── Утилиты ───────────────────────────────────────────────
+
+// Рендер текста от AI: экранирует HTML + рендерит **bold** и переносы строк
+function renderAIText(text) {
+  if (!text) return '';
+  return escHtml(text)
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\n/g, '<br>');
+}
+
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -182,6 +192,7 @@ function buildSettingsUI() {
       rpCheck('rp-inc-domens',   'По доменам (Domen-1…5)', true) +
       rpCheck('rp-inc-ditches',  'Детали канав (профиль)', true) +
       rpCheck('rp-inc-photos',   'Фотофиксация (если есть)', true) +
+      rpCheck('rp-inc-photo-ai', 'AI-анализ фотографий откосов', false) +
       rpCheck('rp-inc-map',      'Схема карьера с точками', true) +
       rpCheck('rp-inc-history',  'История замеров', true) +
       rpCheck('rp-inc-compare',  'Сравнительный анализ А vs Б', true) +
@@ -317,6 +328,101 @@ function loadDitchesHistory() {
 
   return Promise.all(ditchTasks.concat(ptTasks));
 }
+
+// ── Claude Vision API — анализ изображений ───────────────
+function callClaudeVisionAPI(apiKey, textPrompt, imageBase64List) {
+  // imageBase64List: массив строк "data:image/jpeg;base64,..."
+  // Формируем content с изображениями + текстом
+  var content = [];
+
+  (imageBase64List || []).forEach(function(b64) {
+    if (!b64 || b64.length < 100) return;
+    var mimeMatch = b64.match(/^data:([^;]+);base64,/);
+    var mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    var base64Data = b64.replace(/^data:[^;]+;base64,/, '');
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: mimeType, data: base64Data }
+    });
+  });
+
+  content.push({ type: 'text', text: textPrompt });
+
+  // claude-haiku-4-5-20251001 поддерживает vision
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 800,
+      messages: [{ role: 'user', content: content }]
+    })
+  }).then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      if (!data.content || !data.content[0]) throw new Error('Пустой ответ Vision API');
+      return data.content[0].text || '';
+    });
+}
+
+// ── Анализ фото одной точки ───────────────────────────────
+function analyzePointPhoto(apiKey, pointNumber, suffix) {
+  // suffix: 'b' для текущего периода, 'a' для предыдущего
+  var cache = ReportState.photoCache || {};
+  // Собираем все фото точки за период
+  var images = [];
+  for (var i = 0; i < 5; i++) {
+    var key = 'pt_' + pointNumber + '_' + i + '_' + suffix;
+    if (cache[key]) images.push(cache[key]);
+  }
+  if (images.length === 0) return Promise.resolve(null);
+
+  var prompt =
+    'Ты гидрогеолог. Опиши на русском языке гидрогеологическую обстановку откоса по фотографии.' +
+    'Укажи: 1) наличие и характер обводнённости (капёж, просачивание, струйный поток, отсутствие),' +
+    '2) ориентировочная интенсивность водопритока,' +
+    '3) состояние породы (влажная, мокрая, сухая, следы высыхания),' +
+    '4) наличие высолов, натёков, железистых осадков,' +
+    '5) риски (размыв, оплывание, обрушение).' +
+    'Ответ: 2-3 предложения, только факты по фото. Без вводных слов.';
+
+  return callClaudeVisionAPI(apiKey, prompt, images);
+}
+
+// ── Анализ фото всех точек периода (батч) ────────────────
+function analyzeAllPhotos(apiKey, pts, suffix, onProgress) {
+  var results = {};
+  // Последовательно — чтобы не превысить rate limit API
+  var tasks = pts.filter(function(p) {
+    // Только точки у которых есть фото за этот период
+    var cache = ReportState.photoCache || {};
+    return cache['pt_' + p.pointNumber + '_0_' + suffix];
+  });
+
+  if (tasks.length === 0) return Promise.resolve({});
+
+  var idx = 0;
+  function next() {
+    if (idx >= tasks.length) return Promise.resolve();
+    var p = tasks[idx++];
+    if (onProgress) onProgress(idx, tasks.length, p.pointNumber);
+    return analyzePointPhoto(apiKey, p.pointNumber, suffix).then(function(desc) {
+      if (desc) results[String(p.pointNumber)] = desc;
+      // Пауза 0.5 сек между запросами чтобы не упираться в rate limit
+      return new Promise(function(res){ setTimeout(res, 500); });
+    }).catch(function() {
+      return new Promise(function(res){ setTimeout(res, 500); });
+    }).then(next);
+  }
+
+  return next().then(function(){ return results; });
+}
+
 
 // ── Генерация AI заключения ───────────────────────────────
 function generateAIConclusion() {
@@ -501,8 +607,11 @@ function generateAIBlocks(s) {
       'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
       'ДЕТАЛИ ПО ТОЧКАМ (топ по Q):\n' + ctx.ptsDetail + '\n\n' +
       'ВАЖНО: используй только эти цифры. Не выдумывай данные. Суммарный Q = ' + ctx.qB.toFixed(2) + ' л/с.\n' +
-      'Ответ ТОЛЬКО JSON без markdown:\n' +
-      '{"summary":"...кратко об общей обстановке...","compare":"...не применимо (одна дата)...","recommendations":"...рекомендации..."}';
+      'Ответь тремя абзацами разделёнными строкой "---":\n' +
+      'Абзац 1: общая гидрогеологическая обстановка (2-3 предложения)\n' +
+      'Абзац 2: напиши "не применимо" (одна дата, сравнение недоступно)\n' +
+      'Абзац 3: рекомендации (2-3 предложения)\n' +
+      'Только текст, без заголовков, без JSON, без markdown.';
   } else {
     // Режим: сравнение двух периодов
     prompt = 'Ты опытный гидрогеолог на золотодобывающем карьере ЮРГ (Казахстан).\n' +
@@ -517,13 +626,22 @@ function generateAIBlocks(s) {
       'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
       'ИЗМЕНЕНИЯ ПО ТОЧКАМ:\n' + ctx.ptsDetail + '\n\n' +
       'ВАЖНО: используй только эти цифры. Не выдумывай данные.\n' +
-      'Ответ ТОЛЬКО JSON без markdown:\n' +
-      '{"summary":"...об обстановке в период Б...","compare":"...сравнение с периодом А, динамика...","recommendations":"...рекомендации..."}';
+      'Ответь тремя абзацами разделёнными строкой "---":\n' +
+      'Абзац 1: обстановка в период Б (2-3 предложения)\n' +
+      'Абзац 2: сравнение с периодом А, динамика (2-3 предложения)\n' +
+      'Абзац 3: рекомендации (2-3 предложения)\n' +
+      'Только текст, без заголовков, без JSON, без markdown.';
   }
 
   return callClaudeAPI(s.apiKey, prompt).then(function(text) {
-    try { return JSON.parse(text.replace(/```json|```/g,'').trim()); }
-    catch(e) { return { summary: text, compare: '', recommendations: '' }; }
+    var clean = text.replace(/```json/g,'').replace(/```/g,'').trim();
+    // Парсим абзацы разделённые "---"
+    var parts = clean.split(/\n---\n|\n---$/);
+    return {
+      summary:         (parts[0] || '').trim(),
+      compare:         (parts[1] || '').trim(),
+      recommendations: (parts[2] || '').trim(),
+    };
   }).catch(function() { return {}; });
 }
 
@@ -672,7 +790,8 @@ function generateReport() {
   s.apiKey      = getRField('rp-apikey');
   s.includeDomens  = !!(document.getElementById('rp-inc-domens')  || {checked:true}).checked;
   s.includeDitches = !!(document.getElementById('rp-inc-ditches') || {checked:true}).checked;
-  s.includePhotos  = !!(document.getElementById('rp-inc-photos')  || {checked:true}).checked;
+  s.includePhotos   = !!(document.getElementById('rp-inc-photos')   || {checked:true}).checked;
+  s.includePhotoAI  = !!(document.getElementById('rp-inc-photo-ai') || {checked:false}).checked;
   s.includeMap     = !!(document.getElementById('rp-inc-map')     || {checked:true}).checked;
   s.includeHistory = !!(document.getElementById('rp-inc-history') || {checked:true}).checked;
   s.includeCompare = !!(document.getElementById('rp-inc-compare') || {checked:true}).checked;
@@ -705,6 +824,28 @@ function generateReport() {
     return Promise.resolve();
 
   }).then(function() {
+    // Vision-анализ фотографий (если включён)
+    if (s.includePhotoAI && s.apiKey) {
+      var photoSuffix = 'b'; // Фото периода Б (текущий)
+      var ptsWithPhoto = ReportState.ptsB.filter(function(p){
+        return (ReportState.photoCache || {})['pt_' + p.pointNumber + '_0_b'];
+      });
+      if (ptsWithPhoto.length > 0) {
+        Toast.progress('rp-gen', 'AI анализирует фотографии (' + ptsWithPhoto.length + ' точек)...');
+        return analyzeAllPhotos(s.apiKey, ptsWithPhoto, photoSuffix, function(cur, total, ptNum) {
+          Toast.progress('rp-gen', 'AI анализирует фото: точка #' + ptNum + ' (' + cur + '/' + total + ')...');
+        });
+      }
+    }
+    return Promise.resolve({});
+
+  }).then(function(photoAnalysis) {
+    // Сохраняем результаты анализа фото в ReportState
+    if (photoAnalysis && typeof photoAnalysis === 'object' && Object.keys(photoAnalysis).length > 0) {
+      ReportState.photoAnalysis = photoAnalysis;
+    }
+
+    // AI текстовый анализ (если включён)
     if (s.includeAI && s.apiKey) {
       Toast.progress('rp-gen', 'Генерация AI анализа...');
       return generateAIBlocks(s);
@@ -837,9 +978,19 @@ function buildPointHistoryChart(pointNumber, markerA, markerB) {
   var hist = (ReportState.ptHistory || {})[String(pointNumber)] || [];
   if (!hist.length) return '';
 
+  // Нормализуем даты до ISO перед сортировкой
+  function normalizeToISO(raw) {
+    raw = (raw||'').trim();
+    if (raw.match(/^\d{4}-\d{2}-\d{2}/)) return raw.slice(0,10);
+    var d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+    }
+    return raw.slice(0,10);
+  }
   var sorted = hist.slice().sort(function(a,b) {
-    var da = (a.monitoringDate||'').slice(0,10);
-    var db = (b.monitoringDate||'').slice(0,10);
+    var da = normalizeToISO(a.monitoringDate);
+    var db = normalizeToISO(b.monitoringDate);
     return da < db ? -1 : da > db ? 1 : 0;
   });
   var data = sorted.filter(function(h) {
@@ -1052,6 +1203,22 @@ function buildPointCard(pb, pa, s) {
     }
   }
 
+  // ── AI-описание фотографии ──────────────────────────────
+  var photoAIRow = '';
+  if (s.includePhotoAI) {
+    var photoAnalysis = ReportState.photoAnalysis || {};
+    var aiPhotoDesc = photoAnalysis[String(pb.pointNumber)];
+    if (aiPhotoDesc) {
+      photoAIRow =
+        '<div style="padding:10px 16px;border-bottom:1px solid #e0e6f0;' +
+          'background:#f3f0ff;border-left:3px solid #7f77dd">' +
+          '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;' +
+            'color:#7f77dd;font-weight:700;margin-bottom:4px">AI — Гидрогеологическое описание фото</div>' +
+          '<div style="font-size:12px;line-height:1.6;color:#333">' + escHtml(aiPhotoDesc) + '</div>' +
+        '</div>';
+    }
+  }
+
   // ── График на всю ширину
   var chartRow = '';
   if (s.includeHistory) {
@@ -1089,7 +1256,7 @@ function buildPointCard(pb, pa, s) {
     : '';
 
   return '<div style="border:1px solid #e0e6f0;border-radius:8px;overflow:hidden;margin-bottom:14px;page-break-inside:avoid;break-inside:avoid">' +
-    header + photosRow + chartRow + metricsRow + commentRow +
+    header + photosRow + photoAIRow + chartRow + metricsRow + commentRow +
   '</div>';
 }
 
@@ -1269,7 +1436,7 @@ function buildReportHTML(s) {
     '</div></div>';
 
   // ── Сводка
-  var summaryAI = ai.summary ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + escHtml(ai.summary) + '</div>' : '';
+  var summaryAI = ai.summary ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.summary) + '</div>' : '';
 
   var summaryContent = '';
   if (isSingle) {
@@ -1346,9 +1513,16 @@ function buildReportHTML(s) {
     var qDA = dA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
     var qDB = dB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
     var dd  = qDB - qDA;
+    if (isSingle) {
+      return '<tr><td><b>' + escHtml(dom) + '</b></td>' +
+        '<td style="text-align:center">' + dB.length + '</td>' +
+        '<td style="text-align:right;color:#1a73e8;font-weight:600">' + qDB.toFixed(2) + '</td></tr>';
+    }
     return '<tr><td><b>' + escHtml(dom) + '</b></td>' +
-      '<td>' + dA.length + '</td><td>' + qDA.toFixed(2) + '</td>' +
-      '<td>' + dB.length + '</td><td>' + qDB.toFixed(2) + '</td>' +
+      '<td style="text-align:center">' + dA.length + '</td>' +
+      '<td style="text-align:right">' + qDA.toFixed(2) + '</td>' +
+      '<td style="text-align:center">' + dB.length + '</td>' +
+      '<td style="text-align:right;color:#1a73e8;font-weight:600">' + qDB.toFixed(2) + '</td>' +
       '<td class="' + (dd>=0?'rp-up':'rp-down') + '">' + (dd>=0?'+':'') + dd.toFixed(2) + '</td></tr>';
   }).join('');
 
@@ -1486,7 +1660,7 @@ function buildReportHTML(s) {
   // ── Сравнение А vs Б
   var compareSection = '';
   if (!isSingle && s.includeCompare && ptsA.length && ptsB.length) {
-    var cmpAI = ai.compare ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + escHtml(ai.compare) + '</div>' : '';
+    var cmpAI = ai.compare ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.compare) + '</div>' : '';
     var cmpRows = ptsB.map(function(pb) {
       var pa = ptsA.find(function(p){ return p.pointNumber===pb.pointNumber; });
       var qa = pa ? parseFloat(pa.flowRate)||0 : null;
@@ -1518,7 +1692,7 @@ function buildReportHTML(s) {
   }
 
   // ── Заключение
-  var aiRec = ai.recommendations ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + escHtml(ai.recommendations) + '</div>' : '';
+  var aiRec = ai.recommendations ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.recommendations) + '</div>' : '';
   var concl = '<section class="rp-section"><h2>6. Заключение и рекомендации</h2>' +
     aiRec +
     (s.conclusions
