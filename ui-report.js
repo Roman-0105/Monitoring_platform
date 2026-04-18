@@ -357,12 +357,13 @@ function callClaudeAPI(apiKey, prompt) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }]
     })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    if (!data.content) throw new Error('Пустой ответ API: ' + JSON.stringify(data));
     return (data.content && data.content[0]) ? data.content[0].text : '';
   });
 }
