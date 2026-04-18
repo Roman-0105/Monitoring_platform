@@ -325,11 +325,14 @@ function generateAIConclusion() {
   var btn = document.getElementById('rp-ai-concl-btn');
   if (btn) { btn.disabled = true; btn.textContent = '✨ Генерирую...'; }
 
+  // Обновляем настройки из формы перед вызовом AI
   var s = ReportState.settings;
-  var ptsA = ReportState.ptsA || [], ptsB = ReportState.ptsB || [];
-  var qA = ptsA.reduce(function(s,p){ return s+(parseFloat(p.flowRate)||0); },0);
-  var qB = ptsB.reduce(function(s,p){ return s+(parseFloat(p.flowRate)||0); },0);
-
+  s.author   = getRField('rp-author') || s.author;
+  s.dateA    = getRField('rp-date-a') || s.dateA;
+  s.dateB    = getRField('rp-date-b') || s.dateB;
+  var modeEl = document.getElementById('rp-mode-single');
+  if (modeEl && modeEl.classList.contains('active')) s.reportMode = 'single';
+  // buildAIContext сам вычислит ptsA/ptsB/Q из allPoints
   var ctx = buildAIContext(s);
   var prompt;
   if (ctx.isSingle) {
@@ -391,9 +394,26 @@ function callClaudeAPI(apiKey, prompt) {
 
 function buildAIContext(s) {
   // Строит полный контекст для AI — работает в обоих режимах
-  var isSingle = s.reportMode === 'single';
-  var ptsA = ReportState.ptsA || [], ptsB = ReportState.ptsB || [];
+  // Всегда читаем dateA/dateB из формы для актуальности
+  var dateAForm = getRField('rp-date-a') || s.dateA || '';
+  var dateBForm = getRField('rp-date-b') || s.dateB || '';
+  var modeSingleBtn = document.getElementById('rp-mode-single');
+  var modeForm = (modeSingleBtn && modeSingleBtn.classList.contains('active')) ? 'single'
+    : (s.reportMode || 'compare');
+  var isSingle = modeForm === 'single' || dateAForm === dateBForm;
+  var dateA = dateAForm;
+  var dateB = isSingle ? dateAForm : dateBForm;
+  // Если s уже заполнен из generateReport — используем его данные
+  // Иначе фильтруем allPoints сами
   var allPts = ReportState.allPoints || [];
+  var ptsB = (ReportState.ptsB && ReportState.ptsB.length > 0)
+    ? ReportState.ptsB
+    : allPts.filter(function(p){ return (p.monitoringDate||'').slice(0,10) === dateB; });
+  var ptsA = (ReportState.ptsA && ReportState.ptsA.length > 0)
+    ? ReportState.ptsA
+    : allPts.filter(function(p){ return (p.monitoringDate||'').slice(0,10) === dateA; });
+  // Перезаписываем s.dateA/dateB актуальными значениями
+  s.dateA = dateA; s.dateB = dateB; s.reportMode = modeForm;
   var allDitches = ReportState.allDitches || [];
   var allDates = (ReportState.allDates || []).slice().sort();
 
@@ -436,7 +456,10 @@ function buildAIContext(s) {
   // Канавы
   var ditchStr = allDitches.length > 0
     ? allDitches.slice(0,5).map(function(d){
-        return d.ditchName+': Q='+(d.flowLs||0).toFixed(2)+' л/с';
+        // flowLs может быть из нового расчёта, flowM3h — из старого
+        var qls = d.flowLs != null ? d.flowLs
+          : (d.flowM3h != null ? d.flowM3h / 3.6 : 0);
+        return d.ditchName+': Q='+qls.toFixed(2)+' л/с';
       }).join('; ')
     : 'нет данных';
 
@@ -824,7 +847,22 @@ function buildPointHistoryChart(pointNumber, markerA, markerB) {
   }).map(function(h) {
     // Нормализуем дату: берём первые 10 символов ISO-строки YYYY-MM-DD
     var rawDate = (h.monitoringDate||'').trim();
-    var isoDate = rawDate.match(/\d{4}-\d{2}-\d{2}/) ? rawDate.match(/\d{4}-\d{2}-\d{2}/)[0] : rawDate.slice(0,10);
+    var isoDate;
+    var isoMatch = rawDate.match(/\d{4}-\d{2}-\d{2}/);
+    if (isoMatch) {
+      isoDate = isoMatch[0]; // Уже ISO: "2026-04-18"
+    } else {
+      // Пробуем распарсить любой формат через Date
+      var parsed = new Date(rawDate);
+      if (!isNaN(parsed.getTime())) {
+        var y = parsed.getFullYear();
+        var mo = ('0'+(parsed.getMonth()+1)).slice(-2);
+        var d  = ('0'+parsed.getDate()).slice(-2);
+        isoDate = y+'-'+mo+'-'+d;
+      } else {
+        isoDate = rawDate.slice(0,10);
+      }
+    }
     return { date: isoDate, q: parseFloat(h.flowRate)||0 };
   });
 
