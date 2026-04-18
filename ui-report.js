@@ -330,11 +330,32 @@ function generateAIConclusion() {
   var qA = ptsA.reduce(function(s,p){ return s+(parseFloat(p.flowRate)||0); },0);
   var qB = ptsB.reduce(function(s,p){ return s+(parseFloat(p.flowRate)||0); },0);
 
-  var prompt = 'Ты гидрогеолог. Составь профессиональное заключение (3-5 абзацев) по мониторингу подземных вод карьера ЮРГ.\n' +
-    'Период А (' + (s.dateA||'—') + '): точек=' + ptsA.length + ', Q=' + qA.toFixed(1) + ' л/с\n' +
-    'Период Б (' + (s.dateB||'—') + '): точек=' + ptsB.length + ', Q=' + qB.toFixed(1) + ' л/с\n' +
-    'Канав: ' + ReportState.allDitches.length + '\n' +
-    'Включи: общий вывод по гидрогеологической обстановке, оценку изменений, рекомендации.';
+  var ctx = buildAIContext(s);
+  var prompt;
+  if (ctx.isSingle) {
+    prompt = 'Ты опытный гидрогеолог. Составь профессиональное заключение (3-5 абзацев) по мониторингу подземных вод карьера ЮРГ (Казахстан).\n\n' +
+      'ДАТА: ' + ctx.dateB + '\n' +
+      'ТОЧЕК: ' + ctx.totalPts + '\n' +
+      'СУММАРНЫЙ Q: ' + ctx.qB.toFixed(2) + ' л/с\n' +
+      'СТАТУСЫ: ' + ctx.statusStr + '\n' +
+      'ГОРИЗОНТЫ: ' + ctx.horizStr + '\n' +
+      'ПАВОДКОВЫЕ: ' + ctx.floodStr + '\n' +
+      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
+      'ДЕТАЛИ:\n' + ctx.ptsDetail + '\n\n' +
+      'ВАЖНО: Суммарный Q = ' + ctx.qB.toFixed(2) + ' л/с — используй это значение точно.\n' +
+      'Включи: общую гидрогеологическую обстановку, характеристику водопритока, состояние точек, рекомендации.';
+  } else {
+    prompt = 'Ты опытный гидрогеолог. Составь профессиональное заключение (3-5 абзацев) по мониторингу подземных вод карьера ЮРГ (Казахстан).\n\n' +
+      'ПЕРИОД А (' + ctx.dateA + '): Q=' + ctx.qA.toFixed(2) + ' л/с, точек=' + (ReportState.ptsA||[]).length + '\n' +
+      'ПЕРИОД Б (' + ctx.dateB + '): Q=' + ctx.qB.toFixed(2) + ' л/с, точек=' + ctx.totalPts + '\n' +
+      'СТАТУСЫ: ' + ctx.statusStr + '\n' +
+      'ГОРИЗОНТЫ: ' + ctx.horizStr + '\n' +
+      'ПАВОДКОВЫЕ: ' + ctx.floodStr + '\n' +
+      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
+      'ДЕТАЛИ:\n' + ctx.ptsDetail + '\n\n' +
+      'ВАЖНО: Q в период Б = ' + ctx.qB.toFixed(2) + ' л/с — используй точно.\n' +
+      'Включи: гидрогеологическую обстановку, динамику изменений А→Б, рекомендации.';
+  }
 
   callClaudeAPI(apiKey, prompt).then(function(text) {
     var ta = document.getElementById('rp-conclusions');
@@ -368,23 +389,114 @@ function callClaudeAPI(apiKey, prompt) {
   });
 }
 
+function buildAIContext(s) {
+  // Строит полный контекст для AI — работает в обоих режимах
+  var isSingle = s.reportMode === 'single';
+  var ptsA = ReportState.ptsA || [], ptsB = ReportState.ptsB || [];
+  var allPts = ReportState.allPoints || [];
+  var allDitches = ReportState.allDitches || [];
+  var allDates = (ReportState.allDates || []).slice().sort();
+
+  // Суммарные Q
+  var qB = ptsB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
+  var qA = ptsA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
+
+  // Статистика по статусам
+  var statusCount = {};
+  ptsB.forEach(function(p){
+    var st = p.status||'—';
+    statusCount[st] = (statusCount[st]||0)+1;
+  });
+  var statusStr = Object.keys(statusCount).map(function(k){ return k+':'+statusCount[k]; }).join(', ');
+
+  // По горизонтам
+  var horizCount = {};
+  ptsB.forEach(function(p){
+    var h = p.horizon||'—';
+    horizCount[h] = (horizCount[h]||0) + (parseFloat(p.flowRate)||0);
+  });
+  var horizStr = Object.keys(horizCount).map(function(k){ return 'горизонт '+k+': '+horizCount[k].toFixed(2)+' л/с'; }).join('; ');
+
+  // Детали точек (топ-10 по Q)
+  var topPts = ptsB.slice().sort(function(a,b){
+    return (parseFloat(b.flowRate)||0) - (parseFloat(a.flowRate)||0);
+  }).slice(0,10);
+  var ptsDetail = topPts.map(function(pb){
+    var pa = ptsA.find(function(p){ return p.pointNumber===pb.pointNumber; });
+    var qb = parseFloat(pb.flowRate)||0;
+    var qa = pa ? parseFloat(pa.flowRate)||0 : null;
+    var delta = qa!==null ? (qb-qa) : null;
+    return 'Точка #'+pb.pointNumber+
+      ' ('+pb.status+(pb.domain||pb.domen?', '+(pb.domain||pb.domen):'')+
+      (pb.horizon?', гор.'+pb.horizon:'')+')'+
+      ': Q='+qb.toFixed(2)+' л/с'+
+      (delta!==null ? ' (была '+qa.toFixed(2)+', Δ='+(delta>=0?'+':'')+delta.toFixed(2)+')' : '');
+  }).join('\n');
+
+  // Канавы
+  var ditchStr = allDitches.length > 0
+    ? allDitches.slice(0,5).map(function(d){
+        return d.ditchName+': Q='+(d.flowLs||0).toFixed(2)+' л/с';
+      }).join('; ')
+    : 'нет данных';
+
+  // Паводковые и критические точки
+  var flood = ptsB.filter(function(p){ return p.status==='Паводковая'||p.status==='Перелив'; });
+  var floodStr = flood.length > 0
+    ? flood.map(function(p){ return '#'+p.pointNumber+' ('+p.status+', Q='+parseFloat(p.flowRate).toFixed(2)+' л/с)'; }).join(', ')
+    : 'нет';
+
+  return {
+    isSingle: isSingle,
+    dateA: s.dateA, dateB: s.dateB,
+    totalPts: ptsB.length,
+    qB: qB, qA: qA,
+    statusStr: statusStr,
+    horizStr: horizStr,
+    ptsDetail: ptsDetail,
+    ditchStr: ditchStr,
+    floodStr: floodStr,
+    allDatesCount: allDates.length,
+  };
+}
+
 function generateAIBlocks(s) {
   if (!s.apiKey) return Promise.resolve({});
-  var ptsA = ReportState.ptsA || [], ptsB = ReportState.ptsB || [];
-  var qA = ptsA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
-  var qB = ptsB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
+  var ctx = buildAIContext(s);
 
-  var changes = ptsB.map(function(pb) {
-    var pa = ptsA.find(function(p){ return p.pointNumber === pb.pointNumber; });
-    var qa = pa ? parseFloat(pa.flowRate)||0 : null;
-    var qb = parseFloat(pb.flowRate)||0;
-    return pb.pointNumber + ': ' + (qa!==null?qa.toFixed(2)+'→':'') + qb.toFixed(2) + ' л/с' + (qa!==null?' (Δ'+(qb-qa>=0?'+':'')+(qb-qa).toFixed(2)+')':'');
-  }).join('; ');
-
-  var prompt = 'Ты гидрогеолог. Дай краткий анализ (2-3 предложения) изменений мониторинга карьера ЮРГ.\n' +
-    'Период А (' + s.dateA + '): Q=' + qA.toFixed(1) + ' л/с. Период Б (' + s.dateB + '): Q=' + qB.toFixed(1) + ' л/с.\n' +
-    'Точки: ' + (changes || 'нет данных') + '\n' +
-    'Ответ ТОЛЬКО JSON без markdown: {"summary":"...","compare":"...","recommendations":"..."}';
+  var prompt;
+  if (ctx.isSingle) {
+    // Режим: одна неделя
+    prompt = 'Ты опытный гидрогеолог на золотодобывающем карьере ЮРГ (Казахстан).\n' +
+      'Составь профессиональный анализ (формат JSON) на основе РЕАЛЬНЫХ данных мониторинга.\n\n' +
+      'ДАТА ЗАМЕРА: ' + ctx.dateB + '\n' +
+      'ТОЧЕК МОНИТОРИНГА: ' + ctx.totalPts + ' шт.\n' +
+      'СУММАРНЫЙ ВОДОПРИТОК: ' + ctx.qB.toFixed(2) + ' л/с (' + (ctx.qB*3.6).toFixed(2) + ' м³/ч)\n' +
+      'СТАТУСЫ ТОЧЕК: ' + ctx.statusStr + '\n' +
+      'ПО ГОРИЗОНТАМ: ' + ctx.horizStr + '\n' +
+      'ПАВОДКОВЫЕ/ПЕРЕЛИВ: ' + ctx.floodStr + '\n' +
+      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
+      'ДЕТАЛИ ПО ТОЧКАМ (топ по Q):\n' + ctx.ptsDetail + '\n\n' +
+      'ВАЖНО: используй только эти цифры. Не выдумывай данные. Суммарный Q = ' + ctx.qB.toFixed(2) + ' л/с.\n' +
+      'Ответ ТОЛЬКО JSON без markdown:\n' +
+      '{"summary":"...кратко об общей обстановке...","compare":"...не применимо (одна дата)...","recommendations":"...рекомендации..."}';
+  } else {
+    // Режим: сравнение двух периодов
+    prompt = 'Ты опытный гидрогеолог на золотодобывающем карьере ЮРГ (Казахстан).\n' +
+      'Составь сравнительный анализ двух периодов мониторинга (формат JSON).\n\n' +
+      'ПЕРИОД А: ' + ctx.dateA + ' — точек: ' + (ReportState.ptsA||[]).length + ', Q=' + ctx.qA.toFixed(2) + ' л/с\n' +
+      'ПЕРИОД Б: ' + ctx.dateB + ' — точек: ' + ctx.totalPts + ', Q=' + ctx.qB.toFixed(2) + ' л/с\n' +
+      'ИЗМЕНЕНИЕ Q: ' + (ctx.qB-ctx.qA>=0?'+':'') + (ctx.qB-ctx.qA).toFixed(2) + ' л/с (' +
+        (ctx.qA>0 ? ((ctx.qB-ctx.qA)/ctx.qA*100).toFixed(0)+'%' : 'н/д') + ')\n' +
+      'СТАТУСЫ (период Б): ' + ctx.statusStr + '\n' +
+      'ПО ГОРИЗОНТАМ: ' + ctx.horizStr + '\n' +
+      'ПАВОДКОВЫЕ/ПЕРЕЛИВ: ' + ctx.floodStr + '\n' +
+      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
+      'ИЗМЕНЕНИЯ ПО ТОЧКАМ:\n' + ctx.ptsDetail + '\n\n' +
+      'ВАЖНО: используй только эти цифры. Не выдумывай данные.\n' +
+      'Ответ ТОЛЬКО JSON без markdown:\n' +
+      '{"summary":"...об обстановке в период Б...","compare":"...сравнение с периодом А, динамика...","recommendations":"...рекомендации..."}';
+  }
 
   return callClaudeAPI(s.apiKey, prompt).then(function(text) {
     try { return JSON.parse(text.replace(/```json|```/g,'').trim()); }
@@ -703,12 +815,17 @@ function buildPointHistoryChart(pointNumber, markerA, markerB) {
   if (!hist.length) return '';
 
   var sorted = hist.slice().sort(function(a,b) {
-    return (a.monitoringDate||'') < (b.monitoringDate||'') ? -1 : 1;
+    var da = (a.monitoringDate||'').slice(0,10);
+    var db = (b.monitoringDate||'').slice(0,10);
+    return da < db ? -1 : da > db ? 1 : 0;
   });
   var data = sorted.filter(function(h) {
     return h.flowRate != null && !isNaN(parseFloat(h.flowRate));
   }).map(function(h) {
-    return { date: (h.monitoringDate||'').slice(0,10), q: parseFloat(h.flowRate)||0 };
+    // Нормализуем дату: берём первые 10 символов ISO-строки YYYY-MM-DD
+    var rawDate = (h.monitoringDate||'').trim();
+    var isoDate = rawDate.match(/\d{4}-\d{2}-\d{2}/) ? rawDate.match(/\d{4}-\d{2}-\d{2}/)[0] : rawDate.slice(0,10);
+    return { date: isoDate, q: parseFloat(h.flowRate)||0 };
   });
 
   if (data.length < 2) return '';
@@ -820,9 +937,22 @@ function buildPointHistoryChart(pointNumber, markerA, markerB) {
 // Компактная карточка точки: фото(А+Б) + график + комментарий
 function buildPointCard(pb, pa, s) {
   var qb = parseFloat(pb.flowRate) || 0;
+  var isSingle = s.reportMode === 'single';
+
+  // В single режиме pa может быть null — берём предыдущую дату из истории
+  if (pa == null && isSingle) {
+    var hist = (ReportState.ptHistory || {})[String(pb.pointNumber)] || [];
+    var prevEntries = hist.filter(function(h) {
+      return (h.monitoringDate||'').slice(0,10) < (pb.monitoringDate||'').slice(0,10) &&
+             h.flowRate != null && !isNaN(parseFloat(h.flowRate));
+    }).sort(function(a,b){
+      return (b.monitoringDate||'') < (a.monitoringDate||'') ? -1 : 1;
+    });
+    if (prevEntries.length > 0) pa = prevEntries[prevEntries.length - 1];
+  }
+
   var qa = pa != null ? parseFloat(pa.flowRate) || 0 : null;
   var delta = qa != null ? qb - qa : null;
-  var isSingle = s.reportMode === 'single';
   var cache = ReportState.photoCache || {};
 
   var trendColor = delta == null ? '#888' : (delta > 0.001 ? '#d93025' : (delta < -0.001 ? '#188038' : '#888'));
@@ -858,8 +988,8 @@ function buildPointCard(pb, pa, s) {
     '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#e6f4ea;color:#188038;font-weight:600">' + escHtml(pb.status || '—') + '</span>' +
     '<span style="font-size:11px;color:#666">' + escHtml(pb.intensity || '') + (pb.waterColor ? ' · ' + escHtml(pb.waterColor) : '') + (pb.horizon ? ' · гор. ' + escHtml(String(pb.horizon)) : '') + '</span>' +
     '<div style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px">' +
-      (qa != null ? '<span style="color:#888">нед. А: <b>' + qa.toFixed(2) + '</b></span><span style="color:#ccc">→</span>' : '') +
-      '<span style="color:#1a73e8;font-weight:700">нед. Б: ' + qb.toFixed(2) + ' л/с</span>' +
+      (qa != null ? '<span style="color:#888">' + (isSingle ? 'Пред. замер' : 'нед. А') + ': <b>' + qa.toFixed(2) + '</b></span><span style="color:#ccc">→</span>' : '') +
+      '<span style="color:#1a73e8;font-weight:700">' + (isSingle ? 'Текущий' : 'нед. Б') + ': ' + qb.toFixed(2) + ' л/с</span>' +
       (delta != null ? '<span style="font-weight:700;color:' + trendColor + '">' + trendArrow + ' ' + (delta >= 0 ? '+' : '') + delta.toFixed(2) + '</span>' : '') +
     '</div>' +
   '</div>';
