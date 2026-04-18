@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Фиксация точек — Карьер ЮРГ</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="app-header">
+    <div class="brand-block">
+      <div class="brand-logo" title="ZiJin | RG Gold" style="display:flex;align-items:center"><img src="data:image/png;base64,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REcwGFqzes11F/3xggcXLlzYTSlFlhUxnnzykYO2bNlyoWVZNrPWkVC461NPPftpdk5OAESirra22xljT/9s6tSphzAzuVwurqioyDnvvPOe2bpl03nBYDCSnp4mjj7m6GctKwJBAswAE2HkyFN6bNq0KXfx4sXdV6xYkbtmzZoemzZt6qJUtEyAmeFwGO76+vrcb7/9tsc778zo4fPdM3bM6X+YW1lVdYwVjujMzEw6efToh42EzENumVHxcDDqspRnu9BCQZKdLX5sdhvS39YAqv9+PDM/UFZMav87br/zh5qG4+TCb1OVw21BwNi5DwMTMSllpwCOjoEDVh7+9LMPcdZkASA50rD0dNXeZEkyHAldByOcMebmrENvejCaQbwhXHfJX590tn55UGuYw8nJTmdEeuYTkc3efIN2IqXibtFfbr75zPfefe+N+vp6iiUMiZiKVFormZGe3nL40SNOv/rqq+fEeZrflA4Ruw3BcDAcbv0tXKS0LCEEid+mivEB5IDVvmkI2jdryAQAWoABOwLlCq3q1rTq5ZEAZkQiETr2mBEKBEVEukuXLsTMJKT84bxzz32trbXlj83NjfaX38592OFwHBOJRHDGuDMvrqmpLq+ururf0FCX9vnns/5x/HGFd7hc7rpwOJzZ1tbWu6WlhYUgSklJae/RI3dNzK1O3vJx0dmR1nomkSjACkJ4jNb2dtsU64e5jK7OWKIdVVXliJKSkhfOPHPsiR0dHWe2tDTbCxctuvG6a6+5LDk5ebNlWWZrW+uAtpYWGYlEkJWVhV49ey8mouC1V155Vn1d3dttba2OlStX5NXU1s4rK3tjxXEj860777y9d0tzc5dgMKgSEhIcObk5D91yy23vaK3lyJGFESFIKdvC9OkfzZz56SfxpipKGoZMTU590+12P0uAAlhXVVYddd6556xiZoRCIYTD4cS2tlZorZGa1sU48IADbr3kkvEzRXLPI94tyhxCABDpaM5gbcXWJO8EQpjCNpSrY2H3mkWTrikug3L16bMi6dwxJ7mHH1KfLKUpIjaxUgqabWi2WSklwhFKdrrM8OAB81Mvvmg0ETWQj3TV/HvvMdu/Tk9MSjPdOfnVsv+VZ2cectODqx/r5Rx4zbpw49IpN8uGj//c0txkK4IUzmS40oZGa3wKCn405ysqKuzbbrvl0tlzyssaGhqE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" alt="ZiJin RG Gold" style="height:44px;width:auto;object-fit:contain;display:block" draggable="false"></div>
+      <div class="brand-name">
+        <span class="brand-title">КАРЬЕР ЮРГ</span>
+        <span class="brand-sub">Пулково-42 / Мониторинг подземных вод</span>
+      </div>
+    </div>
+    <nav class="tab-bar" id="tab-bar">
+      <button class="tab-btn active" data-tab="home"><span class="tab-icon">⌂</span> Главная</button>
+      <button class="tab-btn" data-tab="map"><span class="tab-icon">⌖</span> Карта</button>
+      <button class="tab-btn" data-tab="add"><span class="tab-icon">＋</span> Добавить точку</button>
+      <button class="tab-btn" data-tab="points"><span class="tab-icon">◻</span> Список точек</button>
+      <button class="tab-btn" data-tab="stats"><span class="tab-icon">◍</span> Аналитика</button>
+      <button class="tab-btn" data-tab="settings"><span class="tab-icon">◉</span> Настройки</button>
+      <button class="tab-btn" data-tab="report"><span class="tab-icon">◈</span> Отчёт</button>
+      <button class="tab-btn" data-tab="diag"><span class="tab-icon">◌</span> Диагностика</button>
+    </nav>
+  </header>
+
+  <!-- Главная / Дашборд -->
+  <div class="page active" id="page-home">
+    <div id="dashboard-root"><p class="empty-msg" style="padding:40px;text-align:center">Загрузка...</p></div>
+  </div>
+
+  <!-- Список точек -->
+  <div class="page" id="page-points">
+    <div class="points-header">
+      <h2 class="section-title">Список точек</h2>
+      <span class="points-count" id="points-count-badge">0 точек</span>
+    </div>
+    <div class="filter-bar" id="filter-bar"></div>
+    <div id="points-list"><p class="empty-msg">Загрузка...</p></div>
+  </div>
+
+  <!-- Добавление точки -->
+  <div class="page" id="page-add">
+    <h2 class="section-title">Новая точка</h2>
+    <form id="add-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="f-num">Номер точки *</label>
+          <input class="form-input" id="f-num" type="text" placeholder="1, 2, К..." required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-worker">Сотрудник</label>
+          <select class="form-select" id="f-worker"><option value="">— выберите —</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Координаты WGS-84</label>
+        <div class="form-row">
+          <input class="form-input" id="f-lat" type="text" inputmode="decimal" placeholder="Широта">
+          <input class="form-input" id="f-lon" type="text" inputmode="decimal" placeholder="Долгота">
+        </div>
+        <button type="button" class="btn-gps" id="btn-gps" style="margin-top:8px">
+          📍 Определить GPS
+        </button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Локальные координаты (СК-42)</label>
+        <div class="form-row">
+          <div style="position:relative;flex:1">
+            <label style="font-size:10px;color:var(--gray-600);position:absolute;top:3px;left:10px;z-index:1">Y</label>
+            <input class="form-input" id="f-xlocal" type="text" inputmode="decimal" placeholder="Y" style="padding-top:16px">
+          </div>
+          <div style="position:relative;flex:1">
+            <label style="font-size:10px;color:var(--gray-600);position:absolute;top:3px;left:10px;z-index:1">X</label>
+            <input class="form-input" id="f-ylocal" type="text" inputmode="decimal" placeholder="X" style="padding-top:16px">
+          </div>
+        </div>
+        <p class="form-hint" id="f-map-coord-info"></p>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="f-intensity">Интенсивность</label>
+          <select class="form-select" id="f-intensity">
+            <option value="">—</option>
+            <option>Слабая (капёж)</option>
+            <option>Умеренная</option>
+            <option>Сильная (поток)</option>
+            <option>Очень сильная</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-flowrate">Дебит, л/с</label>
+          <input class="form-input" id="f-flowrate" type="number" step="any" min="0">
+          <p class="form-hint" id="f-flowrate-m3h">—</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="f-color">Цвет воды</label>
+          <select class="form-select" id="f-color">
+            <option value="">—</option>
+            <option>Прозрачная</option>
+            <option>Слабожелтоватая</option>
+            <option>Мутная</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-status">Статус</label>
+          <select class="form-select" id="f-status">
+            <option value="Новая">Новая</option>
+            <option value="Активная">Активная</option>
+            <option value="Иссякает">Иссякает</option>
+            <option value="Пересохла">Пересохла</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="f-wall">Борт</label>
+          <select class="form-select" id="f-wall">
+            <option value="">—</option>
+            <option>Северо-восточный</option>
+            <option>Северо-западный</option>
+            <option>Юго-восточный</option>
+            <option>Юго-западный</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-domain">Домен</label>
+          <select class="form-select" id="f-domain">
+            <option value="">—</option>
+            <option value="Domen-1">Domen-1</option><option value="Domen-2">Domen-2</option>
+            <option value="Domen-3">Domen-3</option><option value="Domen-4">Domen-4</option><option value="Domen-5">Domen-5</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="f-comment">Комментарий</label>
+        <textarea class="form-textarea" id="f-comment" placeholder="Описание, наблюдения..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Фото</label>
+        <div id="f-photo-preview"></div>
+        <div id="f-photo-progress" style="display:none"></div>
+        <button type="button" class="photo-pick-btn" id="f-photo-btn"
+          onclick="showPhotoSourceModal('f-photo','f-photo-preview','f-photo-progress',false)">
+          📷 Загрузить фото
+        </button>
+        <input type="file" id="f-photo" accept="image/*" style="display:none">
+        <p class="form-hint">Сжимается до 1600px перед отправкой</p>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full">Сохранить точку</button>
+    </form>
+  </div>
+
+  <!-- Сотрудники -->
+  <div class="page" id="page-workers">
+    <div class="card">
+      <div class="card-title">Список сотрудников</div>
+      <div id="workers-manage-list"></div>
+      <div class="add-worker-row">
+        <input type="text" id="new-worker-name" placeholder="Фамилия И.О.">
+        <button class="btn btn-primary btn-sm" id="btn-add-worker">+ Добавить</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Выбор сотрудника</div>
+      <div id="worker-grid" class="worker-grid"></div>
+    </div>
+  </div>
+
+  <!-- Карта -->
+  <div class="page" id="page-map">
+    <div class="map-toolbar-top">
+      <button class="btn btn-sm btn-outline" id="btn-map-add-point" title="Добавить точку на карте">
+        ➕ Добавить точку
+      </button>
+      <button class="btn btn-sm btn-outline" id="btn-map-add-ditch"
+        title="Добавить канаву"
+        style="margin-left:4px;color:var(--blue,#1a73e8);border-color:rgba(64,144,232,.3)"
+        onclick="startDitchMapPickNew()">
+        🌊 Канава
+      </button>
+      <button class="btn btn-sm btn-outline" id="btn-domens-toggle" title="Показать/скрыть домены" style="margin-left:4px">
+        🗺 Домены
+      </button>
+      <button class="btn btn-sm btn-outline" id="btn-map-filter-toggle" title="Показать/скрыть фильтры" style="margin-left:4px">
+        🎛 Фильтр
+      </button>
+      <button class="btn btn-sm btn-outline" id="btn-map-legend-section-toggle" title="Показать/скрыть легенду" style="margin-left:4px">
+        📑 Легенда
+      </button>
+      <div class="map-scheme-select-wrap">
+        <label class="map-scheme-select-label" for="map-scheme-select">Схема</label>
+        <select id="map-scheme-select" class="filter-select filter-select--compact"></select>
+      </div>
+      <span id="map-add-hint" class="map-add-hint" style="display:none">
+        Нажмите на карту чтобы поставить точку
+      </span>
+    </div>
+    <div class="map-container">
+    <div id="map-scheme-wrap" class="map-scheme-wrap">
+      <div id="map-no-scheme" class="map-no-scheme">
+        <p>Схема не загружена</p>
+        <p class="form-hint">Загрузи схему в разделе Настройки</p>
+      </div>
+      <canvas id="map-canvas"></canvas>
+    </div>
+    <!-- Боковая панель легенды -->
+    <div id="map-legend-panel" class="map-legend-panel">
+      <div class="map-legend-header">
+        <span class="map-legend-title">Легенда</span>
+        <button class="map-legend-toggle" id="btn-legend-toggle" title="Свернуть/развернуть">−</button>
+      </div>
+      <div id="map-legend-body" class="map-legend-body">
+        <div class="map-filter-group" id="map-filter-week-section">
+          <label class="form-label" for="map-filter-week">Неделя</label>
+          <select id="map-filter-week" class="filter-select filter-select--full"></select>
+        </div>
+        <div class="map-filter-group" id="map-filter-worker-section">
+          <label class="form-label" for="map-filter-worker">Сотрудник</label>
+          <select id="map-filter-worker" class="filter-select filter-select--full"></select>
+        </div>
+        <div class="map-filter-group" id="map-mode-section">
+          <label class="form-label">Отображение точек</label>
+          <div id="map-mode-switch" class="map-mode-switch">
+            <label><input type="radio" name="map-marker-mode" value="simple"> Simple</label>
+            <label><input type="radio" name="map-marker-mode" value="status"> Status</label>
+            <label><input type="radio" name="map-marker-mode" value="intensity"> Intensity</label>
+            <label><input type="radio" name="map-marker-mode" value="combined" checked> Combined</label>
+          </div>
+        </div>
+        <div id="map-legend-section">
+          <hr style="border:none;border-top:1px solid var(--line-2);margin:10px 0">
+          <div id="map-mode-legend"></div>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--line-2);margin:8px 0">
+        <div id="map-legend-points" style="font-size:11px;color:var(--txt-3)"></div>
+      </div>
+    </div>
+  </div><!-- map-container -->
+  </div>
+
+  <!-- Настройки -->
+  <div class="page" id="page-settings">
+    <div class="settings-subtabs">
+      <button class="btn btn-sm btn-outline active" id="btn-settings-tab-main" data-settings-tab="main">Схемы</button>
+      <button class="btn btn-sm btn-outline" id="btn-settings-tab-legend" data-settings-tab="legend">Легенда</button>
+    </div>
+
+    <div class="settings-panel active" id="settings-panel-main">
+      <div class="card">
+        <div class="card-title">Схема карьера</div>
+        <p class="form-hint" style="margin-bottom:12px">
+          Загружай PNG схему карьера. Схема привязана к текущей неделе
+          и автоматически появится у всех пользователей.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Текущая неделя</label>
+          <div id="settings-week-key" class="settings-week-label">—</div>
+          <p class="form-hint" id="settings-current-week-status"></p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Загруженные схемы</label>
+          <div id="settings-schemes-list" class="settings-schemes-list">Загрузка...</div>
+          <p class="form-hint" id="settings-active-scheme"></p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Загрузить новую схему</label>
+          <div id="scheme-preview"></div>
+          <label class="photo-pick-btn" for="scheme-file">
+            🗺 Выбрать PNG файл
+            <input type="file" id="scheme-file" accept="image/png,image/jpeg" style="display:none">
+          </label>
+          <button class="btn btn-primary btn-full" id="btn-upload-scheme" style="margin-top:10px">
+            ⬆️ Загрузить схему
+          </button>
+          <p class="form-hint" id="scheme-upload-status"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-panel" id="settings-panel-legend">
+      <div class="card">
+        <div class="card-title">Настройки цветов карты</div>
+        <p class="form-hint" style="margin-bottom:12px">Компактные плитки цветов для статусов и интенсивности.</p>
+        <div class="color-grid color-grid--status">
+          <div class="color-tile"><span class="color-swatch" id="swatch-status-new"></span><span class="color-title">Новая</span><input type="color" id="set-status-new" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-status-active"></span><span class="color-title">Активная</span><input type="color" id="set-status-active" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-status-fading"></span><span class="color-title">Иссякает</span><input type="color" id="set-status-fading" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-status-dry"></span><span class="color-title">Пересохла</span><input type="color" id="set-status-dry" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-intensity"></span><span class="color-title">Intensity</span><input type="color" id="set-intensity-color" class="color-picker"></div>
+        </div>
+        <button class="btn btn-primary" id="btn-save-status-colors">Сохранить цвета статусов</button>
+        <p class="form-hint" id="map-color-save-msg"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Цвета доменов</div>
+        <div class="color-grid color-grid--domain">
+          <div class="color-tile"><span class="color-swatch" id="swatch-domain-1"></span><span class="color-title">Domen-1</span><input type="color" id="set-domain-1" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-domain-2"></span><span class="color-title">Domen-2</span><input type="color" id="set-domain-2" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-domain-3"></span><span class="color-title">Domen-3</span><input type="color" id="set-domain-3" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-domain-4"></span><span class="color-title">Domen-4</span><input type="color" id="set-domain-4" class="color-picker"></div>
+          <div class="color-tile"><span class="color-swatch" id="swatch-domain-5"></span><span class="color-title">Domen-5</span><input type="color" id="set-domain-5" class="color-picker"></div>
+        </div>
+        <button class="btn btn-primary" id="btn-save-domain-colors">Сохранить цвета доменов</button>
+        <p class="form-hint" id="map-domain-save-msg"></p>
+      </div>
+      <button class="btn btn-primary" id="btn-save-domain-colors">Сохранить цвета доменов</button>
+      <p class="form-hint" id="map-domain-save-msg"></p>
+    </div>
+  </div>
+
+  <!-- Диагностика -->
+  <div class="page" id="page-diag">
+    <div class="card">
+      <div class="card-title">Состояние</div>
+      <div id="diag-panel"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Действия</div>
+      <button class="btn btn-outline btn-full" id="btn-sync-now" style="margin-bottom:8px">🔄 Синхронизировать</button>
+      <button class="btn btn-outline btn-full" id="btn-flush-queue" style="margin-bottom:8px">📤 Отправить очередь</button>
+      <button class="btn btn-outline btn-full" id="btn-clear-cache"
+              style="color:var(--red);border-color:var(--red)">🗑 Очистить кэш</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Конфигурация</div>
+      <div class="diag-row"><span>Apps Script URL</span><span id="script-url-status">—</span></div>
+      <div class="diag-row"><span>Device ID</span><span id="device-id-display">—</span></div>
+    </div>
+  </div>
+
+  <!-- Аналитика -->
+  <div class="page" id="page-stats">
+    <!-- Подвкладки аналитики -->
+    <div class="settings-subtabs" style="margin-bottom:12px">
+      <button class="btn btn-sm btn-outline active" data-stats-tab="summary" onclick="switchStatsTab('summary',this)">📊 Сводка</button>
+      <button class="btn btn-sm btn-outline" data-stats-tab="history" onclick="switchStatsTab('history',this)">📈 История</button>
+      <button class="btn btn-sm btn-outline" data-stats-tab="ditches" onclick="switchStatsTab('ditches',this)">🌊 Канавы</button>
+    </div>
+
+    <!-- Подвкладка: Сводка -->
+    <div id="stats-panel-summary" class="stats-subpanel">
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Фильтры аналитики</span>
+          <div id="stats-export-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
+            <button id="btn-export-csv"  class="btn btn-sm btn-outline" style="white-space:nowrap">⬇ CSV</button>
+            <button id="btn-export-xlsx" class="btn btn-sm btn-outline" style="white-space:nowrap;color:#217346;border-color:#217346">⬇ Excel</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Дата мониторинга</label>
+            <div id="stats-date-filter-wrap"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="stats-worker">Сотрудник</label>
+            <select id="stats-worker" class="form-select"></select>
+          </div>
+        </div>
+      </div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="stats-charts-grid">
+        <div class="card"><div class="card-title">Диаграмма по статусам</div><div id="stats-status-chart"></div></div>
+        <div class="card"><div class="card-title">Диаграмма по интенсивности</div><div id="stats-intensity-chart"></div></div>
+      </div>
+      <div class="card"><div class="card-title">Разбивка по статусам</div><div id="stats-status-list"></div></div>
+      <div class="card"><div class="card-title">Разбивка по доменам</div><div id="stats-domain-list"></div></div>
+      <div class="card"><div class="card-title">Разбивка по горизонтам / уступам</div><div id="stats-horizon-list"></div></div>
+    </div>
+
+    <!-- Подвкладка: История -->
+    <div id="stats-panel-history" class="stats-subpanel" style="display:none">
+      <div class="card">
+        <div class="card-title">Выбор точек для сравнения</div>
+        <div class="form-row" style="align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:200px">
+            <label class="form-label" for="history-point-select">Точка 1</label>
+            <select id="history-point-select" class="form-select"></select>
+          </div>
+          <div class="form-group" style="flex:1;min-width:200px">
+            <label class="form-label" for="history-point-select2">Точка 2 <span style="font-size:11px;color:var(--txt-3);font-weight:400">— для сравнения</span></label>
+            <select id="history-point-select2" class="form-select"></select>
+          </div>
+          <div class="form-group" style="flex:0">
+            <label class="form-label" style="visibility:hidden">.</label>
+            <button id="history-compare-clear" class="btn btn-sm btn-outline" style="white-space:nowrap">✕ Сброс</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">
+        <div class="card" style="overflow:hidden">
+          <div class="card-title">График водопритока</div>
+          <div id="history-chart-area" style="overflow-x:auto"></div>
+        </div>
+        <div id="history-info-panel"></div>
+      </div>
+    </div>
+
+    <!-- Подвкладка: Канавы -->
+    <div id="stats-panel-ditches" class="stats-subpanel" style="display:none">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Фильтры канав</div>
+        <div class="form-row" style="flex-wrap:wrap;gap:10px">
+          <div class="form-group" style="flex:1;min-width:150px">
+            <label class="form-label">Дата мониторинга</label>
+            <input type="date" id="ditch-filter-date" class="form-input" style="padding:7px 10px" oninput="renderDitchStatsPanel()">
+          </div>
+          <div class="form-group" style="flex:1;min-width:150px">
+            <label class="form-label">Сотрудник</label>
+            <select id="ditch-filter-worker" class="form-select" onchange="renderDitchStatsPanel()">
+              <option value="all">Все сотрудники</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;min-width:160px;position:relative">
+            <label class="form-label">Поиск по названию</label>
+            <input type="text" id="ditch-filter-name" class="form-input" placeholder="напр. К-5-А" style="padding:7px 10px" oninput="onDitchNameSearch(this)" autocomplete="off">
+            <div id="ditch-name-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--card-bg,#161e2e);border:1px solid var(--line);border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto"></div>
+          </div>
+          <div class="form-group" style="flex:0;align-self:flex-end">
+            <button class="btn btn-sm btn-outline" onclick="clearDitchFilters()">✕ Сбросить</button>
+          </div>
+        </div>
+      </div>
+      <div class="stats-grid" id="ditch-kpi-grid" style="margin-bottom:12px"></div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Список канав</div>
+        <div id="ditch-list-container"></div>
+      </div>
+      <div id="ditch-detail-panel" style="display:none">
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title" id="ditch-detail-title">Детали канавы</div>
+          <div id="ditch-detail-info"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-outline" id="ditch-detail-edit-btn">✏ Редактировать</button>
+            <button class="btn btn-sm btn-outline" id="ditch-detail-hist-btn">📈 История</button>
+            <button class="btn btn-sm btn-outline" id="ditch-detail-del-btn" style="color:var(--red);border-color:rgba(224,80,80,.3)">🗑 Удалить</button>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">📈 История водопритока</div>
+          <div id="ditch-history-chart-area" style="overflow-x:auto;min-height:60px"></div>
+          <div id="ditch-history-table" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div id="ditch-viz-wrap" style="display:none;margin-top:4px">
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>📐 Профиль поперечного сечения</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm btn-outline active" id="btn-dv-section" onclick="setDitchVizMode('section',this)">2D Сечение</button>
+              <button class="btn btn-sm btn-outline" id="btn-dv-extrude" onclick="setDitchVizMode('extrude',this)">3D Объём</button>
+            </div>
+          </div>
+          <div id="ditch-viz-2d">
+            <canvas id="ditch-profile-canvas" style="width:100%;border-radius:8px;background:var(--card-bg2,#0f1520)"></canvas>
+          </div>
+          <div id="ditch-viz-3d" style="display:none">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+              <button class="btn btn-sm btn-outline" onclick="dvCamPreset('iso')" style="font-size:10px">⬡ Изо</button>
+              <button class="btn btn-sm btn-outline" onclick="dvCamPreset('front')" style="font-size:10px">▤ Фронт</button>
+              <button class="btn btn-sm btn-outline" onclick="dvCamPreset('top')" style="font-size:10px">⬛ Сверху</button>
+              <button class="btn btn-sm btn-outline" id="dv-rotate-btn" onclick="dvToggleRotate()" style="font-size:10px">↻ Авто</button>
+            </div>
+            <canvas id="ditch-3d-canvas" style="width:100%;height:380px;border-radius:8px;cursor:grab;touch-action:none;background:#05080f"></canvas>
+            <div style="font-size:10px;color:var(--txt-3);text-align:center;margin-top:4px">🖱 ЛКМ — вращение · Колесо — зум</div>
+          </div>
+          <div id="dv3d-missing-modal" style="display:none"></div>
+        </div>
+        <div id="dv-tooltip" style="display:none;position:absolute;pointer-events:none"></div>
+        <div id="dv-hud" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Tooltip для карты -->
+  <div id="map-tooltip" class="map-tooltip" style="display:none"></div>
+  <!-- Статус-бар -->
+  <div id="status-bar" class="status-bar">
+    <span id="sb-coords">—</span>
+    <span class="sb-sep">|</span>
+    <span id="sb-scale">—</span>
+    <span class="sb-sep">|</span>
+    <span id="sb-net">—</span>
+  </div>
+</div><!-- #app -->
+
+<!-- Модальное окно редактирования -->
+<div id="edit-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="edit-modal-title">Редактирование</span>
+      <button class="modal-close" id="edit-modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="e-num">Номер точки *</label>
+            <input class="form-input" id="e-num" type="text" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="e-worker">Сотрудник</label>
+            <select class="form-select" id="e-worker"><option value="">— выберите —</option></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Координаты WGS-84</label>
+          <div class="form-row">
+            <input class="form-input" id="e-lat" type="text" inputmode="decimal" placeholder="Широта">
+            <input class="form-input" id="e-lon" type="text" inputmode="decimal" placeholder="Долгота">
+          </div>
+          <button type="button" class="btn-gps" id="e-btn-gps" style="margin-top:6px">
+            📍 Определить GPS
+          </button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Локальные координаты (СК-42)</label>
+          <div class="form-row">
+            <div style="position:relative;flex:1">
+              <label style="font-size:10px;color:var(--gray-600);position:absolute;top:3px;left:10px">Y</label>
+              <input class="form-input" id="e-xlocal" type="text" inputmode="decimal" placeholder="Y локальный" style="padding-top:16px">
+            </div>
+            <div style="position:relative;flex:1">
+              <label style="font-size:10px;color:var(--gray-600);position:absolute;top:3px;left:10px">X</label>
+              <input class="form-input" id="e-ylocal" type="text" inputmode="decimal" placeholder="X локальный" style="padding-top:16px">
+            </div>
+          </div>
+          <p class="form-hint" id="e-map-coord-info"></p>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="e-intensity">Интенсивность</label>
+            <select class="form-select" id="e-intensity">
+              <option value="">—</option>
+              <option>Слабая (капёж)</option><option>Умеренная</option>
+              <option>Сильная (поток)</option><option>Очень сильная</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="e-flowrate">Дебит, л/с</label>
+            <input class="form-input" id="e-flowrate" type="number" step="any" min="0">
+            <p class="form-hint" id="e-flowrate-m3h">—</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="e-color">Цвет воды</label>
+            <select class="form-select" id="e-color">
+              <option value="">—</option>
+              <option>Прозрачная</option><option>Слабожелтоватая</option><option>Мутная</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="e-status">Статус</label>
+            <select class="form-select" id="e-status">
+              <option value="Новая">Новая</option><option value="Активная">Активная</option>
+              <option value="Иссякает">Иссякает</option><option value="Пересохла">Пересохла</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="e-wall">Борт</label>
+            <select class="form-select" id="e-wall">
+              <option value="">—</option>
+              <option>Северо-восточный</option><option>Северо-западный</option>
+              <option>Юго-восточный</option><option>Юго-западный</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="e-domain">Домен</label>
+            <select class="form-select" id="e-domain">
+              <option value="">—</option>
+              <option value="Domen-1">Domen-1</option><option value="Domen-2">Domen-2</option>
+              <option value="Domen-3">Domen-3</option><option value="Domen-4">Domen-4</option><option value="Domen-5">Domen-5</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="e-comment">Комментарий</label>
+          <textarea class="form-textarea" id="e-comment"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Фото</label>
+          <div id="e-photo-preview"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button type="button" class="photo-pick-btn" id="e-photo-btn"
+              onclick="showPhotoSourceModal('e-photo','e-new-photo-preview','e-photo-progress',!!(document.getElementById('e-photo-preview')&&document.getElementById('e-photo-preview').querySelector('img')))">
+              📷 Загрузить фото
+            </button>
+            <input type="file" id="e-photo" accept="image/*" style="display:none">
+            <div id="e-photo-progress" style="display:none"></div>
+            <button type="button" id="e-delete-photo-btn" class="btn-delete-photo" style="display:none">
+              🗑 Удалить фото
+            </button>
+          </div>
+          <div id="e-new-photo-preview"></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Сохранить изменения</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="loader"><div class="loader-spinner"></div><span id="loader-text">Загрузка...</span></div>
+
+<!-- Скрипты — порядок важен -->
+<script src="storage.js"></script>
+<script src="diagnostics.js"></script>
+<script src="api.js"></script>
+<script src="workers.js"></script>
+<script src="points.js"></script>
+<script src="photos.js"></script>
+<script src="domens.js"></script>
+<script src="map.js"></script>
+<script src="schemes.js"></script>
+<script src="ui-toast.js"></script>
+<script src="ui-utils.js"></script>
+<script src="ui-points.js"></script>
+<script src="ui-map.js"></script>
+<script src="ui-stats.js"></script>
+<script src="ui-settings.js"></script>
+<script src="ui-print.js"></script>
+<script src="ditch-ui.js"></script>
+<script src="ui-history.js"></script>
+<script src="app.js"></script>
+
+<!-- Страница Отчёт -->
+<div class="page" id="page-report">
+  <div id="report-root"></div>
+</div>
+
+
+<script src="ui-dashboard.js"></script>
+<script src="ui-report.js"></script>
+
+<!-- ═══ МОДАЛЬНОЕ ОКНО КАНАВЫ ═══ -->
+<div id="ditch-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box" style="max-width:580px;max-height:94vh;overflow-y:auto">
+    <div class="modal-header">
+      <span class="modal-title" id="ditch-modal-title">🌊 Канава</span>
+      <button class="modal-close" onclick="closeDitchModal()">✕</button>
+    </div>
+    <div style="padding:16px">
+
+      <div class="form-group">
+        <label class="form-label">Название канавы *</label>
+        <input class="form-input" id="dm-name" type="text" placeholder="напр. К-5-А" oninput="calcDitch()">
+        <p class="form-hint">Уникальное имя — по нему ведётся история</p>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Дата мониторинга</label>
+          <input class="form-input" id="dm-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Сотрудник</label>
+          <select class="form-select" id="dm-worker">
+            <option value="">— выберите —</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Привязка к точке <span style="font-size:10px;font-weight:400;color:var(--txt-3)">— необязательно</span></label>
+        <input class="form-input" id="dm-point" type="text" placeholder="Номер точки">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Координаты GPS</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label class="form-label" style="font-size:9px">Широта</label>
+            <input class="form-input" id="dm-lat" type="number" step="0.0000001" placeholder="52.4781896">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label" style="font-size:9px">Долгота</label>
+            <input class="form-input" id="dm-lon" type="number" step="0.0000001" placeholder="69.6867285">
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="getDitchGPS()" style="white-space:nowrap;padding:9px 12px">📍 GPS</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="startDitchMapPick()" style="white-space:nowrap;padding:9px 12px;color:var(--gold);border-color:rgba(200,160,18,.3)">🗺 На карте</button>
+        </div>
+        <input type="hidden" id="dm-xlocal">
+        <input type="hidden" id="dm-ylocal">
+        <div id="dm-coords-hint" style="font-size:10px;color:var(--txt-3);margin-top:4px;display:none">✓ Координаты с карты</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Статус канавы</label>
+        <select class="form-select" id="dm-status">
+          <option value="Активная">Активная</option>
+          <option value="Новая">Новая</option>
+          <option value="Пересохла">Пересохла</option>
+          <option value="Заилилась">Заилилась</option>
+        </select>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+
+      <!-- Метод скорости -->
+      <div class="form-group">
+        <label class="form-label">Метод определения скорости</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-sm btn-outline dm-vel-tab active" data-vm="single" onclick="setDitchVelMethod('single',this)">Одна скорость</button>
+          <button type="button" class="btn btn-sm btn-outline dm-vel-tab" data-vm="multi" onclick="setDitchVelMethod('multi',this)">По точкам</button>
+          <button type="button" class="btn btn-sm btn-outline dm-vel-tab" data-vm="float" onclick="setDitchVelMethod('float',this)">Поплавок</button>
+          <button type="button" class="btn btn-sm btn-outline dm-vel-tab" data-vm="manning" onclick="setDitchVelMethod('manning',this)">Манинг</button>
+        </div>
+      </div>
+
+      <!-- Одна скорость -->
+      <div id="dm-vm-single">
+        <div class="form-group">
+          <label class="form-label">Скорость потока, м/с</label>
+          <input class="form-input" id="dm-velocity" type="number" step="0.001" min="0" placeholder="0.34" oninput="calcDitch()">
+        </div>
+      </div>
+
+      <!-- Многоточечный ГОСТ -->
+      <div id="dm-vm-multi" style="display:none">
+        <div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">ГОСТ 8.486-83: v_ср = (v₀.₂ + v₀.₈) / 2</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">v на 0.2h, м/с</label>
+            <input class="form-input" id="dm-v02" type="number" step="0.001" placeholder="0.420" oninput="calcDitch()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">v на 0.6h, м/с</label>
+            <input class="form-input" id="dm-v06" type="number" step="0.001" placeholder="0.380" oninput="calcDitch()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">v на 0.8h, м/с</label>
+            <input class="form-input" id="dm-v08" type="number" step="0.001" placeholder="0.340" oninput="calcDitch()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Поплавок 3 пуска -->
+      <div id="dm-vm-float" style="display:none">
+        <div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">Наставление, вып.6 §4.3 — не менее 3 пусков, выброс при отклонении &gt;15%</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Длина L, м</label>
+            <input class="form-input" id="dm-floatL" type="number" step="0.1" min="0.1" value="10" oninput="calcDitch()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Коэф. K</label>
+            <select class="form-select" id="dm-floatK" onchange="calcDitch()">
+              <option value="0.95">h &gt;1.0 м → 0.95</option>
+              <option value="0.90" selected>h 0.5–1.0 м → 0.90</option>
+              <option value="0.85">h 0.25–0.5 м → 0.85</option>
+              <option value="0.80">h &lt;0.25 м → 0.80</option>
+            </select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--txt-2);margin-bottom:6px">Время t, секунды — 3 пуска:</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Пуск № 1</label>
+            <input class="form-input" id="dm-float-t1" type="number" step="0.1" min="0.1" placeholder="14.1" oninput="calcDitch()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Пуск № 2</label>
+            <input class="form-input" id="dm-float-t2" type="number" step="0.1" min="0.1" placeholder="14.5" oninput="calcDitch()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Пуск № 3</label>
+            <input class="form-input" id="dm-float-t3" type="number" step="0.1" min="0.1" placeholder="13.9" oninput="calcDitch()">
+          </div>
+        </div>
+        <div id="dm-float-check" style="font-size:11px;color:var(--txt-3);min-height:16px"></div>
+      </div>
+
+      <!-- Только Манинг -->
+      <div id="dm-vm-manning" style="display:none">
+        <div style="font-size:11px;color:var(--txt-3);padding:8px;background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px">
+          v = (1/n) × R^⅔ × I^½ — расчёт по формуле Манинга без полевой скорости
+        </div>
+      </div>
+
+      <!-- Ширина + Уклон + Шероховатость -->
+      <div class="form-group">
+        <label class="form-label">Ширина канавы B, м</label>
+        <input class="form-input" id="dm-width" type="number" step="0.01" min="0.01" placeholder="1.20" oninput="calcDitch()">
+      </div>
+
+      <div class="form-row" style="margin-top:10px">
+        <div class="form-group">
+          <label class="form-label">Уклон дна I, д.е.</label>
+          <input class="form-input" id="dm-slope-i" type="number" step="0.0001" value="0.005" oninput="calcDitch()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Тип русла (n)</label>
+          <select class="form-select" id="dm-n-rough" onchange="calcDitch()">
+            <option value="0.014">Бетон — 0.014</option>
+            <option value="0.020">Глина / лёсс — 0.020</option>
+            <option value="0.025">Земляное русло — 0.025</option>
+            <option value="0.030" selected>Скальная вскрыша — 0.030</option>
+            <option value="0.035">Крупная вскрыша — 0.035</option>
+            <option value="0.040">Заросшая — 0.040</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Глубины -->
+      <div class="form-group">
+        <label class="form-label" style="margin-bottom:6px">Точки замера глубины</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--txt-2)">Единицы:</span>
+          <button type="button" class="btn btn-sm btn-outline dm-unit-btn active" data-u="cm" onclick="setDitchUnit('cm',this)">см</button>
+          <button type="button" class="btn btn-sm btn-outline dm-unit-btn" data-u="m" onclick="setDitchUnit('m',this)">м</button>
+          <span style="margin-left:auto;font-size:11px;color:var(--txt-2)">Точек:</span>
+          <select id="dm-npts" class="form-select" style="width:64px;padding:5px 8px" onchange="buildDitchRows()">
+            <option>2</option><option>3</option><option value="4" selected>4</option>
+            <option>5</option><option>6</option><option>7</option><option>8</option>
+          </select>
+        </div>
+        <div class="bnd-row" style="margin-bottom:4px">
+          <span class="bnd-tag">Тн</span><span>Начальная точка · глубина = 0</span>
+          <span id="dm-tn-dist" style="margin-left:auto;font-size:11px;color:var(--gold)"></span>
+        </div>
+        <div id="dm-depth-rows"></div>
+        <div class="bnd-row" style="margin-top:4px">
+          <span class="bnd-tag">Тк</span><span>Конечная точка · глубина = 0</span>
+          <span id="dm-tk-dist" style="margin-left:auto;font-size:11px;color:var(--gold)"></span>
+        </div>
+      </div>
+
+      <!-- Результат расчёта -->
+      <div id="dm-result" style="display:none;margin:10px 0;background:rgba(64,144,232,.06);border:1px solid rgba(64,144,232,.2);border-radius:10px;padding:12px 14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div style="background:rgba(249,171,0,.12);border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em">Водоприток Q</div>
+            <div style="font-size:20px;font-weight:700;color:#f9ab00" id="dm-res-flow">—</div>
+            <div style="font-size:9px;color:var(--txt-3)">м³/ч</div>
+          </div>
+          <div style="background:rgba(64,144,232,.1);border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em">Q в л/с</div>
+            <div style="font-size:20px;font-weight:700;color:var(--blue)" id="dm-res-qls">—</div>
+            <div style="font-size:9px;color:var(--txt-3)">л/с</div>
+          </div>
+        </div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:5px">Геометрия сечения</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--txt-3)">Площадь A</div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt-1)" id="dm-res-area">—</div>
+          </div>
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--txt-3)">Смоч. пер. χ</div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt-1)" id="dm-res-chi">—</div>
+          </div>
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--txt-3)">Гидр. радиус R</div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt-1)" id="dm-res-R">—</div>
+          </div>
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--txt-3)">h макс</div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt-1)" id="dm-res-hmax">—</div>
+          </div>
+        </div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:5px">Скорость течения</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--txt-3)">v Манинг (теор.)</div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt-2)" id="dm-res-vth">—</div>
+          </div>
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--txt-3)">v полевая</div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt-1)" id="dm-res-vpol">—</div>
+          </div>
+          <div style="background:rgba(64,144,232,.1);border-radius:6px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--txt-3)">v используемая</div>
+            <div style="font-size:13px;font-weight:600;color:var(--blue)" id="dm-res-vuse">—</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:5px 10px;font-size:11px">
+            <span style="color:var(--txt-3)">Fr = </span><span id="dm-res-Fr" style="font-weight:600">—</span>
+          </div>
+          <div style="background:var(--card-bg2,rgba(255,255,255,.04));border-radius:6px;padding:5px 10px;font-size:11px">
+            <span style="color:var(--txt-3)">δ = </span><span id="dm-res-delta" style="font-weight:600">—</span>
+          </div>
+          <div id="dm-res-regime" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;background:var(--card-bg2,rgba(255,255,255,.04))">—</div>
+        </div>
+      </div>
+
+      <!-- Фото -->
+      <div class="form-group">
+        <label class="form-label">Фото</label>
+        <div id="dm-photo-preview"></div>
+        <div id="dm-photo-progress" style="display:none"></div>
+        <button type="button" class="photo-pick-btn" id="dm-photo-btn"
+          onclick="showPhotoSourceModal('dm-photo','dm-photo-preview','dm-photo-progress',false)">
+          📷 Загрузить фото
+        </button>
+        <input type="file" id="dm-photo" accept="image/*" style="display:none">
+      </div>
+
+      <!-- Комментарий -->
+      <div class="form-group">
+        <label class="form-label">Комментарий</label>
+        <textarea class="form-textarea" id="dm-comment" rows="2" placeholder="Наблюдения, особенности канавы..."></textarea>
+      </div>
+
+      <!-- Кнопки -->
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+        <button type="button" class="btn btn-primary" style="flex:1" onclick="saveDitch()">💾 Сохранить канаву</button>
+        <button type="button" class="btn btn-outline" onclick="closeDitchModal()">Отмена</button>
+      </div>
+
+      <div id="dm-delete-wrap" style="display:none;margin-top:10px;text-align:center">
+        <button type="button" class="btn btn-sm" style="color:var(--red);border-color:rgba(224,80,80,.3);background:transparent"
+          onclick="deleteDitch(DitchState.editing&&DitchState.editing.id, DitchState.editing&&DitchState.editing.ditchName)">
+          🗑 Удалить канаву
+        </button>
+      </div>
+
+      <div id="ditch-history-panel" style="display:none;margin-top:12px;background:var(--card-bg2,#1e2535);border-radius:10px;border:1px solid var(--line)"></div>
+    </div>
+  </div>
+</div>
+
+<script src="ui-dashboard.js"></script>
+<script src="ui-report.js"></script>
+</body>
+</html>
+</body>
+</html>
