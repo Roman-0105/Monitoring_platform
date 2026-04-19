@@ -10,7 +10,6 @@ var ReportState = {
   dtsA: [], dtsB: [],
   history:    {},
   photoCache: {},
-  photoAnalysis: {},
   mapImgs:    { imgA: null, imgB: null },
   imgs3d:     {},
   aiText:     {},
@@ -107,21 +106,54 @@ function initReportTab() {
 function restoreSettings() {
   var s = {};
   try { s = JSON.parse(localStorage.getItem('report-settings') || '{}'); } catch(e) {}
-  if (s.author)   setRField('rp-author',   s.author);
-  if (s.position) setRField('rp-position', s.position);
-  if (s.apiKey)   setRField('rp-apikey',   s.apiKey);
+  if (s.author)        setRField('rp-author',        s.author);
+  if (s.position)      setRField('rp-position',      s.position);
+  if (s.apiKey)        setRField('rp-apikey',        s.apiKey);
+  if (s.customPrompt)  setRField('rp-custom-prompt', s.customPrompt);
   setRField('rp-date', new Date().toISOString().slice(0, 10));
+  // Восстанавливаем режим
+  if (s.reportMode) {
+    ReportState.settings.reportMode = s.reportMode;
+    setReportMode(s.reportMode);
+  } else {
+    setReportMode('single');
+  }
 }
 
 function saveReportSettings() {
   try {
     localStorage.setItem('report-settings', JSON.stringify({
-      author:   getRField('rp-author'),
-      position: getRField('rp-position'),
-      apiKey:   getRField('rp-apikey'),
-      reportVersion: ReportState.settings.reportVersion
+      author:        getRField('rp-author'),
+      position:      getRField('rp-position'),
+      apiKey:        getRField('rp-apikey'),
+      customPrompt:  getRField('rp-custom-prompt'),
+      reportVersion: ReportState.settings.reportVersion,
+      reportMode:    ReportState.settings.reportMode || 'single'
     }));
   } catch(e) {}
+}
+
+function fillPresetSelect() {
+  var sel = document.getElementById('rp-preset-select');
+  if (!sel) return;
+  var mode = ReportState.settings.reportMode || 'single';
+  var prompts = getPromptsBank();
+  sel.innerHTML = '<option value="">— выбрать из банка —</option>';
+  prompts.forEach(function(p) {
+    var opt = document.createElement('option');
+    opt.value = p.text;
+    opt.textContent = p.name;
+    opt.title = p.desc;
+    sel.appendChild(opt);
+  });
+}
+
+function onPresetChange(sel) {
+  if (!sel.value) return;
+  setRField('rp-custom-prompt', sel.value);
+  saveReportSettings();
+  sel.value = '';
+  Toast.show('Промпт загружен — можно редактировать', 'success');
 }
 
 function bindEvents() {
@@ -129,125 +161,315 @@ function bindEvents() {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', saveReportSettings);
   });
+  // Инициализируем выпадающий список промптов
+  fillPresetSelect();
 }
 
 // ── UI настроек ───────────────────────────────────────────
-function rpCheck(id, label, checked) {
-  return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">' +
-    '<input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + ' style="width:14px;height:14px">' +
-    '<span>' + label + '</span></label>';
+
+
+
+// ── Банк промптов ─────────────────────────────────────────
+var DEFAULT_PROMPTS = [
+  {
+    id: 'default-1',
+    name: 'Стандартный: обстановка + риски',
+    desc: 'Еженедельный отчёт. Описывает общую гидрогеологическую обстановку, выделяет паводковые зоны и точки с аномальным Q.',
+    text: 'Составь краткий профессиональный вывод по гидрогеологической обстановке карьера ЮРГ. Укажи основные зоны водопритока, горизонты с максимальным Q, состояние паводковых точек и аномальные изменения. Без рекомендаций.'
+  },
+  {
+    id: 'default-2',
+    name: 'Паводковый анализ',
+    desc: 'Акцент на паводковые точки и точки "Перелив". Оценивает угрозу для горных работ.',
+    text: 'Проанализируй паводковые точки и точки со статусом "Перелив". Оцени масштаб обводнённости и потенциальную угрозу для ведения горных работ. Укажи борта карьера и горизонты с наибольшим риском. Без рекомендаций.'
+  },
+  {
+    id: 'default-3',
+    name: 'Краткая сводка для руководства',
+    desc: '2-3 предложения без технических деталей. Для управленческой аудитории.',
+    text: 'Дай краткую сводку (2-3 предложения) по водопритоку карьера. Только ключевые факты: суммарный Q, основные зоны, критические точки. Нетехнический язык, без специализированных терминов.'
+  },
+  {
+    id: 'default-4',
+    name: 'Сравнительный анализ периодов',
+    desc: 'Для режима "Сравнение недель". Описывает динамику изменений Q между двумя датами.',
+    text: 'Составь сравнительный анализ двух периодов мониторинга. Укажи динамику суммарного Q, зоны с ростом и снижением водопритока, изменения статусов точек. Без рекомендаций.'
+  }
+];
+
+function getPromptsBank() {
+  try {
+    var saved = JSON.parse(localStorage.getItem('rp-prompts-bank') || '[]');
+    // Объединяем дефолтные + пользовательские (пользовательские идут первыми)
+    var ids = saved.map(function(p){ return p.id; });
+    var defaults = DEFAULT_PROMPTS.filter(function(p){ return ids.indexOf(p.id) < 0; });
+    return saved.concat(defaults);
+  } catch(e) { return DEFAULT_PROMPTS.slice(); }
+}
+
+function savePromptsBank(prompts) {
+  try {
+    // Сохраняем только пользовательские (не дефолтные)
+    var userPrompts = prompts.filter(function(p){ return p.id.indexOf('default-') < 0; });
+    localStorage.setItem('rp-prompts-bank', JSON.stringify(userPrompts));
+  } catch(e) {}
+}
+
+function addPromptToBank(name, desc, text) {
+  if (!name || !text) return false;
+  var prompts = getPromptsBank().filter(function(p){ return p.id.indexOf('default-') < 0; });
+  prompts.push({ id: 'u-' + Date.now(), name: name, desc: desc, text: text });
+  savePromptsBank(prompts);
+  return true;
+}
+
+function deletePromptFromBank(id) {
+  if (!id || id.indexOf('default-') === 0) return false; // нельзя удалить дефолтные
+  var prompts = getPromptsBank().filter(function(p){ return p.id.indexOf('default-') < 0 && p.id !== id; });
+  savePromptsBank(prompts);
+  return true;
+}
+
+function updatePromptInBank(id, name, desc, text) {
+  if (!id || id.indexOf('default-') === 0) return false;
+  var prompts = getPromptsBank().filter(function(p){ return p.id.indexOf('default-') < 0; });
+  var idx = -1;
+  prompts.forEach(function(p,i){ if(p.id===id) idx=i; });
+  if (idx >= 0) { prompts[idx] = {id:id, name:name, desc:desc, text:text}; }
+  savePromptsBank(prompts);
+  return true;
+}
+
+function applyPrompt(text) {
+  setRField('rp-custom-prompt', text);
+  saveReportSettings();
+  Toast.show('Промпт применён', 'success');
+}
+
+function renderPromptsTab() {
+  var root = document.getElementById('rp-tab-prompts');
+  if (!root) return;
+  var prompts = getPromptsBank();
+
+  var html = '<div style="margin-bottom:14px">';
+  prompts.forEach(function(p) {
+    var isDefault = p.id.indexOf('default-') === 0;
+    var borderColor = isDefault ? '#1a73e8' : '#f9ab00';
+    html += '<div style="border:0.5px solid var(--line-2);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--card-bg)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:600;font-size:13px;color:var(--txt-1);margin-bottom:3px">' + escHtml(p.name) +
+            (isDefault ? '<span style="font-size:10px;font-weight:400;color:#1a73e8;margin-left:6px;padding:1px 6px;background:#e8f0fe;border-radius:3px">встроенный</span>' : '') +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">' + escHtml(p.desc) + '</div>' +
+          '<div style="font-size:12px;color:var(--txt-2);background:var(--card-bg2,#1e2535);padding:8px 10px;border-radius:6px;border-left:2px solid ' + borderColor + ';white-space:pre-wrap">' + escHtml(p.text.slice(0,120)) + (p.text.length>120?'…':'') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' +
+          '<button class="btn btn-sm btn-outline" onclick="applyPrompt(' + JSON.stringify(p.text) + ');switchRpTab(\'settings\')">▶ Применить</button>' +
+          (!isDefault ? '<button class="btn btn-sm btn-outline" onclick="editPromptInUI(' + JSON.stringify(p.id) + ')">✏ Изменить</button>' : '') +
+          (!isDefault ? '<button class="btn btn-sm btn-outline" style="color:var(--red);border-color:rgba(224,80,80,.3)" onclick="deletePromptUI(' + JSON.stringify(p.id) + ')">🗑 Удалить</button>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+
+  html += '<div style="border-top:1px solid var(--line-2);padding-top:14px">' +
+    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">Добавить новый промпт</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">' +
+      '<div style="flex:1;min-width:180px"><label style="font-size:11px;color:var(--txt-3)">Название</label><input class="form-input" id="np-name" type="text" placeholder="напр. Анализ после ливня" style="margin-top:4px"></div>' +
+    '</div>' +
+    '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--txt-3)">Описание (подсказка)</label><input class="form-input" id="np-desc" type="text" placeholder="Для чего этот промпт, когда применять" style="margin-top:4px"></div>' +
+    '<div style="margin-bottom:10px"><label style="font-size:11px;color:var(--txt-3)">Текст промпта</label><textarea class="form-textarea" id="np-text" rows="4" placeholder="Напишите инструкцию для AI..." style="margin-top:4px"></textarea></div>' +
+    '<div style="text-align:right"><button class="btn btn-outline" onclick="saveNewPromptUI()">💾 Сохранить промпт</button></div>' +
+  '</div>';
+
+  root.innerHTML = html;
+}
+
+function saveNewPromptUI() {
+  var name = (document.getElementById('np-name')||{}).value || '';
+  var desc = (document.getElementById('np-desc')||{}).value || '';
+  var text = (document.getElementById('np-text')||{}).value || '';
+  if (!name.trim() || !text.trim()) { Toast.show('Заполните название и текст', 'warning'); return; }
+  addPromptToBank(name.trim(), desc.trim(), text.trim());
+  Toast.show('Промпт сохранён', 'success');
+  renderPromptsTab();
+}
+
+function deletePromptUI(id) {
+  if (!confirm('Удалить этот промпт?')) return;
+  deletePromptFromBank(id);
+  renderPromptsTab();
+}
+
+function editPromptInUI(id) {
+  var prompts = getPromptsBank();
+  var p = null;
+  prompts.forEach(function(x){ if(x.id===id) p=x; });
+  if (!p) return;
+  var np = document.getElementById('np-name');
+  var nd = document.getElementById('np-desc');
+  var nt = document.getElementById('np-text');
+  if (np) np.value = p.name;
+  if (nd) nd.value = p.desc;
+  if (nt) nt.value = p.text;
+  // Меняем кнопку "Сохранить" на "Обновить"
+  np.dataset.editId = id;
+  Toast.show('Промпт загружен для редактирования', 'info');
+}
+
+function switchRpTab(tab) {
+  ['settings','prompts'].forEach(function(t) {
+    var btn = document.getElementById('rp-tabbtn-' + t);
+    var panel = document.getElementById('rp-tab-' + t);
+    if (btn)   btn.classList.toggle('active', t === tab);
+    if (panel) panel.style.display = (t === tab) ? '' : 'none';
+  });
+  if (tab === 'prompts') renderPromptsTab();
 }
 
 function buildSettingsUI() {
-  return '<div style="max-width:860px;margin:0 auto;padding:16px 0">' +
+  return '<div style="max-width:900px;margin:0 auto;padding:14px 0">' +
 
-  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
-    '<div><h2 style="margin:0;font-size:18px;font-weight:500">Формирование отчёта</h2>' +
-    '<div style="font-size:12px;color:var(--txt-3);margin-top:3px">Мониторинг подземных вод карьера ЮРГ</div></div>' +
+  // ── Шапка
+  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+    '<div>' +
+      '<h2 style="margin:0;font-size:17px;font-weight:600;color:var(--txt-1)">Формирование отчёта</h2>' +
+      '<div style="font-size:12px;color:var(--txt-3);margin-top:2px">Мониторинг подземных вод карьера ЮРГ</div>' +
+    '</div>' +
     '<div style="display:flex;gap:8px">' +
-      '<button class="btn btn-outline" id="rp-load-btn" onclick="loadReportData()">📥 Загрузить данные</button>' +
-      '<button class="btn btn-primary" id="rp-generate-btn" onclick="generateReport()" style="opacity:0.5;pointer-events:none">📄 Сформировать отчёт</button>' +
+      '<button class="btn btn-outline" id="rp-load-btn" onclick="loadReportData()" style="white-space:nowrap">📥 Загрузить данные</button>' +
+      '<button class="btn btn-primary" id="rp-generate-btn" onclick="generateReport()" style="opacity:.5;pointer-events:none;white-space:nowrap">📄 Сформировать отчёт</button>' +
     '</div>' +
   '</div>' +
 
-  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">' +
+  // ── Вкладки
+  '<div style="display:flex;gap:4px;border-bottom:1px solid var(--line-2);margin-bottom:16px">' +
+    '<button id="rp-tabbtn-settings" class="btn btn-sm active" onclick="switchRpTab(\'settings\')" ' +
+      'style="border-radius:8px 8px 0 0;border-bottom:none;padding:7px 16px">⚙ Настройки</button>' +
+    '<button id="rp-tabbtn-prompts" onclick="switchRpTab(\'prompts\')" ' +
+      'style="border-radius:8px 8px 0 0;border:0.5px solid var(--line-2);border-bottom:none;padding:7px 16px;background:transparent;cursor:pointer;color:var(--txt-2);font-size:13px">🗒 Промпты AI</button>' +
+  '</div>' +
 
-  '<div class="card" style="padding:16px">' +
-    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:12px">Составитель</div>' +
-    '<div style="display:flex;flex-direction:column;gap:10px">' +
-      '<div><label style="font-size:12px;color:var(--txt-2);display:block;margin-bottom:4px">ФИО</label>' +
-        '<input class="form-input" id="rp-author" placeholder="Юкин Р.А." style="font-size:13px"></div>' +
-      '<div><label style="font-size:12px;color:var(--txt-2);display:block;margin-bottom:4px">Должность</label>' +
-        '<input class="form-input" id="rp-position" placeholder="Гидрогеолог" style="font-size:13px"></div>' +
-      '<div><label style="font-size:12px;color:var(--txt-2);display:block;margin-bottom:4px">Дата составления</label>' +
-        '<input class="form-input" type="date" id="rp-date" style="font-size:13px"></div>' +
+  // ════ ПАНЕЛЬ: НАСТРОЙКИ ═══════════════════════════════════
+  '<div id="rp-tab-settings">' +
+
+    // Составитель
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Составитель</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:start">' +
+        '<div><label style="font-size:11px;color:var(--txt-3)">ФИО</label><input class="form-input" id="rp-author" placeholder="Юкин Р.А." style="margin-top:4px"></div>' +
+        '<div><label style="font-size:11px;color:var(--txt-3)">Должность</label><input class="form-input" id="rp-position" placeholder="Гидрогеолог" style="margin-top:4px"></div>' +
+        '<div><label style="font-size:11px;color:var(--txt-3)">Дата составления</label><input class="form-input" id="rp-date" type="date" style="margin-top:4px;width:150px"></div>' +
+      '</div>' +
     '</div>' +
-  '</div>' +
 
-  '<div class="card" style="padding:16px">' +
-    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Период отчёта</div>' +
-    '<div style="display:flex;gap:6px;margin-bottom:12px">' +
-      '<button class="btn btn-sm" id="rp-mode-single" onclick="setReportMode(\'single\')" style="flex:1;font-size:12px">📅 Одна неделя</button>' +
-      '<button class="btn btn-sm btn-primary" id="rp-mode-compare" onclick="setReportMode(\'compare\')" style="flex:1;font-size:12px">📊 Сравнение недель</button>' +
+    // Тип отчёта
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Тип отчёта</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+        '<button id="rp-mode-single" class="btn btn-primary" onclick="setReportMode(\'single\')" style="flex:1;font-size:13px">📅 Одна неделя</button>' +
+        '<button id="rp-mode-compare" class="btn btn-outline" onclick="setReportMode(\'compare\')" style="flex:1;font-size:13px">📊 Сравнение периодов</button>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div><label id="rp-label-a" style="font-size:11px;color:var(--txt-3)">Дата мониторинга</label>' +
+          '<select class="form-select" id="rp-date-a" onchange="onReportDateChange()" style="margin-top:4px"></select></div>' +
+        '<div id="rp-period-b-block" style="display:none">' +
+          '<label style="font-size:11px;color:var(--txt-3)">Период Б (текущий)</label>' +
+          '<select class="form-select" id="rp-date-b" onchange="onReportDateChange()" style="margin-top:4px"></select>' +
+        '</div>' +
+      '</div>' +
+      '<div id="rp-dates-status" style="font-size:11px;color:var(--txt-3);margin-top:6px"></div>' +
     '</div>' +
-    '<div style="display:flex;flex-direction:column;gap:10px">' +
-      '<div><label id="rp-label-a" style="font-size:12px;color:var(--txt-2);display:block;margin-bottom:4px">Неделя А (базовая)</label>' +
-        '<select class="form-input" id="rp-date-a" style="font-size:13px" onchange="onReportDateChange()">' +
-          '<option value="">— загрузите данные —</option></select></div>' +
-      '<div id="rp-period-b-block">' +
-        '<label style="font-size:12px;color:var(--txt-2);display:block;margin-bottom:4px">Неделя Б (текущая)</label>' +
-        '<select class="form-input" id="rp-date-b" style="font-size:13px" onchange="onReportDateChange()">' +
-          '<option value="">— загрузите данные —</option></select></div>' +
-      '<div id="rp-dates-status" style="font-size:11px;color:var(--txt-3);min-height:16px"></div>' +
+
+    // Содержание
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Содержание отчёта</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">' +
+        '<div>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-map"     checked> Схема карьера с точками</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-domens"  checked> По горизонтам и доменам</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-photos"  checked> Фотофиксация точек</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-history" checked> История замеров (графики)</label>' +
+        '</div>' +
+        '<div>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-ditches" checked> Детали канав</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-compare"> Сравнительный анализ А vs Б</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-ai"      checked> AI-вывод по промпту</label>' +
+        '</div>' +
+      '</div>' +
+      '<div id="rp-data-status" style="display:none;border-top:0.5px solid var(--line-2);padding-top:8px;margin-top:8px">' +
+        '<div id="rp-data-summary" style="font-size:12px;color:var(--txt-2)"></div>' +
+      '</div>' +
     '</div>' +
-  '</div>' +
 
-  '</div>' +
+    // Claude AI
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Claude AI — автовыводы</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="rp-inc-ai-cb" checked onchange="document.getElementById(\'rp-inc-ai\').checked=this.checked"> Включить AI-анализ при формировании</label>' +
+      '<label style="font-size:11px;color:var(--txt-3)">Anthropic API ключ</label>' +
+      '<input class="form-input" id="rp-apikey" type="password" placeholder="sk-ant-..." style="margin-top:4px;font-family:monospace;font-size:12px">' +
+      '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">Ключ хранится только в браузере</div>' +
 
-  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">' +
-
-  '<div class="card" style="padding:16px">' +
-    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:12px">Содержимое отчёта</div>' +
-    '<div style="display:flex;flex-direction:column;gap:8px">' +
-      rpCheck('rp-inc-domens',   'По доменам (Domen-1…5)', true) +
-      rpCheck('rp-inc-ditches',  'Детали канав (профиль)', true) +
-      rpCheck('rp-inc-photos',   'Фотофиксация (если есть)', true) +
-      rpCheck('rp-inc-photo-ai', 'AI-анализ фотографий откосов', false) +
-      rpCheck('rp-inc-map',      'Схема карьера с точками', true) +
-      rpCheck('rp-inc-history',  'История замеров', true) +
-      rpCheck('rp-inc-compare',  'Сравнительный анализ А vs Б', true) +
+      '<div style="margin-top:12px;border-top:0.5px solid var(--line-2);padding-top:10px">' +
+        '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">' +
+          '<div style="flex:1">' +
+            '<label style="font-size:11px;color:var(--txt-3)">Готовый промпт</label>' +
+            '<select class="form-select" id="rp-preset-select" style="margin-top:4px" onchange="onPresetChange(this)">' +
+              '<option value="">— выбрать из банка —</option>' +
+            '</select>' +
+          '</div>' +
+          '<button class="btn btn-outline btn-sm" onclick="switchRpTab(\'prompts\')" style="white-space:nowrap;margin-bottom:1px">⊕ Банк промптов</button>' +
+        '</div>' +
+        '<label style="font-size:11px;color:var(--txt-3)">Свой промпт (инструкция для AI)</label>' +
+        '<textarea class="form-textarea" id="rp-custom-prompt" rows="4" ' +
+          'placeholder="Составь краткий вывод по гидрогеологической обстановке карьера ЮРГ. Укажи основные зоны водопритока и состояние паводковых точек. Без рекомендаций." ' +
+          'style="margin-top:4px;font-size:12px" oninput="saveReportSettings()"></textarea>' +
+        '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">AI получает: Q, статусы, горизонты, домены, борт, цвет воды, полевые наблюдения по топ-10 точкам</div>' +
+      '</div>' +
     '</div>' +
-  '</div>' +
 
-  '<div class="card" style="padding:16px;border-color:rgba(127,119,221,.3)">' +
-    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#534AB7;margin-bottom:12px">Claude AI — автовыводы</div>' +
-    '<div style="display:flex;flex-direction:column;gap:10px">' +
-      rpCheck('rp-inc-ai', 'Авто-анализ по доменам и сравнению', true) +
-      '<div><label style="font-size:12px;color:var(--txt-2);display:block;margin-bottom:4px">Anthropic API ключ</label>' +
-        '<input class="form-input" id="rp-apikey" type="password" placeholder="sk-ant-..." style="font-size:12px;font-family:monospace">' +
-        '<div style="font-size:11px;color:var(--txt-3);margin-top:4px">Ключ хранится только в браузере</div></div>' +
+    // Заключение
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Заключение и рекомендации</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
+        '<button class="btn btn-outline" id="rp-ai-concl-btn" onclick="generateAIConclusion()" style="white-space:nowrap">✨ Сгенерировать через AI</button>' +
+        '<span style="font-size:12px;color:var(--txt-3)">или введите вручную ↓</span>' +
+      '</div>' +
+      '<textarea class="form-textarea" id="rp-conclusions" rows="5" placeholder="Введите заключение и рекомендации..." style="font-size:12px"></textarea>' +
     '</div>' +
-  '</div>' +
 
   '</div>' +
 
-  '<div class="card" style="padding:16px;margin-bottom:16px">' +
-    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Заключение и рекомендации</div>' +
-    '<div style="display:flex;gap:8px;margin-bottom:8px">' +
-      '<button class="btn btn-sm btn-outline" onclick="generateAIConclusion()" id="rp-ai-concl-btn">✨ Сгенерировать через AI</button>' +
-      '<span style="font-size:12px;color:var(--txt-3);align-self:center">или введите вручную ↓</span>' +
-    '</div>' +
-    '<textarea id="rp-conclusions" class="form-input" rows="5" placeholder="Введите заключение и рекомендации..." style="resize:vertical;font-size:13px;line-height:1.6"></textarea>' +
-  '</div>' +
-
-  '<div id="rp-data-status" class="card" style="padding:14px;background:var(--bg-2);display:none">' +
-    '<div style="font-size:13px;font-weight:500;margin-bottom:8px">📊 Загруженные данные</div>' +
-    '<div id="rp-data-summary" style="font-size:12px;color:var(--txt-2)"></div>' +
-  '</div>' +
+  // ════ ПАНЕЛЬ: ПРОМПТЫ ═════════════════════════════════════
+  '<div id="rp-tab-prompts" style="display:none"></div>' +
 
   '</div>';
 }
 
 function setReportMode(mode) {
   ReportState.settings.reportMode = mode;
-  var btnS = document.getElementById('rp-mode-single');
-  var btnC = document.getElementById('rp-mode-compare');
-  var blockB = document.getElementById('rp-period-b-block');
-  var labelA = document.getElementById('rp-label-a');
-  var cmpCheck = document.getElementById('rp-inc-compare');
-  if (mode === 'single') {
-    if (btnS) { btnS.className = 'btn btn-sm btn-primary'; btnS.style.flex='1'; btnS.style.fontSize='12px'; }
-    if (btnC) { btnC.className = 'btn btn-sm'; btnC.style.flex='1'; btnC.style.fontSize='12px'; }
-    if (blockB) blockB.style.display = 'none';
-    if (labelA) labelA.textContent = 'Дата мониторинга';
-    if (cmpCheck) { cmpCheck.checked = false; cmpCheck.disabled = true; }
-  } else {
-    if (btnS) { btnS.className = 'btn btn-sm'; btnS.style.flex='1'; btnS.style.fontSize='12px'; }
-    if (btnC) { btnC.className = 'btn btn-sm btn-primary'; btnC.style.flex='1'; btnC.style.fontSize='12px'; }
-    if (blockB) blockB.style.display = '';
-    if (labelA) labelA.textContent = 'Неделя А (базовая)';
-    if (cmpCheck) { cmpCheck.checked = true; cmpCheck.disabled = false; }
+  var btnS    = document.getElementById('rp-mode-single');
+  var btnC    = document.getElementById('rp-mode-compare');
+  var blockB  = document.getElementById('rp-period-b-block');
+  var labelA  = document.getElementById('rp-label-a');
+  var cmpChk  = document.getElementById('rp-inc-compare');
+
+  var isSingle = (mode === 'single');
+  if (btnS) { btnS.className = 'btn btn-primary'; btnS.style.flex='1'; btnS.style.fontSize='13px'; }
+  if (btnC) { btnC.className = 'btn btn-outline'; btnC.style.flex='1'; btnC.style.fontSize='13px'; }
+  if (!isSingle) {
+    if (btnS) btnS.className = 'btn btn-outline'; btnS && (btnS.style.flex='1');
+    if (btnC) btnC.className = 'btn btn-primary'; btnC && (btnC.style.flex='1');
   }
+  if (blockB) blockB.style.display = isSingle ? 'none' : '';
+  if (labelA) labelA.textContent   = isSingle ? 'Дата мониторинга' : 'Период А (базовый)';
+  if (cmpChk) { cmpChk.checked = !isSingle; cmpChk.disabled = isSingle; }
+
+  // Обновляем выпадающий список готовых промптов
+  fillPresetSelect();
+  saveReportSettings();
 }
 
 // ── Загрузка данных ───────────────────────────────────────
@@ -329,99 +551,8 @@ function loadDitchesHistory() {
   return Promise.all(ditchTasks.concat(ptTasks));
 }
 
-// ── Claude Vision API — анализ изображений ───────────────
-function callClaudeVisionAPI(apiKey, textPrompt, imageBase64List) {
-  // imageBase64List: массив строк "data:image/jpeg;base64,..."
-  // Формируем content с изображениями + текстом
-  var content = [];
 
-  (imageBase64List || []).forEach(function(b64) {
-    if (!b64 || b64.length < 100) return;
-    var mimeMatch = b64.match(/^data:([^;]+);base64,/);
-    var mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-    var base64Data = b64.replace(/^data:[^;]+;base64,/, '');
-    content.push({
-      type: 'image',
-      source: { type: 'base64', media_type: mimeType, data: base64Data }
-    });
-  });
 
-  content.push({ type: 'text', text: textPrompt });
-
-  // claude-haiku-4-5-20251001 поддерживает vision
-  return fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 800,
-      messages: [{ role: 'user', content: content }]
-    })
-  }).then(function(res) { return res.json(); })
-    .then(function(data) {
-      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-      if (!data.content || !data.content[0]) throw new Error('Пустой ответ Vision API');
-      return data.content[0].text || '';
-    });
-}
-
-// ── Анализ фото одной точки ───────────────────────────────
-function analyzePointPhoto(apiKey, pointNumber, suffix) {
-  // suffix: 'b' для текущего периода, 'a' для предыдущего
-  var cache = ReportState.photoCache || {};
-  // Собираем все фото точки за период
-  var images = [];
-  for (var i = 0; i < 5; i++) {
-    var key = 'pt_' + pointNumber + '_' + i + '_' + suffix;
-    if (cache[key]) images.push(cache[key]);
-  }
-  if (images.length === 0) return Promise.resolve(null);
-
-  var prompt =
-    'Ты гидрогеолог. Опиши на русском языке гидрогеологическую обстановку откоса по фотографии.' +
-    'Укажи: 1) наличие и характер обводнённости (капёж, просачивание, струйный поток, отсутствие),' +
-    '2) ориентировочная интенсивность водопритока,' +
-    '3) состояние породы (влажная, мокрая, сухая, следы высыхания),' +
-    '4) наличие высолов, натёков, железистых осадков,' +
-    '5) риски (размыв, оплывание, обрушение).' +
-    'Ответ: 2-3 предложения, только факты по фото. Без вводных слов.';
-
-  return callClaudeVisionAPI(apiKey, prompt, images);
-}
-
-// ── Анализ фото всех точек периода (батч) ────────────────
-function analyzeAllPhotos(apiKey, pts, suffix, onProgress) {
-  var results = {};
-  // Последовательно — чтобы не превысить rate limit API
-  var tasks = pts.filter(function(p) {
-    // Только точки у которых есть фото за этот период
-    var cache = ReportState.photoCache || {};
-    return cache['pt_' + p.pointNumber + '_0_' + suffix];
-  });
-
-  if (tasks.length === 0) return Promise.resolve({});
-
-  var idx = 0;
-  function next() {
-    if (idx >= tasks.length) return Promise.resolve();
-    var p = tasks[idx++];
-    if (onProgress) onProgress(idx, tasks.length, p.pointNumber);
-    return analyzePointPhoto(apiKey, p.pointNumber, suffix).then(function(desc) {
-      if (desc) results[String(p.pointNumber)] = desc;
-      // Пауза 0.5 сек между запросами чтобы не упираться в rate limit
-      return new Promise(function(res){ setTimeout(res, 500); });
-    }).catch(function() {
-      return new Promise(function(res){ setTimeout(res, 500); });
-    }).then(next);
-  }
-
-  return next().then(function(){ return results; });
-}
 
 
 // ── Генерация AI заключения ───────────────────────────────
@@ -440,30 +571,15 @@ function generateAIConclusion() {
   if (modeEl && modeEl.classList.contains('active')) s.reportMode = 'single';
   // buildAIContext сам вычислит ptsA/ptsB/Q из allPoints
   var ctx = buildAIContext(s);
+  // Используем пользовательский промпт если задан
+  var userPrompt = (getRField('rp-custom-prompt') || s.customPrompt || '').trim();
   var prompt;
-  if (ctx.isSingle) {
-    prompt = 'Ты опытный гидрогеолог. Составь профессиональное заключение (3-5 абзацев) по мониторингу подземных вод карьера ЮРГ (Казахстан).\n\n' +
-      'ДАТА: ' + ctx.dateB + '\n' +
-      'ТОЧЕК: ' + ctx.totalPts + '\n' +
-      'СУММАРНЫЙ Q: ' + ctx.qB.toFixed(2) + ' л/с\n' +
-      'СТАТУСЫ: ' + ctx.statusStr + '\n' +
-      'ГОРИЗОНТЫ: ' + ctx.horizStr + '\n' +
-      'ПАВОДКОВЫЕ: ' + ctx.floodStr + '\n' +
-      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
-      'ДЕТАЛИ:\n' + ctx.ptsDetail + '\n\n' +
-      'ВАЖНО: Суммарный Q = ' + ctx.qB.toFixed(2) + ' л/с — используй это значение точно.\n' +
-      'Включи: общую гидрогеологическую обстановку, характеристику водопритока, состояние точек, рекомендации.';
+  if (userPrompt) {
+    prompt = userPrompt + buildDataContext(ctx, ctx.isSingle);
   } else {
-    prompt = 'Ты опытный гидрогеолог. Составь профессиональное заключение (3-5 абзацев) по мониторингу подземных вод карьера ЮРГ (Казахстан).\n\n' +
-      'ПЕРИОД А (' + ctx.dateA + '): Q=' + ctx.qA.toFixed(2) + ' л/с, точек=' + (ReportState.ptsA||[]).length + '\n' +
-      'ПЕРИОД Б (' + ctx.dateB + '): Q=' + ctx.qB.toFixed(2) + ' л/с, точек=' + ctx.totalPts + '\n' +
-      'СТАТУСЫ: ' + ctx.statusStr + '\n' +
-      'ГОРИЗОНТЫ: ' + ctx.horizStr + '\n' +
-      'ПАВОДКОВЫЕ: ' + ctx.floodStr + '\n' +
-      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
-      'ДЕТАЛИ:\n' + ctx.ptsDetail + '\n\n' +
-      'ВАЖНО: Q в период Б = ' + ctx.qB.toFixed(2) + ' л/с — используй точно.\n' +
-      'Включи: гидрогеологическую обстановку, динамику изменений А→Б, рекомендации.';
+    prompt = 'Ты опытный гидрогеолог карьера ЮРГ (Казахстан). ' +
+      'Составь профессиональное заключение (3-5 абзацев) по мониторингу подземных вод.' +
+      buildDataContext(ctx, ctx.isSingle);
   }
 
   callClaudeAPI(apiKey, prompt).then(function(text) {
@@ -552,11 +668,17 @@ function buildAIContext(s) {
     var qb = parseFloat(pb.flowRate)||0;
     var qa = pa ? parseFloat(pa.flowRate)||0 : null;
     var delta = qa!==null ? (qb-qa) : null;
-    return 'Точка #'+pb.pointNumber+
-      ' ('+pb.status+(pb.domain||pb.domen?', '+(pb.domain||pb.domen):'')+
-      (pb.horizon?', гор.'+pb.horizon:'')+')'+
+    var line = 'Точка #'+pb.pointNumber+
+      ' ('+pb.status+
+      (pb.domain||pb.domen ? ', '+(pb.domain||pb.domen) : '')+
+      (pb.horizon ? ', гор.'+pb.horizon+' м' : '')+
+      (pb.wall    ? ', борт '+pb.wall : '')+')'+
       ': Q='+qb.toFixed(2)+' л/с'+
-      (delta!==null ? ' (была '+qa.toFixed(2)+', Δ='+(delta>=0?'+':'')+delta.toFixed(2)+')' : '');
+      (delta!==null ? ' (была '+qa.toFixed(2)+', Δ='+(delta>=0?'+':'')+delta.toFixed(2)+')' : '')+
+      (pb.waterColor ? ', цвет воды: '+pb.waterColor : '')+
+      (pb.intensity  ? ', интенсивность: '+pb.intensity : '')+
+      (pb.comment    ? '\n  Наблюдение: '+pb.comment : '');
+    return line;
   }).join('\n');
 
   // Канавы
@@ -589,59 +711,57 @@ function buildAIContext(s) {
   };
 }
 
+function buildDataContext(ctx, isSingleMode) {
+  // Формирует блок данных для подстановки в любой промпт
+  var dataBlock = '\n\n--- ДАННЫЕ МОНИТОРИНГА ---\n';
+  if (isSingleMode) {
+    dataBlock += 'Дата замера: ' + ctx.dateB + '\n';
+    dataBlock += 'Точек мониторинга: ' + ctx.totalPts + ' шт.\n';
+    dataBlock += 'Суммарный Q: ' + ctx.qB.toFixed(2) + ' л/с (' + (ctx.qB*3.6).toFixed(2) + ' м³/ч)\n';
+  } else {
+    dataBlock += 'Период А (' + ctx.dateA + '): ' + (ReportState.ptsA||[]).length + ' точек, Q=' + ctx.qA.toFixed(2) + ' л/с\n';
+    dataBlock += 'Период Б (' + ctx.dateB + '): ' + ctx.totalPts + ' точек, Q=' + ctx.qB.toFixed(2) + ' л/с\n';
+    dataBlock += 'Изменение Q: ' + (ctx.qB-ctx.qA>=0?'+':'') + (ctx.qB-ctx.qA).toFixed(2) + ' л/с';
+    dataBlock += ctx.qA>0 ? ' (' + ((ctx.qB-ctx.qA)/ctx.qA*100).toFixed(0) + '%)\n' : '\n';
+  }
+  dataBlock += 'Статусы точек: ' + ctx.statusStr + '\n';
+  dataBlock += 'По горизонтам: ' + ctx.horizStr + '\n';
+  dataBlock += 'Паводковые/Перелив: ' + ctx.floodStr + '\n';
+  dataBlock += 'Канавы: ' + ctx.ditchStr + '\n';
+  dataBlock += '\nДетали топ-10 точек:\n' + ctx.ptsDetail + '\n';
+  dataBlock += '\nВАЖНО: используй только эти цифры. Суммарный Q = ' + ctx.qB.toFixed(2) + ' л/с.\n';
+  dataBlock += 'Ответь только текстом, без JSON, без markdown, без заголовков.';
+  return dataBlock;
+}
+
 function generateAIBlocks(s) {
   if (!s.apiKey) return Promise.resolve({});
   var ctx = buildAIContext(s);
 
+  // Пользовательский промпт из поля (или дефолтный)
+  var userPrompt = (s.customPrompt || '').trim();
   var prompt;
-  if (ctx.isSingle) {
-    // Режим: одна неделя
-    prompt = 'Ты опытный гидрогеолог на золотодобывающем карьере ЮРГ (Казахстан).\n' +
-      'Составь профессиональный анализ (формат JSON) на основе РЕАЛЬНЫХ данных мониторинга.\n\n' +
-      'ДАТА ЗАМЕРА: ' + ctx.dateB + '\n' +
-      'ТОЧЕК МОНИТОРИНГА: ' + ctx.totalPts + ' шт.\n' +
-      'СУММАРНЫЙ ВОДОПРИТОК: ' + ctx.qB.toFixed(2) + ' л/с (' + (ctx.qB*3.6).toFixed(2) + ' м³/ч)\n' +
-      'СТАТУСЫ ТОЧЕК: ' + ctx.statusStr + '\n' +
-      'ПО ГОРИЗОНТАМ: ' + ctx.horizStr + '\n' +
-      'ПАВОДКОВЫЕ/ПЕРЕЛИВ: ' + ctx.floodStr + '\n' +
-      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
-      'ДЕТАЛИ ПО ТОЧКАМ (топ по Q):\n' + ctx.ptsDetail + '\n\n' +
-      'ВАЖНО: используй только эти цифры. Не выдумывай данные. Суммарный Q = ' + ctx.qB.toFixed(2) + ' л/с.\n' +
-      'Ответь тремя абзацами разделёнными строкой "---":\n' +
-      'Абзац 1: общая гидрогеологическая обстановка (2-3 предложения)\n' +
-      'Абзац 2: напиши "не применимо" (одна дата, сравнение недоступно)\n' +
-      'Абзац 3: рекомендации (2-3 предложения)\n' +
-      'Только текст, без заголовков, без JSON, без markdown.';
+  if (userPrompt) {
+    // Пользователь написал свой промпт — подставляем данные в конце
+    prompt = userPrompt + buildDataContext(ctx, ctx.isSingle);
   } else {
-    // Режим: сравнение двух периодов
-    prompt = 'Ты опытный гидрогеолог на золотодобывающем карьере ЮРГ (Казахстан).\n' +
-      'Составь сравнительный анализ двух периодов мониторинга (формат JSON).\n\n' +
-      'ПЕРИОД А: ' + ctx.dateA + ' — точек: ' + (ReportState.ptsA||[]).length + ', Q=' + ctx.qA.toFixed(2) + ' л/с\n' +
-      'ПЕРИОД Б: ' + ctx.dateB + ' — точек: ' + ctx.totalPts + ', Q=' + ctx.qB.toFixed(2) + ' л/с\n' +
-      'ИЗМЕНЕНИЕ Q: ' + (ctx.qB-ctx.qA>=0?'+':'') + (ctx.qB-ctx.qA).toFixed(2) + ' л/с (' +
-        (ctx.qA>0 ? ((ctx.qB-ctx.qA)/ctx.qA*100).toFixed(0)+'%' : 'н/д') + ')\n' +
-      'СТАТУСЫ (период Б): ' + ctx.statusStr + '\n' +
-      'ПО ГОРИЗОНТАМ: ' + ctx.horizStr + '\n' +
-      'ПАВОДКОВЫЕ/ПЕРЕЛИВ: ' + ctx.floodStr + '\n' +
-      'КАНАВЫ: ' + ctx.ditchStr + '\n\n' +
-      'ИЗМЕНЕНИЯ ПО ТОЧКАМ:\n' + ctx.ptsDetail + '\n\n' +
-      'ВАЖНО: используй только эти цифры. Не выдумывай данные.\n' +
-      'Ответь тремя абзацами разделёнными строкой "---":\n' +
-      'Абзац 1: обстановка в период Б (2-3 предложения)\n' +
-      'Абзац 2: сравнение с периодом А, динамика (2-3 предложения)\n' +
-      'Абзац 3: рекомендации (2-3 предложения)\n' +
-      'Только текст, без заголовков, без JSON, без markdown.';
+    // Дефолтный промпт
+    if (ctx.isSingle) {
+      prompt = 'Ты опытный гидрогеолог карьера ЮРГ (Казахстан). ' +
+        'Составь профессиональный вывод по гидрогеологической обстановке. ' +
+        'Укажи суммарный водоприток, основные зоны, состояние паводковых точек. Без рекомендаций.' +
+        buildDataContext(ctx, true);
+    } else {
+      prompt = 'Ты опытный гидрогеолог карьера ЮРГ (Казахстан). ' +
+        'Составь сравнительный анализ двух периодов мониторинга. ' +
+        'Укажи динамику Q, зоны роста/снижения водопритока, паводковые риски. Без рекомендаций.' +
+        buildDataContext(ctx, false);
+    }
   }
 
   return callClaudeAPI(s.apiKey, prompt).then(function(text) {
-    var clean = text.replace(/```json/g,'').replace(/```/g,'').trim();
-    // Парсим абзацы разделённые "---"
-    var parts = clean.split(/\n---\n|\n---$/);
-    return {
-      summary:         (parts[0] || '').trim(),
-      compare:         (parts[1] || '').trim(),
-      recommendations: (parts[2] || '').trim(),
-    };
+    var clean = text.replace(/```/g,'').trim();
+    return { summary: clean, compare: '', recommendations: '' };
   }).catch(function() { return {}; });
 }
 
@@ -786,12 +906,12 @@ function generateReport() {
   s.dateB       = s.reportMode === 'single' ? s.dateA : getRField('rp-date-b');
   s.weekA       = getWeekNumber(s.dateA);
   s.weekB       = s.reportMode === 'single' ? s.weekA : getWeekNumber(s.dateB);
-  s.conclusions = getRField('rp-conclusions');
-  s.apiKey      = getRField('rp-apikey');
+  s.conclusions  = getRField('rp-conclusions');
+  s.apiKey       = getRField('rp-apikey');
+  s.customPrompt = getRField('rp-custom-prompt');
   s.includeDomens  = !!(document.getElementById('rp-inc-domens')  || {checked:true}).checked;
   s.includeDitches = !!(document.getElementById('rp-inc-ditches') || {checked:true}).checked;
   s.includePhotos   = !!(document.getElementById('rp-inc-photos')   || {checked:true}).checked;
-  s.includePhotoAI  = !!(document.getElementById('rp-inc-photo-ai') || {checked:false}).checked;
   s.includeMap     = !!(document.getElementById('rp-inc-map')     || {checked:true}).checked;
   s.includeHistory = !!(document.getElementById('rp-inc-history') || {checked:true}).checked;
   s.includeCompare = !!(document.getElementById('rp-inc-compare') || {checked:true}).checked;
@@ -824,27 +944,6 @@ function generateReport() {
     return Promise.resolve();
 
   }).then(function() {
-    // Vision-анализ фотографий (если включён)
-    if (s.includePhotoAI && s.apiKey) {
-      var photoSuffix = 'b'; // Фото периода Б (текущий)
-      var ptsWithPhoto = ReportState.ptsB.filter(function(p){
-        return (ReportState.photoCache || {})['pt_' + p.pointNumber + '_0_b'];
-      });
-      if (ptsWithPhoto.length > 0) {
-        Toast.progress('rp-gen', 'AI анализирует фотографии (' + ptsWithPhoto.length + ' точек)...');
-        return analyzeAllPhotos(s.apiKey, ptsWithPhoto, photoSuffix, function(cur, total, ptNum) {
-          Toast.progress('rp-gen', 'AI анализирует фото: точка #' + ptNum + ' (' + cur + '/' + total + ')...');
-        });
-      }
-    }
-    return Promise.resolve({});
-
-  }).then(function(photoAnalysis) {
-    // Сохраняем результаты анализа фото в ReportState
-    if (photoAnalysis && typeof photoAnalysis === 'object' && Object.keys(photoAnalysis).length > 0) {
-      ReportState.photoAnalysis = photoAnalysis;
-    }
-
     // AI текстовый анализ (если включён)
     if (s.includeAI && s.apiKey) {
       Toast.progress('rp-gen', 'Генерация AI анализа...');
@@ -1203,22 +1302,6 @@ function buildPointCard(pb, pa, s) {
     }
   }
 
-  // ── AI-описание фотографии ──────────────────────────────
-  var photoAIRow = '';
-  if (s.includePhotoAI) {
-    var photoAnalysis = ReportState.photoAnalysis || {};
-    var aiPhotoDesc = photoAnalysis[String(pb.pointNumber)];
-    if (aiPhotoDesc) {
-      photoAIRow =
-        '<div style="padding:10px 16px;border-bottom:1px solid #e0e6f0;' +
-          'background:#f3f0ff;border-left:3px solid #7f77dd">' +
-          '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;' +
-            'color:#7f77dd;font-weight:700;margin-bottom:4px">AI — Гидрогеологическое описание фото</div>' +
-          '<div style="font-size:12px;line-height:1.6;color:#333">' + escHtml(aiPhotoDesc) + '</div>' +
-        '</div>';
-    }
-  }
-
   // ── График на всю ширину
   var chartRow = '';
   if (s.includeHistory) {
@@ -1249,14 +1332,18 @@ function buildPointCard(pb, pa, s) {
       '<div style="font-size:14px;font-weight:700;color:#555">' + numHist + '</div></div>' +
   '</div>';
 
-  // ── Комментарий
+  // ── Комментарий (полевое описание — гидрогеологическое наблюдение)
   var commentRow = pb.comment
-    ? '<div style="padding:7px 14px;font-size:11px;color:#444;border-left:3px solid #f9ab00;background:#fffde7">' +
-        '<b>Комментарий:</b> ' + escHtml(pb.comment) + '</div>'
+    ? '<div style="padding:10px 16px;border-top:1px solid #e0e6f0;' +
+        'background:#fffde7;border-left:3px solid #f9ab00">' +
+        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;' +
+          'color:#b8860b;font-weight:700;margin-bottom:4px">Полевое наблюдение</div>' +
+        '<div style="font-size:12px;line-height:1.6;color:#333">' + escHtml(pb.comment) + '</div>' +
+      '</div>'
     : '';
 
   return '<div style="border:1px solid #e0e6f0;border-radius:8px;overflow:hidden;margin-bottom:14px;page-break-inside:avoid;break-inside:avoid">' +
-    header + photosRow + photoAIRow + chartRow + metricsRow + commentRow +
+    header + photosRow + chartRow + metricsRow + commentRow +
   '</div>';
 }
 
