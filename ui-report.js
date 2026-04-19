@@ -1305,6 +1305,20 @@ function buildPointHistoryChart(pointNumber, markerA, markerB) {
 }
 
 // Компактная карточка точки: фото(А+Б) + график + комментарий
+
+// Нормализует дату любого формата в ISO YYYY-MM-DD
+function normDateISO(raw) {
+  raw = (raw || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  var d = new Date(raw);
+  if (!isNaN(d.getTime())) {
+    return d.getFullYear() + '-' +
+      ('0' + (d.getMonth() + 1)).slice(-2) + '-' +
+      ('0' + d.getDate()).slice(-2);
+  }
+  return '';
+}
+
 function buildPointCard(pb, pa, s) {
   var qb = parseFloat(pb.flowRate) || 0;
   var isSingle = s.reportMode === 'single';
@@ -1312,11 +1326,16 @@ function buildPointCard(pb, pa, s) {
   // В single режиме pa может быть null — берём предыдущую дату из истории
   if (pa == null && isSingle) {
     var hist = (ReportState.ptHistory || {})[String(pb.pointNumber)] || [];
+    var pbDateISO = normDateISO(pb.monitoringDate);
     var prevEntries = hist.filter(function(h) {
-      return (h.monitoringDate||'').slice(0,10) < (pb.monitoringDate||'').slice(0,10) &&
+      var hDateISO = normDateISO(h.monitoringDate);
+      return hDateISO && pbDateISO && hDateISO < pbDateISO &&
              h.flowRate != null && !isNaN(parseFloat(h.flowRate));
-    }).sort(function(a,b){
-      return (b.monitoringDate||'') < (a.monitoringDate||'') ? -1 : 1;
+    }).sort(function(a, b) {
+      // Сортируем по возрастанию (ASC) — берём последний = ближайший к текущей дате
+      var da = normDateISO(a.monitoringDate);
+      var db = normDateISO(b.monitoringDate);
+      return da < db ? -1 : da > db ? 1 : 0;
     });
     if (prevEntries.length > 0) pa = prevEntries[prevEntries.length - 1];
   }
@@ -1358,8 +1377,16 @@ function buildPointCard(pb, pa, s) {
     '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#e6f4ea;color:#188038;font-weight:600">' + escHtml(pb.status || '—') + '</span>' +
     '<span style="font-size:11px;color:#666">' + escHtml(pb.intensity || '') + (pb.waterColor ? ' · ' + escHtml(pb.waterColor) : '') + (pb.horizon ? ' · гор. ' + escHtml(String(pb.horizon)) : '') + '</span>' +
     '<div style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px">' +
-      (qa != null ? '<span style="color:#888">' + (isSingle ? 'Пред. замер' : 'нед. А') + ': <b>' + qa.toFixed(2) + '</b></span><span style="color:#ccc">→</span>' : '') +
-      '<span style="color:#1a73e8;font-weight:700">' + (isSingle ? 'Текущий' : 'нед. Б') + ': ' + qb.toFixed(2) + ' л/с</span>' +
+      (qa != null ? '<span style="color:#888">' +
+        (isSingle
+          ? (pa && pa.monitoringDate ? normDateISO(pa.monitoringDate).slice(5).split('-').reverse().join('.') + ' ' : 'Пред. ')
+          : 'нед. А ') +
+        ': <b>' + qa.toFixed(2) + '</b></span><span style="color:#ccc">→</span>' : '') +
+      '<span style="color:#1a73e8;font-weight:700">' +
+        (isSingle
+          ? (pb.monitoringDate ? normDateISO(pb.monitoringDate).slice(5).split('-').reverse().join('.') + ' ' : 'Текущий ')
+          : 'нед. Б ') +
+        ': ' + qb.toFixed(2) + ' л/с</span>' +
       (delta != null ? '<span style="font-weight:700;color:' + trendColor + '">' + trendArrow + ' ' + (delta >= 0 ? '+' : '') + delta.toFixed(2) + '</span>' : '') +
     '</div>' +
   '</div>';
@@ -1400,11 +1427,11 @@ function buildPointCard(pb, pa, s) {
   var numHist = ((ReportState.ptHistory || {})[String(pb.pointNumber)] || []).length;
   var metricsRow = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e0e6f0">' +
     (qa != null
-      ? '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Q нед. А</div>' +
+      ? '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">" + (isSingle && pa && pa.monitoringDate ? normDateISO(pa.monitoringDate).slice(5).split("-").reverse().join(".") : "Q нед. А") + "</div>' +
           '<div style="font-size:14px;font-weight:700;color:#1a1a2e">' + qa.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>'
       : '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Метод</div>' +
           '<div style="font-size:11px;color:#555">' + escHtml(pb.measureMethod || '—') + '</div></div>') +
-    '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Q нед. Б</div>' +
+    '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">" + (isSingle && pb.monitoringDate ? normDateISO(pb.monitoringDate).slice(5).split("-").reverse().join(".") : "Q нед. Б") + "</div>' +
       '<div style="font-size:14px;font-weight:700;color:#1a73e8">' + qb.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>' +
     '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Изменение</div>' +
       '<div style="font-size:14px;font-weight:700;color:' + trendColor + '">' +
