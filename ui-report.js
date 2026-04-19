@@ -111,13 +111,38 @@ function restoreSettings() {
   if (s.apiKey)        setRField('rp-apikey',        s.apiKey);
   if (s.customPrompt)  setRField('rp-custom-prompt', s.customPrompt);
   setRField('rp-date', new Date().toISOString().slice(0, 10));
-  // Восстанавливаем режим
-  if (s.reportMode) {
-    ReportState.settings.reportMode = s.reportMode;
-    setReportMode(s.reportMode);
-  } else {
-    setReportMode('single');
+
+  // Если данные уже были загружены — восстанавливаем даты
+  var allDates = ReportState.allDates || [];
+  if (allDates.length > 0) {
+    var savedDateA = s.dateA || (allDates.length >= 2 ? allDates[allDates.length-2] : allDates[0]);
+    var savedDateB = s.dateB || allDates[allDates.length-1];
+    fillDateDropdown('rp-date-a', allDates, savedDateA);
+    fillDateDropdown('rp-date-b', allDates, savedDateB);
+    // Активируем кнопку формирования
+    var genBtn = document.getElementById('rp-generate-btn');
+    if (genBtn) { genBtn.style.opacity='1'; genBtn.style.pointerEvents=''; }
+    // Обновляем строку статуса данных
+    var sumEl = document.getElementById('rp-data-summary');
+    if (sumEl && !sumEl.textContent) {
+      var domains = [];
+      var ds = {};
+      (ReportState.allPoints||[]).forEach(function(p){
+        var d=p.domain||p.domen||'—'; if(!ds[d]){ds[d]=1;domains.push(d);}
+      });
+      sumEl.innerHTML = '<span style="color:var(--blue)">▸ Точек: <b>' + (ReportState.allPoints||[]).length + '</b></span>&nbsp;&nbsp;' +
+        '<span style="color:var(--gold)">▸ Канав: <b>' + (ReportState.allDitches||[]).length + '</b></span>&nbsp;&nbsp;' +
+        '<span style="color:var(--txt-2)">▸ Дат: <b>' + allDates.length + '</b></span>&nbsp;&nbsp;' +
+        '<span style="color:var(--txt-2)">▸ Домены: <b>' + domains.join(', ') + '</b></span>';
+      var statusEl = document.getElementById('rp-data-status');
+      if (statusEl) statusEl.style.display = '';
+    }
   }
+
+  // Восстанавливаем режим
+  var mode = s.reportMode || 'single';
+  ReportState.settings.reportMode = mode;
+  setReportMode(mode);
 }
 
 function saveReportSettings() {
@@ -133,10 +158,10 @@ function saveReportSettings() {
   } catch(e) {}
 }
 
-function fillPresetSelect() {
+function fillPresetSelect(keepValue) {
   var sel = document.getElementById('rp-preset-select');
   if (!sel) return;
-  var mode = ReportState.settings.reportMode || 'single';
+  var prevValue = keepValue || sel.value || '';
   var prompts = getPromptsBank();
   sel.innerHTML = '<option value="">— выбрать из банка —</option>';
   prompts.forEach(function(p) {
@@ -144,6 +169,7 @@ function fillPresetSelect() {
     opt.value = p.text;
     opt.textContent = p.name;
     opt.title = p.desc;
+    if (prevValue && p.text === prevValue) opt.selected = true;
     sel.appendChild(opt);
   });
 }
@@ -152,7 +178,7 @@ function onPresetChange(sel) {
   if (!sel.value) return;
   setRField('rp-custom-prompt', sel.value);
   saveReportSettings();
-  sel.value = '';
+  // НЕ сбрасываем sel.value — пусть отображается название
   Toast.show('Промпт загружен — можно редактировать', 'success');
 }
 
@@ -251,8 +277,11 @@ function renderPromptsTab() {
   if (!root) return;
   var prompts = getPromptsBank();
 
+  // Сохраняем в глобальную переменную для доступа из onclick по индексу
+  window._rpPrompts = prompts;
+
   var html = '<div style="margin-bottom:14px">';
-  prompts.forEach(function(p) {
+  prompts.forEach(function(p, idx) {
     var isDefault = p.id.indexOf('default-') === 0;
     var borderColor = isDefault ? '#1a73e8' : '#f9ab00';
     html += '<div style="border:0.5px solid var(--line-2);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--card-bg)">' +
@@ -261,62 +290,112 @@ function renderPromptsTab() {
           '<div style="font-weight:600;font-size:13px;color:var(--txt-1);margin-bottom:3px">' + escHtml(p.name) +
             (isDefault ? '<span style="font-size:10px;font-weight:400;color:#1a73e8;margin-left:6px;padding:1px 6px;background:#e8f0fe;border-radius:3px">встроенный</span>' : '') +
           '</div>' +
-          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">' + escHtml(p.desc) + '</div>' +
-          '<div style="font-size:12px;color:var(--txt-2);background:var(--card-bg2,#1e2535);padding:8px 10px;border-radius:6px;border-left:2px solid ' + borderColor + ';white-space:pre-wrap">' + escHtml(p.text.slice(0,120)) + (p.text.length>120?'…':'') + '</div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">' + escHtml(p.desc || '—') + '</div>' +
+          '<div style="font-size:12px;color:var(--txt-2);background:var(--card-bg2,#1e2535);padding:8px 10px;border-radius:6px;border-left:2px solid ' + borderColor + ';white-space:pre-wrap">' +
+            escHtml(p.text.slice(0, 120)) + (p.text.length > 120 ? '…' : '') +
+          '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' +
-          '<button class="btn btn-sm btn-outline" onclick="applyPrompt(' + JSON.stringify(p.text) + ');switchRpTab(\'settings\')">▶ Применить</button>' +
-          (!isDefault ? '<button class="btn btn-sm btn-outline" onclick="editPromptInUI(' + JSON.stringify(p.id) + ')">✏ Изменить</button>' : '') +
-          (!isDefault ? '<button class="btn btn-sm btn-outline" style="color:var(--red);border-color:rgba(224,80,80,.3)" onclick="deletePromptUI(' + JSON.stringify(p.id) + ')">🗑 Удалить</button>' : '') +
+          '<button class="btn btn-sm btn-outline" data-rp-idx="' + idx + '" data-rp-action="apply">▶ Применить</button>' +
+          (!isDefault ? '<button class="btn btn-sm btn-outline" data-rp-idx="' + idx + '" data-rp-action="edit">✏ Изменить</button>' : '') +
+          (!isDefault ? '<button class="btn btn-sm btn-outline" data-rp-idx="' + idx + '" data-rp-action="del" style="color:var(--red);border-color:rgba(224,80,80,.3)">🗑 Удалить</button>' : '') +
         '</div>' +
       '</div>' +
     '</div>';
   });
   html += '</div>';
 
+  // Форма добавления / редактирования
   html += '<div style="border-top:1px solid var(--line-2);padding-top:14px">' +
-    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">Добавить новый промпт</div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">' +
-      '<div style="flex:1;min-width:180px"><label style="font-size:11px;color:var(--txt-3)">Название</label><input class="form-input" id="np-name" type="text" placeholder="напр. Анализ после ливня" style="margin-top:4px"></div>' +
+    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px" id="np-form-title">Добавить новый промпт</div>' +
+    '<input type="hidden" id="np-edit-id">' +
+    '<div style="margin-bottom:8px">' +
+      '<label style="font-size:11px;color:var(--txt-3)">Название</label>' +
+      '<input class="form-input" id="np-name" type="text" placeholder="напр. Анализ после ливня" style="margin-top:4px">' +
     '</div>' +
-    '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--txt-3)">Описание (подсказка)</label><input class="form-input" id="np-desc" type="text" placeholder="Для чего этот промпт, когда применять" style="margin-top:4px"></div>' +
-    '<div style="margin-bottom:10px"><label style="font-size:11px;color:var(--txt-3)">Текст промпта</label><textarea class="form-textarea" id="np-text" rows="4" placeholder="Напишите инструкцию для AI..." style="margin-top:4px"></textarea></div>' +
-    '<div style="text-align:right"><button class="btn btn-outline" onclick="saveNewPromptUI()">💾 Сохранить промпт</button></div>' +
+    '<div style="margin-bottom:8px">' +
+      '<label style="font-size:11px;color:var(--txt-3)">Описание (подсказка)</label>' +
+      '<input class="form-input" id="np-desc" type="text" placeholder="Для чего этот промпт, когда применять" style="margin-top:4px">' +
+    '</div>' +
+    '<div style="margin-bottom:10px">' +
+      '<label style="font-size:11px;color:var(--txt-3)">Текст промпта</label>' +
+      '<textarea class="form-textarea" id="np-text" rows="4" placeholder="Напишите инструкцию для AI..." style="margin-top:4px"></textarea>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<button class="btn btn-outline btn-sm" id="np-cancel-btn" onclick="cancelEditPrompt()" style="display:none">Отмена</button>' +
+      '<button class="btn btn-outline btn-sm" id="np-save-btn" onclick="saveNewPromptUI()">💾 Сохранить промпт</button>' +
+    '</div>' +
   '</div>';
 
   root.innerHTML = html;
+
+  // Вешаем обработчики через делегирование на корень
+  root.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-rp-action]');
+    if (!btn) return;
+    var action = btn.dataset.rpAction;
+    var idx = parseInt(btn.dataset.rpIdx, 10);
+    var p = (window._rpPrompts || [])[idx];
+    if (!p) return;
+
+    if (action === 'apply') {
+      applyPrompt(p.text);
+      switchRpTab('settings');
+    } else if (action === 'edit') {
+      var nameEl = document.getElementById('np-name');
+      var descEl = document.getElementById('np-desc');
+      var textEl = document.getElementById('np-text');
+      var editId = document.getElementById('np-edit-id');
+      var titleEl = document.getElementById('np-form-title');
+      var cancelBtn = document.getElementById('np-cancel-btn');
+      if (nameEl) nameEl.value = p.name;
+      if (descEl) descEl.value = p.desc || '';
+      if (textEl) textEl.value = p.text;
+      if (editId) editId.value = p.id;
+      if (titleEl) titleEl.textContent = 'Редактировать промпт';
+      if (cancelBtn) cancelBtn.style.display = '';
+      nameEl && nameEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      nameEl && nameEl.focus();
+    } else if (action === 'del') {
+      if (!confirm('Удалить промпт "' + p.name + '"?')) return;
+      deletePromptFromBank(p.id);
+      fillPresetSelect();
+      renderPromptsTab();
+      Toast.show('Промпт удалён', 'success');
+    }
+  });
 }
 
 function saveNewPromptUI() {
-  var name = (document.getElementById('np-name')||{}).value || '';
-  var desc = (document.getElementById('np-desc')||{}).value || '';
-  var text = (document.getElementById('np-text')||{}).value || '';
-  if (!name.trim() || !text.trim()) { Toast.show('Заполните название и текст', 'warning'); return; }
-  addPromptToBank(name.trim(), desc.trim(), text.trim());
-  Toast.show('Промпт сохранён', 'success');
+  var name   = ((document.getElementById('np-name')  ||{}).value || '').trim();
+  var desc   = ((document.getElementById('np-desc')  ||{}).value || '').trim();
+  var text   = ((document.getElementById('np-text')  ||{}).value || '').trim();
+  var editId = ((document.getElementById('np-edit-id')||{}).value || '').trim();
+  if (!name || !text) { Toast.show('Заполните название и текст', 'warning'); return; }
+  if (editId) {
+    updatePromptInBank(editId, name, desc, text);
+    Toast.show('Промпт обновлён', 'success');
+  } else {
+    addPromptToBank(name, desc, text);
+    Toast.show('Промпт сохранён', 'success');
+  }
+  fillPresetSelect();
   renderPromptsTab();
 }
 
-function deletePromptUI(id) {
-  if (!confirm('Удалить этот промпт?')) return;
-  deletePromptFromBank(id);
-  renderPromptsTab();
-}
-
-function editPromptInUI(id) {
-  var prompts = getPromptsBank();
-  var p = null;
-  prompts.forEach(function(x){ if(x.id===id) p=x; });
-  if (!p) return;
-  var np = document.getElementById('np-name');
-  var nd = document.getElementById('np-desc');
-  var nt = document.getElementById('np-text');
-  if (np) np.value = p.name;
-  if (nd) nd.value = p.desc;
-  if (nt) nt.value = p.text;
-  // Меняем кнопку "Сохранить" на "Обновить"
-  np.dataset.editId = id;
-  Toast.show('Промпт загружен для редактирования', 'info');
+function cancelEditPrompt() {
+  var nameEl   = document.getElementById('np-name');
+  var descEl   = document.getElementById('np-desc');
+  var textEl   = document.getElementById('np-text');
+  var editIdEl = document.getElementById('np-edit-id');
+  var titleEl  = document.getElementById('np-form-title');
+  var cancelBtn= document.getElementById('np-cancel-btn');
+  if (nameEl)   nameEl.value   = '';
+  if (descEl)   descEl.value   = '';
+  if (textEl)   textEl.value   = '';
+  if (editIdEl) editIdEl.value = '';
+  if (titleEl)  titleEl.textContent = 'Добавить новый промпт';
+  if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
 function switchRpTab(tab) {
@@ -416,9 +495,12 @@ function buildSettingsUI() {
         '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">' +
           '<div style="flex:1">' +
             '<label style="font-size:11px;color:var(--txt-3)">Готовый промпт</label>' +
-            '<select class="form-select" id="rp-preset-select" style="margin-top:4px" onchange="onPresetChange(this)">' +
-              '<option value="">— выбрать из банка —</option>' +
-            '</select>' +
+            '<div style="position:relative;margin-top:4px">' +
+              '<select class="form-select" id="rp-preset-select" style="appearance:none;-webkit-appearance:none;padding-right:32px" onchange="onPresetChange(this)">' +
+                '<option value="">— выбрать из банка —</option>' +
+              '</select>' +
+              '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--txt-3);font-size:12px">▼</span>' +
+            '</div>' +
           '</div>' +
           '<button class="btn btn-outline btn-sm" onclick="switchRpTab(\'prompts\')" style="white-space:nowrap;margin-bottom:1px">⊕ Банк промптов</button>' +
         '</div>' +
