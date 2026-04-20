@@ -38,7 +38,12 @@ var HeatMap = (function() {
   }
 
   function getVal(p, maxQ, minH, maxH) {
-    if (_mode === 'q')       return maxQ > 0 ? (parseFloat(p.flowRate)||0) / maxQ : 0;
+    if (_mode === 'q') {
+      var q = parseFloat(p.flowRate) || 0;
+      // Точки с нулевым или отсутствующим Q всё равно показываем с минимальным весом
+      if (maxQ > 0) return Math.max(0.08, q / maxQ);
+      return 0.08; // нет данных — минимальное присутствие
+    }
     if (_mode === 'status')  return STATUS_WEIGHT[p.status] || 0.1;
     if (_mode === 'horizon') {
       var h = parseFloat(p.horizon) || 0;
@@ -117,8 +122,8 @@ var HeatMap = (function() {
             val += getVal(pt.p, maxQ, minH, maxH) * fall * fall;
           }
         }
-        val = Math.min(1, val * 1.5);
-        if (val > 0.025) {
+        val = Math.min(1, val * 1.2);
+        if (val > 0.012) {
           var rgb = heatColor(val);
           var idx = (py * oW + px) * 4;
           data[idx]   = rgb[0];
@@ -132,7 +137,10 @@ var HeatMap = (function() {
     _dirty = false;
   }
 
-  // Рисуем offscreen canvas на основной canvas с той же трансформацией что и схема
+  // Рисуем offscreen canvas на основной canvas.
+  // ВАЖНО: вызывается ВНУТРИ блока ctx.save/translate/scale в redrawMap,
+  // поэтому трансформация схемы УЖЕ применена к контексту.
+  // Повторно translate/scale применять НЕЛЬЗЯ — иначе двойное смещение.
   function compositeOnMap() {
     if (!_enabled || !_offscreen) return;
 
@@ -141,15 +149,10 @@ var HeatMap = (function() {
     if (!img || !mapCanvas) return;
 
     var ctx = mapCanvas.getContext('2d');
-    var scale = window._mapScale || 1;
-    var offX  = window._mapOffX  || 0;
-    var offY  = window._mapOffY  || 0;
-
-    // Рисуем поверх схемы с той же transform — offscreen масштабируется до imgW×imgH
+    // Контекст уже находится в СК схемы (translate + scale из redrawMap).
+    // Рисуем offscreen 1:1 в пикселях схемы — ctx.scale уже сделает масштаб.
     ctx.save();
     ctx.globalAlpha = _opacity;
-    ctx.translate(offX, offY);
-    ctx.scale(scale, scale);
     ctx.drawImage(_offscreen, 0, 0, img.width, img.height);
     ctx.restore();
   }
