@@ -5,6 +5,7 @@ var HeatMap = (function() {
   var _mode      = 'q';
   var _radius    = 0.06;   // доля от ширины схемы
   var _opacity   = 0.70;
+  var _gamma     = 1.0;    // степень кривой Q: <1 усиливает слабые точки, >1 гасит их
   var _offscreen = null;   // offscreen canvas в координатах схемы
   var _dirty     = true;   // нужен ли пересчёт
 
@@ -41,8 +42,11 @@ var HeatMap = (function() {
     if (_mode === 'q') {
       var q = parseFloat(p.flowRate) || 0;
       // Точки с нулевым или отсутствующим Q всё равно показываем с минимальным весом
-      if (maxQ > 0) return Math.max(0.08, q / maxQ);
-      return 0.08; // нет данных — минимальное присутствие
+      if (maxQ > 0) {
+        var norm = q / maxQ;
+        return Math.max(0.08, Math.pow(norm, _gamma));
+      }
+      return 0.08;
     }
     if (_mode === 'status')  return STATUS_WEIGHT[p.status] || 0.1;
     if (_mode === 'horizon') {
@@ -171,6 +175,7 @@ var HeatMap = (function() {
   function setMode(m)    { _mode    = m; markDirty(); if (_enabled && typeof redrawMap === 'function') redrawMap(); }
   function setRadius(r)  { _radius  = r; markDirty(); if (_enabled && typeof redrawMap === 'function') redrawMap(); }
   function setOpacity(o) { _opacity = o;               if (_enabled && typeof redrawMap === 'function') redrawMap(); }
+  function setGamma(g)   { _gamma   = g; markDirty(); if (_enabled && typeof redrawMap === 'function') redrawMap(); updateGammaLabel(g); }
 
   function updateButton() {
     var btn = document.getElementById('btn-heatmap-toggle');
@@ -187,6 +192,17 @@ var HeatMap = (function() {
     markDirty();
   }
 
+  function updateGammaLabel(g) {
+    var el = document.getElementById('hmgv');
+    if (!el) return;
+    g = parseFloat(g);
+    if      (g <= 0.35) el.textContent = 'лог';
+    else if (g <= 0.75) el.textContent = 'мягк';
+    else if (g <= 1.25) el.textContent = 'лин';
+    else if (g <= 1.75) el.textContent = 'жёстк';
+    else                el.textContent = 'контр';
+  }
+
   function renderControls() {
     var panel = document.getElementById('heatmap-panel');
     if (!panel) return;
@@ -201,18 +217,33 @@ var HeatMap = (function() {
           '<option value="status">По статусу</option>' +
           '<option value="horizon">По горизонту</option>' +
         '</select>' +
+
+        // Шкала Q (gamma)
+        '<div style="display:flex;align-items:center;gap:5px" title="Кривая реакции на Q: лог — все точки заметны, контраст — только сильные">' +
+          '<span style="font-size:11px;color:rgba(255,255,255,.45)">Шкала Q</span>' +
+          '<span style="font-size:9px;color:rgba(255,255,255,.25)">лог</span>' +
+          '<input type="range" id="hm-gamma" min="20" max="300" value="100" step="5" style="width:80px"' +
+            ' oninput="HeatMap.setGamma(this.value/100)">' +
+          '<span style="font-size:9px;color:rgba(255,255,255,.25)">контр</span>' +
+          '<span id="hmgv" style="font-size:11px;color:rgba(255,255,255,.35);min-width:34px">лин</span>' +
+        '</div>' +
+
+        // Радиус
         '<div style="display:flex;align-items:center;gap:5px">' +
           '<span style="font-size:11px;color:rgba(255,255,255,.45)">Радиус</span>' +
           '<input type="range" id="hm-radius" min="2" max="15" value="6" step="1" style="width:72px"' +
             ' oninput="HeatMap.setRadius(this.value/100);document.getElementById(\'hmrv\').textContent=this.value">' +
           '<span id="hmrv" style="font-size:11px;color:rgba(255,255,255,.35);min-width:16px">6</span>' +
         '</div>' +
+
+        // Яркость
         '<div style="display:flex;align-items:center;gap:5px">' +
           '<span style="font-size:11px;color:rgba(255,255,255,.45)">Яркость</span>' +
           '<input type="range" id="hm-opacity" min="20" max="100" value="70" step="5" style="width:72px"' +
             ' oninput="HeatMap.setOpacity(this.value/100);document.getElementById(\'hmov\').textContent=this.value+\'%\'">' +
           '<span id="hmov" style="font-size:11px;color:rgba(255,255,255,.35);min-width:28px">70%</span>' +
         '</div>' +
+
         '<canvas id="hm-legend" width="90" height="8" style="border-radius:3px"></canvas>' +
       '</div>';
 
@@ -241,6 +272,7 @@ var HeatMap = (function() {
     setMode:       setMode,
     setRadius:     setRadius,
     setOpacity:    setOpacity,
+    setGamma:      setGamma,
     markDirty:     markDirty,
     showControls:  showControls,
     // Вызывается из redrawMap ПОСЛЕ ctx.restore() — рисует поверх схемы
