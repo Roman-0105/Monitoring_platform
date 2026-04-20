@@ -144,7 +144,6 @@ document.addEventListener('DOMContentLoaded', function() {
     Diagnostics.clearError();
     Diagnostics.set('queueSize', Storage.getQueue().length);
     hideLoader();
-    if (typeof renderDashboard === 'function') renderDashboard();
     // Инициализируем модуль канав
     if (typeof initDitchModule === 'function') {
       initDitchModule(function() {
@@ -176,6 +175,9 @@ document.addEventListener('DOMContentLoaded', function() {
     _syncTimer = setInterval(syncAll, APP_CONFIG.SYNC_INTERVAL_MS);
   };
   window.addEventListener('online', function() { Points.flushQueue(); syncAll(); });
+
+  // Инициализация темы — внутри основного блока, чтобы не было двух DOMContentLoaded
+  initThemePanel();
 });
 
 // ── Синхронизация ─────────────────────────────────────────
@@ -233,7 +235,6 @@ function switchTab(name) {
   // Скрываем карточку канавы (класс ditch-map-card)
   document.querySelectorAll('.ditch-map-card').forEach(function(el){ el.remove(); });
 
-  if (name === 'home')     { if (typeof renderDashboard==='function') renderDashboard(); }
   if (name === 'add')      resetAddForm();
   if (name === 'diag')     Diagnostics.render();
   if (name === 'map')      { _mapSchemeImg = null; initMapFilters(); renderMap(); initMapLegend(); updateMapLegendPoints(); }
@@ -332,7 +333,3 @@ function initThemePanel() {
   }
 }
 
-// Инициализируем тему при загрузке
-document.addEventListener('DOMContentLoaded', function() {
-  initThemePanel();
-});
