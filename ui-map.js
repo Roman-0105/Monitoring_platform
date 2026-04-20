@@ -196,6 +196,10 @@ function renderMap() {
     var img = new Image();
     img.onload = function() {
       _mapSchemeImg = img;
+      // Инициализируем тепловую карту после загрузки схемы
+      if (typeof HeatMap !== 'undefined') {
+        setTimeout(function() { HeatMap.init(); }, 100);
+      }
       var wrap = document.getElementById('map-scheme-wrap');
       if (wrap) {
         var fitScale = Math.min(wrap.clientWidth / img.width, wrap.clientHeight / img.height);
