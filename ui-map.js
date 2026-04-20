@@ -250,6 +250,8 @@ function redrawMap() {
   ctx.translate(_mapOffX, _mapOffY);
   ctx.scale(_mapScale, _mapScale);
   ctx.drawImage(_mapSchemeImg, 0, 0);
+  // Тепловая карта рисуется в координатах схемы — масштабируется вместе с картой
+  if (typeof HeatMap !== 'undefined') HeatMap.draw();
   if (typeof Domens !== 'undefined') {
     Domens.draw(ctx, _mapSchemeImg.width, _mapSchemeImg.height);
   }
@@ -517,7 +519,7 @@ function initMapFilters() {
   // Виджет дат — пересобираем каждый раз
   buildDateFilterWidget('map-date-filter-wrap', _mapFilters.dates, function(newDates) {
     _mapFilters.dates = newDates;
-    redrawMap();
+    if(typeof HeatMap!=="undefined")HeatMap.markDirty();redrawMap();
     updateMapLegendPoints();
   });
 
@@ -532,7 +534,7 @@ function initMapFilters() {
     workerSel._bound = true;
     workerSel.addEventListener('change', function() {
       _mapFilters.worker = workerSel.value || 'all';
-      redrawMap();
+      if(typeof HeatMap!=="undefined")HeatMap.markDirty();redrawMap();
       updateMapLegendPoints();
     });
   }
