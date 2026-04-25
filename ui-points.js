@@ -446,17 +446,53 @@ function openDetailModal(pointId) {
 
   // Загружаем историю → заполняем KPI + график + журнал
   var cached = _chartCache[pointId];
-  if (cached) {
+  if (cached && cached.length) {
     _fillDetailHistory(box, cached, p.pointNumber);
   } else {
-    Api.getHistory(p.pointNumber).then(function(hist) {
-      _chartCache[pointId] = hist || [];
-      _fillDetailHistory(box, _chartCache[pointId], p.pointNumber);
-    }).catch(function(err) {
-      var cw = box.querySelector('#dm-chart');
-      if (cw) cw.innerHTML = '<p style="color:var(--bad);font-size:11px;padding:10px">Ошибка загрузки: ' + err.message + '</p>';
-    });
+    _loadDetailHistory(box, pointId, p.pointNumber);
   }
+}
+
+// Загрузка истории с показом ошибки во всех секциях + кнопка Повторить
+function _loadDetailHistory(box, pointId, pointNumber) {
+  // Показываем «загрузка» во всех трёх секциях
+  var elChart   = box.querySelector('#dm-chart');
+  var elJournal = box.querySelector('#dm-journal');
+  if (elChart)   elChart.innerHTML   = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка истории...</p>';
+  if (elJournal) elJournal.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка...</p>';
+
+  Api.getHistory(pointNumber).then(function(hist) {
+    _chartCache[pointId] = hist || [];
+    _fillDetailHistory(box, _chartCache[pointId], pointNumber);
+  }).catch(function(err) {
+    var errMsg = err && err.message ? err.message : String(err);
+    var isTimeout = errMsg.indexOf('timeout') >= 0 || errMsg.indexOf('Timeout') >= 0;
+    var errHtml =
+      '<div style="padding:14px;text-align:center">' +
+        '<div style="color:var(--bad);font-size:12px;margin-bottom:8px">' +
+          (isTimeout
+            ? '⏱ Сервер не ответил вовремя — история замеров загружается дольше обычного'
+            : '⚠ Ошибка загрузки: ' + errMsg) +
+        '</div>' +
+        '<button class="btn-retry-history" type="button" ' +
+        'style="height:26px;padding:0 12px;border-radius:3px;border:1px solid var(--gold);' +
+        'background:rgba(88,166,255,.1);color:var(--gold);font-size:11px;cursor:pointer;font-family:inherit">' +
+        '↺ Повторить загрузку</button>' +
+      '</div>';
+    var elC = box.querySelector('#dm-chart');
+    var elJ = box.querySelector('#dm-journal');
+    if (elC) elC.innerHTML = errHtml;
+    if (elJ) elJ.innerHTML = '<div style="padding:10px;text-align:center;font-size:11px;color:var(--txt-3)">Ожидание загрузки истории...</div>';
+
+    // Кнопка «Повторить» — удаляем кэш и пробуем снова
+    var retryBtn = box.querySelector('.btn-retry-history');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function() {
+        delete _chartCache[pointId];
+        _loadDetailHistory(box, pointId, pointNumber);
+      });
+    }
+  });
 }
 
 // Заполняет KPI, график и журнал внутри detail-modal
