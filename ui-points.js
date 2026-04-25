@@ -496,6 +496,115 @@ function _loadDetailHistory(box, pointId, pointNumber) {
 }
 
 // Заполняет KPI, график и журнал внутри detail-modal
+
+// ── График дебита точки ────────────────────────────────────
+// Используется из карточки подробностей и с карты (ui-map.js)
+
+function renderPointChart(container, history, pointNumber) {
+  var STATUS_COLORS = (typeof MapModule !== 'undefined') ? MapModule.STATUS_COLORS : {
+    'Новая': '#58a6ff', 'Активная': '#3fb950', 'Иссякает': '#d29922', 'Пересохла': '#f85149'
+  };
+
+  var W = 560, H = 130;
+  var PAD = { top: 18, right: 20, bottom: 36, left: 44 };
+  var chartW = W - PAD.left - PAD.right;
+  var chartH = H - PAD.top - PAD.bottom;
+
+  var defined = history.filter(function(r) { return r.flowRate != null; });
+  var maxLps  = defined.length ? Math.max.apply(null, defined.map(function(r) { return r.flowRate; })) : 1;
+  if (maxLps === 0) maxLps = 1;
+
+  var n = history.length;
+  function xPos(i) { return n === 1 ? PAD.left + chartW / 2 : PAD.left + (i / (n - 1)) * chartW; }
+  function yPos(v)  { return v == null ? null : PAD.top + chartH - (v / maxLps) * chartH; }
+
+  // Линия дебита
+  var linePath = '';
+  var firstPt  = true;
+  history.forEach(function(r, i) {
+    var y = yPos(r.flowRate);
+    if (y == null) { firstPt = true; return; }
+    linePath += (firstPt ? 'M' : 'L') + xPos(i).toFixed(1) + ',' + y.toFixed(1) + ' ';
+    firstPt = false;
+  });
+
+  // Область под линией
+  var areaPath = '';
+  var fi = -1, li = -1;
+  history.forEach(function(r, i) { if (r.flowRate != null) { if (fi < 0) fi = i; li = i; } });
+  if (fi >= 0) {
+    var base = (PAD.top + chartH).toFixed(1);
+    areaPath = 'M' + xPos(fi).toFixed(1) + ',' + base + ' L' +
+               linePath.replace(/^M/, '').trim() +
+               ' L' + xPos(li).toFixed(1) + ',' + base + ' Z';
+  }
+
+  // Оси Y
+  var yTicks = [0, maxLps / 2, maxLps];
+  var svg = '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;max-width:100%">';
+
+  // Сетка и метки
+  yTicks.forEach(function(v) {
+    var y = yPos(v).toFixed(1);
+    svg += '<line x1="' + PAD.left + '" y1="' + y + '" x2="' + (PAD.left + chartW) + '" y2="' + y +
+           '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
+    svg += '<text x="' + (PAD.left - 4) + '" y="' + (Number(y) + 4) + '" text-anchor="end" font-size="8" fill="rgba(139,148,158,.8)">' +
+           v.toFixed(2) + '</text>';
+    svg += '<text x="' + (PAD.left + chartW + 4) + '" y="' + (Number(y) + 4) + '" text-anchor="start" font-size="8" fill="rgba(88,166,255,.6)">' +
+           (v * 3.6).toFixed(2) + '</text>';
+  });
+
+  // Подписи осей
+  svg += '<text x="' + (PAD.left - 4) + '" y="' + (PAD.top - 6) + '" text-anchor="end" font-size="7" fill="rgba(139,148,158,.5)">л/с</text>';
+  svg += '<text x="' + (PAD.left + chartW + 4) + '" y="' + (PAD.top - 6) + '" text-anchor="start" font-size="7" fill="rgba(88,166,255,.4)">м³/ч</text>';
+
+  // Заливка
+  if (areaPath) svg += '<path d="' + areaPath + '" fill="rgba(88,166,255,.08)"/>';
+
+  // Линия
+  if (linePath) svg += '<path d="' + linePath + '" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>';
+
+  // Точки
+  history.forEach(function(r, i) {
+    var y = yPos(r.flowRate);
+    if (y == null) return;
+    var clr = STATUS_COLORS[r.status] || '#58a6ff';
+    var isLast = (i === n - 1);
+    svg += '<circle cx="' + xPos(i).toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (isLast ? 4 : 3) + '" ' +
+           'fill="' + (isLast ? clr : '#0d1117') + '" stroke="' + clr + '" stroke-width="1.5"/>';
+    if (isLast) {
+      svg += '<text x="' + xPos(i).toFixed(1) + '" y="' + (y - 8).toFixed(1) + '" text-anchor="middle" font-size="8" fill="' + clr + '">' +
+             (r.flowRate * 3.6).toFixed(2) + '</text>';
+    }
+  });
+
+  // Метки дат по оси X (равномерно, не более 6)
+  var step = Math.max(1, Math.ceil(n / 6));
+  for (var i = 0; i < n; i += step) {
+    var r = history[i];
+    var d = (r.monitoringDate || r.date || '').slice(5); // MM-DD
+    svg += '<text x="' + xPos(i).toFixed(1) + '" y="' + (PAD.top + chartH + 14) + '" ' +
+           'text-anchor="middle" font-size="8" fill="rgba(139,148,158,.7)">' + d + '</text>';
+  }
+
+  svg += '</svg>';
+
+  // Легенда статусов
+  var seen = {};
+  history.forEach(function(r) { if (r.status) seen[r.status] = STATUS_COLORS[r.status] || '#888'; });
+  var legend = Object.keys(seen).map(function(s) {
+    return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;' +
+           'color:rgba(139,148,158,.8);margin-right:8px">' +
+           '<span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:' + seen[s] + '"></span>' + s + '</span>';
+  }).join('');
+
+  container.innerHTML =
+    '<div style="padding:8px 12px 6px;overflow-x:auto">' +
+    (legend ? '<div style="margin-bottom:5px">' + legend + '</div>' : '') +
+    svg +
+    '</div>';
+}
+
 function _fillDetailHistory(box, history, pointNumber) {
   var defined = (history || []).filter(function(r) {
     return r.flowRate != null && !isNaN(parseFloat(r.flowRate));
