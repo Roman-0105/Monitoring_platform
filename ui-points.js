@@ -190,15 +190,15 @@ function renderPointsList() {
     if (p.measureMethod) html += _diRow('Способ',  escAttr(p.measureMethod));
     if (p.intensity)     html += _diRow('Интенс.', escAttr(p.intensity));
 
-    html += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">';
+    html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin-top:auto">';
     if (p.status) html += '<span class="badge ' + statusClass + '">' + escAttr(p.status) + '</span>';
     if (p.domain) html += '<span class="badge badge-new">' + escAttr(p.domain) + '</span>';
+    html += '<button class="btn-details-card" data-pid="' + p.id + '" ' +
+            'style="margin-left:auto;height:20px;padding:0 7px;border-radius:3px;' +
+            'border:1px solid rgba(88,166,255,.4);background:rgba(88,166,255,.1);' +
+            'color:var(--gold);font-size:9px;font-weight:500;cursor:pointer;white-space:nowrap;' +
+            'font-family:inherit">▶ Подробнее</button>';
     html += '</div>';
-
-    html += '<button class="btn-details-card btn btn-sm btn-outline" data-pid="' + p.id + '" ' +
-            'style="display:block;width:100%;height:22px;font-size:10px;margin-top:auto;' +
-            'border-radius:3px;text-align:center;padding:0">' +
-            '▶ Подробнее</button>';
 
     html += '</div>';
 
