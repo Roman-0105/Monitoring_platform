@@ -93,6 +93,39 @@ function initPointsFilters() {
   }
 }
 
+// ── Вспомогательные функции рендера карточек ──────────────
+
+function _diRow(label, val) {
+  return '<div style="display:flex;justify-content:space-between;gap:4px;font-size:10px;line-height:1.4;' +
+         'border-bottom:1px solid rgba(48,54,61,.3);padding:1px 0">' +
+         '<span style="color:var(--txt-3);flex-shrink:0">' + label + '</span>' +
+         '<span style="color:var(--txt-2);font-weight:500;text-align:right;white-space:nowrap;' +
+         'overflow:hidden;text-overflow:ellipsis">' + val + '</span></div>';
+}
+
+function _dmRow(label, val) {
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;' +
+         'padding:3px 0;border-bottom:1px solid rgba(48,54,61,.35);font-size:11px">' +
+         '<span style="color:var(--txt-3);flex-shrink:0;font-size:10px">' + label + '</span>' +
+         '<span style="color:var(--txt-2);font-weight:500;text-align:right">' + val + '</span></div>';
+}
+
+function _secHdr(title) {
+  return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;' +
+         'color:var(--txt-2);letter-spacing:.06em;text-transform:uppercase;' +
+         'padding-bottom:6px;border-bottom:1px solid var(--line-2);margin-bottom:8px">' +
+         '<span style="display:inline-block;width:3px;height:12px;border-radius:2px;' +
+         'background:var(--gold);flex-shrink:0"></span>' + title + '</div>';
+}
+
+function _kpiCard(idSuffix, label, unit) {
+  return '<div style="background:var(--bg-2);border:1px solid var(--line-2);border-radius:5px;padding:8px 10px">' +
+         '<div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">' + label + '</div>' +
+         '<div style="font-size:17px;font-weight:700;color:var(--gold);line-height:1" id="dm-kpi-' + idSuffix + '">—</div>' +
+         '<div style="font-size:9px;color:var(--txt-3)" id="dm-kpi-' + idSuffix + '-sub">' + unit + '</div>' +
+         '</div>';
+}
+
 function renderPointsList() {
   var container = document.getElementById('points-list');
   if (!container) return;
@@ -150,20 +183,12 @@ function renderPointsList() {
             'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
             highlightSearch(p.wall || p.domain || '—', _s) + '</div>';
 
-    function diRow(label, val) {
-      return '<div style="display:flex;justify-content:space-between;gap:4px;font-size:10px;line-height:1.4;' +
-             'border-bottom:1px solid rgba(48,54,61,.3);padding:1px 0">' +
-             '<span style="color:var(--txt-3);flex-shrink:0">' + label + '</span>' +
-             '<span style="color:var(--txt-2);font-weight:500;text-align:right;white-space:nowrap;' +
-             'overflow:hidden;text-overflow:ellipsis">' + val + '</span></div>';
-    }
-
-    if (p.horizon)      html += diRow('Горизонт', highlightSearch(p.horizon, _s));
-    if (m3h)            html += diRow('Дебит', '<span style="color:var(--ok)">' + m3h + '</span>');
-    else                html += diRow('Дебит', '—');
-    html += diRow('Дата', formatMonitoringDate(p.monitoringDate));
-    if (p.measureMethod) html += diRow('Способ',  escAttr(p.measureMethod));
-    if (p.intensity)     html += diRow('Интенс.', escAttr(p.intensity));
+    if (p.horizon)      html += _diRow('Горизонт', highlightSearch(p.horizon, _s));
+    if (m3h)            html += _diRow('Дебит', '<span style="color:var(--ok)">' + m3h + '</span>');
+    else                html += _diRow('Дебит', '—');
+    html += _diRow('Дата', formatMonitoringDate(p.monitoringDate));
+    if (p.measureMethod) html += _diRow('Способ',  escAttr(p.measureMethod));
+    if (p.intensity)     html += _diRow('Интенс.', escAttr(p.intensity));
 
     html += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">';
     if (p.status) html += '<span class="badge ' + statusClass + '">' + escAttr(p.status) + '</span>';
@@ -305,60 +330,37 @@ function openDetailModal(pointId) {
               '<div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--txt-3);' +
               'text-transform:uppercase;margin-bottom:6px">Данные последнего замера</div>';
 
-  function dmRow(label, val) {
-    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;' +
-           'padding:3px 0;border-bottom:1px solid rgba(48,54,61,.35);font-size:11px">' +
-           '<span style="color:var(--txt-3);flex-shrink:0;font-size:10px">' + label + '</span>' +
-           '<span style="color:var(--txt-2);font-weight:500;text-align:right">' + val + '</span></div>';
-  }
-
-  if (p.horizon)      bodyHtml += dmRow('Горизонт',      escAttr(p.horizon));
-  bodyHtml += dmRow('Дебит', m3h);
-  bodyHtml += dmRow('Дата замера', formatMonitoringDate(p.monitoringDate));
-  if (p.measureMethod) bodyHtml += dmRow('Способ',       escAttr(p.measureMethod));
-  if (p.intensity)     bodyHtml += dmRow('Интенсивность', escAttr(p.intensity));
-  if (p.worker)        bodyHtml += dmRow('Замерщик',      escAttr(p.worker));
-  if (p.xLocal != null) bodyHtml += dmRow('Координаты',
+  if (p.horizon)      bodyHtml += _dmRow('Горизонт',      escAttr(p.horizon));
+  bodyHtml += _dmRow('Дебит', m3h);
+  bodyHtml += _dmRow('Дата замера', formatMonitoringDate(p.monitoringDate));
+  if (p.measureMethod) bodyHtml += _dmRow('Способ',       escAttr(p.measureMethod));
+  if (p.intensity)     bodyHtml += _dmRow('Интенсивность', escAttr(p.intensity));
+  if (p.worker)        bodyHtml += _dmRow('Замерщик',      escAttr(p.worker));
+  if (p.xLocal != null) bodyHtml += _dmRow('Координаты',
     'X: ' + Number(p.xLocal).toFixed(1) + ' Y: ' + Number(p.yLocal).toFixed(1));
-  if (p.waterColor)   bodyHtml += dmRow('Цвет воды',    escAttr(p.waterColor));
-  if (p.comment)      bodyHtml += dmRow('Примечание',   escAttr(p.comment));
+  if (p.waterColor)   bodyHtml += _dmRow('Цвет воды',    escAttr(p.waterColor));
+  if (p.comment)      bodyHtml += _dmRow('Примечание',   escAttr(p.comment));
 
   bodyHtml += '</div></div>';
 
-  // KPI
-  function secHdr(title) {
-    return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;' +
-           'color:var(--txt-2);letter-spacing:.06em;text-transform:uppercase;' +
-           'padding-bottom:6px;border-bottom:1px solid var(--line-2);margin-bottom:8px">' +
-           '<span style="display:inline-block;width:3px;height:12px;border-radius:2px;' +
-           'background:var(--gold);flex-shrink:0"></span>' + title + '</div>';
-  }
-  function kpiCard(id_suffix, label, id_val, unit, id_sub) {
-    return '<div style="background:var(--bg-2);border:1px solid var(--line-2);border-radius:5px;padding:8px 10px">' +
-           '<div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">' + label + '</div>' +
-           '<div style="font-size:17px;font-weight:700;color:var(--gold);line-height:1" id="dm-kpi-' + id_suffix + '">—</div>' +
-           '<div style="font-size:9px;color:var(--txt-3)" id="dm-kpi-' + id_suffix + '-sub">' + unit + '</div>' +
-           '</div>';
-  }
-
   bodyHtml +=
-    '<div>' + secHdr('Аналитика') +
+    '<div>' + _secHdr('Аналитика') +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">' +
-      kpiCard('avg',   'Среднее Q',   '', 'м³/ч', '') +
-      kpiCard('max',   'Максимум',    '', 'м³/ч', '') +
-      kpiCard('min',   'Минимум',     '', 'м³/ч', '') +
-      kpiCard('count', 'Замеров',     '', 'всего', '') +
+      _kpiCard('avg',   'Среднее Q',   'м³/ч') +
+      _kpiCard('max',   'Максимум',    'м³/ч') +
+      _kpiCard('min',   'Минимум',     'м³/ч') +
+      _kpiCard('count', 'Замеров',     'всего') +
     '</div></div>';
 
   bodyHtml +=
-    '<div>' + secHdr('История дебита') +
+    '<div>' + _secHdr('История дебита') +
     '<div id="dm-chart-wrap" style="background:var(--bg-2);border:1px solid var(--line-2);' +
     'border-radius:5px;padding:10px 12px;min-height:80px">' +
     '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка...</p>' +
     '</div></div>';
 
   bodyHtml +=
-    '<div>' + secHdr('Журнал замеров') +
+    '<div>' + _secHdr('Журнал замеров') +
     '<div id="dm-history-wrap" style="background:var(--bg-2);border:1px solid var(--line-2);' +
     'border-radius:5px;overflow:hidden">' +
     '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка...</p>' +
