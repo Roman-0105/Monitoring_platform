@@ -107,298 +107,389 @@ function renderPointsList() {
     return;
   }
 
-  var html = '';
-  for (var i = 0; i < points.length; i++) {
-    var p        = points[i];
-    var syncStatus   = p.syncStatus || 'pending';
-    var statusColors = (typeof MapModule !== 'undefined') ? MapModule.STATUS_COLORS : {};
-    var statusClass  = p.status === 'Новая'    ? 'badge-new'    :
-                       p.status === 'Активная' ? 'badge-active' :
-                       p.status === 'Иссякает' ? 'badge-fading' :
-                       p.status === 'Пересохла'? 'badge-dry'    : '';
-    var hasPhoto = p.photoUrls && p.photoUrls[0];
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
 
-    var syncIcon, syncStyle;
-    if (syncStatus === 'synced') {
-      syncIcon  = '✓';
-      syncStyle = 'display:inline-flex;align-items:center;justify-content:center;' +
-                  'width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:700;' +
-                  'flex-shrink:0;margin-left:auto;cursor:default;' +
-                  'background:rgba(52,168,83,.18);color:#34a853;border:1.5px solid rgba(52,168,83,.4)';
-    } else if (syncStatus === 'error') {
-      syncIcon  = '✕';
-      syncStyle = 'display:inline-flex;align-items:center;justify-content:center;' +
-                  'width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:700;' +
-                  'flex-shrink:0;margin-left:auto;cursor:default;' +
-                  'background:rgba(234,67,53,.18);color:#ea4335;border:1.5px solid rgba(234,67,53,.4)';
-    } else {
-      syncIcon  = '⏳';
-      syncStyle = 'display:inline-flex;align-items:center;justify-content:center;' +
-                  'width:22px;height:22px;border-radius:50%;font-size:13px;' +
-                  'flex-shrink:0;margin-left:auto;cursor:default;' +
-                  'background:rgba(251,188,5,.15);color:#f9ab00;border:1.5px solid rgba(251,188,5,.4)';
+  for (var i = 0; i < points.length; i++) {
+    var p          = points[i];
+    var syncStatus = p.syncStatus || 'pending';
+    var hasPhoto   = p.photoUrls && p.photoUrls[0];
+    var _s         = _pointsFilters.search || '';
+
+    var statusClass = p.status === 'Новая'    ? 'badge-new'    :
+                      p.status === 'Активная' ? 'badge-active' :
+                      p.status === 'Иссякает' ? 'badge-fading' :
+                      p.status === 'Пересохла'? 'badge-dry'    : '';
+
+    var syncColor = syncStatus === 'synced' ? 'var(--ok)' :
+                    syncStatus === 'error'  ? 'var(--bad)' : 'var(--warn)';
+    var syncTitle = syncStatus === 'synced' ? 'Синхронизировано' :
+                    syncStatus === 'error'  ? 'Ошибка синхронизации' : 'Ожидает отправки';
+
+    var m3h = '';
+    if (p.flowRate != null && !isNaN(parseFloat(p.flowRate))) {
+      m3h = (parseFloat(p.flowRate) * 3.6).toFixed(2) + ' м³/ч';
     }
 
-    html += '<div class="point-card' + (syncStatus !== 'synced' ? ' point-pending' : '') + '">';
-    var _s = _pointsFilters.search || '';
-    html += '<div class="point-card__header">';
-    html += '<span class="point-card__num">#' + highlightSearch(p.pointNumber || '—', _s) + '</span>';
-    html += '<span class="badge ' + statusClass + '">' + (p.status || '') + '</span>';
-    html += '<span style="' + syncStyle + '" title="' +
-            (syncStatus === 'synced' ? 'Синхронизировано' :
-             syncStatus === 'error'  ? 'Ошибка синхронизации' : 'Ожидает отправки') +
-            '">' + syncIcon + '</span>';
+    var pendingBorder = syncStatus !== 'synced' ? 'border-left:3px solid var(--warn);' : '';
+    html += '<div class="point-card" style="display:flex;height:160px;position:relative;' + pendingBorder + '">';
+
+    html += '<span title="' + syncTitle + '" style="' +
+            'position:absolute;top:7px;left:7px;z-index:2;' +
+            'width:7px;height:7px;border-radius:50%;' +
+            'background:' + syncColor + ';' +
+            'border:1px solid rgba(13,17,23,.5)"></span>';
+
+    // Левая 1/3 — данные
+    html += '<div style="flex:1;padding:8px 10px 8px 16px;display:flex;flex-direction:column;' +
+            'gap:3px;min-width:0;border-right:1px solid var(--line-2)">';
+
+    html += '<div style="font-size:18px;font-weight:700;color:var(--gold);line-height:1;margin-bottom:2px">' +
+            highlightSearch(p.pointNumber || '—', _s) + '</div>';
+
+    html += '<div style="font-size:11px;color:var(--txt-1);font-weight:500;' +
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+            highlightSearch(p.wall || p.domain || '—', _s) + '</div>';
+
+    function diRow(label, val) {
+      return '<div style="display:flex;justify-content:space-between;gap:4px;font-size:10px;line-height:1.4;' +
+             'border-bottom:1px solid rgba(48,54,61,.3);padding:1px 0">' +
+             '<span style="color:var(--txt-3);flex-shrink:0">' + label + '</span>' +
+             '<span style="color:var(--txt-2);font-weight:500;text-align:right;white-space:nowrap;' +
+             'overflow:hidden;text-overflow:ellipsis">' + val + '</span></div>';
+    }
+
+    if (p.horizon)      html += diRow('Горизонт', highlightSearch(p.horizon, _s));
+    if (m3h)            html += diRow('Дебит', '<span style="color:var(--ok)">' + m3h + '</span>');
+    else                html += diRow('Дебит', '—');
+    html += diRow('Дата', formatMonitoringDate(p.monitoringDate));
+    if (p.measureMethod) html += diRow('Способ',  escAttr(p.measureMethod));
+    if (p.intensity)     html += diRow('Интенс.', escAttr(p.intensity));
+
+    html += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">';
+    if (p.status) html += '<span class="badge ' + statusClass + '">' + escAttr(p.status) + '</span>';
+    if (p.domain) html += '<span class="badge badge-new">' + escAttr(p.domain) + '</span>';
     html += '</div>';
+
+    html += '<button class="btn-details-card btn btn-sm btn-outline" data-pid="' + p.id + '" ' +
+            'style="display:block;width:100%;height:22px;font-size:10px;margin-top:auto;' +
+            'border-radius:3px;text-align:center;padding:0">' +
+            '▶ Подробнее</button>';
+
+    html += '</div>';
+
+    // Правая 2/3 — фото
+    html += '<div style="flex:2;position:relative;background:var(--bg-0);overflow:hidden">';
 
     if (hasPhoto) {
-      html += '<div class="point-card__photo-wrap">';
-      html += '<img class="card-photo-thumb" data-url="' + escAttr(p.photoUrls[0]) + '" src="" alt="фото">';
-      html += '</div>';
+      html += '<img class="card-photo-grid" data-url="' + escAttr(p.photoUrls[0]) + '" src="" alt="фото" ' +
+              'style="width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in">';
+    } else {
+      html += '<div style="width:100%;height:100%;display:flex;flex-direction:column;' +
+              'align-items:center;justify-content:center;gap:6px;' +
+              'color:var(--txt-3);font-size:10px">' +
+              '<div style="width:30px;height:24px;border:1px dashed var(--txt-3);' +
+              'border-radius:3px;display:flex;align-items:center;justify-content:center">' +
+              '<span style="font-size:12px">—</span></div>' +
+              'нет фото</div>';
     }
 
-    html += '<div class="point-card__body">';
-    html += '<div class="pc-row"><span class="pc-lbl">👤</span><span>' + highlightSearch(p.worker || '—', _s) + '</span></div>';
-    html += '<div class="pc-row"><span class="pc-lbl">📅</span><span>' + formatMonitoringDate(p.monitoringDate) + '</span></div>';
-    html += '<div class="pc-row pc-row--muted"><span class="pc-lbl">🕐</span><span>' + formatDate(p.createdAt) + '</span></div>';
-    if (p.domain || p.wall) {
-      html += '<div class="pc-row">';
-      if (p.domain) html += '<span class="pc-tag pc-domain">' + p.domain + '</span>';
-      if (p.wall)   html += '<span class="pc-tag pc-wall">' + p.wall + '</span>';
-      html += '</div>';
+    if (p.horizon) {
+      html += '<div style="position:absolute;top:6px;left:6px;' +
+              'background:rgba(13,17,23,.82);border:1px solid var(--line);' +
+              'border-radius:3px;padding:2px 5px;font-size:9px;color:var(--txt-3)">' +
+              escAttr(p.horizon) + '</div>';
     }
-    if (p.intensity || p.flowRate != null) {
-      html += '<div class="pc-row"><span class="pc-lbl">💧</span><span>';
-      if (p.intensity) html += p.intensity;
-      if (p.flowRate != null) html += (p.intensity ? ' · ' : '') + formatFlowBothUnits(p.flowRate);
-      html += '</span></div>';
-    }
-    if (p.waterColor) html += '<div class="pc-row"><span class="pc-lbl">🎨</span><span>' + p.waterColor + '</span></div>';
-    if (p.xLocal != null) {
-      html += '<div class="pc-row pc-coords"><span>X: ' + Number(p.xLocal).toFixed(2) +
-              '  Y: ' + Number(p.yLocal).toFixed(2) + '</span></div>';
-    }
-    if (p.horizon) html += '<div class="pc-row"><span class="pc-lbl">⛰️</span><span style="font-size:12px;color:var(--txt-2)">' + highlightSearch(p.horizon, _s) + '</span></div>';
-    if (p.measureMethod) html += '<div class="pc-row"><span class="pc-lbl">📐</span><span style="font-size:12px;color:var(--txt-3)">' + escAttr(p.measureMethod) + '</span></div>';
-    if (p.comment) html += '<div class="point-card__comment">' + highlightSearch(p.comment, _s) + '</div>';
-    html += '</div>';
 
-    html += '<div class="point-card__actions">';
-    html += '<button class="btn btn-sm btn-outline btn-edit"  data-pid="' + p.id + '">✏️ Изменить</button>';
-    html += '<button class="btn btn-sm btn-danger  btn-del"   data-pid="' + p.id + '">🗑 Удалить</button>';
-    html += '<button class="btn btn-sm btn-outline btn-chart"  data-pnum="' + escAttr(p.pointNumber) + '" data-pid="' + p.id + '" title="График дебита">📈</button>';
-    html += '<button class="btn btn-sm btn-outline btn-print"  data-pid="' + p.id + '" title="Печать">🖨️</button>';
+    if (m3h) {
+      var qColor = p.status === 'Пересохла' ? 'var(--bad)' :
+                   p.status === 'Иссякает'  ? 'var(--warn)' :
+                   p.status === 'Активная'  ? 'var(--ok)' : 'var(--txt-1)';
+      html += '<div style="position:absolute;bottom:6px;right:6px;' +
+              'background:rgba(13,17,23,.82);border:1px solid var(--line);' +
+              'border-radius:3px;padding:2px 6px;font-size:10px;font-weight:600;color:' + qColor + '">' +
+              m3h + '</div>';
+    }
+
     html += '</div>';
-    html += '<div class="point-chart-wrap" id="chart-' + p.id + '" style="display:none"></div>';
     html += '</div>';
   }
+
+  html += '</div>';
   container.innerHTML = html;
 
-  // Восстанавливаем открытые графики после перерисовки
-  // Данные берём из _chartCache — он не зависит от DOM
-  container.querySelectorAll('.point-chart-wrap').forEach(function(wrap) {
-    var pid = wrap.id.replace('chart-', '');
-    if (_openCharts[pid] && _chartCache[pid]) {
-      renderPointChart(wrap, _chartCache[pid], pid);
-      wrap.style.display = 'block';
-      var btn = container.querySelector('.btn-chart[data-pid="' + pid + '"]');
-      if (btn) {
-        btn.style.background = 'var(--blue, #1a73e8)';
-        btn.style.color = '#fff';
-        btn.style.borderColor = 'var(--blue, #1a73e8)';
-      }
-    }
-  });
-
-  var countEl = document.getElementById('points-count-badge');
-  var searchActive = !!(_pointsFilters.search);
-  var filterActive  = _pointsFilters.dates.length > 0 || _pointsFilters.worker !== 'all';
-  var countLabel    = points.length + ' / ' + allPoints.length + ' точек';
-  if (searchActive) countLabel += ' · поиск: «' + _pointsFilters.search + '»';
-  if (countEl) countEl.textContent = countLabel;
-
-  container.querySelectorAll('.btn-edit').forEach(function(btn) {
-    btn.addEventListener('click', function() { openEditModal(this.dataset.pid); });
-  });
-  container.querySelectorAll('.btn-del').forEach(function(btn) {
-    btn.addEventListener('click', function() { confirmDelete(this.dataset.pid); });
-  });
-  container.querySelectorAll('.btn-chart').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      togglePointChart(this.dataset.pid, this.dataset.pnum, this);
-    });
-  });
-  container.querySelectorAll('.btn-print').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      printPointCard(this.dataset.pid);
-    });
-  });
-  container.querySelectorAll('.card-photo-thumb').forEach(function(img) {
+  container.querySelectorAll('.card-photo-grid').forEach(function(img) {
     Photos.setImageSrc(img, img.dataset.url);
   });
+
+  container.querySelectorAll('.btn-details-card').forEach(function(btn) {
+    btn.addEventListener('click', function() { openDetailModal(this.dataset.pid); });
+  });
+
+  var countEl    = document.getElementById('points-count-badge');
+  var countLabel = points.length + ' / ' + allPoints.length + ' точек';
+  if (_pointsFilters.search) countLabel += ' · поиск: «' + _pointsFilters.search + '»';
+  if (countEl) countEl.textContent = countLabel;
+
   updateMapLegendPoints();
 }
 
-// ── График дебита точки ───────────────────────────────────
+// ── Карточка подробностей ──────────────────────────────────
 
-function togglePointChart(pointId, pointNumber, btn) {
-  var wrap = document.getElementById('chart-' + pointId);
-  if (!wrap) return;
+function openDetailModal(pointId) {
+  var p = Points.getList().filter(function(x) { return x.id === pointId; })[0];
+  if (!p) return;
 
-  if (wrap.style.display !== 'none') {
-    wrap.style.display = 'none';
-    btn.style.background = '';
-    btn.style.color = '';
-    btn.style.borderColor = '';
-    if (typeof _openCharts !== 'undefined') delete _openCharts[pointId];
-    return;
-  }
+  var hasPhoto    = p.photoUrls && p.photoUrls[0];
+  var m3h         = (p.flowRate != null && !isNaN(parseFloat(p.flowRate)))
+                    ? (parseFloat(p.flowRate) * 3.6).toFixed(2) + ' м³/ч' : '—';
+  var statusClass = p.status === 'Новая'    ? 'badge-new'    :
+                    p.status === 'Активная' ? 'badge-active' :
+                    p.status === 'Иссякает' ? 'badge-fading' :
+                    p.status === 'Пересохла'? 'badge-dry'    : '';
 
-  wrap.style.display = 'block';
-  btn.style.background = 'var(--blue, #1a73e8)';
-  btn.style.color = '#fff';
-  btn.style.borderColor = 'var(--blue, #1a73e8)';
-  if (typeof _openCharts !== 'undefined') _openCharts[pointId] = true;
+  var overlay = document.createElement('div');
+  overlay.id  = 'detail-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.65);' +
+                           'display:flex;align-items:flex-start;justify-content:center;' +
+                           'padding:20px;overflow-y:auto';
 
-  // Если данные уже закэшированы — не перезапрашиваем API
-  if (_chartCache[pointId] && _chartCache[pointId].length) {
-    renderPointChart(wrap, _chartCache[pointId], pointNumber);
-    return;
-  }
+  var box = document.createElement('div');
+  box.style.cssText = 'width:100%;max-width:720px;background:var(--bg-1);' +
+                       'border:1px solid var(--line);border-radius:8px;overflow:hidden;' +
+                       'margin:auto;flex-shrink:0';
 
-  wrap.innerHTML = '<p style="font-size:11px;color:rgba(180,190,210,.6);padding:8px 14px">⏳ Загрузка истории...</p>';
-
-  Api.getHistory(pointNumber).then(function(history) {
-    if (!history || !history.length) {
-      wrap.innerHTML = '<p style="font-size:11px;color:rgba(180,190,210,.5);padding:8px 14px 10px">Нет истории замеров. Данные появятся после следующего сохранения точки.</p>';
-      return;
-    }
-    _chartCache[pointId] = history;
-    renderPointChart(wrap, history, pointNumber);
-  }).catch(function(err) {
-    wrap.innerHTML = '<p style="font-size:11px;color:#ea4335;padding:8px 14px 10px">Ошибка загрузки: ' + err.message + '</p>';
-  });
-}
-
-function renderPointChart(container, history, pointNumber) {
-  var STATUS_COLORS = (typeof MapModule !== 'undefined') ? MapModule.STATUS_COLORS : {
-    'Новая': '#1a73e8', 'Активная': '#34a853', 'Иссякает': '#f9ab00', 'Пересохла': '#ea4335'
-  };
-  var INTENSITY_SIZES = { 'Слабая (капёж)': 5, 'Умеренная': 7, 'Сильная (поток)': 9, 'Очень сильная': 12 };
-
-  var W = 300, H = 130;
-  var PAD = { top: 18, right: 16, bottom: 36, left: 42 };
-  var chartW = W - PAD.left - PAD.right;
-  var chartH = H - PAD.top - PAD.bottom;
-
-  var defined = history.filter(function(r) { return r.flowRate != null; });
-  var maxLps  = defined.length ? Math.max.apply(null, defined.map(function(r) { return r.flowRate; })) : 1;
-  if (maxLps === 0) maxLps = 1;
-
-  var n = history.length;
-  function xPos(i) { return n === 1 ? PAD.left + chartW / 2 : PAD.left + (i / (n - 1)) * chartW; }
-  function yPos(v)  { return v == null ? null : PAD.top + chartH - (v / maxLps) * chartH; }
-
-  // Линия дебита
-  var linePath = '';
-  var firstPt  = true;
-  history.forEach(function(r, i) {
-    var y = yPos(r.flowRate);
-    if (y == null) { firstPt = true; return; }
-    linePath += (firstPt ? 'M' : 'L') + xPos(i).toFixed(1) + ',' + y.toFixed(1) + ' ';
-    firstPt = false;
-  });
-
-  // Область под линией
-  var areaPath = '';
-  var fi = -1, li = -1;
-  history.forEach(function(r, i) { if (r.flowRate != null) { if (fi < 0) fi = i; li = i; } });
-  if (fi >= 0) {
-    var base = (PAD.top + chartH).toFixed(1);
-    areaPath = 'M' + xPos(fi).toFixed(1) + ',' + base + ' ' +
-               linePath.replace(/^M/, 'L') +
-               'L' + xPos(li).toFixed(1) + ',' + base + ' Z';
-  }
-
-  // Оси Y — 3 метки
-  var yTicks = [0, maxLps / 2, maxLps];
-
-  var svg = '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">';
-
-  // Сетка
-  yTicks.forEach(function(v) {
-    var y = yPos(v).toFixed(1);
-    svg += '<line x1="' + PAD.left + '" y1="' + y + '" x2="' + (PAD.left + chartW) + '" y2="' + y + '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
-    // л/с слева
-    svg += '<text x="' + (PAD.left - 4) + '" y="' + (Number(y) + 4) + '" text-anchor="end" font-size="8" fill="rgba(180,190,210,.5)">' + v.toFixed(1) + '</text>';
-    // м³/ч справа
-    var m3h = (v * 3.6).toFixed(1);
-    svg += '<text x="' + (PAD.left + chartW + 4) + '" y="' + (Number(y) + 4) + '" text-anchor="start" font-size="8" fill="rgba(251,188,5,.45)">' + m3h + '</text>';
-  });
-
-  // Область
-  if (areaPath) svg += '<path d="' + areaPath + '" fill="rgba(26,115,232,.1)"/>';
-
-  // Линия
-  if (linePath) svg += '<path d="' + linePath + '" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>';
-
-  // Маркеры и даты
-  history.forEach(function(r, i) {
-    var x = xPos(i);
-    var y = yPos(r.flowRate);
-    var sc = STATUS_COLORS[r.status] || '#888';
-    var radius = (INTENSITY_SIZES[r.intensity] || 6);
-    var _md = (r.monitoringDate || '');
-    var dateStr = _md.length >= 10
-      ? _md.slice(8,10) + '.' + _md.slice(5,7) + '.' + _md.slice(0,4)
-      : _md;
-
-    // Дата снизу
-    svg += '<text x="' + x.toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle" font-size="8" fill="rgba(180,190,210,.55)">' + dateStr + '</text>';
-
-    if (y != null) {
-      // Внешний кружок — интенсивность (размер)
-      svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (radius + 2) + '" fill="' + sc + '" opacity="0.2"/>';
-      // Маркер — цвет статуса
-      svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + radius + '" fill="' + sc + '" stroke="#1e2530" stroke-width="1.5"/>';
-      // Значение над маркером
-      var lbl = r.flowRate != null ? r.flowRate.toFixed(2) : '';
-      if (lbl) {
-        svg += '<text x="' + x.toFixed(1) + '" y="' + (Number(y) - radius - 3) + '" text-anchor="middle" font-size="8" font-weight="600" fill="rgba(200,210,230,.8)">' + lbl + '</text>';
-      }
-    } else {
-      // Нет данных
-      svg += '<text x="' + x.toFixed(1) + '" y="' + (PAD.top + chartH / 2) + '" text-anchor="middle" font-size="9" fill="rgba(180,190,210,.3)">—</text>';
-    }
-  });
-
-  // Подписи осей
-  svg += '<text x="' + (PAD.left - 4) + '" y="' + (PAD.top - 6) + '" text-anchor="end" font-size="7" fill="rgba(180,190,210,.4)">л/с</text>';
-  svg += '<text x="' + (PAD.left + chartW + 4) + '" y="' + (PAD.top - 6) + '" text-anchor="start" font-size="7" fill="rgba(251,188,5,.35)">м³/ч</text>';
-
-  svg += '</svg>';
-
-  // Легенда статусов
-  var seen = {};
-  history.forEach(function(r) { if (r.status) seen[r.status] = STATUS_COLORS[r.status] || '#888'; });
-  var legend = '';
-  Object.keys(seen).forEach(function(s) {
-    legend += '<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:rgba(180,190,210,.7);margin-right:8px">' +
-              '<span style="width:7px;height:7px;border-radius:50%;background:' + seen[s] + ';flex-shrink:0"></span>' + s + '</span>';
-  });
-
-  // Подсказка по размеру маркера
-  var hasIntensity = history.some(function(r) { return !!r.intensity; });
-  var hint = hasIntensity ? '<span style="font-size:10px;color:rgba(180,190,210,.4)">размер = интенсивность</span>' : '';
-
-  container.innerHTML =
-    '<div style="padding:10px 14px 8px;background:rgba(0,0,0,.18);border-top:1px solid rgba(255,255,255,.05)">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-    (legend ? '<div>' + legend + '</div>' : '<div></div>') +
-    hint +
-    '</div>' +
-    svg +
+  var hdrHtml =
+    '<div style="display:flex;align-items:center;padding:10px 14px;' +
+    'border-bottom:1px solid var(--line);background:var(--bg-0);gap:10px">' +
+      '<div style="min-width:0;flex:1">' +
+        '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">' +
+          '<span style="font-size:20px;font-weight:700;color:var(--gold)">' + escAttr(p.pointNumber || '—') + '</span>' +
+          '<span style="font-size:13px;font-weight:500;color:var(--txt-1)">' + escAttr(p.wall || p.domain || '—') + '</span>' +
+          (p.status ? '<span class="badge ' + statusClass + '">' + escAttr(p.status) + '</span>' : '') +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--txt-3);margin-top:2px">' +
+          escAttr((p.domain || '') + (p.domain && p.horizon ? ' · ' : '') + (p.horizon || '')) +
+          ' · последний замер ' + formatMonitoringDate(p.monitoringDate) +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;flex-shrink:0">' +
+        '<button id="dm-print-btn" class="btn btn-sm btn-outline" data-pid="' + p.id + '">⎙ Печать</button>' +
+        '<button id="dm-edit-btn"  class="btn btn-sm btn-outline" data-pid="' + p.id + '" ' +
+        'style="border-color:rgba(88,166,255,.4);color:var(--gold)">✎ Изменить</button>' +
+        '<button id="dm-del-btn"   class="btn btn-sm btn-danger"  data-pid="' + p.id + '">✕ Удалить</button>' +
+        '<button id="dm-close-btn" class="btn btn-sm btn-outline" style="padding:0 8px">✕</button>' +
+      '</div>' +
     '</div>';
+
+  var bodyHtml = '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:12px">';
+
+  // Фото + данные
+  bodyHtml +=
+    '<div style="display:flex;gap:10px;height:160px">' +
+      '<div style="flex:2;border-radius:5px;overflow:hidden;background:var(--bg-0);position:relative">';
+  if (hasPhoto) {
+    bodyHtml += '<img id="dm-photo" data-url="' + escAttr(p.photoUrls[0]) + '" src="" alt="фото" ' +
+                'style="width:100%;height:100%;object-fit:cover;display:block">';
+  } else {
+    bodyHtml += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
+                'flex-direction:column;gap:6px;color:var(--txt-3);font-size:11px">' +
+                '<span style="font-size:24px">📷</span>нет фото</div>';
+  }
+  bodyHtml += '<div style="position:absolute;bottom:6px;right:6px;background:rgba(13,17,23,.82);' +
+              'border:1px solid var(--line);border-radius:3px;padding:2px 7px;' +
+              'font-size:11px;font-weight:600;color:var(--txt-1)">Q: ' + m3h + '</div>';
+  bodyHtml += '</div>';
+
+  bodyHtml += '<div style="flex:3;display:flex;flex-direction:column;gap:0;' +
+              'background:var(--bg-2);border-radius:5px;border:1px solid var(--line-2);padding:10px 12px">' +
+              '<div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--txt-3);' +
+              'text-transform:uppercase;margin-bottom:6px">Данные последнего замера</div>';
+
+  function dmRow(label, val) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;' +
+           'padding:3px 0;border-bottom:1px solid rgba(48,54,61,.35);font-size:11px">' +
+           '<span style="color:var(--txt-3);flex-shrink:0;font-size:10px">' + label + '</span>' +
+           '<span style="color:var(--txt-2);font-weight:500;text-align:right">' + val + '</span></div>';
+  }
+
+  if (p.horizon)      bodyHtml += dmRow('Горизонт',      escAttr(p.horizon));
+  bodyHtml += dmRow('Дебит', m3h);
+  bodyHtml += dmRow('Дата замера', formatMonitoringDate(p.monitoringDate));
+  if (p.measureMethod) bodyHtml += dmRow('Способ',       escAttr(p.measureMethod));
+  if (p.intensity)     bodyHtml += dmRow('Интенсивность', escAttr(p.intensity));
+  if (p.worker)        bodyHtml += dmRow('Замерщик',      escAttr(p.worker));
+  if (p.xLocal != null) bodyHtml += dmRow('Координаты',
+    'X: ' + Number(p.xLocal).toFixed(1) + ' Y: ' + Number(p.yLocal).toFixed(1));
+  if (p.waterColor)   bodyHtml += dmRow('Цвет воды',    escAttr(p.waterColor));
+  if (p.comment)      bodyHtml += dmRow('Примечание',   escAttr(p.comment));
+
+  bodyHtml += '</div></div>';
+
+  // KPI
+  function secHdr(title) {
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;' +
+           'color:var(--txt-2);letter-spacing:.06em;text-transform:uppercase;' +
+           'padding-bottom:6px;border-bottom:1px solid var(--line-2);margin-bottom:8px">' +
+           '<span style="display:inline-block;width:3px;height:12px;border-radius:2px;' +
+           'background:var(--gold);flex-shrink:0"></span>' + title + '</div>';
+  }
+  function kpiCard(id_suffix, label, id_val, unit, id_sub) {
+    return '<div style="background:var(--bg-2);border:1px solid var(--line-2);border-radius:5px;padding:8px 10px">' +
+           '<div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">' + label + '</div>' +
+           '<div style="font-size:17px;font-weight:700;color:var(--gold);line-height:1" id="dm-kpi-' + id_suffix + '">—</div>' +
+           '<div style="font-size:9px;color:var(--txt-3)" id="dm-kpi-' + id_suffix + '-sub">' + unit + '</div>' +
+           '</div>';
+  }
+
+  bodyHtml +=
+    '<div>' + secHdr('Аналитика') +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">' +
+      kpiCard('avg',   'Среднее Q',   '', 'м³/ч', '') +
+      kpiCard('max',   'Максимум',    '', 'м³/ч', '') +
+      kpiCard('min',   'Минимум',     '', 'м³/ч', '') +
+      kpiCard('count', 'Замеров',     '', 'всего', '') +
+    '</div></div>';
+
+  bodyHtml +=
+    '<div>' + secHdr('История дебита') +
+    '<div id="dm-chart-wrap" style="background:var(--bg-2);border:1px solid var(--line-2);' +
+    'border-radius:5px;padding:10px 12px;min-height:80px">' +
+    '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка...</p>' +
+    '</div></div>';
+
+  bodyHtml +=
+    '<div>' + secHdr('Журнал замеров') +
+    '<div id="dm-history-wrap" style="background:var(--bg-2);border:1px solid var(--line-2);' +
+    'border-radius:5px;overflow:hidden">' +
+    '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка...</p>' +
+    '</div></div>';
+
+  bodyHtml += '</div>';
+
+  box.innerHTML = hdrHtml + bodyHtml;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  var dmPhoto = box.querySelector('#dm-photo');
+  if (dmPhoto) Photos.setImageSrc(dmPhoto, dmPhoto.dataset.url);
+
+  function closeDetail() {
+    var ol = document.getElementById('detail-modal-overlay');
+    if (ol) ol.remove();
+  }
+  box.querySelector('#dm-close-btn').addEventListener('click', closeDetail);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeDetail(); });
+
+  box.querySelector('#dm-print-btn').addEventListener('click', function() {
+    closeDetail(); printPointCard(this.dataset.pid);
+  });
+  box.querySelector('#dm-edit-btn').addEventListener('click', function() {
+    closeDetail(); openEditModal(this.dataset.pid);
+  });
+  box.querySelector('#dm-del-btn').addEventListener('click', function() {
+    closeDetail(); confirmDelete(this.dataset.pid);
+  });
+
+  var cachedHistory = _chartCache[pointId];
+  if (cachedHistory && cachedHistory.length) {
+    renderDetailHistory(box, cachedHistory, p.pointNumber);
+  } else {
+    Api.getHistory(p.pointNumber).then(function(history) {
+      _chartCache[pointId] = history || [];
+      renderDetailHistory(box, _chartCache[pointId], p.pointNumber);
+    }).catch(function(err) {
+      var cw = box.querySelector('#dm-chart-wrap');
+      if (cw) cw.innerHTML = '<p style="font-size:11px;color:var(--bad);padding:10px">Ошибка: ' + err.message + '</p>';
+    });
+  }
 }
+
+function renderDetailHistory(box, history, pointNumber) {
+  var defined = (history || []).filter(function(r) { return r.flowRate != null; });
+  var avg = 0, maxVal = 0, minVal = Infinity, maxDate = '', minDate = '';
+  if (defined.length) {
+    var sum = 0;
+    defined.forEach(function(r) {
+      var v = parseFloat(r.flowRate) * 3.6;
+      sum += v;
+      if (v > maxVal) { maxVal = v; maxDate = r.monitoringDate || r.date || ''; }
+      if (v < minVal) { minVal = v; minDate = r.monitoringDate || r.date || ''; }
+    });
+    avg = sum / defined.length;
+    if (minVal === Infinity) minVal = 0;
+  }
+
+  function kpiSet(id, val) { var el = box.querySelector(id); if (el) el.textContent = val; }
+  kpiSet('#dm-kpi-avg',       defined.length ? avg.toFixed(2) : '—');
+  kpiSet('#dm-kpi-avg-sub',   'м³/ч');
+  kpiSet('#dm-kpi-max',       defined.length ? maxVal.toFixed(2) : '—');
+  kpiSet('#dm-kpi-max-sub',   maxDate ? formatMonitoringDate(maxDate) : 'м³/ч');
+  kpiSet('#dm-kpi-min',       defined.length ? minVal.toFixed(2) : '—');
+  kpiSet('#dm-kpi-min-sub',   minDate ? formatMonitoringDate(minDate) : 'м³/ч');
+  kpiSet('#dm-kpi-count',     String(history.length));
+  kpiSet('#dm-kpi-count-sub', 'всего');
+
+  var chartWrap = box.querySelector('#dm-chart-wrap');
+  if (chartWrap) renderPointChart(chartWrap, history, pointNumber);
+
+  var histWrap = box.querySelector('#dm-history-wrap');
+  if (!histWrap) return;
+  if (!history.length) {
+    histWrap.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">История замеров пуста</p>';
+    return;
+  }
+
+  var SHOW = 5;
+  function buildTable(all) {
+    var rows  = all ? history : history.slice(0, SHOW);
+    var thSt  = 'background:var(--bg-3);color:var(--txt-3);font-weight:600;font-size:9px;' +
+                'letter-spacing:.05em;text-transform:uppercase;padding:5px 8px;' +
+                'border-bottom:1px solid var(--line);text-align:left';
+    var thead = '<thead><tr>' +
+                '<th style="' + thSt + '">#</th>' +
+                '<th style="' + thSt + '">Дата</th>' +
+                '<th style="' + thSt + '">Q м³/ч</th>' +
+                '<th style="' + thSt + '">Интенсивность</th>' +
+                '<th style="' + thSt + '">Способ</th>' +
+                '<th style="' + thSt + '">Замерщик</th>' +
+                '<th style="' + thSt + '">St</th>' +
+                '</tr></thead>';
+    var tbody = '<tbody>';
+    rows.forEach(function(r, idx) {
+      var qVal   = (r.flowRate != null && !isNaN(parseFloat(r.flowRate)))
+                   ? (parseFloat(r.flowRate) * 3.6).toFixed(2) : '—';
+      var qColor = r.status === 'Пересохла' ? 'var(--bad)' :
+                   r.status === 'Иссякает'  ? 'var(--warn)' :
+                   r.status === 'Активная'  ? 'var(--ok)' : 'var(--txt-2)';
+      var dotClr = r.status === 'Активная' ? 'var(--ok)' :
+                   r.status === 'Иссякает' ? 'var(--warn)' : 'var(--txt-3)';
+      var bg     = idx % 2 ? 'background:rgba(255,255,255,.01)' : '';
+      var tdSt   = 'padding:5px 8px;border-bottom:1px solid var(--line-2)';
+      tbody +=
+        '<tr style="' + bg + '">' +
+        '<td style="' + tdSt + ';color:var(--txt-3);font-size:10px">' + (history.length - idx) + '</td>' +
+        '<td style="' + tdSt + ';color:var(--gold);font-size:10px">' + formatMonitoringDate(r.monitoringDate || r.date) + '</td>' +
+        '<td style="' + tdSt + ';color:' + qColor + ';font-weight:500;font-size:10px">' + qVal + '</td>' +
+        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escAttr(r.intensity || '—') + '</td>' +
+        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escAttr(r.measureMethod || '—') + '</td>' +
+        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escAttr(r.worker || '—') + '</td>' +
+        '<td style="' + tdSt + ';text-align:center"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + dotClr + '"></span></td>' +
+        '</tr>';
+    });
+    tbody += '</tbody>';
+    var footer = (!all && history.length > SHOW)
+      ? '<div id="dm-show-all" style="padding:6px 10px;border-top:1px solid var(--line-2);' +
+        'font-size:10px;color:var(--txt-3);display:flex;justify-content:space-between;cursor:pointer">' +
+        '<span>Показано ' + SHOW + ' из ' + history.length + '</span>' +
+        '<span style="color:var(--gold)">Показать все ▾</span></div>' : '';
+    return '<table style="width:100%;border-collapse:collapse">' + thead + tbody + '</table>' + footer;
+  }
+
+  histWrap.innerHTML = buildTable(false);
+  var btn = histWrap.querySelector('#dm-show-all');
+  if (btn) btn.addEventListener('click', function() { histWrap.innerHTML = buildTable(true); });
+}
+
 
 // ── Сотрудники ────────────────────────────────────────────
 

@@ -154,9 +154,33 @@ body {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  overflow: hidden;
+  min-width: 0;
 }
-.brand-title { font-size: 13px; font-weight: 600; letter-spacing: .02em; }
-.brand-sub   { font-size: 11px; color: var(--txt-3); }
+.brand-name {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.brand-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.brand-sub {
+  font-size: 10px;
+  color: var(--txt-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  max-width: 150px;
+}
 
 /* ── Тело ─────────────────────────────────────────────────── */
 .app-body { display: flex; flex: 1; overflow: hidden; }
@@ -692,7 +716,21 @@ body {
 .theme-preview { width: 100%; height: 32px; border-radius: var(--r-xs); border: 1px solid rgba(255,255,255,.08); }
 
 /* ── Логотип ──────────────────────────────────────────────── */
-.brand-logo { display: flex; align-items: center; height: 32px; flex-shrink: 0; }
+.brand-logo {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  flex-shrink: 0;
+  max-width: 48px;
+  overflow: hidden;
+}
+.brand-logo img {
+  height: 36px !important;
+  width: auto !important;
+  max-width: 48px;
+  display: block;
+  object-fit: contain;
+}
 .brand-logo svg { display: block; }
 
 /* ── Дашборд ──────────────────────────────────────────────── */
