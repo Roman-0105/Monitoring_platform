@@ -200,6 +200,34 @@ function getFilteredPoints(filterState) {
   });
 }
 
+// ── Дедупликация: оставляем только последний замер каждой точки ──
+
+function getLatestByPointNumber(points) {
+  // Группируем по pointNumber, оставляем запись с максимальным monitoringDate
+  var map = {};
+  points.forEach(function(p) {
+    var num = String(p.pointNumber || '').trim();
+    if (!num) return;
+    if (!map[num]) { map[num] = p; return; }
+    var dCur = normalizeHistDate(map[num].monitoringDate || '');
+    var dNew = normalizeHistDate(p.monitoringDate || '');
+    // Если дата одинакова — берём ту что создана позже (по createdAt)
+    if (dNew > dCur) {
+      map[num] = p;
+    } else if (dNew === dCur) {
+      var tCur = map[num].createdAt || '';
+      var tNew = p.createdAt || '';
+      if (tNew > tCur) map[num] = p;
+    }
+  });
+  // Сортируем по числовому значению номера точки
+  return Object.keys(map).sort(function(a, b) {
+    var na = parseFloat(a), nb = parseFloat(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }).map(function(k) { return map[k]; });
+}
+
 // ── Даты мониторинга ──────────────────────────────────────
 
 // Возвращает массив уникальных дат мониторинга, отсортированных от новых к старым
@@ -216,10 +244,31 @@ function getAllMonitoringDates() {
 function formatMonitoringDate(dateStr) {
   if (!dateStr) return '—';
   try {
-    var d = new Date(dateStr + 'T00:00:00');
-    if (isNaN(d.getTime())) return dateStr;
+    var s = String(dateStr);
+    var d;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      d = new Date(s + 'T00:00:00');        // YYYY-MM-DD — добавляем время
+    } else {
+      d = new Date(s);                       // всё остальное: "Thu Apr 02 2026...", ISO и т.д.
+    }
+    if (isNaN(d.getTime())) return s;
     return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch(e) { return dateStr; }
+  } catch(e) { return String(dateStr); }
+}
+
+// Нормализует дату любого формата -> YYYY-MM-DD строка (для сравнений)
+function normalizeHistDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    var s = String(dateStr);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+  } catch(e) { return String(dateStr); }
 }
 
 // Сегодня в формате YYYY-MM-DD

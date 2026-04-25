@@ -145,13 +145,15 @@ function renderPointsList() {
   if (!container) return;
   initPointsFilters();
 
-  var points    = getFilteredPoints(_pointsFilters);
-  var allPoints = Points.getList();
+  var allPoints  = Points.getList();
+  var filtered   = getFilteredPoints(_pointsFilters);
+  var points     = getLatestByPointNumber(filtered);
+  var totalUniq  = getLatestByPointNumber(allPoints).length;
 
   if (!points.length) {
     container.innerHTML = '<p class="empty-msg">Нет точек по выбранному фильтру</p>';
     var c0 = document.getElementById('points-count-badge');
-    if (c0) c0.textContent = '0 / ' + allPoints.length + ' точек';
+    if (c0) c0.textContent = '0 / ' + totalUniq + ' точек';
     return;
   }
 
@@ -273,7 +275,7 @@ function renderPointsList() {
 
   // Счётчик
   var countEl    = document.getElementById('points-count-badge');
-  var countLabel = points.length + ' / ' + allPoints.length + ' точек';
+  var countLabel = points.length + ' / ' + totalUniq + ' точек';
   if (_pointsFilters.search) countLabel += ' · поиск: «' + _pointsFilters.search + '»';
   if (countEl) countEl.textContent = countLabel;
 
@@ -582,7 +584,8 @@ function renderPointChart(container, history, pointNumber) {
   var step = Math.max(1, Math.ceil(n / 6));
   for (var i = 0; i < n; i += step) {
     var r = history[i];
-    var d = (r.monitoringDate || r.date || '').slice(5); // MM-DD
+    var _rd = normalizeHistDate(r.monitoringDate || r.date || '');
+    var d = _rd.length >= 10 ? _rd.slice(5) : _rd; // MM-DD
     svg += '<text x="' + xPos(i).toFixed(1) + '" y="' + (PAD.top + chartH + 14) + '" ' +
            'text-anchor="middle" font-size="8" fill="rgba(139,148,158,.7)">' + d + '</text>';
   }
