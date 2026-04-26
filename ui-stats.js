@@ -101,13 +101,15 @@ function renderStatsPage() {
     byDomain[d]    = (byDomain[d]    || 0) + 1;
     byIntensity[i] = (byIntensity[i] || 0) + 1;
 
-    if (!byHorizon[h]) byHorizon[h] = { count: 0, totalLps: 0, withFlow: 0 };
+    if (!byHorizon[h]) byHorizon[h] = { count: 0, totalLps: 0, withFlow: 0, byStatus: {}, topPoints: [] };
     byHorizon[h].count++;
+    byHorizon[h].byStatus[p.status || '—'] = (byHorizon[h].byStatus[p.status || '—'] || 0) + 1;
     var flow = parseFloat(p.flowRate);
     if (!isNaN(flow)) {
       byHorizon[h].totalLps += flow;
       byHorizon[h].withFlow++;
     }
+    byHorizon[h].topPoints.push({ num: p.pointNumber, status: p.status, flow: isNaN(flow) ? null : flow });
   });
 
   function renderBreakdown(obj) {
@@ -138,68 +140,147 @@ function renderHorizonBreakdown(byHorizon) {
   var keys = Object.keys(byHorizon);
   if (!keys.length) return '<p class="form-hint">Нет точек с указанным горизонтом.</p>';
 
-  // Сортируем: сначала по суммарному дебиту убыванию, затем по количеству
+  var STATUS_COLORS = {
+    'Активная':   '#3fb950',
+    'Новая':      '#58a6ff',
+    'Иссякает':   '#d29922',
+    'Пересохла':  '#f85149',
+    'Паводковая': '#bc8cff',
+    'Перелив':    '#79c0ff',
+  };
+
+  // Сортируем горизонты: числовые по возрастанию высотной отметки, «—» в конец
   keys.sort(function(a, b) {
-    return byHorizon[b].totalLps - byHorizon[a].totalLps ||
-           byHorizon[b].count    - byHorizon[a].count;
+    if (a === '—') return 1;
+    if (b === '—') return -1;
+    var na = parseFloat(String(a).replace(/[^\d.-]/g, ''));
+    var nb = parseFloat(String(b).replace(/[^\d.-]/g, ''));
+    if (!isNaN(na) && !isNaN(nb)) return nb - na; // выше = первый
+    return a < b ? -1 : 1;
   });
 
-  // Считаем максимум для столбца прогресса
-  var maxLps = Math.max.apply(null, keys.map(function(k) { return byHorizon[k].totalLps; })) || 1;
+  var maxM3h = 0;
+  keys.forEach(function(k) {
+    var v = lpsToM3h(byHorizon[k].totalLps);
+    if (v > maxM3h) maxM3h = v;
+  });
+  if (maxM3h === 0) maxM3h = 1;
 
-  var html =
-    '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-    '<thead><tr style="color:var(--txt-3);border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em">' +
-      '<th style="padding:6px 8px;text-align:left;font-weight:500">Горизонт</th>' +
-      '<th style="padding:6px 8px;text-align:center;font-weight:500">Точек</th>' +
-      '<th style="padding:6px 8px;text-align:right;font-weight:500">Σ л/с</th>' +
-      '<th style="padding:6px 8px;text-align:right;font-weight:500">Σ м³/ч</th>' +
-      '<th style="padding:6px 8px;text-align:right;font-weight:500">Ср. л/с</th>' +
-      '<th style="padding:6px 8px;min-width:80px;font-weight:500"></th>' +
-    '</tr></thead><tbody>';
+  var grandTotal = 0, grandCount = 0;
+  keys.filter(function(k){ return k !== '—'; }).forEach(function(k) {
+    grandTotal += byHorizon[k].totalLps;
+    grandCount += byHorizon[k].count;
+  });
+
+  var html = '';
 
   keys.forEach(function(h) {
-    var d      = byHorizon[h];
-    var sumLps = Math.round(d.totalLps * 100) / 100;
-    var sumM3h = Math.round(lpsToM3h(d.totalLps) * 100) / 100;
-    var avgLps = d.withFlow ? Math.round(d.totalLps / d.withFlow * 100) / 100 : null;
-    var barPct = maxLps > 0 ? Math.round(d.totalLps / maxLps * 100) : 0;
+    var d        = byHorizon[h];
+    var m3h      = lpsToM3h(d.totalLps);
+    var avgM3h   = d.withFlow ? m3h / d.withFlow : null;
+    var barPct   = maxM3h > 0 ? Math.round(m3h / maxM3h * 100) : 0;
     var isUnknown = h === '—';
+    var shareOfTotal = grandTotal > 0 ? Math.round(d.totalLps / grandTotal * 100) : 0;
+
+    // Топ-3 точки по дебиту
+    var sorted = (d.topPoints || []).slice().sort(function(a, b) { return (b.flow || 0) - (a.flow || 0); });
+    var top3   = sorted.slice(0, 3);
 
     html +=
-      '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
-        '<td style="padding:8px 8px;font-weight:' + (isUnknown ? '400' : '600') + ';color:' + (isUnknown ? 'var(--txt-3)' : 'var(--txt-1)') + '">' +
-          (isUnknown ? '— не указан —' : '⛰️ ' + h) +
-        '</td>' +
-        '<td style="padding:8px;text-align:center;color:var(--txt-1)">' + d.count + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#1a73e8;font-weight:600">' + (d.withFlow ? sumLps : '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#f9ab00">' + (d.withFlow ? sumM3h : '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:var(--txt-2)">' + (avgLps != null ? avgLps : '—') + '</td>' +
-        '<td style="padding:8px 8px 8px 4px">' +
-          '<div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">' +
-            '<div style="height:6px;border-radius:3px;background:#1a73e8;width:' + barPct + '%;transition:width .3s"></div>' +
+      '<div style="background:var(--bg-2);border:1px solid var(--line-2);border-radius:6px;padding:10px 12px;margin-bottom:8px">' +
+
+        // Заголовок горизонта
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+          '<span style="font-size:14px;font-weight:700;color:var(--gold)">' +
+            (isUnknown ? '—' : h) +
+          '</span>' +
+          '<span style="font-size:10px;color:var(--txt-3)">' +
+            (isUnknown ? 'горизонт не указан' : 'м') +
+          '</span>' +
+          '<span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--txt-2)">' +
+            d.count + ' ' + (d.count === 1 ? 'точка' : d.count < 5 ? 'точки' : 'точек') +
+          '</span>' +
+        '</div>' +
+
+        // Q + прогресс-бар
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+          '<div style="flex:1">' +
+            '<div style="height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;margin-bottom:3px">' +
+              '<div style="height:8px;border-radius:4px;background:var(--gold);width:' + barPct + '%;transition:width .4s"></div>' +
+            '</div>' +
+            '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt-3)">' +
+              '<span>' + (d.withFlow ? m3h.toFixed(2) + ' м³/ч суммарно' : 'нет данных по дебиту') + '</span>' +
+              (d.withFlow && !isUnknown ? '<span>' + shareOfTotal + '% от итога карьера</span>' : '') +
+            '</div>' +
           '</div>' +
-        '</td>' +
-      '</tr>';
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<div style="font-size:16px;font-weight:700;color:' + (d.withFlow ? 'var(--gold)' : 'var(--txt-3)') + '">' +
+              (d.withFlow ? m3h.toFixed(2) : '—') +
+            '</div>' +
+            '<div style="font-size:9px;color:var(--txt-3)">м³/ч</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Разбивка по статусам (цветные бейджи-числа)
+        '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">' +
+          (function() {
+            var badges = '';
+            var statusOrder = ['Паводковая','Активная','Иссякает','Новая','Пересохла','Перелив'];
+            statusOrder.forEach(function(s) {
+              if (!d.byStatus[s]) return;
+              var clr = STATUS_COLORS[s] || '#8b949e';
+              badges +=
+                '<span style="display:inline-flex;align-items:center;gap:3px;' +
+                'background:' + clr.replace(')', ',.12)').replace('rgb', 'rgba') + ';' +
+                'border:1px solid ' + clr.replace(')', ',.35)').replace('rgb', 'rgba') + ';' +
+                'border-radius:3px;padding:2px 6px;font-size:9px;font-weight:600;color:' + clr + '">' +
+                '<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:' + clr + ';flex-shrink:0"></span>' +
+                s + ' · ' + d.byStatus[s] +
+                '</span>';
+            });
+            // Остальные статусы
+            Object.keys(d.byStatus).forEach(function(s) {
+              if (statusOrder.indexOf(s) >= 0) return;
+              badges +=
+                '<span style="background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);' +
+                'border-radius:3px;padding:2px 6px;font-size:9px;color:var(--txt-2)">' +
+                s + ' · ' + d.byStatus[s] + '</span>';
+            });
+            return badges;
+          })() +
+        '</div>' +
+
+        // Топ-3 точки
+        (top3.length ? (
+          '<div style="display:flex;gap:5px;align-items:center">' +
+            '<span style="font-size:9px;color:var(--txt-3);flex-shrink:0">Топ Q:</span>' +
+            top3.map(function(p) {
+              var clr = STATUS_COLORS[p.status] || '#8b949e';
+              return '<span style="font-size:10px;color:' + clr + ';font-weight:500">' +
+                     '№' + p.num + (p.flow != null ? ' · ' + lpsToM3h(p.flow).toFixed(2) + ' м³/ч' : '') +
+                     '</span>';
+            }).join('<span style="color:var(--txt-3);margin:0 2px">·</span>') +
+          '</div>'
+        ) : '') +
+
+      '</div>';
   });
 
-  html += '</tbody></table>';
-
-  // Итоговая строка если больше одного горизонта с данными
-  var totalKeys = keys.filter(function(k){ return k !== '—'; });
-  if (totalKeys.length > 1) {
-    var grandTotal = totalKeys.reduce(function(acc, k) { return acc + byHorizon[k].totalLps; }, 0);
-    var grandCount = totalKeys.reduce(function(acc, k) { return acc + byHorizon[k].count; }, 0);
+  // Итог
+  if (keys.filter(function(k){ return k !== '—'; }).length > 1) {
     html +=
-      '<div style="display:flex;gap:16px;padding:10px 8px 4px;border-top:1px solid var(--line);font-size:12px;color:var(--txt-3)">' +
-        '<span>Итого по горизонтам: <b style="color:var(--txt-1)">' + grandCount + ' точек</b></span>' +
-        '<span><b style="color:#1a73e8">' + Math.round(grandTotal*100)/100 + ' л/с</b> · ' +
-        '<b style="color:#f9ab00">' + Math.round(lpsToM3h(grandTotal)*100)/100 + ' м³/ч</b></span>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 12px;' +
+      'background:var(--bg-3);border:1px solid var(--line);border-radius:6px;font-size:12px">' +
+        '<span style="color:var(--txt-3)">Итого по карьеру:</span>' +
+        '<span><b style="color:var(--txt-1)">' + grandCount + ' точек</b></span>' +
+        '<span><b style="color:var(--gold)">' + lpsToM3h(grandTotal).toFixed(2) + ' м³/ч</b></span>' +
+        '<span style="color:var(--txt-3)">· ' + grandTotal.toFixed(2) + ' л/с</span>' +
       '</div>';
   }
 
   return html;
 }
+
 
 function renderPieChart(container, statsObj, palette) {
   if (!container) return;
