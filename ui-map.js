@@ -255,6 +255,9 @@ function redrawMap() {
   if (typeof Domens !== 'undefined') {
     Domens.draw(ctx, _mapSchemeImg.width, _mapSchemeImg.height);
   }
+  if (typeof Faults !== 'undefined') {
+    Faults.draw(ctx, _mapSchemeImg.width, _mapSchemeImg.height);
+  }
   if (typeof MapModule !== 'undefined') {
     MapModule.drawPoints(ctx, getFilteredPointsForMap(), _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
     // Рисуем маркеры канав поверх точек
@@ -568,6 +571,19 @@ function initMapLegend() {
     dBtn.style.background  = 'var(--blue)';
     dBtn.style.color       = '#fff';
     dBtn.style.borderColor = 'var(--blue)';
+  }
+
+  var fBtn = document.getElementById('btn-faults-toggle');
+  if (fBtn && !fBtn._bound) {
+    fBtn._bound = true;
+    fBtn.addEventListener('click', function() {
+      if (typeof Faults === 'undefined') return;
+      var visible = Faults.toggle();
+      fBtn.style.background  = visible ? 'var(--bad)' : '';
+      fBtn.style.color       = visible ? '#fff'       : '';
+      fBtn.style.borderColor = visible ? 'var(--bad)' : '';
+      if (_mapSchemeImg) redrawMap();
+    });
   }
 
   var modeWrap = document.getElementById('map-mode-switch');
