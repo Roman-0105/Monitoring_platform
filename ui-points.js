@@ -514,12 +514,60 @@ function _loadPhotoGallery(box, pointNumber) {
   var wrap = box.querySelector('#dm-gallery');
   if (!wrap) return;
 
-  Api.getPhotos(pointNumber).then(function(photos) {
-    if (!photos || !photos.length) {
+  // Загружаем фото и историю параллельно, затем объединяем по дате
+  var photosP  = Api.getPhotos(pointNumber);
+  var historyP = _chartCache[pointNumber]
+    ? Promise.resolve(_chartCache[pointNumber])
+    : Api.getHistory(pointNumber).then(function(h) {
+        _chartCache[pointNumber] = h || [];
+        return _chartCache[pointNumber];
+      });
+
+  Promise.all([photosP, historyP]).then(function(results) {
+    var photos  = results[0] || [];
+    var history = results[1] || [];
+
+    if (!photos.length) {
       wrap.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:14px 0">Фотографии ещё не загружены</p>';
       return;
     }
-    _renderPhotoGallery(wrap, photos);
+
+    // Строим индекс истории по дате для быстрого поиска
+    var histByDate = {};
+    history.forEach(function(h) {
+      var d = (h.monitoringDate || '').slice(0, 10);
+      if (d) histByDate[d] = h;
+    });
+
+    // Берём комментарий из самой точки (хранится в листе Точки)
+    var pointComment = '';
+    if (typeof Points !== 'undefined') {
+      var allPts = Points.getList();
+      for (var i = 0; i < allPts.length; i++) {
+        if (String(allPts[i].pointNumber) === String(pointNumber)) {
+          pointComment = allPts[i].comment || ''; break;
+        }
+      }
+    }
+
+    // Обогащаем каждое фото данными из истории
+    var enriched = photos.map(function(ph) {
+      var d   = (ph.monitoringDate || '').slice(0, 10);
+      var hst = histByDate[d] || {};
+      return {
+        photoUrl:       ph.photoUrl,
+        monitoringDate: ph.monitoringDate || hst.monitoringDate || '',
+        flowRate:       ph.flowRate != null ? ph.flowRate : hst.flowRate,
+        status:         hst.status        || '',
+        intensity:      hst.intensity     || '',
+        measureMethod:  hst.measureMethod || '',
+        worker:         hst.worker        || '',
+        comment:        hst.comment       || pointComment || '',
+        driveFileId:    ph.driveFileId    || '',
+      };
+    });
+
+    _renderPhotoGallery(wrap, enriched);
   }).catch(function() {
     wrap.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:14px 0">Не удалось загрузить фотографии</p>';
   });
