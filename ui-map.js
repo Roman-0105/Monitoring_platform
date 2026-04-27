@@ -186,6 +186,7 @@ function renderMap() {
   canvas.style.display = 'block';
 
   if (_mapSchemeImg) {
+    initExtraMapButtons();
     redrawMap();
     return;
   }
@@ -216,6 +217,7 @@ function renderMap() {
       _mapOffY = 0;
       setupMapCanvas(canvas);
       initMapFilters();
+      initExtraMapButtons();
       redrawMap();
       initMapInteraction(canvas);
       initMapZoomButtons();
@@ -601,23 +603,6 @@ function initMapLegend() {
       fBtn.style.background  = visible ? 'var(--bad)' : '';
       fBtn.style.color       = visible ? '#fff'       : '';
       fBtn.style.borderColor = visible ? 'var(--bad)' : '';
-      if (_mapSchemeImg) redrawMap();
-    });
-  }
-
-  initPoiControls();
-
-  // Кнопка показать/скрыть точки
-  var pvBtn = document.getElementById('btn-points-visible');
-  if (pvBtn && !pvBtn._bound) {
-    pvBtn._bound = true;
-    pvBtn.addEventListener('click', function() {
-      _mapPointsVisible = !_mapPointsVisible;
-      pvBtn.style.background  = _mapPointsVisible ? '' : 'rgba(139,148,158,.15)';
-      pvBtn.style.color       = _mapPointsVisible ? '' : 'var(--txt-3)';
-      pvBtn.style.borderColor = _mapPointsVisible ? '' : 'rgba(139,148,158,.4)';
-      pvBtn.textContent       = _mapPointsVisible ? '● Точки' : '○ Точки';
-      pvBtn.title             = _mapPointsVisible ? 'Скрыть точки замеров' : 'Показать точки замеров';
       if (_mapSchemeImg) redrawMap();
     });
   }
@@ -1382,6 +1367,28 @@ function showDitchHistoryInPanel(ditchName, panelEl) {
   }).catch(function() {
     panelEl.innerHTML = '<div style="padding:10px;color:var(--red);font-size:11px">Ошибка загрузки</div>';
   });
+}
+
+// ── Кнопки тулбара карты (инициализируются при загрузке схемы) ──
+
+function initExtraMapButtons() {
+  // Кнопка «● Точки» — показать/скрыть точки замеров
+  var pvBtn = document.getElementById('btn-points-visible');
+  if (pvBtn && !pvBtn._bound) {
+    pvBtn._bound = true;
+    pvBtn.addEventListener('click', function() {
+      _mapPointsVisible = !_mapPointsVisible;
+      pvBtn.style.background  = _mapPointsVisible ? '' : 'rgba(139,148,158,.15)';
+      pvBtn.style.color       = _mapPointsVisible ? '' : 'var(--txt-3)';
+      pvBtn.style.borderColor = _mapPointsVisible ? '' : 'rgba(139,148,158,.4)';
+      pvBtn.innerHTML         = _mapPointsVisible ? '&#9679; Точки' : '&#9675; Точки';
+      pvBtn.title             = _mapPointsVisible ? 'Скрыть точки' : 'Показать точки';
+      if (_mapSchemeImg) redrawMap();
+    });
+  }
+
+  // Точки интереса (POI)
+  initPoiControls();
 }
 
 // ============================================================

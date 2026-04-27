@@ -242,14 +242,15 @@ var MapModule = (function() {
   // ── Рендер точек ─────────────────────────────────────────
   // ── Пульсация по интенсивности ─────────────────────────
   // Параметры: { speed, rings, maxR, opacity }
+  // period: длина цикла в секундах
   var PULSE_MAP = {
-    'Очень сильная':  { speed: 0.06, rings: 2, maxR: 2.6, opacity: 0.65, color: '#f85149' },
-    'Сильная (поток)':{ speed: 0.05, rings: 2, maxR: 2.4, opacity: 0.6,  color: '#f85149' },
-    'Сильная':        { speed: 0.05, rings: 2, maxR: 2.4, opacity: 0.6,  color: '#f85149' },
-    'Перелив':        { speed: 0.06, rings: 2, maxR: 2.6, opacity: 0.65, color: '#bc8cff' },
-    'Умеренная':      { speed: 0.035,rings: 1, maxR: 2.0, opacity: 0.45, color: '#d29922' },
-    'Слабая (капёж)': { speed: 0.02, rings: 1, maxR: 1.7, opacity: 0.3,  color: '#8b949e' },
-    'Слабая':         { speed: 0.02, rings: 1, maxR: 1.7, opacity: 0.3,  color: '#8b949e' },
+    'Очень сильная':  { period: 1.2, rings: 2, maxR: 2.8, opacity: 0.75, color: '#f85149' },
+    'Сильная (поток)':{ period: 1.4, rings: 2, maxR: 2.6, opacity: 0.7,  color: '#f85149' },
+    'Сильная':        { period: 1.4, rings: 2, maxR: 2.6, opacity: 0.7,  color: '#f85149' },
+    'Перелив':        { period: 1.2, rings: 2, maxR: 2.8, opacity: 0.75, color: '#bc8cff' },
+    'Умеренная':      { period: 2.0, rings: 1, maxR: 2.2, opacity: 0.6,  color: '#d29922' },
+    'Слабая (капёж)': { period: 3.0, rings: 1, maxR: 2.0, opacity: 0.5,  color: '#8b949e' },
+    'Слабая':         { period: 3.0, rings: 1, maxR: 2.0, opacity: 0.5,  color: '#8b949e' },
     'Отсутствует':    null,
   };
 
@@ -261,9 +262,14 @@ var MapModule = (function() {
   function startPulse(redrawFn) {
     if (_pulseActive) return;
     _pulseActive = true;
-    function tick() {
+    var lastTime = null;
+    function tick(timestamp) {
       if (!_pulseActive) return;
-      _pulseT = (_pulseT + 0.016) % 1;  // ~60fps, период 1 сек
+      if (lastTime !== null) {
+        var dt = (timestamp - lastTime) / 1000; // секунды
+        _pulseT = (_pulseT + dt) % 100; // накапливаем секунды
+      }
+      lastTime = timestamp;
       if (typeof redrawFn === 'function') redrawFn();
       _pulseRaf = requestAnimationFrame(tick);
     }
@@ -276,17 +282,19 @@ var MapModule = (function() {
   }
 
   function drawPulseRing(ctx, px, py, radius, cfg, ringIdx) {
-    // Каждое кольцо сдвинуто по фазе
-    var phase    = (_pulseT + ringIdx * 0.5) % 1;
+    var period   = cfg.period || 2.0;
+    // Каждое второе кольцо сдвинуто на полпериода
+    var t        = (_pulseT + ringIdx * period * 0.5) % period;
+    var phase    = t / period;                          // 0..1
     var ringR    = radius * (1 + phase * (cfg.maxR - 1));
     var alpha    = cfg.opacity * (1 - phase);
-    if (alpha < 0.01) return;
+    if (alpha < 0.02) return;
     ctx.save();
     ctx.beginPath();
     ctx.arc(px, py, ringR, 0, Math.PI * 2);
     ctx.strokeStyle = cfg.color;
     ctx.globalAlpha = alpha;
-    ctx.lineWidth   = Math.max(0.8, 1.5 * (1 - phase * 0.5));
+    ctx.lineWidth   = Math.max(1.0, 2.0 * (1 - phase));
     ctx.stroke();
     ctx.restore();
   }
