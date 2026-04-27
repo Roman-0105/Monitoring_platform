@@ -15,6 +15,7 @@ var _mapDragStartX     = 0;
 var _mapDragStartY     = 0;
 var _mapFilters        = { dates: [], worker: 'all' };
 var _poiEnabled        = false;   // Точки интереса включены
+var _mapPointsVisible  = true;    // Видимость точек замеров
 var _poiDate           = '';      // Выбранная дата для ТИ
 var _mapUiState        = { showFilter: true, showLegend: true };
 var _mapSelectedWeekKey = 'auto';
@@ -218,6 +219,10 @@ function renderMap() {
       redrawMap();
       initMapInteraction(canvas);
       initMapZoomButtons();
+      // Запускаем анимацию пульсации точек
+      if (typeof MapModule !== 'undefined' && MapModule.startPulse) {
+        MapModule.startPulse(redrawMap);
+      }
     };
     img.src = dataUrl;
   });
@@ -261,7 +266,7 @@ function redrawMap() {
     Faults.draw(ctx, _mapSchemeImg.width, _mapSchemeImg.height);
   }
   if (typeof MapModule !== 'undefined') {
-    MapModule.drawPoints(ctx, getFilteredPointsForMap(), _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
+    if (_mapPointsVisible) MapModule.drawPoints(ctx, getFilteredPointsForMap(), _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
     // Рисуем маркеры канав поверх точек
     if (typeof DitchState !== 'undefined' && MapModule.drawDitches) {
       MapModule.drawDitches(ctx, getFilteredDitchesForMap(), _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
@@ -601,6 +606,21 @@ function initMapLegend() {
   }
 
   initPoiControls();
+
+  // Кнопка показать/скрыть точки
+  var pvBtn = document.getElementById('btn-points-visible');
+  if (pvBtn && !pvBtn._bound) {
+    pvBtn._bound = true;
+    pvBtn.addEventListener('click', function() {
+      _mapPointsVisible = !_mapPointsVisible;
+      pvBtn.style.background  = _mapPointsVisible ? '' : 'rgba(139,148,158,.15)';
+      pvBtn.style.color       = _mapPointsVisible ? '' : 'var(--txt-3)';
+      pvBtn.style.borderColor = _mapPointsVisible ? '' : 'rgba(139,148,158,.4)';
+      pvBtn.textContent       = _mapPointsVisible ? '● Точки' : '○ Точки';
+      pvBtn.title             = _mapPointsVisible ? 'Скрыть точки замеров' : 'Показать точки замеров';
+      if (_mapSchemeImg) redrawMap();
+    });
+  }
 
   var modeWrap = document.getElementById('map-mode-switch');
   if (modeWrap && !modeWrap._bound) {

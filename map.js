@@ -240,6 +240,75 @@ var MapModule = (function() {
   }
 
   // ── Рендер точек ─────────────────────────────────────────
+  // ── Пульсация по интенсивности ─────────────────────────
+  // Параметры: { speed, rings, maxR, opacity }
+  var PULSE_MAP = {
+    'Очень сильная':  { speed: 0.06, rings: 2, maxR: 2.6, opacity: 0.65, color: '#f85149' },
+    'Сильная (поток)':{ speed: 0.05, rings: 2, maxR: 2.4, opacity: 0.6,  color: '#f85149' },
+    'Сильная':        { speed: 0.05, rings: 2, maxR: 2.4, opacity: 0.6,  color: '#f85149' },
+    'Перелив':        { speed: 0.06, rings: 2, maxR: 2.6, opacity: 0.65, color: '#bc8cff' },
+    'Умеренная':      { speed: 0.035,rings: 1, maxR: 2.0, opacity: 0.45, color: '#d29922' },
+    'Слабая (капёж)': { speed: 0.02, rings: 1, maxR: 1.7, opacity: 0.3,  color: '#8b949e' },
+    'Слабая':         { speed: 0.02, rings: 1, maxR: 1.7, opacity: 0.3,  color: '#8b949e' },
+    'Отсутствует':    null,
+  };
+
+  // Глобальный таймер пульсации (0..1, циклично)
+  var _pulseT    = 0;
+  var _pulseRaf  = null;
+  var _pulseActive = false;
+
+  function startPulse(redrawFn) {
+    if (_pulseActive) return;
+    _pulseActive = true;
+    function tick() {
+      if (!_pulseActive) return;
+      _pulseT = (_pulseT + 0.016) % 1;  // ~60fps, период 1 сек
+      if (typeof redrawFn === 'function') redrawFn();
+      _pulseRaf = requestAnimationFrame(tick);
+    }
+    _pulseRaf = requestAnimationFrame(tick);
+  }
+
+  function stopPulse() {
+    _pulseActive = false;
+    if (_pulseRaf) { cancelAnimationFrame(_pulseRaf); _pulseRaf = null; }
+  }
+
+  function drawPulseRing(ctx, px, py, radius, cfg, ringIdx) {
+    // Каждое кольцо сдвинуто по фазе
+    var phase    = (_pulseT + ringIdx * 0.5) % 1;
+    var ringR    = radius * (1 + phase * (cfg.maxR - 1));
+    var alpha    = cfg.opacity * (1 - phase);
+    if (alpha < 0.01) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(px, py, ringR, 0, Math.PI * 2);
+    ctx.strokeStyle = cfg.color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth   = Math.max(0.8, 1.5 * (1 - phase * 0.5));
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPointPulses(ctx, points, imgW, imgH, viewScale) {
+    for (var i = 0; i < points.length; i++) {
+      var p   = points[i];
+      var cfg = PULSE_MAP[p.intensity];
+      if (!cfg) continue;
+
+      var x = p.xLocal, y = p.yLocal;
+      if (x == null || y == null) continue;
+      var pos    = xyToPixel(x, y, imgW, imgH);
+      var marker = getMarkerStyle(p, MARKER_MODE, viewScale);
+      var radius = marker.size;
+
+      for (var r = 0; r < cfg.rings; r++) {
+        drawPulseRing(ctx, pos.px, pos.py, radius, cfg, r);
+      }
+    }
+  }
+
   function drawPoints(ctx, points, imgW, imgH, viewScale) {
     for (var i = 0; i < points.length; i++) {
       var p = points[i];
@@ -288,6 +357,8 @@ var MapModule = (function() {
         ctx.fillText(labelText, pos.px, pos.py - radius - (3 / scale));
       }
     }
+    // Рисуем кольца пульсации поверх всех точек
+    drawPointPulses(ctx, points, imgW, imgH, viewScale);
   }
 
   // ── Hit-test ─────────────────────────────────────────────
@@ -422,6 +493,8 @@ var MapModule = (function() {
     wgs84ToXY:     wgs84ToXY,
     xyToWgs84:     xyToWgs84,
     drawPoints:    drawPoints,
+    startPulse:    startPulse,
+    stopPulse:     stopPulse,
     findPointAt:   findPointAt,
     drawDitches:   drawDitches,
     findDitchAt:   findDitchAt,
