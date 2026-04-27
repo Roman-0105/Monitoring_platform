@@ -48,10 +48,12 @@ var Photos = (function() {
    * Возвращает Promise<string> — driveUrl.
    * При любой ошибке бросает Error.
    */
-  function upload(file, pointId) {
+  function upload(file, pointId, extra) {
+    // extra: { pointNumber, monitoringDate, flowRate } — для листа «Фото»
     if (!file)    return Promise.reject(new Error('Файл не выбран'));
     if (!pointId) return Promise.reject(new Error('pointId не задан'));
 
+    extra = extra || {};
     Diagnostics.set('photoStatus', 'uploading');
 
     var TIMEOUT_MS = 70000;  // 30 сек polling + 40 сек запас
@@ -62,8 +64,11 @@ var Photos = (function() {
     });
 
     var uploadP = compress(file).then(function(base64) {
-      var fileName = 'photo_' + pointId + '_' + Date.now() + '.jpg';
-      return Api.uploadPhotoConfirmed(pointId, fileName, base64, 'image/jpeg');
+      // Имя файла: "17_2026-04-02.jpg" — читаемое и осмысленное
+      var dateStr  = (extra.monitoringDate || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+      var numStr   = extra.pointNumber || pointId.slice(0, 8);
+      var fileName = numStr + '_' + dateStr + '.jpg';
+      return Api.uploadPhotoConfirmed(pointId, fileName, base64, 'image/jpeg', extra);
     }).then(function(driveUrl) {
       Diagnostics.set('photoStatus', 'uploaded');
       return driveUrl;

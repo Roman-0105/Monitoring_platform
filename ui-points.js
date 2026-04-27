@@ -388,6 +388,13 @@ function openDetailModal(pointId) {
   body += '</div>'; // /данные
   body += '</div>'; // /блок фото+данные
 
+  // Блок: Галерея фотографий
+  body +=
+    '<div>' + _secTitle('История фотографий') +
+    '<div id="dm-gallery" style="min-height:60px">' +
+    '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:14px 0">⏳ Загрузка фотографий...</p>' +
+    '</div></div>';
+
   // Блок: Аналитика (KPI)
   body +=
     '<div>' + _secTitle('Аналитика') +
@@ -453,6 +460,9 @@ function openDetailModal(pointId) {
   } else {
     _loadDetailHistory(box, pointId, p.pointNumber);
   }
+
+  // Загружаем галерею фотографий
+  _loadPhotoGallery(box, p.pointNumber);
 }
 
 // Загрузка истории с показом ошибки во всех секциях + кнопка Повторить
@@ -495,6 +505,100 @@ function _loadDetailHistory(box, pointId, pointNumber) {
       });
     }
   });
+}
+
+
+// ── Галерея фотографий в карточке подробностей ────────────
+
+function _loadPhotoGallery(box, pointNumber) {
+  var wrap = box.querySelector('#dm-gallery');
+  if (!wrap) return;
+
+  Api.getPhotos(pointNumber).then(function(photos) {
+    if (!photos || !photos.length) {
+      wrap.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:14px 0">Фотографии ещё не загружены</p>';
+      return;
+    }
+    _renderPhotoGallery(wrap, photos);
+  }).catch(function() {
+    wrap.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:14px 0">Не удалось загрузить фотографии</p>';
+  });
+}
+
+function _renderPhotoGallery(wrap, photos) {
+  var html = '<div style="font-size:10px;color:var(--txt-3);margin-bottom:8px">' +
+    photos.length + ' ' + (photos.length === 1 ? 'фотография' : photos.length < 5 ? 'фотографии' : 'фотографий') +
+    ' · от новых к старым</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">';
+
+  photos.forEach(function(ph) {
+    var m3h  = ph.flowRate != null ? (ph.flowRate * 3.6).toFixed(2) + ' м³/ч' : '—';
+    var date = formatMonitoringDate(ph.monitoringDate);
+    html +=
+      '<div style="border:1px solid var(--line-2);border-radius:5px;overflow:hidden;' +
+      'background:var(--bg-2);cursor:pointer;transition:border-color .15s" ' +
+      'class="dm-photo-card" data-url="' + escAttr(ph.photoUrl) + '" ' +
+      'data-date="' + escAttr(date) + '" data-q="' + escAttr(m3h) + '">' +
+        '<div style="height:80px;background:var(--bg-0);overflow:hidden">' +
+          '<img data-url="' + escAttr(ph.photoUrl) + '" src="" alt="фото" ' +
+          'style="width:100%;height:100%;object-fit:cover;display:block">' +
+        '</div>' +
+        '<div style="padding:5px 6px">' +
+          '<div style="font-size:10px;font-weight:500;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + date + '</div>' +
+          '<div style="font-size:10px;color:var(--ok);font-weight:600">' + m3h + '</div>' +
+        '</div>' +
+      '</div>';
+  });
+
+  html += '</div>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('img[data-url]').forEach(function(img) {
+    Photos.setImageSrc(img, img.dataset.url);
+  });
+
+  wrap.querySelectorAll('.dm-photo-card').forEach(function(card) {
+    card.addEventListener('click', function() {
+      _openPhotoLightbox(this.dataset.url, this.dataset.date, this.dataset.q);
+    });
+    card.addEventListener('mouseenter', function() { this.style.borderColor = 'rgba(88,166,255,.5)'; });
+    card.addEventListener('mouseleave', function() { this.style.borderColor = ''; });
+  });
+}
+
+function _openPhotoLightbox(url, date, q) {
+  var existing = document.getElementById('photo-lightbox');
+  if (existing) existing.remove();
+
+  var lb = document.createElement('div');
+  lb.id = 'photo-lightbox';
+  lb.style.cssText =
+    'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);' +
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+    'padding:20px;cursor:zoom-out';
+
+  lb.innerHTML =
+    '<div style="position:absolute;top:14px;right:14px;display:flex;gap:8px;align-items:center">' +
+      '<div style="background:rgba(13,17,23,.85);border:1px solid var(--line);border-radius:5px;' +
+      'padding:5px 12px;font-size:12px;color:var(--txt-1)">' +
+        '<span style="color:var(--txt-3);margin-right:8px">' + escAttr(date) + '</span>' +
+        '<span style="color:var(--ok);font-weight:600">' + escAttr(q) + '</span>' +
+      '</div>' +
+      '<button id="lb-close" style="width:32px;height:32px;border-radius:5px;border:1px solid var(--line);' +
+      'background:rgba(13,17,23,.85);color:var(--txt-1);font-size:16px;cursor:pointer;' +
+      'display:flex;align-items:center;justify-content:center">✕</button>' +
+    '</div>' +
+    '<img id="lb-img" data-url="' + escAttr(url) + '" src="" alt="фото" ' +
+    'style="max-width:100%;max-height:calc(100vh - 80px);border-radius:6px;object-fit:contain;display:block">';
+
+  document.body.appendChild(lb);
+  Photos.setImageSrc(lb.querySelector('#lb-img'), url);
+
+  function closeLb() { lb.remove(); document.removeEventListener('keydown', onKey); }
+  lb.addEventListener('click', function(e) { if (e.target === lb) closeLb(); });
+  lb.querySelector('#lb-close').addEventListener('click', closeLb);
+  function onKey(e) { if (e.key === 'Escape') closeLb(); }
+  document.addEventListener('keydown', onKey);
 }
 
 // Заполняет KPI, график и журнал внутри detail-modal
@@ -860,7 +964,8 @@ function saveNewPoint() {
     Toast.progress('save-point', 'Загрузка фото на Drive...', 50);
     var sizeMb = photoFile ? (photoFile.size/1024/1024).toFixed(2) + ' МБ' : '';
     showPhotoProgress('f-photo-progress', 'compressing', sizeMb);
-    return Photos.upload(photoFile, savedPoint.id).then(function(driveUrl) {
+    var _extra1 = { pointNumber: data.pointNumber, monitoringDate: data.monitoringDate, flowRate: data.flowRate };
+    return Photos.upload(photoFile, savedPoint.id, _extra1).then(function(driveUrl) {
       showPhotoProgress('f-photo-progress', 'done');
       var pt = Points.getById(savedPoint.id);
       if (pt) { pt.photoUrls = [driveUrl]; Storage.cachePoints(Points.getList()); }
@@ -1031,7 +1136,8 @@ function saveEditedPoint() {
     chain = Points.create(data).then(function(savedPoint) {
       if (!ePhotoFile || !savedPoint || !savedPoint.id) return null;
       showLoader('Загрузка фото...');
-      return Photos.upload(ePhotoFile, savedPoint.id).catch(function(photoErr) {
+      var _extra2 = { pointNumber: eData.pointNumber, monitoringDate: eData.monitoringDate, flowRate: eData.flowRate };
+      return Photos.upload(ePhotoFile, savedPoint.id, _extra2).catch(function(photoErr) {
         Diagnostics.setError('photo', photoErr.message);
         alert('Точка сохранена, но фото не загрузилось: ' + photoErr.message);
       });
@@ -1040,7 +1146,8 @@ function saveEditedPoint() {
     });
   } else if (ePhotoFile) {
     showLoader('Загрузка фото...');
-    chain = Photos.upload(ePhotoFile, id).then(function(driveUrl) {
+    var _extra3 = { pointNumber: eData.pointNumber, monitoringDate: eData.monitoringDate, flowRate: eData.flowRate };
+    chain = Photos.upload(ePhotoFile, id, _extra3).then(function(driveUrl) {
       data.photoUrls = [driveUrl];
       return Points.update(id, data);
     }).catch(function(photoErr) {

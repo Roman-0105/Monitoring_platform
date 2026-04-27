@@ -127,8 +127,13 @@ var Api = (function() {
   }
 
   function getHistory(pointNumber) {
-    return jsonpGet({ action: 'getHistory', pointNumber: pointNumber }, 15000)
+    return jsonpGet({ action: 'getHistory', pointNumber: pointNumber }, 30000)
       .then(function(d) { return d.history || []; });
+  }
+
+  function getPhotos(pointNumber) {
+    return jsonpGet({ action: 'getPhotos', pointNumber: pointNumber }, 15000)
+      .then(function(d) { return d.photos || []; });
   }
 
   // ── Запись точек ─────────────────────────────────────────
@@ -164,15 +169,19 @@ var Api = (function() {
    * Возвращает Promise<string> — новый driveUrl.
    * При ошибке бросает Error (не возвращает null).
    */
-  function uploadPhotoConfirmed(pointId, fileName, base64, mimeType) {
+  function uploadPhotoConfirmed(pointId, fileName, base64, mimeType, extra) {
     // POST — Apps Script загружает файл в Drive и пишет URL в Sheets.
-    // fetch no-cors завершается при отправке, независимо от Apps Script.
+    // extra: { pointNumber, monitoringDate, flowRate } — для листа «Фото»
+    extra = extra || {};
     return post({
-      action:   'uploadPhoto',
-      pointId:  pointId,
-      fileName: fileName,
-      base64:   base64,
-      mimeType: mimeType || 'image/jpeg',
+      action:         'uploadPhoto',
+      pointId:        pointId,
+      fileName:       fileName,
+      base64:         base64,
+      mimeType:       mimeType || 'image/jpeg',
+      pointNumber:    extra.pointNumber    || '',
+      monitoringDate: extra.monitoringDate || '',
+      flowRate:       extra.flowRate       != null ? extra.flowRate : '',
     }).then(function() {
       // Ждём Apps Script: polling каждые 3 сек, до 10 попыток (30 сек)
       return poll(function() {
@@ -206,6 +215,7 @@ var Api = (function() {
     getPoints: getPoints, getPoint: getPoint,
     getWorkers: getWorkers, getSchemes: getSchemes,
     getHistory:  getHistory,
+    getPhotos:   getPhotos,
     getDitches:  function(pointNumber) {
       return jsonpGet({ action: 'getDitches', pointNumber: pointNumber||'' })
         .then(function(d){ return d || { ditches:[] }; });
