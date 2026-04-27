@@ -526,25 +526,28 @@ function _loadPhotoGallery(box, pointNumber) {
 }
 
 function _renderPhotoGallery(wrap, photos) {
+  // Сохраняем весь массив в замыкании для лайтбокса
+  var _photos = photos;
+
   var html = '<div style="font-size:10px;color:var(--txt-3);margin-bottom:8px">' +
     photos.length + ' ' + (photos.length === 1 ? 'фотография' : photos.length < 5 ? 'фотографии' : 'фотографий') +
     ' · от новых к старым</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">';
 
-  photos.forEach(function(ph) {
+  photos.forEach(function(ph, idx) {
     var m3h  = ph.flowRate != null ? (ph.flowRate * 3.6).toFixed(2) + ' м³/ч' : '—';
     var date = formatMonitoringDate(ph.monitoringDate);
     html +=
       '<div style="border:1px solid var(--line-2);border-radius:5px;overflow:hidden;' +
       'background:var(--bg-2);cursor:pointer;transition:border-color .15s" ' +
-      'class="dm-photo-card" data-url="' + escAttr(ph.photoUrl) + '" ' +
-      'data-date="' + escAttr(date) + '" data-q="' + escAttr(m3h) + '">' +
+      'class="dm-photo-card" data-idx="' + idx + '">' +
         '<div style="height:80px;background:var(--bg-0);overflow:hidden">' +
           '<img data-url="' + escAttr(ph.photoUrl) + '" src="" alt="фото" ' +
           'style="width:100%;height:100%;object-fit:cover;display:block">' +
         '</div>' +
         '<div style="padding:5px 6px">' +
-          '<div style="font-size:10px;font-weight:500;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + date + '</div>' +
+          '<div style="font-size:10px;font-weight:500;color:var(--txt-1);white-space:nowrap;' +
+          'overflow:hidden;text-overflow:ellipsis">' + date + '</div>' +
           '<div style="font-size:10px;color:var(--ok);font-weight:600">' + m3h + '</div>' +
         '</div>' +
       '</div>';
@@ -559,46 +562,143 @@ function _renderPhotoGallery(wrap, photos) {
 
   wrap.querySelectorAll('.dm-photo-card').forEach(function(card) {
     card.addEventListener('click', function() {
-      _openPhotoLightbox(this.dataset.url, this.dataset.date, this.dataset.q);
+      var idx = parseInt(this.dataset.idx, 10);
+      _openPhotoLightbox(_photos, idx);
     });
     card.addEventListener('mouseenter', function() { this.style.borderColor = 'rgba(88,166,255,.5)'; });
     card.addEventListener('mouseleave', function() { this.style.borderColor = ''; });
   });
 }
 
-function _openPhotoLightbox(url, date, q) {
+// Лайтбокс с боковой панелью данных + навигация prev/next
+function _openPhotoLightbox(photos, startIdx) {
   var existing = document.getElementById('photo-lightbox');
   if (existing) existing.remove();
+
+  var idx = startIdx || 0;
 
   var lb = document.createElement('div');
   lb.id = 'photo-lightbox';
   lb.style.cssText =
-    'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);' +
-    'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
-    'padding:20px;cursor:zoom-out';
+    'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);' +
+    'display:flex;align-items:stretch';
 
-  lb.innerHTML =
-    '<div style="position:absolute;top:14px;right:14px;display:flex;gap:8px;align-items:center">' +
-      '<div style="background:rgba(13,17,23,.85);border:1px solid var(--line);border-radius:5px;' +
-      'padding:5px 12px;font-size:12px;color:var(--txt-1)">' +
-        '<span style="color:var(--txt-3);margin-right:8px">' + escAttr(date) + '</span>' +
-        '<span style="color:var(--ok);font-weight:600">' + escAttr(q) + '</span>' +
+  // Функция отрисовки текущего фото
+  function render() {
+    var ph   = photos[idx];
+    var m3h  = ph.flowRate != null ? (ph.flowRate * 3.6).toFixed(2) : '—';
+    var date = formatMonitoringDate(ph.monitoringDate);
+    var hasP = photos.length > 1;
+
+    lb.innerHTML =
+      // ── Фото (левая часть) ──
+      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;' +
+      'justify-content:center;padding:20px;position:relative;min-width:0">' +
+
+        // Кнопка ← (prev)
+        (hasP ? '<button id="lb-prev" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);' +
+        'width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.2);' +
+        'background:rgba(13,17,23,.7);color:var(--txt-1);font-size:18px;cursor:pointer;' +
+        'display:flex;align-items:center;justify-content:center;z-index:2;' +
+        (idx === 0 ? 'opacity:.3;pointer-events:none' : '') + '">‹</button>' : '') +
+
+        // Фото
+        '<img id="lb-img" src="" alt="фото" style="max-width:100%;max-height:calc(100vh - 40px);' +
+        'object-fit:contain;display:block;border-radius:4px">' +
+
+        // Счётчик
+        (hasP ? '<div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);' +
+        'background:rgba(13,17,23,.7);border-radius:20px;padding:3px 10px;font-size:10px;' +
+        'color:var(--txt-2)">' + (idx+1) + ' / ' + photos.length + '</div>' : '') +
+
+        // Кнопка → (next)
+        (hasP ? '<button id="lb-next" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);' +
+        'width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.2);' +
+        'background:rgba(13,17,23,.7);color:var(--txt-1);font-size:18px;cursor:pointer;' +
+        'display:flex;align-items:center;justify-content:center;z-index:2;' +
+        (idx === photos.length-1 ? 'opacity:.3;pointer-events:none' : '') + '">›</button>' : '') +
+
       '</div>' +
-      '<button id="lb-close" style="width:32px;height:32px;border-radius:5px;border:1px solid var(--line);' +
-      'background:rgba(13,17,23,.85);color:var(--txt-1);font-size:16px;cursor:pointer;' +
-      'display:flex;align-items:center;justify-content:center">✕</button>' +
-    '</div>' +
-    '<img id="lb-img" data-url="' + escAttr(url) + '" src="" alt="фото" ' +
-    'style="max-width:100%;max-height:calc(100vh - 80px);border-radius:6px;object-fit:contain;display:block">';
+
+      // ── Правая панель с данными ──
+      '<div style="width:260px;flex-shrink:0;background:rgba(13,17,23,.95);' +
+      'border-left:1px solid rgba(48,54,61,.8);display:flex;flex-direction:column;' +
+      'overflow-y:auto">' +
+
+        // Шапка панели
+        '<div style="display:flex;align-items:center;justify-content:space-between;' +
+        'padding:12px 14px;border-bottom:1px solid rgba(48,54,61,.6)">' +
+          '<span style="font-size:11px;font-weight:600;letter-spacing:.06em;' +
+          'text-transform:uppercase;color:var(--txt-3)">Данные замера</span>' +
+          '<button id="lb-close" style="width:26px;height:26px;border-radius:4px;' +
+          'border:1px solid rgba(48,54,61,.8);background:transparent;' +
+          'color:var(--txt-2);font-size:14px;cursor:pointer;display:flex;' +
+          'align-items:center;justify-content:center">✕</button>' +
+        '</div>' +
+
+        // Данные
+        '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:0;flex:1">' +
+
+          _lbRow('Дата замера',   date,  'var(--gold)') +
+          _lbRow('Дебит',        (ph.flowRate != null ? m3h + ' м³/ч' : '—'), 'var(--ok)') +
+
+          (ph.status      ? _lbRow('Статус',        ph.status)      : '') +
+          (ph.intensity   ? _lbRow('Интенсивность', ph.intensity)   : '') +
+          (ph.measureMethod ? _lbRow('Способ',      ph.measureMethod) : '') +
+          (ph.worker      ? _lbRow('Замерщик',      ph.worker)      : '') +
+          (ph.comment     ? _lbRow('Примечание',    ph.comment)     : '') +
+
+          // Загрузить оригинал
+          '<div style="margin-top:auto;padding-top:14px">' +
+            '<a href="' + escAttr(ph.photoUrl) + '" target="_blank" rel="noopener" ' +
+            'style="display:block;text-align:center;padding:8px;border-radius:4px;' +
+            'border:1px solid rgba(88,166,255,.35);color:var(--gold);font-size:11px;' +
+            'text-decoration:none;transition:background .15s" ' +
+            'onmouseover="this.style.background=\'rgba(88,166,255,.1)\'" ' +
+            'onmouseout="this.style.background=\'transparent\'">↗ Открыть оригинал</a>' +
+          '</div>' +
+
+        '</div>' +
+      '</div>';
+
+    // Загружаем фото
+    var imgEl = lb.querySelector('#lb-img');
+    if (imgEl) Photos.setImageSrc(imgEl, ph.photoUrl);
+
+    // Навигация
+    var prev = lb.querySelector('#lb-prev');
+    var next = lb.querySelector('#lb-next');
+    if (prev) prev.addEventListener('click', function(e) { e.stopPropagation(); if (idx > 0) { idx--; render(); } });
+    if (next) next.addEventListener('click', function(e) { e.stopPropagation(); if (idx < photos.length-1) { idx++; render(); } });
+
+    // Закрытие
+    lb.querySelector('#lb-close').addEventListener('click', closeLb);
+  }
+
+  function closeLb() {
+    lb.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape')      closeLb();
+    if (e.key === 'ArrowLeft'  && idx > 0)              { idx--; render(); }
+    if (e.key === 'ArrowRight' && idx < photos.length-1) { idx++; render(); }
+  }
 
   document.body.appendChild(lb);
-  Photos.setImageSrc(lb.querySelector('#lb-img'), url);
-
-  function closeLb() { lb.remove(); document.removeEventListener('keydown', onKey); }
-  lb.addEventListener('click', function(e) { if (e.target === lb) closeLb(); });
-  lb.querySelector('#lb-close').addEventListener('click', closeLb);
-  function onKey(e) { if (e.key === 'Escape') closeLb(); }
+  render();
   document.addEventListener('keydown', onKey);
+}
+
+// Строка данных в панели лайтбокса
+function _lbRow(label, val, valColor) {
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;' +
+    'gap:8px;padding:6px 0;border-bottom:1px solid rgba(48,54,61,.35);font-size:11px">' +
+    '<span style="color:var(--txt-3);flex-shrink:0;font-size:10px">' + label + '</span>' +
+    '<span style="color:' + (valColor || 'var(--txt-2)') + ';font-weight:500;' +
+    'text-align:right;word-break:break-word">' + escAttr(String(val)) + '</span>' +
+    '</div>';
 }
 
 // Заполняет KPI, график и журнал внутри detail-modal
