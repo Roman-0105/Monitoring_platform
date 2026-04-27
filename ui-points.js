@@ -1161,6 +1161,8 @@ function saveEditedPoint() {
 
   var etid = Toast.progress('edit-point', 'Сохранение изменений...');
   chain.then(function() {
+    // Сбрасываем кэш графика для этой точки — данные изменились
+    delete _chartCache[id];
     return Points.load();
   }).then(function() {
     renderPointsList();
