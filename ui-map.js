@@ -14,6 +14,8 @@ var _mapDragging       = false;
 var _mapDragStartX     = 0;
 var _mapDragStartY     = 0;
 var _mapFilters        = { dates: [], worker: 'all' };
+var _poiEnabled        = false;   // Точки интереса включены
+var _poiDate           = '';      // Выбранная дата для ТИ
 var _mapUiState        = { showFilter: true, showLegend: true };
 var _mapSelectedWeekKey = 'auto';
 var _tooltipEl         = null;
@@ -265,6 +267,10 @@ function redrawMap() {
       MapModule.drawDitches(ctx, getFilteredDitchesForMap(), _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
     }
   }
+  // Точки интереса — серые маркеры прошлых замеров
+  if (_poiEnabled && _poiDate && typeof MapModule !== 'undefined') {
+    drawPoiPoints(ctx, _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
+  }
   ctx.restore();
   var sbScale = document.getElementById('sb-scale');
   if (sbScale) sbScale.textContent = 'x' + _mapScale.toFixed(2);
@@ -503,7 +509,15 @@ function initMapInteraction(canvas) {
         showDitchMapCard(ditch);
         return;
       }
-      // Затем точку
+      // Проверяем точки интереса (серые) если включены
+      if (_poiEnabled && _poiDate) {
+        var poi = findPoiAt(imgX, imgY, _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
+        if (poi) {
+          showPoiCard(poi, e.clientX, e.clientY);
+          return;
+        }
+      }
+      // Затем обычную точку
       var p = MapModule.findPointAt(imgX, imgY, getFilteredPointsForMap(),
                 _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
       if (p) showMapPointCard(p);
@@ -585,6 +599,8 @@ function initMapLegend() {
       if (_mapSchemeImg) redrawMap();
     });
   }
+
+  initPoiControls();
 
   var modeWrap = document.getElementById('map-mode-switch');
   if (modeWrap && !modeWrap._bound) {
@@ -1346,4 +1362,336 @@ function showDitchHistoryInPanel(ditchName, panelEl) {
   }).catch(function() {
     panelEl.innerHTML = '<div style="padding:10px;color:var(--red);font-size:11px">Ошибка загрузки</div>';
   });
+}
+
+// ============================================================
+// ТОЧКИ ИНТЕРЕСА (POI)
+// Серые маркеры прошлых замеров для навигации на местности
+// ============================================================
+
+// Инициализация кнопки и select
+function initPoiControls() {
+  var poiBtn    = document.getElementById('btn-poi-toggle');
+  var poiSelect = document.getElementById('poi-date-select');
+  var poiProg   = document.getElementById('poi-progress');
+  if (!poiBtn || poiBtn._bound) return;
+  poiBtn._bound = true;
+
+  poiBtn.addEventListener('click', function() {
+    _poiEnabled = !_poiEnabled;
+
+    if (_poiEnabled) {
+      // Заполняем список дат
+      fillPoiDateSelect(poiSelect);
+      poiSelect.style.display = '';
+      if (poiProg) poiProg.style.display = '';
+      poiBtn.style.background  = 'rgba(139,148,158,.18)';
+      poiBtn.style.color       = 'var(--txt-1)';
+      poiBtn.style.borderColor = 'rgba(139,148,158,.6)';
+      // Автоматически выбираем предыдущую дату
+      if (poiSelect.options.length > 1 && !_poiDate) {
+        poiSelect.selectedIndex = 1;
+        _poiDate = poiSelect.value;
+      }
+    } else {
+      _poiDate = '';
+      poiSelect.style.display = 'none';
+      if (poiProg) poiProg.style.display = 'none';
+      poiBtn.style.background  = '';
+      poiBtn.style.color       = '';
+      poiBtn.style.borderColor = '';
+      closePoiCard();
+    }
+
+    updatePoiProgress();
+    if (_mapSchemeImg) redrawMap();
+  });
+
+  poiSelect.addEventListener('change', function() {
+    _poiDate = poiSelect.value;
+    closePoiCard();
+    updatePoiProgress();
+    if (_mapSchemeImg) redrawMap();
+  });
+}
+
+// Заполняем дропдаун датами
+function fillPoiDateSelect(sel) {
+  var dates = getAllMonitoringDates(); // из ui-utils.js
+  var current = sel.value;
+  sel.innerHTML = '<option value="">— выберите неделю —</option>';
+  dates.forEach(function(d) {
+    var opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = formatMonitoringDate(d);
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+}
+
+// Получаем точки для ТИ (по выбранной дате, исключая уже замеренные сегодня)
+function getPoiPoints() {
+  if (!_poiDate) return [];
+  var all = Points.getList();
+  // Берём все точки с выбранной датой
+  var byDate = all.filter(function(p) {
+    return (p.monitoringDate || '').slice(0, 10) === _poiDate;
+  });
+  // Дедуплицируем по pointNumber — оставляем одну на номер
+  var seen = {};
+  var result = [];
+  byDate.forEach(function(p) {
+    if (!seen[p.pointNumber]) {
+      seen[p.pointNumber] = true;
+      result.push(p);
+    }
+  });
+  return result;
+}
+
+// Получаем номера точек уже замеренных в текущую неделю
+function getCurrentWeekNumbers() {
+  var today     = new Date().toISOString().slice(0, 10);
+  var allDates  = getAllMonitoringDates();
+  // "Текущая неделя" = самая последняя дата (не совпадающая с _poiDate)
+  var curDate   = allDates.filter(function(d) { return d !== _poiDate; })[0] || today;
+  var nums = {};
+  Points.getList().forEach(function(p) {
+    if ((p.monitoringDate || '').slice(0, 10) === curDate) {
+      nums[p.pointNumber] = true;
+    }
+  });
+  return nums;
+}
+
+// Прогресс замеров
+function updatePoiProgress() {
+  var prog = document.getElementById('poi-progress');
+  if (!prog || !_poiEnabled || !_poiDate) {
+    if (prog) prog.style.display = 'none';
+    return;
+  }
+  var poiPts    = getPoiPoints();
+  var doneNums  = getCurrentWeekNumbers();
+  var done      = poiPts.filter(function(p) { return doneNums[p.pointNumber]; }).length;
+  prog.style.display   = '';
+  prog.style.color     = done === poiPts.length ? 'var(--ok)' : 'var(--txt-3)';
+  prog.textContent     = '✓ ' + done + ' / ' + poiPts.length;
+  prog.title           = 'Замерено ' + done + ' из ' + poiPts.length + ' точек';
+}
+
+// Отрисовка серых маркеров ТИ на canvas
+function drawPoiPoints(ctx, imgW, imgH, scale) {
+  var pts      = getPoiPoints();
+  var doneNums = getCurrentWeekNumbers();
+  var R        = Math.max(8, 10 / scale);  // радиус адаптивный
+  var fontSize = Math.max(7, 9 / scale);
+
+  pts.forEach(function(p) {
+    if (p.xLocal == null || p.yLocal == null) return;
+    var px = MapModule.xyToPixel(p.xLocal, p.yLocal, imgW, imgH);
+    if (!px) return;
+
+    var alreadyDone = doneNums[p.pointNumber];
+
+    ctx.save();
+
+    // Тень для читаемости
+    ctx.shadowColor   = 'rgba(0,0,0,.5)';
+    ctx.shadowBlur    = 3;
+
+    if (alreadyDone) {
+      // Уже замерена в текущую неделю — зелёная галочка с обводкой
+      ctx.strokeStyle = 'rgba(63,185,80,.6)';
+      ctx.fillStyle   = 'rgba(13,17,23,.7)';
+      ctx.lineWidth   = 1.2 / scale;
+    } else {
+      // Не замерена — серый маркер
+      ctx.strokeStyle = 'rgba(139,148,158,.65)';
+      ctx.fillStyle   = 'rgba(13,17,23,.7)';
+      ctx.lineWidth   = 1.5 / scale;
+    }
+
+    // Кружок
+    ctx.beginPath();
+    ctx.arc(px.px, px.py, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Номер точки
+    ctx.shadowBlur  = 0;
+    ctx.fillStyle   = alreadyDone ? 'rgba(63,185,80,.7)' : 'rgba(139,148,158,.85)';
+    ctx.font        = 'bold ' + fontSize + 'px Inter, sans-serif';
+    ctx.textAlign   = 'center';
+    ctx.textBaseline= 'middle';
+    ctx.fillText(String(p.pointNumber), px.px, px.py);
+
+    ctx.restore();
+  });
+}
+
+// Поиск ТИ по клику
+function findPoiAt(imgX, imgY, imgW, imgH, scale) {
+  var pts = getPoiPoints();
+  var R   = Math.max(10, 12 / scale);
+  for (var i = 0; i < pts.length; i++) {
+    var p = pts[i];
+    if (p.xLocal == null) continue;
+    var px = MapModule.xyToPixel(p.xLocal, p.yLocal, imgW, imgH);
+    if (!px) continue;
+    var dx = imgX - px.px, dy = imgY - px.py;
+    if (dx*dx + dy*dy <= R*R) return p;
+  }
+  return null;
+}
+
+// Попап точки интереса
+function showPoiCard(p, clientX, clientY) {
+  closePoiCard();
+
+  var doneNums  = getCurrentWeekNumbers();
+  var isDone    = doneNums[p.pointNumber];
+  var m3h       = p.flowRate != null ? (p.flowRate * 3.6).toFixed(2) + ' м³/ч' : '—';
+  var date      = formatMonitoringDate(p.monitoringDate);
+
+  var card = document.createElement('div');
+  card.id  = 'poi-card';
+
+  // Позиционируем рядом с курсором
+  var wrap = document.getElementById('map-scheme-wrap');
+  var wRect= wrap ? wrap.getBoundingClientRect() : { left:0, top:0 };
+  var left = Math.min(clientX - wRect.left + 10, (wrap ? wrap.offsetWidth : 600) - 220);
+  var top  = Math.min(clientY - wRect.top  + 10, (wrap ? wrap.offsetHeight: 400) - 200);
+
+  card.style.cssText =
+    'position:absolute;z-index:200;left:' + left + 'px;top:' + top + 'px;' +
+    'width:210px;background:var(--bg-1);border:1px solid rgba(88,166,255,.4);' +
+    'border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden';
+
+  function row(label, val, color) {
+    return '<div style="display:flex;justify-content:space-between;gap:6px;' +
+      'padding:4px 10px;border-bottom:1px solid rgba(48,54,61,.4);font-size:10px">' +
+      '<span style="color:var(--txt-3)">' + label + '</span>' +
+      '<span style="color:' + (color || 'var(--txt-2)') + ';font-weight:500;text-align:right">' + escAttr(String(val)) + '</span>' +
+      '</div>';
+  }
+
+  card.innerHTML =
+    // Шапка
+    '<div style="display:flex;align-items:center;justify-content:space-between;' +
+    'padding:7px 10px;background:var(--bg-0);border-bottom:1px solid rgba(48,54,61,.6)">' +
+      '<div style="display:flex;align-items:center;gap:7px">' +
+        '<span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;background:' +
+        (isDone ? 'var(--ok)' : 'rgba(139,148,158,.6)') + '"></span>' +
+        '<span style="font-size:13px;font-weight:700;color:var(--gold)">№' + escAttr(p.pointNumber) + '</span>' +
+        '<span style="font-size:11px;color:var(--txt-2)">' + escAttr(p.wall || p.domain || '') + '</span>' +
+      '</div>' +
+      '<button id="poi-card-close" style="width:20px;height:20px;border-radius:3px;border:1px solid var(--line);' +
+      'background:transparent;color:var(--txt-2);font-size:12px;cursor:pointer;' +
+      'display:flex;align-items:center;justify-content:center">✕</button>' +
+    '</div>' +
+
+    // Данные прошлого замера
+    '<div style="padding:4px 0;">' +
+      row('Замер', date, 'var(--txt-2)') +
+      row('Дебит', m3h, 'var(--ok)') +
+      (p.horizon    ? row('Горизонт',   p.horizon)       : '') +
+      (p.domain     ? row('Домен',      p.domain)        : '') +
+      (p.status     ? row('Статус',     p.status)        : '') +
+      (p.intensity  ? row('Интенс.',    p.intensity)     : '') +
+      (p.worker     ? row('Замерщик',   p.worker)        : '') +
+    '</div>' +
+
+    // Статус и кнопка
+    '<div style="padding:8px 10px;border-top:1px solid rgba(48,54,61,.4)">' +
+      (isDone
+        ? '<div style="font-size:10px;color:var(--ok);text-align:center;padding:2px 0">✓ Замерена в текущую неделю</div>'
+        : '<button id="poi-new-measure" data-pid="' + p.id + '" ' +
+          'style="width:100%;height:28px;border-radius:4px;border:1px solid rgba(88,166,255,.5);' +
+          'background:rgba(88,166,255,.12);color:var(--gold);font-size:11px;font-weight:600;' +
+          'cursor:pointer;font-family:inherit">+ Новый замер по этой точке</button>'
+      ) +
+    '</div>';
+
+  wrap.appendChild(card);
+
+  // Закрытие
+  card.querySelector('#poi-card-close').addEventListener('click', closePoiCard);
+
+  // Кнопка нового замера
+  var newBtn = card.querySelector('#poi-new-measure');
+  if (newBtn) {
+    newBtn.addEventListener('click', function() {
+      closePoiCard();
+      openAddFormFromPoi(p);
+    });
+  }
+}
+
+function closePoiCard() {
+  var card = document.getElementById('poi-card');
+  if (card) card.remove();
+}
+
+// Открываем форму добавления, предзаполненную данными ТИ
+function openAddFormFromPoi(p) {
+  // Переходим на вкладку «Добавить точку»
+  if (typeof switchTab === 'function') switchTab('add');
+
+  // Небольшая задержка чтобы DOM успел отрисоваться
+  setTimeout(function() {
+    var fields = {
+      'f-point-number':    p.pointNumber  || '',
+      'f-horizon':         p.horizon      || '',
+      'f-domain':          p.domain       || '',
+      'f-wall':            p.wall         || '',
+      'f-worker':          '',            // сотрудника не переносим
+      'f-status':          '',            // статус не переносим
+      'f-intensity':       '',
+      'f-flow-rate':       '',
+      'f-measure-method':  '',
+      'f-water-color':     p.waterColor   || '',
+      'f-comment':         '',
+    };
+
+    Object.keys(fields).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (el.tagName === 'SELECT') {
+        // Ищем option с нужным значением
+        for (var i = 0; i < el.options.length; i++) {
+          if (el.options[i].value === fields[id]) {
+            el.selectedIndex = i; break;
+          }
+        }
+      } else {
+        el.value = fields[id];
+      }
+    });
+
+    // Координаты — скрытые поля
+    if (p.xLocal != null) {
+      var fx = document.getElementById('f-x-local');
+      var fy = document.getElementById('f-y-local');
+      if (fx) fx.value = p.xLocal;
+      if (fy) fy.value = p.yLocal;
+    }
+
+    // Дата — ставим сегодня
+    var fDate = document.getElementById('f-monitoring-date');
+    if (fDate && !fDate.value) {
+      fDate.value = new Date().toISOString().slice(0, 10);
+    }
+
+    // Показываем тост-подсказку
+    if (typeof Toast !== 'undefined') {
+      Toast.show('Форма заполнена данными точки №' + p.pointNumber +
+        ' · Проверьте поля и добавьте новые данные замера', 'info');
+    }
+
+    // Фокус на поле дебита
+    var fFlow = document.getElementById('f-flow-rate');
+    if (fFlow) fFlow.focus();
+
+  }, 150);
 }
