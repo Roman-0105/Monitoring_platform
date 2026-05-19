@@ -180,6 +180,32 @@ document.addEventListener('DOMContentLoaded', function() {
   initThemePanel();
 });
 
+// ── Переключатель темы (сайдбар) ─────────────────────────
+
+function toggleTheme() {
+  var current = document.documentElement.getAttribute('data-theme') || 'default';
+  var next = current === 'light' ? 'default' : 'light';
+  applyTheme(next, null);
+  _updateThemeToggleUI(next);
+}
+
+function _updateThemeToggleUI(theme) {
+  var icon  = document.getElementById('theme-icon');
+  var label = document.getElementById('theme-label');
+  var isDark = !theme || theme === 'default';
+  if (icon)  icon.textContent  = isDark ? '☀' : '🌑';
+  if (label) label.textContent = isDark ? ' Светлая тема' : ' Тёмная тема';
+}
+
+// ── Сворачивание сайдбара ─────────────────────────────────
+
+function toggleSidebar() {
+  var sidebar = document.getElementById('tab-bar');
+  if (!sidebar) return;
+  var collapsed = sidebar.classList.toggle('collapsed');
+  try { localStorage.setItem('sidebar-collapsed', collapsed ? '1' : ''); } catch(e) {}
+}
+
 // ── Синхронизация ─────────────────────────────────────────
 
 function syncAll() {
@@ -309,27 +335,21 @@ function applyTheme(theme, btn) {
 }
 
 function initThemePanel() {
-  // Вставляем шаблон панели тем
-  var tpl = document.getElementById('theme-panel-tpl');
-  var settingsMain = document.getElementById('settings-section-main') ||
-                     document.querySelector('[data-settings-tab-content="main"]');
-  if (tpl && !document.getElementById('settings-section-theme')) {
-    var container = document.querySelector('.settings-subtab-content') ||
-                    document.querySelector('#page-settings > .card') ||
-                    document.getElementById('page-settings');
-    if (container) {
-      var node = tpl.content.cloneNode(true);
-      container.appendChild(node);
-    }
-  }
   // Восстанавливаем сохранённую тему
   var saved = '';
   try { saved = localStorage.getItem('app-theme') || ''; } catch(e) {}
+  // Если сохранённая тема из старого набора — сбросить на default
+  var validThemes = ['default', 'light'];
+  if (saved && validThemes.indexOf(saved) < 0) saved = 'default';
   if (saved) applyTheme(saved, null);
-  else {
-    document.querySelectorAll('.theme-btn').forEach(function(b) {
-      b.classList.toggle('active', b.dataset.theme === 'default');
-    });
-  }
+  _updateThemeToggleUI(saved || 'default');
+
+  // Восстанавливаем состояние сайдбара
+  try {
+    if (localStorage.getItem('sidebar-collapsed')) {
+      var sidebar = document.getElementById('tab-bar');
+      if (sidebar) sidebar.classList.add('collapsed');
+    }
+  } catch(e) {}
 }
 
