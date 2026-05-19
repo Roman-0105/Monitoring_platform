@@ -1,8 +1,14 @@
 /**
  * api.js — единственный модуль для общения с Supabase.
  *
- * Использует официальный Supabase JS SDK v2 (подключается в index.html).
- * Все методы возвращают Promise с camelCase-объектами (как раньше).
+ * Упрощённая структура (4 таблицы):
+ *   points   — каждая строка = один замер в одной точке
+ *   ditches  — каждая строка = один замер одной канавы
+ *   workers  — сотрудники
+ *   schemes  — схемы карьера (изображения)
+ *
+ * История точки  = SELECT * FROM points WHERE point_number = X
+ * История канавы = SELECT * FROM ditches WHERE ditch_name  = X
  */
 
 var Api = (function() {
@@ -22,65 +28,60 @@ var Api = (function() {
     return _client;
   }
 
-  // ── Маппинг полей camelCase ↔ snake_case ─────────────────
+  // ── Маппинг points ────────────────────────────────────────
 
   function pointToRow(p) {
     return {
       id:              p.id,
-      version:         p.version         || 1,
-      device_id:       p.deviceId        || '',
-      sync_status:     'synced',
-      synced_at:       new Date().toISOString(),
-      created_at:      p.createdAt       || new Date().toISOString(),
-      updated_at:      p.updatedAt       || new Date().toISOString(),
-      monitoring_date: p.monitoringDate  || null,
       point_number:    p.pointNumber     || '',
+      monitoring_date: p.monitoringDate  || null,
       worker:          p.worker          || '',
-      lat:             p.lat             != null ? p.lat  : null,
-      lon:             p.lon             != null ? p.lon  : null,
+      lat:             p.lat             != null ? p.lat    : null,
+      lon:             p.lon             != null ? p.lon    : null,
       x_local:         p.xLocal          != null ? p.xLocal : null,
       y_local:         p.yLocal          != null ? p.yLocal : null,
+      status:          p.status          || 'Новая',
       intensity:       p.intensity       || '',
       flow_rate:       p.flowRate        != null ? p.flowRate : null,
       water_color:     p.waterColor      || '',
       wall:            p.wall            || '',
       domain:          p.domain          || '',
-      status:          p.status          || 'Новая',
       measure_method:  p.measureMethod   || '',
       horizon:         p.horizon         || '',
       comment:         p.comment         || '',
-      photo_urls:      Array.isArray(p.photoUrls) ? p.photoUrls : [],
+      photos:          Array.isArray(p.photoUrls) ? p.photoUrls : [],
+      created_at:      p.createdAt       || new Date().toISOString(),
     };
   }
 
   function rowToPoint(r) {
     return {
       id:             r.id,
-      version:        r.version,
-      deviceId:       r.device_id,
-      syncStatus:     r.sync_status,
-      syncedAt:       r.synced_at,
-      createdAt:      r.created_at,
-      updatedAt:      r.updated_at,
-      monitoringDate: r.monitoring_date,
       pointNumber:    r.point_number,
+      monitoringDate: r.monitoring_date,
       worker:         r.worker,
       lat:            r.lat,
       lon:            r.lon,
       xLocal:         r.x_local,
       yLocal:         r.y_local,
+      status:         r.status,
       intensity:      r.intensity,
       flowRate:       r.flow_rate,
       waterColor:     r.water_color,
       wall:           r.wall,
       domain:         r.domain,
-      status:         r.status,
       measureMethod:  r.measure_method,
       horizon:        r.horizon,
       comment:        r.comment,
-      photoUrls:      r.photo_urls || [],
+      photoUrls:      r.photos || [],
+      createdAt:      r.created_at,
+      // Поля совместимости (offline queue)
+      syncStatus:     'synced',
+      syncedAt:       r.created_at,
     };
   }
+
+  // ── Маппинг workers ───────────────────────────────────────
 
   function workerToRow(w) {
     return {
@@ -88,32 +89,85 @@ var Api = (function() {
       name:       w.name,
       active:     w.active !== false,
       created_at: w.createdAt || new Date().toISOString(),
-      updated_at: w.updatedAt || new Date().toISOString(),
     };
   }
 
   function rowToWorker(r) {
+    return { id: r.id, name: r.name, active: r.active, createdAt: r.created_at };
+  }
+
+  // ── Маппинг ditches ───────────────────────────────────────
+
+  function ditchToRow(d) {
     return {
-      id:        r.id,
-      name:      r.name,
-      active:    r.active,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
+      id:              d.id,
+      point_number:    d.pointNumber    || '',
+      ditch_name:      d.ditchName      || '',
+      monitoring_date: d.monitoringDate || null,
+      worker:          d.worker         || '',
+      lat:             d.lat            != null ? d.lat    : null,
+      lon:             d.lon            != null ? d.lon    : null,
+      x_local:         d.xLocal         != null ? d.xLocal : null,
+      y_local:         d.yLocal         != null ? d.yLocal : null,
+      status:          d.status         || 'Активная',
+      width:           d.width          != null ? d.width    : null,
+      vel_method:      d.velMethod      || 'single',
+      velocity:        d.velocity       != null ? d.velocity : null,
+      float_l:         d.floatL         != null ? d.floatL   : null,
+      float_t:         d.floatT         != null ? d.floatT   : null,
+      float_k:         d.floatK         != null ? d.floatK   : null,
+      dist_mode:       d.distMode       || 'u',
+      n_points:        d.nPoints        != null ? d.nPoints  : null,
+      depths:          Array.isArray(d.depths) ? d.depths : [],
+      dists:           Array.isArray(d.dists)  ? d.dists  : [],
+      area:            d.area           != null ? d.area    : null,
+      flow_m3h:        d.flowM3h        != null ? d.flowM3h : null,
+      comment:         d.comment        || '',
+      photos:          Array.isArray(d.photoUrls) ? d.photoUrls : [],
+      created_at:      d.createdAt      || new Date().toISOString(),
     };
   }
 
-  // ── Вспомогательная: base64 → Blob ───────────────────────
+  function rowToDitch(r) {
+    return {
+      id:             r.id,
+      pointNumber:    r.point_number,
+      ditchName:      r.ditch_name,
+      monitoringDate: r.monitoring_date,
+      worker:         r.worker,
+      lat:            r.lat,
+      lon:            r.lon,
+      xLocal:         r.x_local,
+      yLocal:         r.y_local,
+      status:         r.status,
+      width:          r.width,
+      velMethod:      r.vel_method,
+      velocity:       r.velocity,
+      floatL:         r.float_l,
+      floatT:         r.float_t,
+      floatK:         r.float_k,
+      distMode:       r.dist_mode,
+      nPoints:        r.n_points,
+      depths:         r.depths  || [],
+      dists:          r.dists   || [],
+      area:           r.area,
+      flowM3h:        r.flow_m3h,
+      comment:        r.comment,
+      photoUrls:      r.photos  || [],
+      createdAt:      r.created_at,
+    };
+  }
+
+  // ── base64 → Blob ─────────────────────────────────────────
 
   function base64ToBlob(base64, mimeType) {
-    var byteString = atob(base64);
-    var arr = new Uint8Array(byteString.length);
-    for (var i = 0; i < byteString.length; i++) {
-      arr[i] = byteString.charCodeAt(i);
-    }
+    var str = atob(base64);
+    var arr = new Uint8Array(str.length);
+    for (var i = 0; i < str.length; i++) arr[i] = str.charCodeAt(i);
     return new Blob([arr], { type: mimeType || 'image/jpeg' });
   }
 
-  // ── Points ────────────────────────────────────────────────
+  // ── Points CRUD ───────────────────────────────────────────
 
   async function getPoints() {
     var { data, error } = await client()
@@ -146,11 +200,49 @@ var Api = (function() {
     if (error) throw new Error(error.message);
   }
 
-  // ── Workers ───────────────────────────────────────────────
+  // История точки = все замеры по point_number
+  async function getHistory(pointNumber) {
+    var { data, error } = await client()
+      .from('points').select('*')
+      .eq('point_number', pointNumber)
+      .order('monitoring_date', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map(function(r) {
+      return {
+        pointNumber:    r.point_number,
+        monitoringDate: r.monitoring_date,
+        flowRate:       r.flow_rate,
+        flowRateM3h:    r.flow_rate != null ? Math.round(r.flow_rate * 3.6 * 100) / 100 : null,
+        status:         r.status,
+        intensity:      r.intensity,
+        measureMethod:  r.measure_method,
+        worker:         r.worker,
+        recordedAt:     r.created_at,
+      };
+    });
+  }
+
+  // Фото точки = photoUrls из всех замеров по point_number
+  async function getPhotos(pointNumber) {
+    var { data, error } = await client()
+      .from('points').select('photos, monitoring_date, flow_rate')
+      .eq('point_number', pointNumber)
+      .order('monitoring_date', { ascending: false });
+    if (error) throw new Error(error.message);
+    var photos = [];
+    (data || []).forEach(function(r) {
+      (r.photos || []).forEach(function(url) {
+        photos.push({ photoUrl: url, monitoringDate: r.monitoring_date, flowRate: r.flow_rate });
+      });
+    });
+    return photos;
+  }
+
+  // ── Workers CRUD ──────────────────────────────────────────
 
   async function getWorkers() {
     var { data, error } = await client()
-      .from('workers').select('*').order('name');
+      .from('workers').select('*').eq('active', true).order('name');
     if (error) throw new Error(error.message);
     return (data || []).map(rowToWorker);
   }
@@ -161,7 +253,7 @@ var Api = (function() {
   }
 
   async function deleteWorker(id) {
-    var { error } = await client().from('workers').delete().eq('id', id);
+    var { error } = await client().from('workers').update({ active: false }).eq('id', id);
     if (error) throw new Error(error.message);
   }
 
@@ -169,10 +261,8 @@ var Api = (function() {
 
   async function getSchemes() {
     var { data, error } = await client()
-      .from('schemes').select('*')
-      .order('week_key', { ascending: false });
+      .from('schemes').select('*').order('week_key', { ascending: false });
     if (error) throw new Error(error.message);
-
     return (data || []).map(function(r) {
       var urlResult = client().storage.from('schemes').getPublicUrl(r.storage_path);
       var publicUrl = urlResult.data ? urlResult.data.publicUrl : '';
@@ -204,7 +294,7 @@ var Api = (function() {
     if (dbError) throw new Error(dbError.message);
   }
 
-  // ── Photos ────────────────────────────────────────────────
+  // ── Photos (Supabase Storage) ─────────────────────────────
 
   async function uploadPhotoConfirmed(pointId, fileName, base64, mimeType) {
     var blob = base64ToBlob(base64, mimeType);
@@ -217,132 +307,26 @@ var Api = (function() {
     var urlResult = client().storage.from('photos').getPublicUrl(path);
     var photoUrl  = urlResult.data ? urlResult.data.publicUrl : path;
 
-    // Добавляем URL к массиву photo_urls точки
     var { data: row, error: fetchError } = await client()
-      .from('points').select('photo_urls').eq('id', pointId).maybeSingle();
+      .from('points').select('photos').eq('id', pointId).maybeSingle();
     if (fetchError) throw new Error(fetchError.message);
 
-    var existing = (row && row.photo_urls) || [];
-    var updated  = [photoUrl].concat(existing);
+    var updated = [photoUrl].concat((row && row.photos) || []);
 
-    var { error: updateError } = await client().from('points')
-      .update({ photo_urls: updated, updated_at: new Date().toISOString() })
-      .eq('id', pointId);
+    var { error: updateError } = await client()
+      .from('points').update({ photos: updated }).eq('id', pointId);
     if (updateError) throw new Error(updateError.message);
 
     return photoUrl;
   }
 
   async function deletePhoto(pointId) {
-    var { error } = await client().from('points')
-      .update({ photo_urls: [], updated_at: new Date().toISOString() })
-      .eq('id', pointId);
+    var { error } = await client()
+      .from('points').update({ photos: [] }).eq('id', pointId);
     if (error) throw new Error(error.message);
   }
 
-  // ── История точки (из таблицы history) ───────────────────
-
-  async function getHistory(pointNumber) {
-    var { data, error } = await client()
-      .from('history').select('*')
-      .eq('point_number', pointNumber)
-      .order('monitoring_date', { ascending: false });
-    if (error) throw new Error(error.message);
-    return (data || []).map(function(r) {
-      return {
-        pointNumber:    r.point_number,
-        monitoringDate: r.monitoring_date,
-        flowRate:       r.flow_rate,
-        flowRateM3h:    r.flow_rate_m3h,
-        status:         r.status,
-        intensity:      r.intensity,
-        measureMethod:  r.measure_method,
-        worker:         r.worker,
-        recordedAt:     r.recorded_at,
-      };
-    });
-  }
-
-  async function getPhotos(pointNumber) {
-    var { data, error } = await client()
-      .from('photos').select('*')
-      .eq('point_number', pointNumber)
-      .order('monitoring_date', { ascending: false });
-    if (error) throw new Error(error.message);
-    return (data || []).map(function(r) {
-      return {
-        pointNumber:    r.point_number,
-        monitoringDate: r.monitoring_date,
-        photoUrl:       r.photo_url,
-        flowRate:       r.flow_rate,
-        uploadedAt:     r.uploaded_at,
-      };
-    });
-  }
-
-  // ── Канавы ────────────────────────────────────────────────
-
-  function ditchToRow(d) {
-    return {
-      id:              d.id,
-      point_number:    d.pointNumber    || '',
-      ditch_name:      d.ditchName      || '',
-      monitoring_date: d.monitoringDate || null,
-      worker:          d.worker         || '',
-      lat:             d.lat            != null ? d.lat    : null,
-      lon:             d.lon            != null ? d.lon    : null,
-      x_local:         d.xLocal         != null ? d.xLocal : null,
-      y_local:         d.yLocal         != null ? d.yLocal : null,
-      status:          d.status         || 'Активная',
-      width:           d.width          != null ? d.width    : null,
-      vel_method:      d.velMethod      || 'single',
-      velocity:        d.velocity       != null ? d.velocity : null,
-      float_l:         d.floatL         != null ? d.floatL   : null,
-      float_t:         d.floatT         != null ? d.floatT   : null,
-      float_k:         d.floatK         != null ? d.floatK   : null,
-      dist_mode:       d.distMode       || 'u',
-      n_points:        d.nPoints        != null ? d.nPoints  : null,
-      depths:          Array.isArray(d.depths) ? d.depths : [],
-      dists:           Array.isArray(d.dists)  ? d.dists  : [],
-      area:            d.area           != null ? d.area     : null,
-      flow_m3h:        d.flowM3h        != null ? d.flowM3h  : null,
-      comment:         d.comment        || '',
-      photo_urls:      Array.isArray(d.photoUrls) ? d.photoUrls : [],
-      created_at:      d.createdAt      || new Date().toISOString(),
-      updated_at:      new Date().toISOString(),
-    };
-  }
-
-  function rowToDitch(r) {
-    return {
-      id:             r.id,
-      pointNumber:    r.point_number,
-      ditchName:      r.ditch_name,
-      monitoringDate: r.monitoring_date,
-      worker:         r.worker,
-      lat:            r.lat,
-      lon:            r.lon,
-      xLocal:         r.x_local,
-      yLocal:         r.y_local,
-      status:         r.status,
-      width:          r.width,
-      velMethod:      r.vel_method,
-      velocity:       r.velocity,
-      floatL:         r.float_l,
-      floatT:         r.float_t,
-      floatK:         r.float_k,
-      distMode:       r.dist_mode,
-      nPoints:        r.n_points,
-      depths:         r.depths  || [],
-      dists:          r.dists   || [],
-      area:           r.area,
-      flowM3h:        r.flow_m3h,
-      comment:        r.comment,
-      photoUrls:      r.photo_urls || [],
-      createdAt:      r.created_at,
-      updatedAt:      r.updated_at,
-    };
-  }
+  // ── Ditches CRUD ──────────────────────────────────────────
 
   async function getDitches(pointNumber) {
     var query = client().from('ditches').select('*').order('created_at', { ascending: false });
@@ -353,7 +337,8 @@ var Api = (function() {
   }
 
   async function getDitch(id) {
-    var { data, error } = await client().from('ditches').select('*').eq('id', id).maybeSingle();
+    var { data, error } = await client()
+      .from('ditches').select('*').eq('id', id).maybeSingle();
     if (error) throw new Error(error.message);
     return { ditch: data ? rowToDitch(data) : null };
   }
@@ -376,9 +361,10 @@ var Api = (function() {
     return { status: 'deleted', id: id };
   }
 
+  // История канавы = все замеры по ditch_name
   async function getDitchHistory(ditchName) {
     var { data, error } = await client()
-      .from('ditch_history').select('*')
+      .from('ditches').select('*')
       .eq('ditch_name', ditchName)
       .order('monitoring_date', { ascending: true });
     if (error) throw new Error(error.message);
@@ -392,51 +378,45 @@ var Api = (function() {
         area:           r.area,
         flowM3h:        r.flow_m3h,
         velMethod:      r.vel_method,
-        recordedAt:     r.recorded_at,
+        recordedAt:     r.created_at,
       };
     })};
   }
 
-  // ── Ping / совместимость ──────────────────────────────────
+  // ── Ping ─────────────────────────────────────────────────
 
   async function ping() {
     try {
       var { error } = await client().from('points').select('id').limit(1);
       return !error;
-    } catch (_) {
-      return false;
-    }
+    } catch (_) { return false; }
   }
 
-  // getImage больше не нужен — фото доступны по прямым URL
-  function getImage() {
-    return Promise.resolve(null);
-  }
-
+  function getImage() { return Promise.resolve(null); }
 
   return {
-    getPoints:    getPoints,
-    getPoint:     getPoint,
-    getWorkers:   getWorkers,
-    getSchemes:   getSchemes,
-    getHistory:   getHistory,
-    getPhotos:    getPhotos,
-    getDitches:   getDitches,
-    getDitch:     getDitch,
-    createDitch:  createDitch,
-    updateDitch:  updateDitch,
-    deleteDitch:  deleteDitch,
-    getDitchHistory: getDitchHistory,
-    post:         function() { return Promise.resolve(); },
-    getImage:     getImage,
-    ping:         ping,
-    createPoint:  createPoint,
-    updatePoint:  updatePoint,
-    deletePoint:  deletePoint,
-    saveWorker:   saveWorker,
-    deleteWorker: deleteWorker,
+    getPoints:           getPoints,
+    getPoint:            getPoint,
+    getWorkers:          getWorkers,
+    getHistory:          getHistory,
+    getPhotos:           getPhotos,
+    getSchemes:          getSchemes,
+    getDitches:          getDitches,
+    getDitch:            getDitch,
+    getDitchHistory:     getDitchHistory,
+    ping:                ping,
+    getImage:            getImage,
+    post:                function() { return Promise.resolve(); },
+    createPoint:         createPoint,
+    updatePoint:         updatePoint,
+    deletePoint:         deletePoint,
+    saveWorker:          saveWorker,
+    deleteWorker:        deleteWorker,
     uploadPhotoConfirmed: uploadPhotoConfirmed,
-    deletePhoto:  deletePhoto,
-    uploadScheme: uploadScheme,
+    deletePhoto:         deletePhoto,
+    uploadScheme:        uploadScheme,
+    createDitch:         createDitch,
+    updateDitch:         updateDitch,
+    deleteDitch:         deleteDitch,
   };
 })();

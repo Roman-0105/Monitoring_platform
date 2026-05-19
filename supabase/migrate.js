@@ -2,13 +2,20 @@
  * migrate.js — перенос данных из Google Sheets CSV → Supabase
  *
  * Использование:
- *   1. npm install @supabase/supabase-js csv-parse node-fetch
- *   2. Положите CSV-файлы в папку ./csv/ рядом с этим скриптом
- *   3. Заполните CONFIG ниже (SUPABASE_URL и SERVICE_KEY)
- *   4. node migrate.js
+ *   1. npm install @supabase/supabase-js csv-parse
+ *   2. Создайте папку ./csv/ рядом с этим скриптом
+ *   3. Положите CSV-файлы в ./csv/ (названия указаны ниже)
+ *   4. Вставьте SERVICE_KEY
+ *   5. node migrate.js
  *
- * Порядок запуска: workers → points → history → photos → ditches → ditch_history
- * Схемы (изображения) — отдельный шаг, требует скачивания из Google Drive вручную
+ * Названия файлов:
+ *   csv/points.csv        — лист «Точки»
+ *   csv/workers.csv       — лист «Сотрудники»
+ *   csv/ditches.csv       — лист «Канавы»
+ *   csv/schemes.csv       — лист «Схемы» (опционально)
+ *
+ * Листы «История», «ИсторияКанав», «Фото» — не нужны.
+ * История теперь = фильтр по point_number / ditch_name.
  */
 
 const { createClient } = require('@supabase/supabase-js');
@@ -19,8 +26,8 @@ const path             = require('path');
 // ── ЗАПОЛНИТЕ ЭТО ────────────────────────────────────────────
 const CONFIG = {
   SUPABASE_URL: 'https://dusmrxvybojyrqmmqxjx.supabase.co',
-  SERVICE_KEY:  'ВСТАВЬТЕ_СЮДА_service_role_ключ',   // sb_secret_...
-  CSV_DIR:      './csv',                               // папка с CSV-файлами
+  SERVICE_KEY:  'ВСТАВЬТЕ_СЮДА_service_role_ключ',  // sb_secret_...
+  CSV_DIR:      './csv',
 };
 // ─────────────────────────────────────────────────────────────
 
@@ -31,88 +38,50 @@ const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SERVICE_KEY);
 function readCsv(fileName) {
   const filePath = path.join(CONFIG.CSV_DIR, fileName);
   if (!fs.existsSync(filePath)) {
-    console.warn(`⚠  Файл не найден: ${filePath} — пропускаем`);
+    console.warn(`  ⚠  ${filePath} не найден — пропускаем`);
     return [];
   }
   const content = fs.readFileSync(filePath, 'utf-8');
-  return parse(content, {
-    columns:          true,   // первая строка = заголовки
-    skip_empty_lines: true,
-    trim:             true,
-  });
+  return parse(content, { columns: true, skip_empty_lines: true, trim: true });
 }
 
-function normalizeDate(raw) {
+function toDate(raw) {
   if (!raw || raw === '') return null;
-  // DD.MM.YYYY или DD/MM/YYYY
   const dot = raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
   if (dot) return `${dot[3]}-${dot[2].padStart(2,'0')}-${dot[1].padStart(2,'0')}`;
-  // YYYY-MM-DD — уже правильный
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
   return null;
 }
 
-function toFloat(v) {
-  const n = parseFloat(v);
-  return isNaN(n) ? null : n;
+function toFloat(v) { const n = parseFloat(v); return isNaN(n) ? null : n; }
+function toInt(v)   { const n = parseInt(v, 10); return isNaN(n) ? null : n; }
+function toBool(v)  { return v === 'FALSE' || v === 'false' || v === '0' ? false : true; }
+
+function parseJsonArray(raw) {
+  if (!raw || raw === '') return [];
+  try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
 }
 
-function toInt(v) {
-  const n = parseInt(v, 10);
-  return isNaN(n) ? null : n;
-}
-
-function toBool(v) {
-  if (v === 'TRUE' || v === 'true' || v === '1') return true;
-  if (v === 'FALSE' || v === 'false' || v === '0') return false;
-  return true;
-}
-
-function parseJsonArray(raw, def = []) {
-  if (!raw || raw === '') return def;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : def;
-  } catch (_) { return def; }
-}
-
-// Разбиваем массив на части по N элементов для batch-insert
 function chunks(arr, size) {
-  const result = [];
-  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
-  return result;
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
-async function insertBatch(table, rows, batchSize = 100) {
-  if (!rows.length) { console.log(`  ${table}: нет данных`); return; }
-  let inserted = 0;
-  for (const batch of chunks(rows, batchSize)) {
-    const { error } = await supabase.from(table).upsert(batch);
+async function insertBatch(table, rows) {
+  if (!rows.length) { console.log(`  ${table}: нет данных`); return 0; }
+  let total = 0;
+  for (const batch of chunks(rows, 200)) {
+    const { error } = await supabase.from(table).upsert(batch, { ignoreDuplicates: false });
     if (error) {
-      console.error(`  ❌ ${table}: ошибка вставки —`, error.message);
-      console.error('  Первая строка пачки:', JSON.stringify(batch[0]));
+      console.error(`  ❌ ${table} ошибка:`, error.message);
+      console.error('     Пример строки:', JSON.stringify(batch[0]));
       process.exit(1);
     }
-    inserted += batch.length;
+    total += batch.length;
   }
-  console.log(`  ✅ ${table}: вставлено ${inserted} строк`);
-}
-
-// ── Миграция сотрудников ──────────────────────────────────────
-
-async function migrateWorkers() {
-  console.log('\n👷 Сотрудники...');
-  const rows = readCsv('workers.csv');
-  const data = rows
-    .filter(r => r.id)
-    .map(r => ({
-      id:         r.id,
-      name:       r.name || '',
-      active:     toBool(r.active),
-      created_at: r.createdAt || new Date().toISOString(),
-      updated_at: r.updatedAt || new Date().toISOString(),
-    }));
-  await insertBatch('workers', data);
+  console.log(`  ✅ ${table}: ${total} строк`);
+  return total;
 }
 
 // ── Миграция точек ────────────────────────────────────────────
@@ -120,144 +89,102 @@ async function migrateWorkers() {
 async function migratePoints() {
   console.log('\n📍 Точки...');
   const rows = readCsv('points.csv');
-  const data = rows
-    .filter(r => r.id)
-    .map(r => ({
-      id:              r.id,
-      version:         toInt(r.version)     || 1,
-      device_id:       r.deviceId           || '',
-      sync_status:     'synced',
-      synced_at:       r.syncedAt           || null,
-      created_at:      r.createdAt          || new Date().toISOString(),
-      updated_at:      r.updatedAt          || new Date().toISOString(),
-      monitoring_date: normalizeDate(r.monitoringDate),
-      point_number:    r.pointNumber        || '',
-      worker:          r.worker             || '',
-      lat:             toFloat(r.lat),
-      lon:             toFloat(r.lon),
-      x_local:         toFloat(r.xLocal),
-      y_local:         toFloat(r.yLocal),
-      intensity:       r.intensity          || '',
-      flow_rate:       toFloat(r.flowRate),
-      water_color:     r.waterColor         || '',
-      wall:            r.wall               || '',
-      domain:          r.domain             || '',
-      status:          r.status             || 'Новая',
-      measure_method:  r.measureMethod      || '',
-      horizon:         r.horizon            || '',
-      comment:         r.comment            || '',
-      // photoUrls из Google Drive не переносим — они недоступны после отключения Drive
-      // Фото нужно загружать заново через Supabase Storage
-      photo_urls:      [],
-    }));
+  const data = rows.filter(r => r.id).map(r => ({
+    id:              r.id,
+    point_number:    r.pointNumber     || '',
+    monitoring_date: toDate(r.monitoringDate),
+    worker:          r.worker          || '',
+    lat:             toFloat(r.lat),
+    lon:             toFloat(r.lon),
+    x_local:         toFloat(r.xLocal),
+    y_local:         toFloat(r.yLocal),
+    status:          r.status          || 'Новая',
+    intensity:       r.intensity       || '',
+    flow_rate:       toFloat(r.flowRate),
+    water_color:     r.waterColor      || '',
+    wall:            r.wall            || '',
+    domain:          r.domain          || '',
+    measure_method:  r.measureMethod   || '',
+    horizon:         r.horizon         || '',
+    comment:         r.comment         || '',
+    photos:          [],    // Drive-ссылки недоступны — фото загружать заново
+    created_at:      r.createdAt       || new Date().toISOString(),
+  }));
   await insertBatch('points', data);
 }
 
-// ── Миграция истории замеров ──────────────────────────────────
+// ── Миграция сотрудников ──────────────────────────────────────
 
-async function migrateHistory() {
-  console.log('\n📈 История замеров...');
-  const rows = readCsv('history.csv');   // лист «История»
-  const data = rows
-    .filter(r => r.pointNumber)
-    .map(r => ({
-      point_number:    r.pointNumber    || '',
-      monitoring_date: normalizeDate(r.monitoringDate),
-      flow_rate:       toFloat(r.flowRate),
-      flow_rate_m3h:   toFloat(r.flowRateM3h),
-      status:          r.status         || '',
-      intensity:       r.intensity      || '',
-      measure_method:  r.measureMethod  || '',
-      worker:          r.worker         || '',
-      recorded_at:     r.recordedAt     || new Date().toISOString(),
-    }));
-  await insertBatch('history', data);
-}
-
-// ── Миграция фото (метаданные без файлов) ────────────────────
-
-async function migratePhotos() {
-  console.log('\n🖼  Фото (метаданные)...');
-  const rows = readCsv('photos.csv');   // лист «Фото»
-  const data = rows
-    .filter(r => r.pointNumber && r.photoUrl)
-    .map(r => ({
-      point_number:    r.pointNumber    || '',
-      monitoring_date: normalizeDate(r.monitoringDate),
-      // Старый Google Drive URL — оставляем как есть, файлы уже не доступны
-      // После загрузки фото через новый интерфейс URL обновятся автоматически
-      photo_url:       r.photoUrl       || '',
-      flow_rate:       toFloat(r.flowRate),
-      uploaded_at:     r.uploadedAt     || new Date().toISOString(),
-    }));
-  await insertBatch('photos', data);
+async function migrateWorkers() {
+  console.log('\n👷 Сотрудники...');
+  const rows = readCsv('workers.csv');
+  const data = rows.filter(r => r.id).map(r => ({
+    id:         r.id,
+    name:       r.name || '',
+    active:     toBool(r.active),
+    created_at: r.createdAt || new Date().toISOString(),
+  }));
+  await insertBatch('workers', data);
 }
 
 // ── Миграция канав ────────────────────────────────────────────
 
 async function migrateDitches() {
   console.log('\n🏗  Канавы...');
-  const rows = readCsv('ditches.csv');   // лист «Канавы»
-  const data = rows
-    .filter(r => r.id)
-    .map(r => ({
-      id:              r.id,
-      point_number:    r.pointNumber    || '',
-      ditch_name:      r.ditchName      || '',
-      monitoring_date: normalizeDate(r.monitoringDate),
-      worker:          r.worker         || '',
-      lat:             toFloat(r.lat),
-      lon:             toFloat(r.lon),
-      x_local:         toFloat(r.xLocal),
-      y_local:         toFloat(r.yLocal),
-      status:          r.status         || 'Активная',
-      width:           toFloat(r.width),
-      vel_method:      r.velMethod      || 'single',
-      velocity:        toFloat(r.velocity),
-      float_l:         toFloat(r.floatL),
-      float_t:         toFloat(r.floatT),
-      float_k:         toFloat(r.floatK),
-      dist_mode:       r.distMode       || 'u',
-      n_points:        toInt(r.nPoints),
-      depths:          parseJsonArray(r.depths),
-      dists:           parseJsonArray(r.dists),
-      area:            toFloat(r.area),
-      flow_m3h:        toFloat(r.flowM3h),
-      comment:         r.comment        || '',
-      photo_urls:      [],   // фото канав переносим отдельно
-      created_at:      r.createdAt      || new Date().toISOString(),
-      updated_at:      r.updatedAt      || new Date().toISOString(),
-    }));
+  const rows = readCsv('ditches.csv');
+  const data = rows.filter(r => r.id).map(r => ({
+    id:              r.id,
+    point_number:    r.pointNumber     || '',
+    ditch_name:      r.ditchName       || '',
+    monitoring_date: toDate(r.monitoringDate),
+    worker:          r.worker          || '',
+    lat:             toFloat(r.lat),
+    lon:             toFloat(r.lon),
+    x_local:         toFloat(r.xLocal),
+    y_local:         toFloat(r.yLocal),
+    status:          r.status          || 'Активная',
+    width:           toFloat(r.width),
+    vel_method:      r.velMethod       || 'single',
+    velocity:        toFloat(r.velocity),
+    float_l:         toFloat(r.floatL),
+    float_t:         toFloat(r.floatT),
+    float_k:         toFloat(r.floatK),
+    dist_mode:       r.distMode        || 'u',
+    n_points:        toInt(r.nPoints),
+    depths:          parseJsonArray(r.depths),
+    dists:           parseJsonArray(r.dists),
+    area:            toFloat(r.area),
+    flow_m3h:        toFloat(r.flowM3h),
+    comment:         r.comment         || '',
+    photos:          [],
+    created_at:      r.createdAt       || new Date().toISOString(),
+  }));
   await insertBatch('ditches', data);
 }
 
-// ── Миграция истории канав ────────────────────────────────────
+// ── Миграция схем (только метаданные) ────────────────────────
 
-async function migrateDitchHistory() {
-  console.log('\n📊 История канав...');
-  const rows = readCsv('ditch_history.csv');   // лист «ИсторияКанав»
-  const data = rows
-    .filter(r => r.ditchName)
-    .map(r => ({
-      ditch_name:      r.ditchName      || '',
-      point_number:    r.pointNumber    || '',
-      monitoring_date: normalizeDate(r.monitoringDate),
-      worker:          r.worker         || '',
-      width:           toFloat(r.width),
-      area:            toFloat(r.area),
-      flow_m3h:        toFloat(r.flowM3h),
-      vel_method:      r.velMethod      || '',
-      recorded_at:     r.recordedAt     || new Date().toISOString(),
-    }));
-  await insertBatch('ditch_history', data);
+async function migrateSchemes() {
+  console.log('\n🗺  Схемы...');
+  const rows = readCsv('schemes.csv');
+  if (!rows.length) return;
+  // Схемы без изображений — только метаданные.
+  // Сами изображения нужно загрузить вручную в Supabase Storage → schemes
+  const data = rows.filter(r => r.weekKey).map(r => ({
+    week_key:     r.weekKey,
+    storage_path: r.weekKey + '.jpg',  // путь в Storage — после ручной загрузки
+    uploaded_at:  r.uploadedAt || new Date().toISOString(),
+    uploaded_by:  r.uploadedBy || '',
+  }));
+  await insertBatch('schemes', data);
+  console.log('  ℹ  Изображения схем нужно загрузить вручную в Storage → schemes');
 }
 
 // ── Главная функция ───────────────────────────────────────────
 
 async function main() {
-  console.log('🚀 Начало миграции данных в Supabase');
-  console.log(`   URL: ${CONFIG.SUPABASE_URL}`);
-  console.log(`   CSV: ${path.resolve(CONFIG.CSV_DIR)}\n`);
+  console.log('🚀 Миграция данных в Supabase');
+  console.log(`   URL: ${CONFIG.SUPABASE_URL}\n`);
 
   if (CONFIG.SERVICE_KEY.includes('ВСТАВЬТЕ')) {
     console.error('❌ Заполните SERVICE_KEY в CONFIG!');
@@ -265,31 +192,24 @@ async function main() {
   }
 
   if (!fs.existsSync(CONFIG.CSV_DIR)) {
-    console.error(`❌ Папка ${CONFIG.CSV_DIR} не найдена. Создайте её и положите CSV-файлы.`);
+    console.error(`❌ Папка ${CONFIG.CSV_DIR} не найдена.`);
     process.exit(1);
   }
 
-  // Тест подключения
-  const { error: pingError } = await supabase.from('workers').select('id').limit(1);
-  if (pingError) {
-    console.error('❌ Не удалось подключиться к Supabase:', pingError.message);
+  const { error } = await supabase.from('workers').select('id').limit(1);
+  if (error) {
+    console.error('❌ Ошибка подключения:', error.message);
     process.exit(1);
   }
-  console.log('✅ Supabase подключён\n');
+  console.log('✅ Supabase подключён');
 
   await migrateWorkers();
   await migratePoints();
-  await migrateHistory();
-  await migratePhotos();
   await migrateDitches();
-  await migrateDitchHistory();
+  await migrateSchemes();
 
-  console.log('\n🎉 Миграция завершена!');
-  console.log('\nПримечание: фотографии не перенесены (Google Drive URLs недоступны).');
-  console.log('Существующие фото нужно будет загрузить заново через интерфейс сайта.');
+  console.log('\n🎉 Готово!');
+  console.log('⚠  Фотографии не перенесены — их нужно загружать заново через сайт.');
 }
 
-main().catch(err => {
-  console.error('\n💥 Критическая ошибка:', err);
-  process.exit(1);
-});
+main().catch(err => { console.error('💥', err); process.exit(1); });

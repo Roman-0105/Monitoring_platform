@@ -1,12 +1,9 @@
 /**
  * points.js — CRUD точек + офлайн-очередь.
- * Источник истины: Google Sheets.
+ * Источник истины: Supabase.
  *
- * ИСПРАВЛЕНИЯ v2:
- *  - makePoint: wgs84ToSK42 → wgs84ToXY (имя метода MapModule)
- *  - makePoint: guard typeof MapModule проверяется корректно
- *
- * v3: добавлено поле monitoringDate (дата проведения мониторинга, YYYY-MM-DD)
+ * Каждая строка в БД = один замер (одна точка в одну дату).
+ * История = SELECT * FROM points WHERE point_number = X
  */
 
 const Points = (() => {
@@ -32,9 +29,9 @@ const Points = (() => {
   }
 
   function makePoint(data) {
-    const now = new Date().toISOString();
+    const now   = new Date().toISOString();
+    const today = now.slice(0, 10);
 
-    // Вычисляем xLocal / yLocal из GPS только если метод реально существует
     let xLocal = data.xLocal != null ? data.xLocal : null;
     let yLocal = data.yLocal != null ? data.yLocal : null;
 
@@ -45,39 +42,33 @@ const Points = (() => {
       if (yLocal == null) yLocal = sk.y;
     }
 
-    // monitoringDate — дата мониторинга в формате YYYY-MM-DD
-    // Если не передана — ставим сегодня
-    const today = now.slice(0, 10);
-
     var flowRaw = toFloat(data.flowRate);
 
     return {
       id:             (typeof data.id === 'string' && data.id) ? data.id : makeId(),
-      version:        (Number.isFinite(data.version) && data.version > 0) ? Math.floor(data.version) : 1,
-      deviceId:       data.deviceId       || Storage.getDeviceId(),
-      syncStatus:     data.syncStatus     || 'pending',
-      syncedAt:       data.syncedAt       || null,
-      createdAt:      data.createdAt      || now,
-      updatedAt:      data.updatedAt      || now,
-      monitoringDate: data.monitoringDate || today,
       pointNumber:    String(data.pointNumber || ''),
-      worker:         String(data.worker  || ''),
+      monitoringDate: data.monitoringDate || today,
+      worker:         String(data.worker   || ''),
       lat:            clampedFloat(data.lat, -90,  90),
       lon:            clampedFloat(data.lon, -180, 180),
       xLocal:         toFloat(xLocal),
       yLocal:         toFloat(yLocal),
+      status:         data.status         || 'Новая',
       intensity:      data.intensity      || '',
       flowRate:       (flowRaw !== null && flowRaw >= 0) ? flowRaw : null,
       waterColor:     data.waterColor     || '',
       wall:           data.wall           || '',
       domain:         data.domain         || '',
-      status:         data.status         || 'Новая',
       measureMethod:  data.measureMethod  || '',
       horizon:        data.horizon        || '',
       comment:        data.comment        || '',
       photoUrls:      Array.isArray(data.photoUrls)
-                        ? data.photoUrls.filter(function(u) { return typeof u === 'string' && u; })
+                        ? data.photoUrls.filter(u => typeof u === 'string' && u)
                         : [],
+      createdAt:      data.createdAt || now,
+      // Поля совместимости для UI-компонентов
+      syncStatus:     data.syncStatus || 'pending',
+      syncedAt:       data.syncedAt   || null,
     };
   }
 
@@ -99,9 +90,7 @@ const Points = (() => {
     }
   }
 
-  function getList() {
-    return _list;
-  }
+  function getList() { return _list; }
 
   function getById(id) {
     return _list.find(p => p.id === id) || null;
@@ -142,13 +131,7 @@ const Points = (() => {
     const idx = _list.findIndex(p => p.id === id);
     if (idx < 0) throw new Error('Точка не найдена: ' + id);
 
-    const point = {
-      ...makePoint(_list[idx]),
-      ...changes,
-      id,
-      version:   (_list[idx].version || 1) + 1,
-      updatedAt: new Date().toISOString(),
-    };
+    const point = { ...makePoint(_list[idx]), ...changes, id };
     _list[idx] = point;
     Storage.cachePoints(_list);
 
