@@ -12,11 +12,11 @@ var _chartCache = {};
 
 // Подсвечивает вхождения строки поиска в тексте
 function highlightSearch(text, search) {
-  if (!search || !text) return escAttr(String(text || ''));
-  var escaped = escAttr(String(text));
-  var searchEsc = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!search || !text) return escHTML(String(text || ''));
+  var escaped = escHTML(String(text));
   try {
-    return escaped.replace(new RegExp('(' + escAttr(search).replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'),
+    var safeSearch = escHTML(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escaped.replace(new RegExp('(' + safeSearch + ')', 'gi'),
       '<span class="search-highlight">$1</span>');
   } catch(e) { return escaped; }
 }
@@ -52,11 +52,11 @@ function initPointsFilters() {
       searchInp.value = _pointsFilters.search;
       if (searchClear) searchClear.style.display = 'flex';
     }
-    searchInp.addEventListener('input', function() {
+    searchInp.addEventListener('input', debounce(function() {
       _pointsFilters.search = this.value.trim().toLowerCase();
       if (searchClear) searchClear.style.display = _pointsFilters.search ? 'flex' : 'none';
       renderPointsList();
-    });
+    }, 200));
   }
   if (searchClear && !searchClear._bound) {
     searchClear._bound = true;

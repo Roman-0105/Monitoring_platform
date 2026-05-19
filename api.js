@@ -26,11 +26,13 @@ var Api = (function() {
       var settled = false;
 
       var timer = setTimeout(function() {
+        var el = document.getElementById(cbName);
+        if (el) el.remove();
+        delete window[cbName];
         if (!settled) {
           settled = true;
           reject(new Error('JSONP timeout'));
         }
-        // callback остаётся — поглотит запоздалый ответ
       }, timeoutMs);
 
       window[cbName] = function(data) {
@@ -55,6 +57,7 @@ var Api = (function() {
       script.onerror = function() {
         var el = document.getElementById(cbName);
         if (el) el.remove();
+        delete window[cbName];
         if (!settled) {
           settled = true;
           clearTimeout(timer);
