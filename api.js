@@ -240,30 +240,161 @@ var Api = (function() {
     if (error) throw new Error(error.message);
   }
 
-  // ── История точки ─────────────────────────────────────────
+  // ── История точки (из таблицы history) ───────────────────
 
   async function getHistory(pointNumber) {
     var { data, error } = await client()
-      .from('points').select('*')
+      .from('history').select('*')
       .eq('point_number', pointNumber)
       .order('monitoring_date', { ascending: false });
     if (error) throw new Error(error.message);
-    return (data || []).map(rowToPoint);
+    return (data || []).map(function(r) {
+      return {
+        pointNumber:    r.point_number,
+        monitoringDate: r.monitoring_date,
+        flowRate:       r.flow_rate,
+        flowRateM3h:    r.flow_rate_m3h,
+        status:         r.status,
+        intensity:      r.intensity,
+        measureMethod:  r.measure_method,
+        worker:         r.worker,
+        recordedAt:     r.recorded_at,
+      };
+    });
   }
 
   async function getPhotos(pointNumber) {
     var { data, error } = await client()
-      .from('points').select('photo_urls, monitoring_date')
+      .from('photos').select('*')
       .eq('point_number', pointNumber)
       .order('monitoring_date', { ascending: false });
     if (error) throw new Error(error.message);
-    var photos = [];
-    (data || []).forEach(function(r) {
-      (r.photo_urls || []).forEach(function(url) {
-        photos.push({ url: url, monitoringDate: r.monitoring_date });
-      });
+    return (data || []).map(function(r) {
+      return {
+        pointNumber:    r.point_number,
+        monitoringDate: r.monitoring_date,
+        photoUrl:       r.photo_url,
+        flowRate:       r.flow_rate,
+        uploadedAt:     r.uploaded_at,
+      };
     });
-    return photos;
+  }
+
+  // ── Канавы ────────────────────────────────────────────────
+
+  function ditchToRow(d) {
+    return {
+      id:              d.id,
+      point_number:    d.pointNumber    || '',
+      ditch_name:      d.ditchName      || '',
+      monitoring_date: d.monitoringDate || null,
+      worker:          d.worker         || '',
+      lat:             d.lat            != null ? d.lat    : null,
+      lon:             d.lon            != null ? d.lon    : null,
+      x_local:         d.xLocal         != null ? d.xLocal : null,
+      y_local:         d.yLocal         != null ? d.yLocal : null,
+      status:          d.status         || 'Активная',
+      width:           d.width          != null ? d.width    : null,
+      vel_method:      d.velMethod      || 'single',
+      velocity:        d.velocity       != null ? d.velocity : null,
+      float_l:         d.floatL         != null ? d.floatL   : null,
+      float_t:         d.floatT         != null ? d.floatT   : null,
+      float_k:         d.floatK         != null ? d.floatK   : null,
+      dist_mode:       d.distMode       || 'u',
+      n_points:        d.nPoints        != null ? d.nPoints  : null,
+      depths:          Array.isArray(d.depths) ? d.depths : [],
+      dists:           Array.isArray(d.dists)  ? d.dists  : [],
+      area:            d.area           != null ? d.area     : null,
+      flow_m3h:        d.flowM3h        != null ? d.flowM3h  : null,
+      comment:         d.comment        || '',
+      photo_urls:      Array.isArray(d.photoUrls) ? d.photoUrls : [],
+      created_at:      d.createdAt      || new Date().toISOString(),
+      updated_at:      new Date().toISOString(),
+    };
+  }
+
+  function rowToDitch(r) {
+    return {
+      id:             r.id,
+      pointNumber:    r.point_number,
+      ditchName:      r.ditch_name,
+      monitoringDate: r.monitoring_date,
+      worker:         r.worker,
+      lat:            r.lat,
+      lon:            r.lon,
+      xLocal:         r.x_local,
+      yLocal:         r.y_local,
+      status:         r.status,
+      width:          r.width,
+      velMethod:      r.vel_method,
+      velocity:       r.velocity,
+      floatL:         r.float_l,
+      floatT:         r.float_t,
+      floatK:         r.float_k,
+      distMode:       r.dist_mode,
+      nPoints:        r.n_points,
+      depths:         r.depths  || [],
+      dists:          r.dists   || [],
+      area:           r.area,
+      flowM3h:        r.flow_m3h,
+      comment:        r.comment,
+      photoUrls:      r.photo_urls || [],
+      createdAt:      r.created_at,
+      updatedAt:      r.updated_at,
+    };
+  }
+
+  async function getDitches(pointNumber) {
+    var query = client().from('ditches').select('*').order('created_at', { ascending: false });
+    if (pointNumber) query = query.eq('point_number', pointNumber);
+    var { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return { ditches: (data || []).map(rowToDitch) };
+  }
+
+  async function getDitch(id) {
+    var { data, error } = await client().from('ditches').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return { ditch: data ? rowToDitch(data) : null };
+  }
+
+  async function createDitch(d) {
+    var { error } = await client().from('ditches').insert(ditchToRow(d));
+    if (error) throw new Error(error.message);
+    return { status: 'created', id: d.id };
+  }
+
+  async function updateDitch(d) {
+    var { error } = await client().from('ditches').update(ditchToRow(d)).eq('id', d.id);
+    if (error) throw new Error(error.message);
+    return { status: 'updated', id: d.id };
+  }
+
+  async function deleteDitch(id) {
+    var { error } = await client().from('ditches').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { status: 'deleted', id: id };
+  }
+
+  async function getDitchHistory(ditchName) {
+    var { data, error } = await client()
+      .from('ditch_history').select('*')
+      .eq('ditch_name', ditchName)
+      .order('monitoring_date', { ascending: true });
+    if (error) throw new Error(error.message);
+    return { history: (data || []).map(function(r) {
+      return {
+        ditchName:      r.ditch_name,
+        pointNumber:    r.point_number,
+        monitoringDate: r.monitoring_date,
+        worker:         r.worker,
+        width:          r.width,
+        area:           r.area,
+        flowM3h:        r.flow_m3h,
+        velMethod:      r.vel_method,
+        recordedAt:     r.recorded_at,
+      };
+    })};
   }
 
   // ── Ping / совместимость ──────────────────────────────────
@@ -282,6 +413,7 @@ var Api = (function() {
     return Promise.resolve(null);
   }
 
+
   return {
     getPoints:    getPoints,
     getPoint:     getPoint,
@@ -289,8 +421,12 @@ var Api = (function() {
     getSchemes:   getSchemes,
     getHistory:   getHistory,
     getPhotos:    getPhotos,
-    getDitches:   function() { return Promise.resolve({ ditches: [] }); },
-    getDitchHistory: function() { return Promise.resolve({ history: [] }); },
+    getDitches:   getDitches,
+    getDitch:     getDitch,
+    createDitch:  createDitch,
+    updateDitch:  updateDitch,
+    deleteDitch:  deleteDitch,
+    getDitchHistory: getDitchHistory,
     post:         function() { return Promise.resolve(); },
     getImage:     getImage,
     ping:         ping,
