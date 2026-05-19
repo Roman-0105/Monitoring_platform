@@ -1,237 +1,306 @@
 /**
- * api.js — единственный модуль для общения с Apps Script.
+ * api.js — единственный модуль для общения с Supabase.
  *
- * GET:  JSONP (обход CORS)
- * POST: fetch no-cors
- *
- * JSONP: window[cbName] живёт до получения ответа.
- * Удаляется только после вызова — не по таймауту, не по onerror.
+ * Использует официальный Supabase JS SDK v2 (подключается в index.html).
+ * Все методы возвращают Promise с camelCase-объектами (как раньше).
  */
 
 var Api = (function() {
 
-  function scriptUrl() {
-    return window.APP_CONFIG && window.APP_CONFIG.SCRIPT_URL;
+  var _client = null;
+
+  function client() {
+    if (_client) return _client;
+    if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
+      throw new Error('Supabase SDK не загружен');
+    }
+    var cfg = window.APP_CONFIG || {};
+    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_KEY) {
+      throw new Error('SUPABASE_URL / SUPABASE_KEY не заданы в APP_CONFIG');
+    }
+    _client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY);
+    return _client;
   }
 
-  // ── JSONP GET ─────────────────────────────────────────────
+  // ── Маппинг полей camelCase ↔ snake_case ─────────────────
 
-  function jsonpGet(params, timeoutMs) {
-    timeoutMs = timeoutMs || 20000;
-    return new Promise(function(resolve, reject) {
-      var url = scriptUrl();
-      if (!url) return reject(new Error('SCRIPT_URL не задан'));
+  function pointToRow(p) {
+    return {
+      id:              p.id,
+      version:         p.version         || 1,
+      device_id:       p.deviceId        || '',
+      sync_status:     'synced',
+      synced_at:       new Date().toISOString(),
+      created_at:      p.createdAt       || new Date().toISOString(),
+      updated_at:      p.updatedAt       || new Date().toISOString(),
+      monitoring_date: p.monitoringDate  || null,
+      point_number:    p.pointNumber     || '',
+      worker:          p.worker          || '',
+      lat:             p.lat             != null ? p.lat  : null,
+      lon:             p.lon             != null ? p.lon  : null,
+      x_local:         p.xLocal          != null ? p.xLocal : null,
+      y_local:         p.yLocal          != null ? p.yLocal : null,
+      intensity:       p.intensity       || '',
+      flow_rate:       p.flowRate        != null ? p.flowRate : null,
+      water_color:     p.waterColor      || '',
+      wall:            p.wall            || '',
+      domain:          p.domain          || '',
+      status:          p.status          || 'Новая',
+      measure_method:  p.measureMethod   || '',
+      horizon:         p.horizon         || '',
+      comment:         p.comment         || '',
+      photo_urls:      Array.isArray(p.photoUrls) ? p.photoUrls : [],
+    };
+  }
 
-      var cbName  = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-      var settled = false;
+  function rowToPoint(r) {
+    return {
+      id:             r.id,
+      version:        r.version,
+      deviceId:       r.device_id,
+      syncStatus:     r.sync_status,
+      syncedAt:       r.synced_at,
+      createdAt:      r.created_at,
+      updatedAt:      r.updated_at,
+      monitoringDate: r.monitoring_date,
+      pointNumber:    r.point_number,
+      worker:         r.worker,
+      lat:            r.lat,
+      lon:            r.lon,
+      xLocal:         r.x_local,
+      yLocal:         r.y_local,
+      intensity:      r.intensity,
+      flowRate:       r.flow_rate,
+      waterColor:     r.water_color,
+      wall:           r.wall,
+      domain:         r.domain,
+      status:         r.status,
+      measureMethod:  r.measure_method,
+      horizon:        r.horizon,
+      comment:        r.comment,
+      photoUrls:      r.photo_urls || [],
+    };
+  }
 
-      var timer = setTimeout(function() {
-        var el = document.getElementById(cbName);
-        if (el) el.remove();
-        delete window[cbName];
-        if (!settled) {
-          settled = true;
-          reject(new Error('JSONP timeout'));
-        }
-      }, timeoutMs);
+  function workerToRow(w) {
+    return {
+      id:         w.id,
+      name:       w.name,
+      active:     w.active !== false,
+      created_at: w.createdAt || new Date().toISOString(),
+      updated_at: w.updatedAt || new Date().toISOString(),
+    };
+  }
 
-      window[cbName] = function(data) {
-        clearTimeout(timer);
-        var el = document.getElementById(cbName);
-        if (el) el.remove();
-        delete window[cbName];
-        if (settled) return;
-        settled = true;
-        if (data && data.error) return reject(new Error(data.error));
-        resolve(data);
+  function rowToWorker(r) {
+    return {
+      id:        r.id,
+      name:      r.name,
+      active:    r.active,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  }
+
+  // ── Вспомогательная: base64 → Blob ───────────────────────
+
+  function base64ToBlob(base64, mimeType) {
+    var byteString = atob(base64);
+    var arr = new Uint8Array(byteString.length);
+    for (var i = 0; i < byteString.length; i++) {
+      arr[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([arr], { type: mimeType || 'image/jpeg' });
+  }
+
+  // ── Points ────────────────────────────────────────────────
+
+  async function getPoints() {
+    var { data, error } = await client()
+      .from('points').select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map(rowToPoint);
+  }
+
+  async function getPoint(id) {
+    var { data, error } = await client()
+      .from('points').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? rowToPoint(data) : null;
+  }
+
+  async function createPoint(point) {
+    var { error } = await client().from('points').insert(pointToRow(point));
+    if (error) throw new Error(error.message);
+  }
+
+  async function updatePoint(point) {
+    var { error } = await client()
+      .from('points').update(pointToRow(point)).eq('id', point.id);
+    if (error) throw new Error(error.message);
+  }
+
+  async function deletePoint(id) {
+    var { error } = await client().from('points').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // ── Workers ───────────────────────────────────────────────
+
+  async function getWorkers() {
+    var { data, error } = await client()
+      .from('workers').select('*').order('name');
+    if (error) throw new Error(error.message);
+    return (data || []).map(rowToWorker);
+  }
+
+  async function saveWorker(worker) {
+    var { error } = await client().from('workers').upsert(workerToRow(worker));
+    if (error) throw new Error(error.message);
+  }
+
+  async function deleteWorker(id) {
+    var { error } = await client().from('workers').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // ── Schemes ───────────────────────────────────────────────
+
+  async function getSchemes() {
+    var { data, error } = await client()
+      .from('schemes').select('*')
+      .order('week_key', { ascending: false });
+    if (error) throw new Error(error.message);
+
+    return (data || []).map(function(r) {
+      var urlResult = client().storage.from('schemes').getPublicUrl(r.storage_path);
+      var publicUrl = urlResult.data ? urlResult.data.publicUrl : '';
+      return {
+        weekKey:     r.week_key,
+        driveUrl:    publicUrl,
+        driveFileId: r.storage_path,
+        uploadedAt:  r.uploaded_at || '',
+        uploadedBy:  r.uploaded_by || '',
       };
-
-      var parts = Object.keys(params).map(function(k) {
-        return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
-      });
-      parts.push('callback=' + encodeURIComponent(cbName));
-
-      var script   = document.createElement('script');
-      script.id    = cbName;
-      script.src   = url + '?' + parts.join('&');
-      script.onerror = function() {
-        var el = document.getElementById(cbName);
-        if (el) el.remove();
-        delete window[cbName];
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          reject(new Error('JSONP load error'));
-        }
-      };
-      document.head.appendChild(script);
     });
   }
 
-  // ── POST no-cors ─────────────────────────────────────────
+  async function uploadScheme(params) {
+    var ext  = (params.mimeType || 'image/jpeg').split('/')[1] || 'jpg';
+    var path = params.weekKey + '.' + ext;
+    var blob = base64ToBlob(params.base64, params.mimeType);
 
-  function post(body) {
-    var url = scriptUrl();
-    if (!url) return Promise.reject(new Error('SCRIPT_URL не задан'));
-    return fetch(url, {
-      method:  'POST',
-      mode:    'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
+    var { error: uploadError } = await client().storage
+      .from('schemes').upload(path, blob, { upsert: true, contentType: params.mimeType });
+    if (uploadError) throw new Error(uploadError.message);
+
+    var { error: dbError } = await client().from('schemes').upsert({
+      week_key:     params.weekKey,
+      storage_path: path,
+      uploaded_at:  new Date().toISOString(),
+      uploaded_by:  params.uploadedBy || '',
     });
+    if (dbError) throw new Error(dbError.message);
   }
 
-  // POST + polling подтверждения
-  function postWithConfirm(body, checkFn, retryMs, maxRetries) {
-    retryMs    = retryMs    || 2000;
-    maxRetries = maxRetries || 6;
-    return post(body).then(function() {
-      return poll(checkFn, retryMs, maxRetries);
-    });
+  // ── Photos ────────────────────────────────────────────────
+
+  async function uploadPhotoConfirmed(pointId, fileName, base64, mimeType) {
+    var blob = base64ToBlob(base64, mimeType);
+    var path = pointId + '/' + Date.now() + '_' + fileName;
+
+    var { error: uploadError } = await client().storage
+      .from('photos').upload(path, blob, { upsert: true, contentType: mimeType });
+    if (uploadError) throw new Error(uploadError.message);
+
+    var urlResult = client().storage.from('photos').getPublicUrl(path);
+    var photoUrl  = urlResult.data ? urlResult.data.publicUrl : path;
+
+    // Добавляем URL к массиву photo_urls точки
+    var { data: row, error: fetchError } = await client()
+      .from('points').select('photo_urls').eq('id', pointId).maybeSingle();
+    if (fetchError) throw new Error(fetchError.message);
+
+    var existing = (row && row.photo_urls) || [];
+    var updated  = [photoUrl].concat(existing);
+
+    var { error: updateError } = await client().from('points')
+      .update({ photo_urls: updated, updated_at: new Date().toISOString() })
+      .eq('id', pointId);
+    if (updateError) throw new Error(updateError.message);
+
+    return photoUrl;
   }
 
-  function poll(fn, intervalMs, maxAttempts) {
-    return new Promise(function(resolve, reject) {
-      var attempt = 0;
-      function next() {
-        attempt++;
-        fn().then(function(ok) {
-          if (ok) return resolve(true);
-          if (attempt >= maxAttempts) return reject(new Error('Не подтверждено за ' + maxAttempts + ' попыток'));
-          setTimeout(next, intervalMs);
-        }).catch(function() {
-          if (attempt >= maxAttempts) return reject(new Error('Polling error'));
-          setTimeout(next, intervalMs);
-        });
-      }
-      setTimeout(next, intervalMs);
-    });
+  async function deletePhoto(pointId) {
+    var { error } = await client().from('points')
+      .update({ photo_urls: [], updated_at: new Date().toISOString() })
+      .eq('id', pointId);
+    if (error) throw new Error(error.message);
   }
 
-  // ── Чтение ───────────────────────────────────────────────
+  // ── История точки ─────────────────────────────────────────
 
-  function getPoints() {
-    return jsonpGet({ action: 'getPoints' }).then(function(d) { return d.points || []; });
-  }
-  function getPoint(id) {
-    return jsonpGet({ action: 'getPoint', id: id }).then(function(d) { return d.point || null; });
-  }
-  function getWorkers() {
-    return jsonpGet({ action: 'getWorkers' }).then(function(d) { return d.workers || []; });
-  }
-  function getSchemes() {
-    return jsonpGet({ action: 'getSchemes' }).then(function(d) { return d.schemes || []; });
-  }
-  function getImage(fileId) {
-    return jsonpGet({ action: 'getImage', fileId: fileId }, 30000);
-  }
-  function ping() {
-    return jsonpGet({ action: 'ping' }).then(function(d) { return d.ok === true; });
+  async function getHistory(pointNumber) {
+    var { data, error } = await client()
+      .from('points').select('*')
+      .eq('point_number', pointNumber)
+      .order('monitoring_date', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map(rowToPoint);
   }
 
-  function getHistory(pointNumber) {
-    return jsonpGet({ action: 'getHistory', pointNumber: pointNumber }, 30000)
-      .then(function(d) { return d.history || []; });
-  }
-
-  function getPhotos(pointNumber) {
-    return jsonpGet({ action: 'getPhotos', pointNumber: pointNumber }, 15000)
-      .then(function(d) { return d.photos || []; });
-  }
-
-  // ── Запись точек ─────────────────────────────────────────
-
-  function createPoint(point) {
-    return postWithConfirm(
-      { action: 'createPoint', point: point },
-      function() { return getPoint(point.id).then(function(p) { return !!p; }); }
-    );
-  }
-  function updatePoint(point) {
-    return postWithConfirm(
-      { action: 'updatePoint', point: point },
-      function() { return getPoint(point.id).then(function(p) { return !!p; }); }
-    );
-  }
-  function deletePoint(id) {
-    return postWithConfirm(
-      { action: 'deletePoint', id: id },
-      function() { return getPoint(id).then(function(p) { return !p; }); }
-    );
-  }
-
-  // ── Сотрудники ───────────────────────────────────────────
-
-  function saveWorker(worker)  { return post({ action: 'saveWorker', worker: worker }); }
-  function deleteWorker(id)    { return post({ action: 'deleteWorker', id: id }); }
-
-  // ── Фото — с подтверждением ──────────────────────────────
-
-  /**
-   * Загружает фото и подтверждает через getPoint что URL записан.
-   * Возвращает Promise<string> — новый driveUrl.
-   * При ошибке бросает Error (не возвращает null).
-   */
-  function uploadPhotoConfirmed(pointId, fileName, base64, mimeType, extra) {
-    // POST — Apps Script загружает файл в Drive и пишет URL в Sheets.
-    // extra: { pointNumber, monitoringDate, flowRate } — для листа «Фото»
-    extra = extra || {};
-    return post({
-      action:         'uploadPhoto',
-      pointId:        pointId,
-      fileName:       fileName,
-      base64:         base64,
-      mimeType:       mimeType || 'image/jpeg',
-      pointNumber:    extra.pointNumber    || '',
-      monitoringDate: extra.monitoringDate || '',
-      flowRate:       extra.flowRate       != null ? extra.flowRate : '',
-    }).then(function() {
-      // Ждём Apps Script: polling каждые 3 сек, до 10 попыток (30 сек)
-      return poll(function() {
-        return getPoint(pointId).then(function(p) {
-          return !!(p && p.photoUrls && p.photoUrls[0]);
-        });
-      }, 3000, 10);
-    }).then(function() {
-      return getPoint(pointId).then(function(p) {
-        if (!p || !p.photoUrls || !p.photoUrls[0]) {
-          throw new Error('URL фото не записан в Sheets после ожидания');
-        }
-        return p.photoUrls[0];
+  async function getPhotos(pointNumber) {
+    var { data, error } = await client()
+      .from('points').select('photo_urls, monitoring_date')
+      .eq('point_number', pointNumber)
+      .order('monitoring_date', { ascending: false });
+    if (error) throw new Error(error.message);
+    var photos = [];
+    (data || []).forEach(function(r) {
+      (r.photo_urls || []).forEach(function(url) {
+        photos.push({ url: url, monitoringDate: r.monitoring_date });
       });
     });
+    return photos;
   }
 
-  function deletePhoto(pointId) { return post({ action: 'deletePhoto', pointId: pointId }); }
-  function uploadScheme(params) {
-    return post({
-      action:      'uploadScheme',
-      weekKey:     params.weekKey,
-      fileName:    params.fileName,
-      base64:      params.base64,
-      mimeType:    params.mimeType,
-      uploadedBy:  params.uploadedBy,
-    });
+  // ── Ping / совместимость ──────────────────────────────────
+
+  async function ping() {
+    try {
+      var { error } = await client().from('points').select('id').limit(1);
+      return !error;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // getImage больше не нужен — фото доступны по прямым URL
+  function getImage() {
+    return Promise.resolve(null);
   }
 
   return {
-    getPoints: getPoints, getPoint: getPoint,
-    getWorkers: getWorkers, getSchemes: getSchemes,
-    getHistory:  getHistory,
-    getPhotos:   getPhotos,
-    getDitches:  function(pointNumber) {
-      return jsonpGet({ action: 'getDitches', pointNumber: pointNumber||'' })
-        .then(function(d){ return d || { ditches:[] }; });
-    },
-    getDitchHistory: function(ditchName) {
-      return jsonpGet({ action: 'getDitchHistory', ditchName: ditchName })
-        .then(function(d){ return d || { history:[] }; });
-    },
-    post: post,
-    getImage: getImage, ping: ping,
-    createPoint: createPoint, updatePoint: updatePoint, deletePoint: deletePoint,
-    saveWorker: saveWorker, deleteWorker: deleteWorker,
+    getPoints:    getPoints,
+    getPoint:     getPoint,
+    getWorkers:   getWorkers,
+    getSchemes:   getSchemes,
+    getHistory:   getHistory,
+    getPhotos:    getPhotos,
+    getDitches:   function() { return Promise.resolve({ ditches: [] }); },
+    getDitchHistory: function() { return Promise.resolve({ history: [] }); },
+    post:         function() { return Promise.resolve(); },
+    getImage:     getImage,
+    ping:         ping,
+    createPoint:  createPoint,
+    updatePoint:  updatePoint,
+    deletePoint:  deletePoint,
+    saveWorker:   saveWorker,
+    deleteWorker: deleteWorker,
     uploadPhotoConfirmed: uploadPhotoConfirmed,
-    deletePhoto: deletePhoto, uploadScheme: uploadScheme,
+    deletePhoto:  deletePhoto,
+    uploadScheme: uploadScheme,
   };
 })();

@@ -3,12 +3,12 @@
 -- Run AFTER 01_schema.sql
 -- ============================================================
 
--- Bucket для фотографий точек (приватный — доступ через API)
+-- Bucket для фотографий точек (публичный — прямые URL в photo_urls)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'photos',
   'photos',
-  false,
+  true,
   10485760,  -- 10 MB
   array['image/jpeg','image/png','image/webp','image/heic']
 )

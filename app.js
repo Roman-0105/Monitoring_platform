@@ -15,7 +15,8 @@
  */
 
 window.APP_CONFIG = {
-  SCRIPT_URL:       'https://script.google.com/macros/s/AKfycbxYfkdHku11BabfoZ8qQsSqyPehKSfOs5nsA3jXDjuDHavL4IzogGO4o-2GN6-AVsba/exec',
+  SUPABASE_URL:     'https://dusmrxvybojyrqmmqxjx.supabase.co',
+  SUPABASE_KEY:     'sb_publishable_AbYc8gJjsdC04DR-kw48EQ_jnnyqy5a',
   SYNC_INTERVAL_MS: 30000, // будет перезаписан из Storage после загрузки
 };
 
@@ -93,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var devEl = document.getElementById('device-id-display');
   if (devEl) devEl.textContent = Storage.getDeviceId();
   var suEl  = document.getElementById('script-url-status');
-  if (suEl)  suEl.textContent  = (APP_CONFIG.SCRIPT_URL && APP_CONFIG.SCRIPT_URL.indexOf('ВСТАВЬ') < 0) ? '✅ задан' : '❌ не задан';
+  if (suEl)  suEl.textContent  = (APP_CONFIG.SUPABASE_URL && APP_CONFIG.SUPABASE_KEY) ? '✅ подключён' : '❌ не настроен';
 
   // Загружаем сохранённые настройки цветов карты
   loadMapStyleSettings();
