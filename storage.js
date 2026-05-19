@@ -42,6 +42,13 @@ const Storage = (() => {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (e) {
       console.warn('[Storage] save error:', e);
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        if (typeof Toast !== 'undefined') {
+          Toast.fail('storage-quota', 'Переполнен локальный кэш — данные не сохранены. Очистите кэш в настройках.');
+        } else if (typeof Diagnostics !== 'undefined') {
+          Diagnostics.setError('storage', 'Переполнен localStorage — данные не сохранены');
+        }
+      }
     }
   }
 

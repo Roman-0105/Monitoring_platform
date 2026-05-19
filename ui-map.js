@@ -123,6 +123,7 @@ function getActiveSchemeDate() {
 }
 
 function setupMapCanvas(canvas) {
+  if (!canvas) return;
   var wrap = document.getElementById('map-scheme-wrap');
   if (!wrap) return;
   canvas.width  = wrap.clientWidth  || 400;
@@ -348,10 +349,12 @@ function initMapInteraction(canvas) {
     redrawMap();
   }, { passive: false });
 
-  // Touch — pinch zoom + pan
+  // Touch — pinch zoom + pan + tap
   var lastTouchDist = 0;
   var lastTouchX = 0;
   var lastTouchY = 0;
+  var _tapStartX = 0;
+  var _tapStartY = 0;
 
   canvas.addEventListener('touchstart', function(e) {
     if (e.touches.length === 2) {
@@ -361,6 +364,8 @@ function initMapInteraction(canvas) {
     } else if (e.touches.length === 1) {
       lastTouchX = e.touches[0].clientX;
       lastTouchY = e.touches[0].clientY;
+      _tapStartX = e.touches[0].clientX;
+      _tapStartY = e.touches[0].clientY;
       _mapDragging = true;
     }
   }, { passive: true });
@@ -399,7 +404,27 @@ function initMapInteraction(canvas) {
 
   canvas.addEventListener('touchend', function(e) {
     if (e.touches.length < 2) lastTouchDist = 0;
-    if (e.touches.length === 0) _mapDragging = false;
+    if (e.touches.length === 0) {
+      _mapDragging = false;
+      // Tap detection: если палец почти не двигался — это тап, открываем карточку
+      var t = e.changedTouches[0];
+      var dx = t.clientX - _tapStartX;
+      var dy = t.clientY - _tapStartY;
+      if (Math.sqrt(dx*dx + dy*dy) < 10 && _mapSchemeImg && typeof MapModule !== 'undefined') {
+        var rect = canvas.getBoundingClientRect();
+        var cx   = t.clientX - rect.left;
+        var cy   = t.clientY - rect.top;
+        var imgX = (cx - _mapOffX) / _mapScale;
+        var imgY = (cy - _mapOffY) / _mapScale;
+        var ditch = (typeof DitchState !== 'undefined' && MapModule.findDitchAt)
+          ? MapModule.findDitchAt(imgX, imgY, getFilteredDitchesForMap(), _mapSchemeImg.width, _mapSchemeImg.height, _mapScale)
+          : null;
+        if (ditch) { showDitchMapCard(ditch); return; }
+        var p = MapModule.findPointAt(imgX, imgY, getFilteredPointsForMap(),
+                  _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
+        if (p) showMapPointCard(p);
+      }
+    }
   }, { passive: true });
 
   // Mouse drag — pan

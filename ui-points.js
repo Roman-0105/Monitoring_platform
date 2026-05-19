@@ -9,14 +9,26 @@ var _pointsFilters = { dates: [], worker: 'all', search: '' };
 // Кэш историй графиков: { pointId: [ ...history ] }
 // Хранится вне DOM — не теряется при перерисовке списка
 var _chartCache = {};
+var _chartCacheKeys = []; // порядок вставки для вытеснения старых записей
+var _CHART_CACHE_MAX = 30;
+
+function _chartCacheSet(key, value) {
+  if (!_chartCache.hasOwnProperty(key)) {
+    if (_chartCacheKeys.length >= _CHART_CACHE_MAX) {
+      delete _chartCache[_chartCacheKeys.shift()];
+    }
+    _chartCacheKeys.push(key);
+  }
+  _chartCache[key] = value;
+}
 
 // Подсвечивает вхождения строки поиска в тексте
 function highlightSearch(text, search) {
-  if (!search || !text) return escAttr(String(text || ''));
-  var escaped = escAttr(String(text));
-  var searchEsc = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!search || !text) return escHTML(String(text || ''));
+  var escaped = escHTML(String(text));
   try {
-    return escaped.replace(new RegExp('(' + escAttr(search).replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'),
+    var safeSearch = escHTML(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escaped.replace(new RegExp('(' + safeSearch + ')', 'gi'),
       '<span class="search-highlight">$1</span>');
   } catch(e) { return escaped; }
 }
@@ -52,11 +64,11 @@ function initPointsFilters() {
       searchInp.value = _pointsFilters.search;
       if (searchClear) searchClear.style.display = 'flex';
     }
-    searchInp.addEventListener('input', function() {
+    searchInp.addEventListener('input', debounce(function() {
       _pointsFilters.search = this.value.trim().toLowerCase();
       if (searchClear) searchClear.style.display = _pointsFilters.search ? 'flex' : 'none';
       renderPointsList();
-    });
+    }, 200));
   }
   if (searchClear && !searchClear._bound) {
     searchClear._bound = true;
@@ -474,7 +486,7 @@ function _loadDetailHistory(box, pointId, pointNumber) {
   if (elJournal) elJournal.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка...</p>';
 
   Api.getHistory(pointNumber).then(function(hist) {
-    _chartCache[pointId] = hist || [];
+    _chartCacheSet(pointId, hist || []);
     _fillDetailHistory(box, _chartCache[pointId], pointNumber);
   }).catch(function(err) {
     var errMsg = err && err.message ? err.message : String(err);
@@ -519,7 +531,7 @@ function _loadPhotoGallery(box, pointNumber) {
   var historyP = _chartCache[pointNumber]
     ? Promise.resolve(_chartCache[pointNumber])
     : Api.getHistory(pointNumber).then(function(h) {
-        _chartCache[pointNumber] = h || [];
+        _chartCacheSet(pointNumber, h || []);
         return _chartCache[pointNumber];
       });
 
@@ -1047,7 +1059,10 @@ function renameWorker(id, newName) {
       list[i].name      = newName.trim();
       list[i].updatedAt = new Date().toISOString();
       Storage.cacheWorkers(list);
-      Api.saveWorker(list[i]).catch(function(e) { console.warn(e); });
+      Api.saveWorker(list[i]).catch(function(e) {
+        console.warn(e);
+        Toast.fail('worker-save', 'Не удалось сохранить сотрудника: ' + e.message);
+      });
       renderWorkers();
       break;
     }
