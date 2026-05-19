@@ -162,22 +162,20 @@ var Schemes = (function() {
     });
   }
 
-  // ── Получение изображения через прокси ───────────────────
+  // ── Получение изображения ─────────────────────────────────
+  // Схемы хранятся в Supabase Storage (публичный bucket),
+  // driveUrl содержит прямой публичный URL — используем напрямую.
 
   function getImage(weekKey) {
     if (_imgCache[weekKey]) {
       return Promise.resolve(_imgCache[weekKey]);
     }
     var scheme = getByWeek(weekKey);
-    if (!scheme || !scheme.driveFileId) {
+    if (!scheme || !scheme.driveUrl) {
       return Promise.resolve(null);
     }
-    return Api.getImage(scheme.driveFileId).then(function(data) {
-      if (!data || !data.base64) return null;
-      var dataUrl = 'data:' + data.mimeType + ';base64,' + data.base64;
-      _imgCache[weekKey] = dataUrl;
-      return dataUrl;
-    }).catch(function() { return null; });
+    _imgCache[weekKey] = scheme.driveUrl;
+    return Promise.resolve(scheme.driveUrl);
   }
 
   function getCurrentImage() {

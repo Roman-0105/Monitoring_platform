@@ -81,28 +81,16 @@ var Photos = (function() {
     });
   }
 
-  // ── Отображение через прокси ─────────────────────────────
+  // ── Отображение ───────────────────────────────────────────
+  // Фото хранятся в Supabase Storage и доступны по прямым URL.
 
-  // Кэш превью: url → dataUrl (живёт в памяти сессии)
-  var _cache = {};
-
-  function loadForDisplay(driveUrl) {
-    if (!driveUrl) return Promise.resolve(null);
-    // Возвращаем из кэша без повторной загрузки
-    if (_cache[driveUrl]) return Promise.resolve(_cache[driveUrl]);
-    var match = driveUrl.match(/id=([^&]+)/);
-    if (!match) return Promise.resolve(driveUrl);
-    return Api.getImage(match[1]).then(function(data) {
-      if (!data || !data.base64) return null;
-      var dataUrl = 'data:' + data.mimeType + ';base64,' + data.base64;
-      _cache[driveUrl] = dataUrl;  // сохраняем в кэш
-      return dataUrl;
-    }).catch(function() { return null; });
+  function loadForDisplay(url) {
+    if (!url) return Promise.resolve(null);
+    return Promise.resolve(url);
   }
 
-  function clearCache(driveUrl) {
-    if (driveUrl) delete _cache[driveUrl];
-    else _cache = {};
+  function clearCache() {
+    // Кэш не нужен — URL постоянные
   }
 
   function setImageSrc(imgEl, driveUrl) {
@@ -293,8 +281,8 @@ function showPhotoProgress(progressId, phase, detail) {
 
   var phases = {
     compressing: { pct: 20,  color: '#1a73e8', text: 'Сжатие изображения...',   icon: '🔄' },
-    uploading:   { pct: 60,  color: '#1a73e8', text: 'Загрузка на Drive...',     icon: '⬆️' },
-    polling:     { pct: 85,  color: '#f9ab00', text: 'Подтверждение записи...',  icon: '⏳' },
+    uploading:   { pct: 60,  color: '#1a73e8', text: 'Загрузка на сервер...',    icon: '⬆️' },
+    polling:     { pct: 85,  color: '#f9ab00', text: 'Сохранение записи...',     icon: '⏳' },
     done:        { pct: 100, color: '#34a853', text: 'Фото загружено',           icon: '✅' },
     error:       { pct: 100, color: '#ea4335', text: 'Ошибка загрузки',          icon: '❌' },
   };

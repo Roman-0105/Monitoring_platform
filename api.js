@@ -1,237 +1,422 @@
 /**
- * api.js — единственный модуль для общения с Apps Script.
+ * api.js — единственный модуль для общения с Supabase.
  *
- * GET:  JSONP (обход CORS)
- * POST: fetch no-cors
+ * Упрощённая структура (4 таблицы):
+ *   points   — каждая строка = один замер в одной точке
+ *   ditches  — каждая строка = один замер одной канавы
+ *   workers  — сотрудники
+ *   schemes  — схемы карьера (изображения)
  *
- * JSONP: window[cbName] живёт до получения ответа.
- * Удаляется только после вызова — не по таймауту, не по onerror.
+ * История точки  = SELECT * FROM points WHERE point_number = X
+ * История канавы = SELECT * FROM ditches WHERE ditch_name  = X
  */
 
 var Api = (function() {
 
-  function scriptUrl() {
-    return window.APP_CONFIG && window.APP_CONFIG.SCRIPT_URL;
+  var _client = null;
+
+  function client() {
+    if (_client) return _client;
+    if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
+      throw new Error('Supabase SDK не загружен');
+    }
+    var cfg = window.APP_CONFIG || {};
+    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_KEY) {
+      throw new Error('SUPABASE_URL / SUPABASE_KEY не заданы в APP_CONFIG');
+    }
+    _client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY);
+    return _client;
   }
 
-  // ── JSONP GET ─────────────────────────────────────────────
+  // ── Маппинг points ────────────────────────────────────────
 
-  function jsonpGet(params, timeoutMs) {
-    timeoutMs = timeoutMs || 20000;
-    return new Promise(function(resolve, reject) {
-      var url = scriptUrl();
-      if (!url) return reject(new Error('SCRIPT_URL не задан'));
+  function pointToRow(p) {
+    return {
+      id:              p.id,
+      point_number:    p.pointNumber     || '',
+      monitoring_date: p.monitoringDate  || null,
+      worker:          p.worker          || '',
+      lat:             p.lat             != null ? p.lat    : null,
+      lon:             p.lon             != null ? p.lon    : null,
+      x_local:         p.xLocal          != null ? p.xLocal : null,
+      y_local:         p.yLocal          != null ? p.yLocal : null,
+      status:          p.status          || 'Новая',
+      intensity:       p.intensity       || '',
+      flow_rate:       p.flowRate        != null ? p.flowRate : null,
+      water_color:     p.waterColor      || '',
+      wall:            p.wall            || '',
+      domain:          p.domain          || '',
+      measure_method:  p.measureMethod   || '',
+      horizon:         p.horizon         || '',
+      comment:         p.comment         || '',
+      photos:          Array.isArray(p.photoUrls) ? p.photoUrls : [],
+      created_at:      p.createdAt       || new Date().toISOString(),
+    };
+  }
 
-      var cbName  = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-      var settled = false;
+  function rowToPoint(r) {
+    return {
+      id:             r.id,
+      pointNumber:    r.point_number,
+      monitoringDate: r.monitoring_date,
+      worker:         r.worker,
+      lat:            r.lat,
+      lon:            r.lon,
+      xLocal:         r.x_local,
+      yLocal:         r.y_local,
+      status:         r.status,
+      intensity:      r.intensity,
+      flowRate:       r.flow_rate,
+      waterColor:     r.water_color,
+      wall:           r.wall,
+      domain:         r.domain,
+      measureMethod:  r.measure_method,
+      horizon:        r.horizon,
+      comment:        r.comment,
+      photoUrls:      r.photos || [],
+      createdAt:      r.created_at,
+      // Поля совместимости (offline queue)
+      syncStatus:     'synced',
+      syncedAt:       r.created_at,
+    };
+  }
 
-      var timer = setTimeout(function() {
-        var el = document.getElementById(cbName);
-        if (el) el.remove();
-        delete window[cbName];
-        if (!settled) {
-          settled = true;
-          reject(new Error('JSONP timeout'));
-        }
-      }, timeoutMs);
+  // ── Маппинг workers ───────────────────────────────────────
 
-      window[cbName] = function(data) {
-        clearTimeout(timer);
-        var el = document.getElementById(cbName);
-        if (el) el.remove();
-        delete window[cbName];
-        if (settled) return;
-        settled = true;
-        if (data && data.error) return reject(new Error(data.error));
-        resolve(data);
+  function workerToRow(w) {
+    return {
+      id:         w.id,
+      name:       w.name,
+      active:     w.active !== false,
+      created_at: w.createdAt || new Date().toISOString(),
+    };
+  }
+
+  function rowToWorker(r) {
+    return { id: r.id, name: r.name, active: r.active, createdAt: r.created_at };
+  }
+
+  // ── Маппинг ditches ───────────────────────────────────────
+
+  function ditchToRow(d) {
+    return {
+      id:              d.id,
+      point_number:    d.pointNumber    || '',
+      ditch_name:      d.ditchName      || '',
+      monitoring_date: d.monitoringDate || null,
+      worker:          d.worker         || '',
+      lat:             d.lat            != null ? d.lat    : null,
+      lon:             d.lon            != null ? d.lon    : null,
+      x_local:         d.xLocal         != null ? d.xLocal : null,
+      y_local:         d.yLocal         != null ? d.yLocal : null,
+      status:          d.status         || 'Активная',
+      width:           d.width          != null ? d.width    : null,
+      vel_method:      d.velMethod      || 'single',
+      velocity:        d.velocity       != null ? d.velocity : null,
+      float_l:         d.floatL         != null ? d.floatL   : null,
+      float_t:         d.floatT         != null ? d.floatT   : null,
+      float_k:         d.floatK         != null ? d.floatK   : null,
+      dist_mode:       d.distMode       || 'u',
+      n_points:        d.nPoints        != null ? d.nPoints  : null,
+      depths:          Array.isArray(d.depths) ? d.depths : [],
+      dists:           Array.isArray(d.dists)  ? d.dists  : [],
+      area:            d.area           != null ? d.area    : null,
+      flow_m3h:        d.flowM3h        != null ? d.flowM3h : null,
+      comment:         d.comment        || '',
+      photos:          Array.isArray(d.photoUrls) ? d.photoUrls : [],
+      created_at:      d.createdAt      || new Date().toISOString(),
+    };
+  }
+
+  function rowToDitch(r) {
+    return {
+      id:             r.id,
+      pointNumber:    r.point_number,
+      ditchName:      r.ditch_name,
+      monitoringDate: r.monitoring_date,
+      worker:         r.worker,
+      lat:            r.lat,
+      lon:            r.lon,
+      xLocal:         r.x_local,
+      yLocal:         r.y_local,
+      status:         r.status,
+      width:          r.width,
+      velMethod:      r.vel_method,
+      velocity:       r.velocity,
+      floatL:         r.float_l,
+      floatT:         r.float_t,
+      floatK:         r.float_k,
+      distMode:       r.dist_mode,
+      nPoints:        r.n_points,
+      depths:         r.depths  || [],
+      dists:          r.dists   || [],
+      area:           r.area,
+      flowM3h:        r.flow_m3h,
+      comment:        r.comment,
+      photoUrls:      r.photos  || [],
+      createdAt:      r.created_at,
+    };
+  }
+
+  // ── base64 → Blob ─────────────────────────────────────────
+
+  function base64ToBlob(base64, mimeType) {
+    var str = atob(base64);
+    var arr = new Uint8Array(str.length);
+    for (var i = 0; i < str.length; i++) arr[i] = str.charCodeAt(i);
+    return new Blob([arr], { type: mimeType || 'image/jpeg' });
+  }
+
+  // ── Points CRUD ───────────────────────────────────────────
+
+  async function getPoints() {
+    var { data, error } = await client()
+      .from('points').select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map(rowToPoint);
+  }
+
+  async function getPoint(id) {
+    var { data, error } = await client()
+      .from('points').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? rowToPoint(data) : null;
+  }
+
+  async function createPoint(point) {
+    var { error } = await client().from('points').insert(pointToRow(point));
+    if (error) throw new Error(error.message);
+  }
+
+  async function updatePoint(point) {
+    var { error } = await client()
+      .from('points').update(pointToRow(point)).eq('id', point.id);
+    if (error) throw new Error(error.message);
+  }
+
+  async function deletePoint(id) {
+    var { error } = await client().from('points').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // История точки = все замеры по point_number
+  async function getHistory(pointNumber) {
+    var { data, error } = await client()
+      .from('points').select('*')
+      .eq('point_number', pointNumber)
+      .order('monitoring_date', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map(function(r) {
+      return {
+        pointNumber:    r.point_number,
+        monitoringDate: r.monitoring_date,
+        flowRate:       r.flow_rate,
+        flowRateM3h:    r.flow_rate != null ? Math.round(r.flow_rate * 3.6 * 100) / 100 : null,
+        status:         r.status,
+        intensity:      r.intensity,
+        measureMethod:  r.measure_method,
+        worker:         r.worker,
+        recordedAt:     r.created_at,
       };
+    });
+  }
 
-      var parts = Object.keys(params).map(function(k) {
-        return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  // Фото точки = photoUrls из всех замеров по point_number
+  async function getPhotos(pointNumber) {
+    var { data, error } = await client()
+      .from('points').select('photos, monitoring_date, flow_rate')
+      .eq('point_number', pointNumber)
+      .order('monitoring_date', { ascending: false });
+    if (error) throw new Error(error.message);
+    var photos = [];
+    (data || []).forEach(function(r) {
+      (r.photos || []).forEach(function(url) {
+        photos.push({ photoUrl: url, monitoringDate: r.monitoring_date, flowRate: r.flow_rate });
       });
-      parts.push('callback=' + encodeURIComponent(cbName));
+    });
+    return photos;
+  }
 
-      var script   = document.createElement('script');
-      script.id    = cbName;
-      script.src   = url + '?' + parts.join('&');
-      script.onerror = function() {
-        var el = document.getElementById(cbName);
-        if (el) el.remove();
-        delete window[cbName];
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          reject(new Error('JSONP load error'));
-        }
+  // ── Workers CRUD ──────────────────────────────────────────
+
+  async function getWorkers() {
+    var { data, error } = await client()
+      .from('workers').select('*').eq('active', true).order('name');
+    if (error) throw new Error(error.message);
+    return (data || []).map(rowToWorker);
+  }
+
+  async function saveWorker(worker) {
+    var { error } = await client().from('workers').upsert(workerToRow(worker));
+    if (error) throw new Error(error.message);
+  }
+
+  async function deleteWorker(id) {
+    var { error } = await client().from('workers').update({ active: false }).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // ── Schemes ───────────────────────────────────────────────
+
+  async function getSchemes() {
+    var { data, error } = await client()
+      .from('schemes').select('*').order('week_key', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map(function(r) {
+      var urlResult = client().storage.from('schemes').getPublicUrl(r.storage_path);
+      var publicUrl = urlResult.data ? urlResult.data.publicUrl : '';
+      return {
+        weekKey:     r.week_key,
+        driveUrl:    publicUrl,
+        driveFileId: r.storage_path,
+        uploadedAt:  r.uploaded_at || '',
+        uploadedBy:  r.uploaded_by || '',
       };
-      document.head.appendChild(script);
     });
   }
 
-  // ── POST no-cors ─────────────────────────────────────────
+  async function uploadScheme(params) {
+    var ext  = (params.mimeType || 'image/jpeg').split('/')[1] || 'jpg';
+    var path = params.weekKey + '.' + ext;
+    var blob = base64ToBlob(params.base64, params.mimeType);
 
-  function post(body) {
-    var url = scriptUrl();
-    if (!url) return Promise.reject(new Error('SCRIPT_URL не задан'));
-    return fetch(url, {
-      method:  'POST',
-      mode:    'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
+    var { error: uploadError } = await client().storage
+      .from('schemes').upload(path, blob, { upsert: true, contentType: params.mimeType });
+    if (uploadError) throw new Error(uploadError.message);
+
+    var { error: dbError } = await client().from('schemes').upsert({
+      week_key:     params.weekKey,
+      storage_path: path,
+      uploaded_at:  new Date().toISOString(),
+      uploaded_by:  params.uploadedBy || '',
     });
+    if (dbError) throw new Error(dbError.message);
   }
 
-  // POST + polling подтверждения
-  function postWithConfirm(body, checkFn, retryMs, maxRetries) {
-    retryMs    = retryMs    || 2000;
-    maxRetries = maxRetries || 6;
-    return post(body).then(function() {
-      return poll(checkFn, retryMs, maxRetries);
-    });
+  // ── Photos (Supabase Storage) ─────────────────────────────
+
+  async function uploadPhotoConfirmed(pointId, fileName, base64, mimeType) {
+    var blob = base64ToBlob(base64, mimeType);
+    var path = pointId + '/' + Date.now() + '_' + fileName;
+
+    var { error: uploadError } = await client().storage
+      .from('photos').upload(path, blob, { upsert: true, contentType: mimeType });
+    if (uploadError) throw new Error(uploadError.message);
+
+    var urlResult = client().storage.from('photos').getPublicUrl(path);
+    var photoUrl  = urlResult.data ? urlResult.data.publicUrl : path;
+
+    var { data: row, error: fetchError } = await client()
+      .from('points').select('photos').eq('id', pointId).maybeSingle();
+    if (fetchError) throw new Error(fetchError.message);
+
+    var updated = [photoUrl].concat((row && row.photos) || []);
+
+    var { error: updateError } = await client()
+      .from('points').update({ photos: updated }).eq('id', pointId);
+    if (updateError) throw new Error(updateError.message);
+
+    return photoUrl;
   }
 
-  function poll(fn, intervalMs, maxAttempts) {
-    return new Promise(function(resolve, reject) {
-      var attempt = 0;
-      function next() {
-        attempt++;
-        fn().then(function(ok) {
-          if (ok) return resolve(true);
-          if (attempt >= maxAttempts) return reject(new Error('Не подтверждено за ' + maxAttempts + ' попыток'));
-          setTimeout(next, intervalMs);
-        }).catch(function() {
-          if (attempt >= maxAttempts) return reject(new Error('Polling error'));
-          setTimeout(next, intervalMs);
-        });
-      }
-      setTimeout(next, intervalMs);
-    });
+  async function deletePhoto(pointId) {
+    var { error } = await client()
+      .from('points').update({ photos: [] }).eq('id', pointId);
+    if (error) throw new Error(error.message);
   }
 
-  // ── Чтение ───────────────────────────────────────────────
+  // ── Ditches CRUD ──────────────────────────────────────────
 
-  function getPoints() {
-    return jsonpGet({ action: 'getPoints' }).then(function(d) { return d.points || []; });
-  }
-  function getPoint(id) {
-    return jsonpGet({ action: 'getPoint', id: id }).then(function(d) { return d.point || null; });
-  }
-  function getWorkers() {
-    return jsonpGet({ action: 'getWorkers' }).then(function(d) { return d.workers || []; });
-  }
-  function getSchemes() {
-    return jsonpGet({ action: 'getSchemes' }).then(function(d) { return d.schemes || []; });
-  }
-  function getImage(fileId) {
-    return jsonpGet({ action: 'getImage', fileId: fileId }, 30000);
-  }
-  function ping() {
-    return jsonpGet({ action: 'ping' }).then(function(d) { return d.ok === true; });
+  async function getDitches(pointNumber) {
+    var query = client().from('ditches').select('*').order('created_at', { ascending: false });
+    if (pointNumber) query = query.eq('point_number', pointNumber);
+    var { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return { ditches: (data || []).map(rowToDitch) };
   }
 
-  function getHistory(pointNumber) {
-    return jsonpGet({ action: 'getHistory', pointNumber: pointNumber }, 30000)
-      .then(function(d) { return d.history || []; });
+  async function getDitch(id) {
+    var { data, error } = await client()
+      .from('ditches').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return { ditch: data ? rowToDitch(data) : null };
   }
 
-  function getPhotos(pointNumber) {
-    return jsonpGet({ action: 'getPhotos', pointNumber: pointNumber }, 15000)
-      .then(function(d) { return d.photos || []; });
+  async function createDitch(d) {
+    var { error } = await client().from('ditches').insert(ditchToRow(d));
+    if (error) throw new Error(error.message);
+    return { status: 'created', id: d.id };
   }
 
-  // ── Запись точек ─────────────────────────────────────────
-
-  function createPoint(point) {
-    return postWithConfirm(
-      { action: 'createPoint', point: point },
-      function() { return getPoint(point.id).then(function(p) { return !!p; }); }
-    );
-  }
-  function updatePoint(point) {
-    return postWithConfirm(
-      { action: 'updatePoint', point: point },
-      function() { return getPoint(point.id).then(function(p) { return !!p; }); }
-    );
-  }
-  function deletePoint(id) {
-    return postWithConfirm(
-      { action: 'deletePoint', id: id },
-      function() { return getPoint(id).then(function(p) { return !p; }); }
-    );
+  async function updateDitch(d) {
+    var { error } = await client().from('ditches').update(ditchToRow(d)).eq('id', d.id);
+    if (error) throw new Error(error.message);
+    return { status: 'updated', id: d.id };
   }
 
-  // ── Сотрудники ───────────────────────────────────────────
-
-  function saveWorker(worker)  { return post({ action: 'saveWorker', worker: worker }); }
-  function deleteWorker(id)    { return post({ action: 'deleteWorker', id: id }); }
-
-  // ── Фото — с подтверждением ──────────────────────────────
-
-  /**
-   * Загружает фото и подтверждает через getPoint что URL записан.
-   * Возвращает Promise<string> — новый driveUrl.
-   * При ошибке бросает Error (не возвращает null).
-   */
-  function uploadPhotoConfirmed(pointId, fileName, base64, mimeType, extra) {
-    // POST — Apps Script загружает файл в Drive и пишет URL в Sheets.
-    // extra: { pointNumber, monitoringDate, flowRate } — для листа «Фото»
-    extra = extra || {};
-    return post({
-      action:         'uploadPhoto',
-      pointId:        pointId,
-      fileName:       fileName,
-      base64:         base64,
-      mimeType:       mimeType || 'image/jpeg',
-      pointNumber:    extra.pointNumber    || '',
-      monitoringDate: extra.monitoringDate || '',
-      flowRate:       extra.flowRate       != null ? extra.flowRate : '',
-    }).then(function() {
-      // Ждём Apps Script: polling каждые 3 сек, до 10 попыток (30 сек)
-      return poll(function() {
-        return getPoint(pointId).then(function(p) {
-          return !!(p && p.photoUrls && p.photoUrls[0]);
-        });
-      }, 3000, 10);
-    }).then(function() {
-      return getPoint(pointId).then(function(p) {
-        if (!p || !p.photoUrls || !p.photoUrls[0]) {
-          throw new Error('URL фото не записан в Sheets после ожидания');
-        }
-        return p.photoUrls[0];
-      });
-    });
+  async function deleteDitch(id) {
+    var { error } = await client().from('ditches').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { status: 'deleted', id: id };
   }
 
-  function deletePhoto(pointId) { return post({ action: 'deletePhoto', pointId: pointId }); }
-  function uploadScheme(params) {
-    return post({
-      action:      'uploadScheme',
-      weekKey:     params.weekKey,
-      fileName:    params.fileName,
-      base64:      params.base64,
-      mimeType:    params.mimeType,
-      uploadedBy:  params.uploadedBy,
-    });
+  // История канавы = все замеры по ditch_name
+  async function getDitchHistory(ditchName) {
+    var { data, error } = await client()
+      .from('ditches').select('*')
+      .eq('ditch_name', ditchName)
+      .order('monitoring_date', { ascending: true });
+    if (error) throw new Error(error.message);
+    return { history: (data || []).map(function(r) {
+      return {
+        ditchName:      r.ditch_name,
+        pointNumber:    r.point_number,
+        monitoringDate: r.monitoring_date,
+        worker:         r.worker,
+        width:          r.width,
+        area:           r.area,
+        flowM3h:        r.flow_m3h,
+        velMethod:      r.vel_method,
+        recordedAt:     r.created_at,
+      };
+    })};
   }
+
+  // ── Ping ─────────────────────────────────────────────────
+
+  async function ping() {
+    try {
+      var { error } = await client().from('points').select('id').limit(1);
+      return !error;
+    } catch (_) { return false; }
+  }
+
+  function getImage() { return Promise.resolve(null); }
 
   return {
-    getPoints: getPoints, getPoint: getPoint,
-    getWorkers: getWorkers, getSchemes: getSchemes,
-    getHistory:  getHistory,
-    getPhotos:   getPhotos,
-    getDitches:  function(pointNumber) {
-      return jsonpGet({ action: 'getDitches', pointNumber: pointNumber||'' })
-        .then(function(d){ return d || { ditches:[] }; });
-    },
-    getDitchHistory: function(ditchName) {
-      return jsonpGet({ action: 'getDitchHistory', ditchName: ditchName })
-        .then(function(d){ return d || { history:[] }; });
-    },
-    post: post,
-    getImage: getImage, ping: ping,
-    createPoint: createPoint, updatePoint: updatePoint, deletePoint: deletePoint,
-    saveWorker: saveWorker, deleteWorker: deleteWorker,
+    getPoints:           getPoints,
+    getPoint:            getPoint,
+    getWorkers:          getWorkers,
+    getHistory:          getHistory,
+    getPhotos:           getPhotos,
+    getSchemes:          getSchemes,
+    getDitches:          getDitches,
+    getDitch:            getDitch,
+    getDitchHistory:     getDitchHistory,
+    ping:                ping,
+    getImage:            getImage,
+    post:                function() { return Promise.resolve(); },
+    createPoint:         createPoint,
+    updatePoint:         updatePoint,
+    deletePoint:         deletePoint,
+    saveWorker:          saveWorker,
+    deleteWorker:        deleteWorker,
     uploadPhotoConfirmed: uploadPhotoConfirmed,
-    deletePhoto: deletePhoto, uploadScheme: uploadScheme,
+    deletePhoto:         deletePhoto,
+    uploadScheme:        uploadScheme,
+    createDitch:         createDitch,
+    updateDitch:         updateDitch,
+    deleteDitch:         deleteDitch,
   };
 })();
