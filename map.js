@@ -23,6 +23,7 @@ var MapModule = (function() {
   var OFF_X = 5800000;
   var MARKER_MODE = 'combined'; // simple | status | intensity | combined
   var _styleCache = {};
+  var _coordCache = {}; // мемоизация wgs84ToXY: 'lat,lon' → {x, y}
 
   var BOUNDS = {
     Xmin: 45850, Xmax: 47350,
@@ -174,6 +175,8 @@ var MapModule = (function() {
 
   // ── WGS-84 → X/Y ─────────────────────────────────────────
   function wgs84ToXY(lat, lon) {
+    var key = lat + ',' + lon;
+    if (_coordCache[key]) return _coordCache[key];
     var a = 6378245.0, b = 6356863.019;
     var e2 = (a*a - b*b) / (a*a);
     var latR = lat * Math.PI / 180;
@@ -200,10 +203,12 @@ var MapModule = (function() {
       + N*Math.pow(cosLat,5)*(5-18*t+t*t+14*eta2-58*t*eta2)*Math.pow(dL,5)/120;
     sk42y += zone * 1000000 + 500000;
 
-    return {
+    var result = {
       x: parseFloat((sk42y - zone*1000000 - 500000).toFixed(4)),
       y: parseFloat((sk42x - OFF_X).toFixed(4)),
     };
+    _coordCache[lat + ',' + lon] = result;
+    return result;
   }
 
   // ── X/Y → WGS-84 ─────────────────────────────────────────

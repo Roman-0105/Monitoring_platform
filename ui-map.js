@@ -123,6 +123,7 @@ function getActiveSchemeDate() {
 }
 
 function setupMapCanvas(canvas) {
+  if (!canvas) return;
   var wrap = document.getElementById('map-scheme-wrap');
   if (!wrap) return;
   canvas.width  = wrap.clientWidth  || 400;
