@@ -1047,7 +1047,10 @@ function renameWorker(id, newName) {
       list[i].name      = newName.trim();
       list[i].updatedAt = new Date().toISOString();
       Storage.cacheWorkers(list);
-      Api.saveWorker(list[i]).catch(function(e) { console.warn(e); });
+      Api.saveWorker(list[i]).catch(function(e) {
+        console.warn(e);
+        Toast.fail('worker-save', 'Не удалось сохранить сотрудника: ' + e.message);
+      });
       renderWorkers();
       break;
     }

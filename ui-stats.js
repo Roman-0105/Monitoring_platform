@@ -32,27 +32,18 @@ function initStatsFilters() {
   }
 }
 
-// Возвращает актуальную палитру статусов с учётом пользовательских настроек
+// Возвращает актуальную палитру статусов — единый источник из MapModule
 function getStatusPalette() {
-  var defaults = {
-    'Новая':      '#4f8dff',
-    'Активная':   '#39d98a',
-    'Иссякает':   '#f3bf4a',
-    'Пересохла':  '#ff6b6b',
-    'Паводковая': '#a78bfa',
-    'Перелив':    '#38bdf8',
-    'Неизвестно': '#8f9aae',
-  };
-  // Подмешиваем пользовательские цвета если есть
+  var palette = { 'Неизвестно': '#8f9aae' };
   if (typeof MapModule !== 'undefined') {
     var cfg = MapModule.getStyleConfig();
     if (cfg && cfg.statusColors) {
       Object.keys(cfg.statusColors).forEach(function(s) {
-        defaults[s] = cfg.statusColors[s];
+        palette[s] = cfg.statusColors[s];
       });
     }
   }
-  return defaults;
+  return palette;
 }
 
 function renderStatsPage() {
