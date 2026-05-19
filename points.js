@@ -14,6 +14,16 @@ const Points = (() => {
 
   // ── helpers ───────────────────────────────────────────────
 
+  function toFloat(val) {
+    var n = parseFloat(val);
+    return isNaN(n) ? null : n;
+  }
+
+  function clampedFloat(val, min, max) {
+    var n = parseFloat(val);
+    return (!isNaN(n) && n >= min && n <= max) ? n : null;
+  }
+
   function makeId() {
     const ts  = Date.now();
     const dev = Storage.getDeviceId();
@@ -39,23 +49,25 @@ const Points = (() => {
     // Если не передана — ставим сегодня
     const today = now.slice(0, 10);
 
+    var flowRaw = toFloat(data.flowRate);
+
     return {
-      id:             data.id             || makeId(),
-      version:        data.version        || 1,
+      id:             (typeof data.id === 'string' && data.id) ? data.id : makeId(),
+      version:        (Number.isFinite(data.version) && data.version > 0) ? Math.floor(data.version) : 1,
       deviceId:       data.deviceId       || Storage.getDeviceId(),
       syncStatus:     data.syncStatus     || 'pending',
       syncedAt:       data.syncedAt       || null,
       createdAt:      data.createdAt      || now,
       updatedAt:      data.updatedAt      || now,
       monitoringDate: data.monitoringDate || today,
-      pointNumber:    data.pointNumber    || '',
-      worker:         data.worker         || '',
-      lat:            data.lat            != null ? data.lat  : null,
-      lon:            data.lon            != null ? data.lon  : null,
-      xLocal:         xLocal,
-      yLocal:         yLocal,
+      pointNumber:    String(data.pointNumber || ''),
+      worker:         String(data.worker  || ''),
+      lat:            clampedFloat(data.lat, -90,  90),
+      lon:            clampedFloat(data.lon, -180, 180),
+      xLocal:         toFloat(xLocal),
+      yLocal:         toFloat(yLocal),
       intensity:      data.intensity      || '',
-      flowRate:       data.flowRate       != null ? data.flowRate : null,
+      flowRate:       (flowRaw !== null && flowRaw >= 0) ? flowRaw : null,
       waterColor:     data.waterColor     || '',
       wall:           data.wall           || '',
       domain:         data.domain         || '',
@@ -63,7 +75,9 @@ const Points = (() => {
       measureMethod:  data.measureMethod  || '',
       horizon:        data.horizon        || '',
       comment:        data.comment        || '',
-      photoUrls:      data.photoUrls      || [],
+      photoUrls:      Array.isArray(data.photoUrls)
+                        ? data.photoUrls.filter(function(u) { return typeof u === 'string' && u; })
+                        : [],
     };
   }
 
