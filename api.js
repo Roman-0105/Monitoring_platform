@@ -58,7 +58,7 @@ var Api = (function() {
     return {
       id:             r.id,
       pointNumber:    r.point_number,
-      monitoringDate: r.monitoring_date,
+      monitoringDate: r.monitoring_date || (r.created_at ? r.created_at.slice(0, 10) : null),
       worker:         r.worker,
       lat:            r.lat,
       lon:            r.lon,

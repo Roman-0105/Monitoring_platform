@@ -195,8 +195,12 @@ function renderSettingsAliases() {
 // ── Схемы ─────────────────────────────────────────────────
 
 function renderSettingsSchemes() {
-  var weekEl              = document.getElementById('settings-week-key');
+  var weekEl = document.getElementById('settings-week-key');
   if (weekEl) weekEl.textContent = Schemes.formatWeekKey(Schemes.currentWeekKey());
+
+  // Заполняем поле выбора недели текущей неделей по умолчанию
+  var weekInput = document.getElementById('scheme-week-input');
+  if (weekInput && !weekInput.value) weekInput.value = Schemes.currentWeekKey();
   var container           = document.getElementById('settings-schemes-list');
   var activeEl            = document.getElementById('settings-active-scheme');
   var currentWeekStatusEl = document.getElementById('settings-current-week-status');
@@ -254,12 +258,19 @@ function renderSettingsSchemes() {
 }
 
 function uploadScheme() {
-  var fileInput = document.getElementById('scheme-file');
-  var statusEl  = document.getElementById('scheme-upload-status');
+  var fileInput  = document.getElementById('scheme-file');
+  var statusEl   = document.getElementById('scheme-upload-status');
+  var weekInput  = document.getElementById('scheme-week-input');
   var file = fileInput && fileInput.files && fileInput.files[0];
-  if (!file) { alert('Выберите файл схемы'); return; }
-  var weekKey   = Schemes.currentWeekKey();
+  if (!file) { if (statusEl) statusEl.textContent = '❌ Выберите файл схемы'; return; }
+
+  // Берём неделю из поля — если пусто, берём текущую
+  var weekKey = (weekInput && weekInput.value) ? weekInput.value : Schemes.currentWeekKey();
+  // Нормализуем: "2026-W07" → "2026-W07" (браузер может вернуть "2026-W7")
+  weekKey = weekKey.replace(/W(\d)$/, 'W0$1');
+
   var uploadBtn = document.getElementById('btn-upload-scheme');
+  if (statusEl) statusEl.textContent = '⏳ Загрузка ' + Schemes.formatWeekKey(weekKey) + '...';
   if (statusEl)  statusEl.textContent = '⏳ Загрузка...';
   if (uploadBtn) uploadBtn.disabled = true;
   var stid = Toast.progress('scheme-upload', 'Загрузка схемы карьера...', 30);
