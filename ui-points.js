@@ -9,6 +9,18 @@ var _pointsFilters = { dates: [], worker: 'all', search: '' };
 // Кэш историй графиков: { pointId: [ ...history ] }
 // Хранится вне DOM — не теряется при перерисовке списка
 var _chartCache = {};
+var _chartCacheKeys = []; // порядок вставки для вытеснения старых записей
+var _CHART_CACHE_MAX = 30;
+
+function _chartCacheSet(key, value) {
+  if (!_chartCache.hasOwnProperty(key)) {
+    if (_chartCacheKeys.length >= _CHART_CACHE_MAX) {
+      delete _chartCache[_chartCacheKeys.shift()];
+    }
+    _chartCacheKeys.push(key);
+  }
+  _chartCache[key] = value;
+}
 
 // Подсвечивает вхождения строки поиска в тексте
 function highlightSearch(text, search) {
@@ -474,7 +486,7 @@ function _loadDetailHistory(box, pointId, pointNumber) {
   if (elJournal) elJournal.innerHTML = '<p style="font-size:11px;color:var(--txt-3);text-align:center;padding:16px 0">⏳ Загрузка...</p>';
 
   Api.getHistory(pointNumber).then(function(hist) {
-    _chartCache[pointId] = hist || [];
+    _chartCacheSet(pointId, hist || []);
     _fillDetailHistory(box, _chartCache[pointId], pointNumber);
   }).catch(function(err) {
     var errMsg = err && err.message ? err.message : String(err);
@@ -519,7 +531,7 @@ function _loadPhotoGallery(box, pointNumber) {
   var historyP = _chartCache[pointNumber]
     ? Promise.resolve(_chartCache[pointNumber])
     : Api.getHistory(pointNumber).then(function(h) {
-        _chartCache[pointNumber] = h || [];
+        _chartCacheSet(pointNumber, h || []);
         return _chartCache[pointNumber];
       });
 
