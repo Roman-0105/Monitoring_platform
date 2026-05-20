@@ -29,17 +29,47 @@ var Schemes = (function() {
 
   // ── Сжатие схемы ─────────────────────────────────────────
   function compressScheme(file) {
-    // SVG / PDF are vector — skip canvas re-encoding, pass through as-is
-    var isVec = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name) ||
-                file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-    if (isVec) {
-      var vecMime = (file.type === 'application/pdf' || /\.pdf$/i.test(file.name))
-        ? 'application/pdf' : 'image/svg+xml';
+    var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    var isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
+
+    // PDF: render via PDF.js to high-res JPEG (Supabase Storage doesn't accept application/pdf)
+    if (isPdf) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          if (typeof pdfjsLib === 'undefined') {
+            reject(new Error('PDF.js не загружен'));
+            return;
+          }
+          var typedArr = new Uint8Array(e.target.result);
+          pdfjsLib.getDocument({ data: typedArr }).promise.then(function(pdf) {
+            return pdf.getPage(1);
+          }).then(function(page) {
+            // scale=3 → ~2481px for A4 landscape, plenty of detail
+            var vp = page.getViewport({ scale: 3 });
+            var canvas = document.createElement('canvas');
+            canvas.width  = vp.width;
+            canvas.height = vp.height;
+            return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function() {
+              var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+              resolve({ base64: dataUrl.split(',')[1], mime: 'image/jpeg' });
+            });
+          }).catch(function(err) {
+            reject(new Error('Ошибка рендеринга PDF: ' + err.message));
+          });
+        };
+        reader.onerror = function() { reject(new Error('Ошибка чтения файла')); };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    // SVG: pass through as-is
+    if (isSvg) {
       return new Promise(function(resolve, reject) {
         var reader = new FileReader();
         reader.onload = function(e) {
           var d = e.target.result;
-          resolve({ base64: d.split(',')[1], mime: vecMime });
+          resolve({ base64: d.split(',')[1], mime: 'image/svg+xml' });
         };
         reader.onerror = function() { reject(new Error('Ошибка чтения файла')); };
         reader.readAsDataURL(file);
