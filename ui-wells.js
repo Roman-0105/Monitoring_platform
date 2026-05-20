@@ -403,7 +403,7 @@ function _drawWellChart(container, measurements) {
   }).join('');
 
   var hits = data.map(function(m, i) {
-    return '<circle class="wc-dot" cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="14" fill="transparent"' +
+    return '<circle class="wc-dot" cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="14" fill="rgba(0,0,0,0)" pointer-events="all" style="cursor:crosshair"' +
       ' data-date="' + escHTML(m.measurementDate||'') + '" data-flow="' + m.flowRate + '" data-worker="' + escHTML(m.worker||'') + '"/>';
   }).join('');
 
@@ -433,9 +433,12 @@ function _drawWellChart(container, measurements) {
     });
     dot.addEventListener('mousemove', function(e) {
       var rect = container.querySelector('div').getBoundingClientRect();
-      var tx = e.clientX - rect.left + 12;
-      var ty = e.clientY - rect.top  - 42;
-      if (tx + 170 > rect.width) tx = e.clientX - rect.left - 170;
+      var tipH = tip.offsetHeight || 56;
+      var tipW = tip.offsetWidth  || 170;
+      var tx = e.clientX - rect.left + 14;
+      var ty = e.clientY - rect.top  - tipH - 10;
+      if (tx + tipW > rect.width) tx = e.clientX - rect.left - tipW - 6;
+      if (ty < 0) ty = e.clientY - rect.top + 18;
       tip.style.left = tx + 'px';
       tip.style.top  = ty + 'px';
     });
