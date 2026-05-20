@@ -277,7 +277,8 @@ var Api = (function() {
   }
 
   async function uploadScheme(params) {
-    var ext  = (params.mimeType || 'image/jpeg').split('/')[1] || 'jpg';
+    var _mime = params.mimeType || 'image/jpeg';
+    var ext  = _mime === 'image/svg+xml' ? 'svg' : (_mime.split('/')[1] || 'jpg');
     var path = params.weekKey + '.' + ext;
     var blob = base64ToBlob(params.base64, params.mimeType);
 
