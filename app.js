@@ -159,6 +159,12 @@ window.initApp = function() {
         }
       });
     }
+    // Инициализируем модуль скважин
+    if (typeof initWellsModule === 'function') {
+      initWellsModule(function() {
+        if (AppState.currentTab === 'wells' && typeof renderWellsPage === 'function') renderWellsPage();
+      });
+    }
   }).catch(function(err) {
     Diagnostics.setError('sync', 'Начальная загрузка: ' + err.message);
     renderWorkers();
@@ -275,6 +281,11 @@ function syncAll() {
     renderStatsPage();
     Diagnostics.clearError();
     Toast.done('sync', 'Данные синхронизированы');
+    if (typeof initWellsModule === 'function') {
+      initWellsModule(function() {
+        if (AppState.currentTab === 'wells' && typeof renderWellsPage === 'function') renderWellsPage();
+      });
+    }
   }).catch(function(err) {
     Diagnostics.setError('sync', err.message);
     Toast.fail('sync', 'Ошибка синхронизации: ' + err.message);
@@ -305,6 +316,9 @@ function switchTab(name) {
   if (name === 'report' && typeof initReportTab === 'function' && !window._reportInited) {
     window._reportInited = true;
     initReportTab();
+  }
+  if (name === 'wells' && typeof initWellsTab === 'function') {
+    initWellsTab();
   }
   var tooltipEl = document.getElementById('map-tooltip');
   if (tooltipEl) tooltipEl.style.display = 'none';

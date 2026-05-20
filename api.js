@@ -394,6 +394,140 @@ var Api = (function() {
 
   function getImage() { return Promise.resolve(null); }
 
+  // ── Маппинг wells ─────────────────────────────────────────
+
+  function wellToRow(w) {
+    return {
+      id:               w.id,
+      name:             w.name             || '',
+      domain:           w.domain           || '',
+      depth:            w.depth            != null ? w.depth          : null,
+      inclination:      w.inclination      != null ? w.inclination    : null,
+      azimuth:          w.azimuth          != null ? w.azimuth        : null,
+      drill_diameter:   w.drillDiameter    != null ? w.drillDiameter  : null,
+      casing:           w.casing           || '',
+      drill_date:       w.drillDate        || null,
+      has_wellhead:     w.hasWellhead      === true,
+      flow_after_drill: w.flowAfterDrill   != null ? w.flowAfterDrill : null,
+      x_local:          w.xLocal           != null ? w.xLocal         : null,
+      y_local:          w.yLocal           != null ? w.yLocal         : null,
+      z_local:          w.zLocal           != null ? w.zLocal         : null,
+      lat:              w.lat              != null ? w.lat            : null,
+      lon:              w.lon              != null ? w.lon            : null,
+      created_at:       w.createdAt        || new Date().toISOString(),
+    };
+  }
+
+  function rowToWell(r) {
+    return {
+      id:             r.id,
+      name:           r.name,
+      domain:         r.domain,
+      depth:          r.depth,
+      inclination:    r.inclination,
+      azimuth:        r.azimuth,
+      drillDiameter:  r.drill_diameter,
+      casing:         r.casing,
+      drillDate:      r.drill_date,
+      hasWellhead:    r.has_wellhead,
+      flowAfterDrill: r.flow_after_drill,
+      xLocal:         r.x_local,
+      yLocal:         r.y_local,
+      zLocal:         r.z_local,
+      lat:            r.lat,
+      lon:            r.lon,
+      createdAt:      r.created_at,
+    };
+  }
+
+  function measurementToRow(m) {
+    return {
+      id:               m.id,
+      well_id:          m.wellId,
+      measurement_date: m.measurementDate || null,
+      flow_rate:        m.flowRate        != null ? m.flowRate : null,
+      worker:           m.worker          || '',
+      comment:          m.comment         || '',
+      created_at:       m.createdAt       || new Date().toISOString(),
+    };
+  }
+
+  function rowToMeasurement(r) {
+    return {
+      id:              r.id,
+      wellId:          r.well_id,
+      measurementDate: r.measurement_date,
+      flowRate:        r.flow_rate,
+      worker:          r.worker,
+      comment:         r.comment,
+      createdAt:       r.created_at,
+    };
+  }
+
+  // ── Wells CRUD ────────────────────────────────────────────
+
+  async function getWells() {
+    var { data, error } = await client()
+      .from('wells').select('*').order('name', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map(rowToWell);
+  }
+
+  async function getWell(id) {
+    var { data, error } = await client()
+      .from('wells').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? rowToWell(data) : null;
+  }
+
+  async function createWell(w) {
+    var { error } = await client().from('wells').insert(wellToRow(w));
+    if (error) throw new Error(error.message);
+    return { status: 'created', id: w.id };
+  }
+
+  async function updateWell(w) {
+    var { error } = await client().from('wells').update(wellToRow(w)).eq('id', w.id);
+    if (error) throw new Error(error.message);
+    return { status: 'updated', id: w.id };
+  }
+
+  async function deleteWell(id) {
+    var { error } = await client().from('wells').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { status: 'deleted', id: id };
+  }
+
+  // ── Well measurements CRUD ────────────────────────────────
+
+  async function getWellMeasurements(wellId) {
+    var { data, error } = await client()
+      .from('well_measurements').select('*')
+      .eq('well_id', wellId)
+      .order('measurement_date', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map(rowToMeasurement);
+  }
+
+  async function createMeasurement(m) {
+    var { error } = await client().from('well_measurements').insert(measurementToRow(m));
+    if (error) throw new Error(error.message);
+    return { status: 'created', id: m.id };
+  }
+
+  async function updateMeasurement(m) {
+    var { error } = await client()
+      .from('well_measurements').update(measurementToRow(m)).eq('id', m.id);
+    if (error) throw new Error(error.message);
+    return { status: 'updated', id: m.id };
+  }
+
+  async function deleteMeasurement(id) {
+    var { error } = await client().from('well_measurements').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { status: 'deleted', id: id };
+  }
+
   return {
     client:              client,
     getPoints:           getPoints,
@@ -419,5 +553,14 @@ var Api = (function() {
     createDitch:         createDitch,
     updateDitch:         updateDitch,
     deleteDitch:         deleteDitch,
+    getWells:            getWells,
+    getWell:             getWell,
+    createWell:          createWell,
+    updateWell:          updateWell,
+    deleteWell:          deleteWell,
+    getWellMeasurements:  getWellMeasurements,
+    createMeasurement:   createMeasurement,
+    updateMeasurement:   updateMeasurement,
+    deleteMeasurement:   deleteMeasurement,
   };
 })();
