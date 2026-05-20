@@ -402,14 +402,9 @@ function _drawWellChart(container, measurements) {
     return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="4" fill="#f9ab00" stroke="var(--card-bg,#1e2530)" stroke-width="1.5" pointer-events="none"/>';
   }).join('');
 
-  var hits = data.map(function(m, i) {
-    return '<circle class="wc-dot" cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="14" fill="rgba(0,0,0,0)" pointer-events="all" style="cursor:crosshair"' +
-      ' data-date="' + escHTML(m.measurementDate||'') + '" data-flow="' + m.flowRate + '" data-worker="' + escHTML(m.worker||'') + '"/>';
-  }).join('');
-
   container.innerHTML =
-    '<div style="position:relative">' +
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-height:180px" xmlns="http://www.w3.org/2000/svg">' +
+    '<div style="position:relative;cursor:crosshair">' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-height:180px;display:block" xmlns="http://www.w3.org/2000/svg">' +
         '<defs><linearGradient id="wg-fill" x1="0" y1="0" x2="0" y2="1">' +
           '<stop offset="0%" stop-color="#f9ab00" stop-opacity=".3"/>' +
           '<stop offset="100%" stop-color="#f9ab00" stop-opacity=".03"/>' +
@@ -417,33 +412,48 @@ function _drawWellChart(container, measurements) {
         grid + yLbls +
         '<path d="' + areaPath + '" fill="url(#wg-fill)"/>' +
         '<path d="' + linePath + '" fill="none" stroke="#f9ab00" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>' +
-        dots + hits + xLbls +
+        dots + xLbls +
         '<text x="' + (pad.l-30) + '" y="' + (pad.t+cH/2) + '" fill="var(--txt-3)" font-size="10" text-anchor="middle" transform="rotate(-90,' + (pad.l-30) + ',' + (pad.t+cH/2) + ')">м³/ч</text>' +
       '</svg>' +
-      '<div id="wells-chart-tip" style="position:absolute;pointer-events:none;display:none;background:rgba(20,25,35,.95);color:var(--txt-1);font-size:12px;padding:6px 10px;border-radius:7px;white-space:nowrap;z-index:20;border:1px solid rgba(249,171,0,.4);box-shadow:0 2px 8px rgba(0,0,0,.5)"></div>' +
+      '<div id="wells-chart-tip" style="position:fixed;pointer-events:none;display:none;background:rgba(20,25,35,.95);color:#e8eaed;font-size:12px;padding:7px 11px;border-radius:7px;white-space:nowrap;z-index:9999;border:1px solid rgba(249,171,0,.5);box-shadow:0 3px 12px rgba(0,0,0,.6)"></div>' +
     '</div>';
 
   var tip = container.querySelector('#wells-chart-tip');
-  container.querySelectorAll('.wc-dot').forEach(function(dot) {
-    dot.addEventListener('mouseenter', function() {
-      var date = dot.dataset.date ? formatDate(dot.dataset.date) : '—';
-      var worker = dot.dataset.worker ? '<br><span style="color:var(--txt-3)">' + escHTML(dot.dataset.worker) + '</span>' : '';
-      tip.innerHTML = '<b>' + date + '</b><br>' + dot.dataset.flow + ' м³/ч' + worker;
-      tip.style.display = '';
+  var svgEl = container.querySelector('svg');
+
+  svgEl.addEventListener('mousemove', function(e) {
+    var svgRect = svgEl.getBoundingClientRect();
+    var scaleX  = W / svgRect.width;
+    var scaleY  = H / svgRect.height;
+    var mouseX  = (e.clientX - svgRect.left) * scaleX;
+    var mouseY  = (e.clientY - svgRect.top)  * scaleY;
+
+    var closest = -1, minDist = Infinity;
+    pts.forEach(function(pt, i) {
+      var d = Math.sqrt(Math.pow(pt.x - mouseX, 2) + Math.pow(pt.y - mouseY, 2));
+      if (d < minDist) { minDist = d; closest = i; }
     });
-    dot.addEventListener('mousemove', function(e) {
-      var rect = container.querySelector('div').getBoundingClientRect();
-      var tipH = tip.offsetHeight || 56;
-      var tipW = tip.offsetWidth  || 170;
-      var tx = e.clientX - rect.left + 14;
-      var ty = e.clientY - rect.top  - tipH - 10;
-      if (tx + tipW > rect.width) tx = e.clientX - rect.left - tipW - 6;
-      if (ty < 0) ty = e.clientY - rect.top + 18;
+
+    var threshold = 22 * scaleX;
+    if (closest >= 0 && minDist < threshold) {
+      var m = data[closest];
+      var date   = m.measurementDate ? formatDate(m.measurementDate) : '—';
+      var worker = m.worker ? '<br><span style="color:#9aa0a6">' + escHTML(m.worker) + '</span>' : '';
+      tip.innerHTML = '<b style="color:#f9ab00">' + date + '</b><br>' + m.flowRate + ' м³/ч' + worker;
+      tip.style.display = '';
+      var tipW = tip.offsetWidth, tipH = tip.offsetHeight;
+      var tx = e.clientX + 14;
+      var ty = e.clientY - tipH - 10;
+      if (tx + tipW > window.innerWidth - 8)  tx = e.clientX - tipW - 10;
+      if (ty < 8) ty = e.clientY + 16;
       tip.style.left = tx + 'px';
       tip.style.top  = ty + 'px';
-    });
-    dot.addEventListener('mouseleave', function() { tip.style.display = 'none'; });
+    } else {
+      tip.style.display = 'none';
+    }
   });
+
+  svgEl.addEventListener('mouseleave', function() { tip.style.display = 'none'; });
 }
 
 // ── Таблица замеров ───────────────────────────────────────
