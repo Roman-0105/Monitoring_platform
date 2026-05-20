@@ -9,6 +9,11 @@ var _mapSchemeImg      = null;   // ВАЖНО: объявлено здесь, �
 var _mapScale          = 1.0;
 var _mapOffX           = 0;
 var _mapOffY           = 0;
+// Анимация зума
+var _mapScaleT         = 1.0;   // целевое значение
+var _mapOffXT          = 0;
+var _mapOffYT          = 0;
+var _mapAnimId         = null;
 var _mapAddMode        = false;
 var _mapDragging       = false;
 var _mapDragStartX     = 0;
@@ -214,8 +219,8 @@ function renderMap() {
         var lim2 = getMapZoomLimits();
         _mapScale = Math.max(lim2.min, Math.min(lim2.max, 1));
       }
-      _mapOffX = 0;
-      _mapOffY = 0;
+      _mapOffX = 0; _mapOffY = 0;
+      _mapScaleT = _mapScale; _mapOffXT = 0; _mapOffYT = 0;
       setupMapCanvas(canvas);
       initMapFilters();
       initExtraMapButtons();
@@ -282,21 +287,62 @@ function redrawMap() {
   ctx.restore();
   var sbScale = document.getElementById('sb-scale');
   if (sbScale) sbScale.textContent = 'x' + _mapScale.toFixed(2);
+  var pctEl = window._mapZoomPctEl || document.getElementById('map-zoom-pct');
+  if (pctEl) pctEl.textContent = Math.round(_mapScale * 100) + '%';
+}
+
+// ── Анимация зума (rAF lerp) ──────────────────────────────
+
+function _startMapAnim() {
+  if (_mapAnimId) return;
+  function tick() {
+    var done = true;
+    var LERP = 0.16;
+    var EPS  = 0.0005;
+
+    _mapScale += (_mapScaleT - _mapScale) * LERP;
+    _mapOffX  += (_mapOffXT  - _mapOffX)  * LERP;
+    _mapOffY  += (_mapOffYT  - _mapOffY)  * LERP;
+
+    if (Math.abs(_mapScaleT - _mapScale) > EPS ||
+        Math.abs(_mapOffXT  - _mapOffX)  > 0.2 ||
+        Math.abs(_mapOffYT  - _mapOffY)  > 0.2) {
+      done = false;
+    }
+
+    if (done) {
+      _mapScale = _mapScaleT;
+      _mapOffX  = _mapOffXT;
+      _mapOffY  = _mapOffYT;
+      _mapAnimId = null;
+    } else {
+      _mapAnimId = requestAnimationFrame(tick);
+    }
+    redrawMap();
+  }
+  _mapAnimId = requestAnimationFrame(tick);
+}
+
+function _setMapTarget(newScale, newOffX, newOffY) {
+  var lim = getMapZoomLimits();
+  _mapScaleT = Math.max(lim.min, Math.min(lim.max, newScale));
+  _mapOffXT  = newOffX;
+  _mapOffYT  = newOffY;
+  _startMapAnim();
 }
 
 // ── Зум ──────────────────────────────────────────────────
 
-function zoomMap(factor) {
+function zoomMap(factor, pivotX, pivotY) {
   var canvas = document.getElementById('map-canvas');
   if (!canvas) return;
-  var cx = canvas.width  / 2;
-  var cy = canvas.height / 2;
-  var limits = getMapZoomLimits();
-  var newScale = Math.max(limits.min, Math.min(limits.max, _mapScale * factor));
-  _mapOffX = cx - (cx - _mapOffX) * (newScale / _mapScale);
-  _mapOffY = cy - (cy - _mapOffY) * (newScale / _mapScale);
-  _mapScale = newScale;
-  redrawMap();
+  var cx = pivotX != null ? pivotX : canvas.width  / 2;
+  var cy = pivotY != null ? pivotY : canvas.height / 2;
+  var lim = getMapZoomLimits();
+  var newScale = Math.max(lim.min, Math.min(lim.max, _mapScaleT * factor));
+  var newOffX  = cx - (cx - _mapOffXT) * (newScale / _mapScaleT);
+  var newOffY  = cy - (cy - _mapOffYT) * (newScale / _mapScaleT);
+  _setMapTarget(newScale, newOffX, newOffY);
 }
 
 function fitMap() {
@@ -305,10 +351,10 @@ function fitMap() {
   if (!canvas) return;
   var fitScale = Math.min(canvas.width / _mapSchemeImg.width, canvas.height / _mapSchemeImg.height);
   var lim = getMapZoomLimits();
-  _mapScale = Math.max(lim.min, Math.min(lim.max, fitScale > 0 ? fitScale : 1));
-  _mapOffX  = (canvas.width  - _mapSchemeImg.width  * _mapScale) / 2;
-  _mapOffY  = (canvas.height - _mapSchemeImg.height * _mapScale) / 2;
-  redrawMap();
+  var s = Math.max(lim.min, Math.min(lim.max, fitScale > 0 ? fitScale : 1));
+  var ox = (canvas.width  - _mapSchemeImg.width  * s) / 2;
+  var oy = (canvas.height - _mapSchemeImg.height * s) / 2;
+  _setMapTarget(s, ox, oy);
 }
 
 function initMapZoomButtons() {
@@ -318,14 +364,20 @@ function initMapZoomButtons() {
   var controls = document.createElement('div');
   controls.className = 'map-zoom-controls';
   controls.innerHTML =
-    '<button class="map-zoom-btn" id="map-zoom-in"  title="Приблизить">+</button>' +
-    '<button class="map-zoom-btn" id="map-zoom-out" title="Отдалить">−</button>' +
-    '<button class="map-zoom-btn" id="map-zoom-fit" title="По размеру" style="font-size:13px">⊡</button>';
+    '<button class="map-zoom-btn" id="map-zoom-in"  title="Приблизить (прокрутка вверх)">+</button>' +
+    '<button class="map-zoom-btn map-zoom-label" id="map-zoom-pct" title="Сбросить масштаб" style="font-size:11px;min-width:42px">100%</button>' +
+    '<button class="map-zoom-btn" id="map-zoom-out" title="Отдалить (прокрутка вниз)">−</button>' +
+    '<button class="map-zoom-btn" id="map-zoom-fit" title="По размеру (двойной клик)" style="font-size:13px">⊡</button>';
   wrap.appendChild(controls);
 
   document.getElementById('map-zoom-in').addEventListener('click',  function() { zoomMap(1.3); });
   document.getElementById('map-zoom-out').addEventListener('click', function() { zoomMap(0.77); });
   document.getElementById('map-zoom-fit').addEventListener('click', function() { fitMap(); });
+  document.getElementById('map-zoom-pct').addEventListener('click', function() { fitMap(); });
+
+  // Обновляем индикатор масштаба в кнопке
+  var origRedraw = redrawMap;
+  window._mapZoomPctEl = document.getElementById('map-zoom-pct');
 }
 
 // ── Взаимодействие ───────────────────────────────────────
@@ -334,19 +386,18 @@ function initMapInteraction(canvas) {
   if (canvas._mapBound) return;
   canvas._mapBound = true;
 
-  // Колесо мыши — зум
+  // Колесо мыши — плавный зум к курсору
   canvas.addEventListener('wheel', function(e) {
     e.preventDefault();
     var rect   = canvas.getBoundingClientRect();
     var mouseX = e.clientX - rect.left;
     var mouseY = e.clientY - rect.top;
     var delta  = e.deltaY > 0 ? 0.85 : 1.18;
-    var limits = getMapZoomLimits();
-    var newScale = Math.max(limits.min, Math.min(limits.max, _mapScale * delta));
-    _mapOffX = mouseX - (mouseX - _mapOffX) * (newScale / _mapScale);
-    _mapOffY = mouseY - (mouseY - _mapOffY) * (newScale / _mapScale);
-    _mapScale = newScale;
-    redrawMap();
+    var lim    = getMapZoomLimits();
+    var newScale = Math.max(lim.min, Math.min(lim.max, _mapScaleT * delta));
+    var newOffX  = mouseX - (mouseX - _mapOffXT) * (newScale / _mapScaleT);
+    var newOffY  = mouseY - (mouseY - _mapOffYT) * (newScale / _mapScaleT);
+    _setMapTarget(newScale, newOffX, newOffY);
   }, { passive: false });
 
   // Touch — pinch zoom + pan + tap
@@ -383,19 +434,18 @@ function initMapInteraction(canvas) {
         var rect   = canvas.getBoundingClientRect();
         var mx     = midX - rect.left;
         var my     = midY - rect.top;
-        var limits = getMapZoomLimits();
-        var newScale = Math.max(limits.min, Math.min(limits.max, _mapScale * ratio));
-        _mapOffX = mx - (mx - _mapOffX) * (newScale / _mapScale);
-        _mapOffY = my - (my - _mapOffY) * (newScale / _mapScale);
-        _mapScale = newScale;
-        redrawMap();
+        var lim    = getMapZoomLimits();
+        var newScale = Math.max(lim.min, Math.min(lim.max, _mapScaleT * ratio));
+        var newOffX  = mx - (mx - _mapOffXT) * (newScale / _mapScaleT);
+        var newOffY  = my - (my - _mapOffYT) * (newScale / _mapScaleT);
+        _setMapTarget(newScale, newOffX, newOffY);
       }
       lastTouchDist = dist;
     } else if (e.touches.length === 1 && _mapDragging && !_mapAddMode) {
       var ddx = e.touches[0].clientX - lastTouchX;
       var ddy = e.touches[0].clientY - lastTouchY;
-      _mapOffX += ddx;
-      _mapOffY += ddy;
+      _mapOffX  += ddx; _mapOffXT  += ddx;
+      _mapOffY  += ddy; _mapOffYT  += ddy;
       lastTouchX = e.touches[0].clientX;
       lastTouchY = e.touches[0].clientY;
       redrawMap();
@@ -431,8 +481,11 @@ function initMapInteraction(canvas) {
   canvas.addEventListener('mousedown', function(e) {
     if (_mapAddMode) return;
     _mapDragging   = true;
+    // Snap current to target so drag starts from visual position
+    _mapOffX = _mapOffXT; _mapOffY = _mapOffYT; _mapScale = _mapScaleT;
     _mapDragStartX = e.clientX - _mapOffX;
     _mapDragStartY = e.clientY - _mapOffY;
+    if (_mapAnimId) { cancelAnimationFrame(_mapAnimId); _mapAnimId = null; }
     canvas.style.cursor = 'grabbing';
   });
 
@@ -442,8 +495,10 @@ function initMapInteraction(canvas) {
     var cy   = e.clientY - rect.top;
 
     if (_mapDragging && !_mapAddMode) {
-      _mapOffX = e.clientX - _mapDragStartX;
-      _mapOffY = e.clientY - _mapDragStartY;
+      _mapOffX  = e.clientX - _mapDragStartX;
+      _mapOffY  = e.clientY - _mapDragStartY;
+      _mapOffXT = _mapOffX;
+      _mapOffYT = _mapOffY;
       redrawMap();
       hideMapTooltip();
       return;
@@ -485,6 +540,7 @@ function initMapInteraction(canvas) {
     }
   });
 
+  canvas.addEventListener('dblclick',   function() { fitMap(); });
   canvas.addEventListener('mouseup',    function() { _mapDragging = false; canvas.style.cursor = _mapAddMode ? 'crosshair' : 'grab'; });
   canvas.addEventListener('mouseleave', function() {
     _mapDragging = false;
