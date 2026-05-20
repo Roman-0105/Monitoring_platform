@@ -351,8 +351,119 @@ function _applyViewBox() {
     _wellsMap.vbW.toFixed(1) + ' ' + _wellsMap.vbH.toFixed(1));
 }
 
-// Renders all well markers into the SVG markers group.
-// Marker size uses current vbW so they stay constant in screen pixels.
+// ── Tooltip helpers ───────────────────────────────────────
+
+var _wmTip = null;
+function _getWmTip() {
+  if (!_wmTip) {
+    _wmTip = document.createElement('div');
+    _wmTip.style.cssText = 'position:fixed;pointer-events:none;display:none;background:rgba(15,20,30,.92);' +
+      'color:#e8eaed;font-size:12px;padding:5px 10px;border-radius:6px;white-space:nowrap;' +
+      'z-index:9999;border:1px solid rgba(255,255,255,.12);max-width:260px;white-space:normal';
+    document.body.appendChild(_wmTip);
+  }
+  return _wmTip;
+}
+function _showWmTip(html, e) { var t = _getWmTip(); t.innerHTML = html; t.style.display = ''; _moveWmTip(e); }
+function _moveWmTip(e) {
+  var t = _getWmTip();
+  if (t.style.display === 'none') return;
+  var tx = e.clientX + 14, ty = e.clientY - 12;
+  if (tx + t.offsetWidth  > window.innerWidth  - 8) tx = e.clientX - t.offsetWidth  - 10;
+  if (ty + t.offsetHeight > window.innerHeight - 8) ty = e.clientY - t.offsetHeight - 8;
+  t.style.left = tx + 'px'; t.style.top = ty + 'px';
+}
+function _hideWmTip() { _getWmTip().style.display = 'none'; }
+
+// ── Clustering ────────────────────────────────────────────
+
+var _CLUSTER_THRESH = 28; // screen-px distance to group markers
+
+function _clusterWells(svg) {
+  var rect = svg.getBoundingClientRect();
+  var sw = rect.width || 600, sh = rect.height || 400;
+  var z = _wellsMap;
+
+  var items = [];
+  WellsState.list.forEach(function(w) {
+    if (w.xLocal == null || w.yLocal == null) return;
+    var cx = (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * z.imgW;
+    var cy = (WELL_BOUNDS.Ymax - w.yLocal)  / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * z.imgH;
+    var sx = (cx - z.vbX) / z.vbW * sw;
+    var sy = (cy - z.vbY) / z.vbH * sh;
+    items.push({ w: w, cx: cx, cy: cy, sx: sx, sy: sy });
+  });
+
+  var used = items.map(function() { return false; });
+  var result = [];
+
+  for (var i = 0; i < items.length; i++) {
+    if (used[i]) continue;
+    var seed = items[i];
+    // Selected well is never clustered — always shown individually
+    if (seed.w.id === WellsState.selectedId) {
+      used[i] = true;
+      result.push({ type: 'single', well: seed.w, cx: seed.cx, cy: seed.cy });
+      continue;
+    }
+
+    var members = [seed];
+    used[i] = true;
+    for (var j = i + 1; j < items.length; j++) {
+      if (used[j] || items[j].w.id === WellsState.selectedId) continue;
+      var dx = seed.sx - items[j].sx, dy = seed.sy - items[j].sy;
+      if (Math.sqrt(dx * dx + dy * dy) < _CLUSTER_THRESH) {
+        members.push(items[j]);
+        used[j] = true;
+      }
+    }
+
+    if (members.length === 1) {
+      result.push({ type: 'single', well: seed.w, cx: seed.cx, cy: seed.cy });
+    } else {
+      var sumCx = 0, sumCy = 0;
+      members.forEach(function(m) { sumCx += m.cx; sumCy += m.cy; });
+      result.push({ type: 'cluster', wells: members.map(function(m) { return m.w; }),
+        cx: sumCx / members.length, cy: sumCy / members.length });
+    }
+  }
+  return result;
+}
+
+function _zoomToCluster(cluster) {
+  var z = _wellsMap;
+  var wells = cluster.wells;
+  var cxArr = wells.map(function(w) {
+    return (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * z.imgW;
+  });
+  var cyArr = wells.map(function(w) {
+    return (WELL_BOUNDS.Ymax - w.yLocal) / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * z.imgH;
+  });
+  var mnX = Math.min.apply(null, cxArr), mxX = Math.max.apply(null, cxArr);
+  var mnY = Math.min.apply(null, cyArr), mxY = Math.max.apply(null, cyArr);
+
+  var rangeX = Math.max(mxX - mnX, z.imgW * 0.04);
+  var rangeY = Math.max(mxY - mnY, z.imgH * 0.04);
+  var pad = Math.max(rangeX, rangeY) * 0.6;
+
+  var svg = document.getElementById('wells-map-svg');
+  var r   = svg ? svg.getBoundingClientRect() : { width: 600, height: 400 };
+  var asp = (r.width || 600) / (r.height || 400);
+
+  var vbW = rangeX + pad * 2;
+  var vbH = rangeY + pad * 2;
+  if (vbW / vbH > asp) { vbH = vbW / asp; } else { vbW = vbH * asp; }
+  vbW = Math.min(vbW, z.imgW); vbH = Math.min(vbH, z.imgH);
+
+  var cx = (mnX + mxX) / 2, cy = (mnY + mxY) / 2;
+  z.tvbX = Math.max(0, Math.min(z.imgW - vbW, cx - vbW / 2));
+  z.tvbY = Math.max(0, Math.min(z.imgH - vbH, cy - vbH / 2));
+  z.tvbW = vbW; z.tvbH = vbH;
+  if (z._startAnim) z._startAnim();
+}
+
+// ── Marker rendering ──────────────────────────────────────
+
 function _renderWellMapMarkers() {
   var marksG = document.getElementById('wells-map-markers');
   var svg    = document.getElementById('wells-map-svg');
@@ -360,72 +471,135 @@ function _renderWellMapMarkers() {
 
   while (marksG.firstChild) marksG.removeChild(marksG.firstChild);
 
-  var NS  = 'http://www.w3.org/2000/svg';
-  var sw  = svg.getBoundingClientRect().width || 600;
-  var p2s = _wellsMap.vbW / sw; // 1 screen-px expressed in current SVG coordinate units
+  var NS   = 'http://www.w3.org/2000/svg';
+  var sw   = svg.getBoundingClientRect().width || 600;
+  var p2s  = _wellsMap.vbW / sw;
 
-  WellsState.list.forEach(function(w) {
-    if (w.xLocal == null || w.yLocal == null) return;
+  var clusters = _clusterWells(svg);
 
-    var cx = (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * _wellsMap.imgW;
-    var cy = (WELL_BOUNDS.Ymax - w.yLocal)  / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * _wellsMap.imgH;
-
-    var isSel  = w.id === WellsState.selectedId;
-    var color  = isSel ? (WELL_STATUS_COLORS[w.status] || '#9aa0a6') : '#8a9099';
-    var r      = (isSel ? 11 : 7) * p2s;
-    var strokeW = 1.5 * p2s;
-
-    var g = document.createElementNS(NS, 'g');
-    g.setAttribute('data-well-id', w.id);
-    g.setAttribute('data-sel', isSel ? '1' : '0');
-    g.setAttribute('opacity',  isSel ? '1' : '0.55');
-    g.style.cursor = 'pointer';
-
-    function mkC(r2, fill, stroke, sw2, cls) {
-      var c = document.createElementNS(NS, 'circle');
-      c.setAttribute('cx', cx.toFixed(1)); c.setAttribute('cy', cy.toFixed(1));
-      c.setAttribute('r', r2.toFixed(2));
-      c.setAttribute('fill', fill);
-      if (stroke) { c.setAttribute('stroke', stroke); c.setAttribute('stroke-width', sw2.toFixed(2)); }
-      if (cls) c.setAttribute('class', cls);
-      return c;
+  clusters.forEach(function(entry) {
+    if (entry.type === 'cluster') {
+      _appendClusterMarker(marksG, entry, NS, p2s);
+    } else {
+      _appendSingleMarker(marksG, entry.well, entry.cx, entry.cy, NS, p2s);
     }
-
-    if (isSel) g.appendChild(mkC(r * 1.7, color, null, 0, 'wm-halo'));
-    g.appendChild(mkC(r,        color,            'rgba(0,0,0,.65)', strokeW, 'wm-dot'));
-    g.appendChild(mkC(r * 0.3,  'rgba(0,0,0,.7)', null,              0,       'wm-inner'));
-    g.appendChild(mkC(r * 2.5,  'transparent',    null,              0,       'wm-hit'));
-
-    if (isSel) {
-      var fs  = 11 * p2s;
-      var lbl = document.createElementNS(NS, 'text');
-      lbl.setAttribute('x',            cx.toFixed(1));
-      lbl.setAttribute('y',            (cy + r + (fs + 4 * p2s)).toFixed(1));
-      lbl.setAttribute('text-anchor',  'middle');
-      lbl.setAttribute('font-size',    fs.toFixed(2));
-      lbl.setAttribute('font-weight',  '600');
-      lbl.setAttribute('font-family',  'sans-serif');
-      lbl.setAttribute('fill',         color);
-      lbl.setAttribute('stroke',       'rgba(0,0,0,.75)');
-      lbl.setAttribute('stroke-width', (2.5 * p2s).toFixed(2));
-      lbl.setAttribute('paint-order',  'stroke');
-      lbl.setAttribute('pointer-events', 'none');
-      lbl.setAttribute('class', 'wm-label');
-      lbl.textContent = w.name;
-      g.appendChild(lbl);
-    }
-
-    g.addEventListener('click', function(e) {
-      e.stopPropagation();
-      WellsState.selectedId = w.id;
-      renderWellRegistryList();
-      renderWellDetail();
-    });
-    marksG.appendChild(g);
   });
 }
 
-// Updates only marker sizes during zoom animation (no DOM rebuild needed).
+function _mkC(NS, cx, cy, r2, fill, stroke, sw2, cls) {
+  var c = document.createElementNS(NS, 'circle');
+  c.setAttribute('cx', cx.toFixed(1)); c.setAttribute('cy', cy.toFixed(1));
+  c.setAttribute('r', r2.toFixed(2));
+  c.setAttribute('fill', fill);
+  if (stroke) { c.setAttribute('stroke', stroke); c.setAttribute('stroke-width', sw2.toFixed(2)); }
+  if (cls) c.setAttribute('class', cls);
+  return c;
+}
+
+function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
+  var isSel   = w.id === WellsState.selectedId;
+  var color   = WELL_STATUS_COLORS[w.status] || '#9aa0a6'; // status color for ALL wells
+  var r       = (isSel ? 11 : 7) * p2s;
+  var strokeW = 1.5 * p2s;
+
+  var g = document.createElementNS(NS, 'g');
+  g.setAttribute('data-well-id', w.id);
+  g.setAttribute('data-sel', isSel ? '1' : '0');
+  g.style.cursor = 'pointer';
+
+  if (isSel) {
+    // Yellow glow + yellow ring background = selection indicator independent of status color
+    g.appendChild(_mkC(NS, cx, cy, r * 2.2, '#f9ab00', null, 0, 'wm-halo'));
+    g.appendChild(_mkC(NS, cx, cy, r + 3.5 * p2s, '#f9ab00', null, 0, 'wm-sel-bg'));
+  }
+  g.appendChild(_mkC(NS, cx, cy, r,       color,            'rgba(0,0,0,.6)', strokeW, 'wm-dot'));
+  g.appendChild(_mkC(NS, cx, cy, r * 0.3, 'rgba(0,0,0,.7)', null,             0,       'wm-inner'));
+  g.appendChild(_mkC(NS, cx, cy, r * 2.5, 'transparent',    null,             0,       'wm-hit'));
+
+  if (isSel) {
+    var fs  = 11 * p2s;
+    var lbl = document.createElementNS(NS, 'text');
+    lbl.setAttribute('x',             cx.toFixed(1));
+    lbl.setAttribute('y',             (cy + r + (fs + 5 * p2s)).toFixed(1));
+    lbl.setAttribute('text-anchor',   'middle');
+    lbl.setAttribute('font-size',     fs.toFixed(2));
+    lbl.setAttribute('font-weight',   '600');
+    lbl.setAttribute('font-family',   'sans-serif');
+    lbl.setAttribute('fill',          color);
+    lbl.setAttribute('stroke',        'rgba(0,0,0,.8)');
+    lbl.setAttribute('stroke-width',  (2.5 * p2s).toFixed(2));
+    lbl.setAttribute('paint-order',   'stroke');
+    lbl.setAttribute('pointer-events','none');
+    lbl.setAttribute('class', 'wm-label');
+    lbl.textContent = w.name;
+    g.appendChild(lbl);
+  }
+
+  var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
+  var tipHtml = '<b>' + escHTML(w.name) + '</b>' +
+    (w.status ? ' <span style="color:' + statusColor + '">● ' + escHTML(w.status) + '</span>' : '');
+
+  g.addEventListener('mouseenter', function(e) { _showWmTip(tipHtml, e); });
+  g.addEventListener('mousemove',  function(e) { _moveWmTip(e); });
+  g.addEventListener('mouseleave', _hideWmTip);
+  g.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _hideWmTip();
+    WellsState.selectedId = w.id;
+    renderWellRegistryList();
+    renderWellDetail();
+  });
+  marksG.appendChild(g);
+}
+
+function _appendClusterMarker(marksG, cluster, NS, p2s) {
+  var cx  = cluster.cx, cy = cluster.cy;
+  var n   = cluster.wells.length;
+  var r   = 13 * p2s;
+  var fs  = Math.round(Math.min(13, 8 + n)) * p2s;
+
+  var g = document.createElementNS(NS, 'g');
+  g.setAttribute('data-cluster', '1');
+  g.style.cursor = 'pointer';
+
+  // Outer glow ring
+  g.appendChild(_mkC(NS, cx, cy, r * 1.5, 'rgba(255,255,255,.08)', null, 0, ''));
+  // Cluster body
+  g.appendChild(_mkC(NS, cx, cy, r, '#3d4b5c', 'rgba(255,255,255,.25)', 1.5 * p2s, 'wm-cluster-dot'));
+
+  var txt = document.createElementNS(NS, 'text');
+  txt.setAttribute('x',           cx.toFixed(1));
+  txt.setAttribute('y',           (cy + fs * 0.36).toFixed(1));
+  txt.setAttribute('text-anchor', 'middle');
+  txt.setAttribute('font-size',   fs.toFixed(2));
+  txt.setAttribute('font-weight', '700');
+  txt.setAttribute('font-family', 'sans-serif');
+  txt.setAttribute('fill',        '#ffffff');
+  txt.setAttribute('pointer-events', 'none');
+  txt.textContent = n;
+  g.appendChild(txt);
+
+  // Transparent hit area
+  g.appendChild(_mkC(NS, cx, cy, r * 1.5, 'transparent', null, 0, ''));
+
+  var names = cluster.wells.map(function(w) {
+    var sc = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
+    return '<span style="color:' + sc + '">●</span> ' + escHTML(w.name);
+  }).join('<br>');
+  var tipHtml = '<b style="color:#9aa0a6">Скважин: ' + n + '</b><br>' + names;
+
+  g.addEventListener('mouseenter', function(e) { _showWmTip(tipHtml, e); });
+  g.addEventListener('mousemove',  function(e) { _moveWmTip(e); });
+  g.addEventListener('mouseleave', _hideWmTip);
+  g.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _hideWmTip();
+    _zoomToCluster(cluster);
+  });
+  marksG.appendChild(g);
+}
+
+// Updates marker sizes during zoom animation (attribute-only, no DOM rebuild).
 function _updateMarkerSizes() {
   var marksG = document.getElementById('wells-map-markers');
   var svg    = document.getElementById('wells-map-svg');
@@ -437,22 +611,30 @@ function _updateMarkerSizes() {
     var isSel   = g.getAttribute('data-sel') === '1';
     var r       = (isSel ? 11 : 7) * p2s;
     var strokeW = 1.5 * p2s;
-    var halo  = g.querySelector('.wm-halo');
-    var dot   = g.querySelector('.wm-dot');
-    var inner = g.querySelector('.wm-inner');
-    var hit   = g.querySelector('.wm-hit');
-    var lbl   = g.querySelector('.wm-label');
-    if (halo)  halo.setAttribute('r',  (r * 1.7).toFixed(2));
+    var halo    = g.querySelector('.wm-halo');
+    var selBg   = g.querySelector('.wm-sel-bg');
+    var dot     = g.querySelector('.wm-dot');
+    var inner   = g.querySelector('.wm-inner');
+    var hit     = g.querySelector('.wm-hit');
+    var lbl     = g.querySelector('.wm-label');
+    if (halo)  halo.setAttribute('r',  (r * 2.2).toFixed(2));
+    if (selBg) selBg.setAttribute('r', (r + 3.5 * p2s).toFixed(2));
     if (dot)   { dot.setAttribute('r', r.toFixed(2)); dot.setAttribute('stroke-width', strokeW.toFixed(2)); }
     if (inner) inner.setAttribute('r', (r * 0.3).toFixed(2));
     if (hit)   hit.setAttribute('r',   (r * 2.5).toFixed(2));
     if (lbl && dot) {
       var fs = 11 * p2s;
       var cy = parseFloat(dot.getAttribute('cy'));
-      lbl.setAttribute('font-size',    fs.toFixed(2));
-      lbl.setAttribute('stroke-width', (2.5 * p2s).toFixed(2));
-      lbl.setAttribute('y',            (cy + r + (fs + 4 * p2s)).toFixed(1));
+      lbl.setAttribute('font-size',   fs.toFixed(2));
+      lbl.setAttribute('stroke-width',(2.5 * p2s).toFixed(2));
+      lbl.setAttribute('y', (cy + r + (fs + 5 * p2s)).toFixed(1));
     }
+  });
+
+  marksG.querySelectorAll('g[data-cluster]').forEach(function(g) {
+    var r  = 13 * p2s;
+    var cd = g.querySelector('.wm-cluster-dot');
+    if (cd) { cd.setAttribute('r', r.toFixed(2)); cd.setAttribute('stroke-width', (1.5 * p2s).toFixed(2)); }
   });
 }
 
@@ -482,12 +664,16 @@ function _setupWellMapZoom(body, svg) {
                Math.abs(z.tvbW - z.vbW) < 0.05 && Math.abs(z.tvbH - z.vbH) < 0.05;
     if (done) {
       z.vbX = z.tvbX; z.vbY = z.tvbY; z.vbW = z.tvbW; z.vbH = z.tvbH;
-      z.animating = false; _applyViewBox(); _updateMarkerSizes();
+      z.animating = false;
+      _applyViewBox();
+      _renderWellMapMarkers(); // recluster after zoom settles
     } else { requestAnimationFrame(tick); }
   }
-  function startAnim() { if (!z.animating) { z.animating = true; requestAnimationFrame(tick); } }
 
-  // Wheel zoom — zooms toward cursor position
+  function startAnim() { if (!z.animating) { z.animating = true; requestAnimationFrame(tick); } }
+  z._startAnim = startAnim;
+
+  // Wheel zoom
   svg.addEventListener('wheel', function(e) {
     e.preventDefault();
     var rect   = svg.getBoundingClientRect();
@@ -495,7 +681,6 @@ function _setupWellMapZoom(body, svg) {
     var my     = e.clientY - rect.top;
     var sw     = rect.width  || 1;
     var sh     = rect.height || 1;
-    // Cursor in SVG/image coordinate space
     var svgX   = z.tvbX + mx / sw * z.tvbW;
     var svgY   = z.tvbY + my / sh * z.tvbH;
     var factor = e.deltaY > 0 ? 0.84 : 1.19;
@@ -532,7 +717,7 @@ function _setupWellMapZoom(body, svg) {
     svg.style.cursor = z.imgW / z.tvbW > 1.02 ? 'grab' : 'crosshair';
   });
 
-  // Double-click to reset zoom
+  // Double-click reset
   svg.addEventListener('dblclick', function() {
     z.tvbX = 0; z.tvbY = 0; z.tvbW = z.imgW; z.tvbH = z.imgH;
     startAnim();

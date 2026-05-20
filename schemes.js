@@ -29,6 +29,19 @@ var Schemes = (function() {
 
   // ── Сжатие схемы ─────────────────────────────────────────
   function compressScheme(file) {
+    // SVG is vector — skip canvas re-encoding, pass through as-is
+    if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var d = e.target.result;
+          resolve({ base64: d.split(',')[1], mime: 'image/svg+xml' });
+        };
+        reader.onerror = function() { reject(new Error('Ошибка чтения SVG')); };
+        reader.readAsDataURL(file);
+      });
+    }
+
     return new Promise(function(resolve, reject) {
       var img = new Image();
       var url = URL.createObjectURL(file);
