@@ -33,6 +33,7 @@ var AppState = {
   currentTab:     'points',
   editingPointId: null,
   syncing:        false,
+  currentUser:    null,
 };
 
 
