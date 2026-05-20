@@ -404,7 +404,7 @@ function _drawWellChart(container, measurements) {
 
   container.innerHTML =
     '<div style="position:relative;cursor:crosshair">' +
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-height:180px;display:block" xmlns="http://www.w3.org/2000/svg">' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">' +
         '<defs><linearGradient id="wg-fill" x1="0" y1="0" x2="0" y2="1">' +
           '<stop offset="0%" stop-color="#f9ab00" stop-opacity=".3"/>' +
           '<stop offset="100%" stop-color="#f9ab00" stop-opacity=".03"/>' +
