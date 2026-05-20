@@ -149,7 +149,10 @@ function renderWellsRegistryPanel() {
 
   var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
   var addBtn = document.getElementById('btn-add-well');
-  if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+  if (addBtn) {
+    addBtn.style.display = isAdmin ? '' : 'none';
+    addBtn.onclick = openAddWellForm;
+  }
 
   if (!WellsState.list.length) {
     wrap.innerHTML = '<p class="form-hint">Скважины не добавлены</p>';
