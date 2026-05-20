@@ -442,7 +442,7 @@
       <!-- Верхняя строка: паспорт+координаты | карта | список -->
       <div style="display:grid;grid-template-columns:260px 1fr 220px;gap:12px;margin-bottom:12px;align-items:start">
 
-        <!-- Левая колонка: паспорт + координаты -->
+        <!-- Левая колонка: паспорт + координаты + легенда -->
         <div style="display:flex;flex-direction:column;gap:12px">
           <div class="card" style="padding:16px">
             <div class="card-title">Паспорт скважины</div>
@@ -452,12 +452,42 @@
             <div class="card-title">Координаты</div>
             <div id="wells-coords-body"></div>
           </div>
+          <div class="card" style="padding:14px">
+            <div class="card-title" style="margin-bottom:10px">Условные обозначения</div>
+            <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--txt-2)">
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg width="20" height="20" viewBox="-10 -10 20 20" style="flex-shrink:0"><circle cx="0" cy="0" r="9" fill="#4caf7d" stroke="rgba(0,0,0,.6)" stroke-width="1.5"/><circle cx="0" cy="0" r="3" fill="rgba(0,0,0,.7)"/></svg>
+                <span>Активная скважина</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg width="20" height="20" viewBox="-10 -10 20 20" style="flex-shrink:0"><circle cx="0" cy="0" r="9" fill="#f9ab00" stroke="rgba(0,0,0,.6)" stroke-width="1.5"/><circle cx="0" cy="0" r="3" fill="rgba(0,0,0,.7)"/></svg>
+                <span>Иссякает</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg width="20" height="20" viewBox="-10 -10 20 20" style="flex-shrink:0"><circle cx="0" cy="0" r="9" fill="#ea4335" stroke="rgba(0,0,0,.6)" stroke-width="1.5"/><circle cx="0" cy="0" r="3" fill="rgba(0,0,0,.7)"/></svg>
+                <span>Сухая скважина</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg width="20" height="20" viewBox="-10 -10 20 20" style="flex-shrink:0;opacity:.5"><circle cx="0" cy="0" r="9" fill="#8a9099" stroke="rgba(0,0,0,.5)" stroke-width="1.5"/><circle cx="0" cy="0" r="3" fill="rgba(0,0,0,.6)"/></svg>
+                <span style="color:var(--txt-3)">Остальные скважины</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg width="24" height="24" viewBox="-12 -12 24 24" style="flex-shrink:0"><circle cx="0" cy="0" r="13" fill="#4caf7d" opacity=".2"/><circle cx="0" cy="0" r="9" fill="#4caf7d" stroke="rgba(0,0,0,.6)" stroke-width="1.5"/><circle cx="0" cy="0" r="3" fill="rgba(0,0,0,.7)"/></svg>
+                <span>Выбранная скважина</span>
+              </div>
+              <div style="font-size:11px;color:var(--txt-3);margin-top:3px;line-height:1.6">
+                Колесо мыши — масштаб<br>
+                Зажать + тянуть — перемещение<br>
+                Двойной клик — сброс масштаба
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Центр: карта -->
         <div class="card" style="padding:16px">
           <div class="card-title">Положение на схеме</div>
-          <div id="wells-map-body" style="position:relative;overflow:hidden;min-height:220px"></div>
+          <div id="wells-map-body" style="position:relative;overflow:hidden;border-radius:6px;cursor:crosshair"></div>
         </div>
 
         <!-- Правая колонка: список скважин -->

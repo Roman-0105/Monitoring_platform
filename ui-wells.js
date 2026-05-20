@@ -96,7 +96,7 @@ function renderWellDetail() {
   var well = WellsState.list.find(function(w) { return w.id === WellsState.selectedId; }) || null;
   renderWellInfoCard(well);
   renderWellCoordsCard(well);
-  renderWellMapCard(well);
+  renderWellMapCard();
   renderWellChartCard(well);
   renderMeasurementsTable(well);
 }
@@ -273,48 +273,207 @@ function renderWellCoordsCard(well) {
 
 var WELL_BOUNDS = { Xmin: 45850, Xmax: 47350, Ymin: 15800, Ymax: 17350 };
 
-function renderWellMapCard(well) {
+var _wellsMap = {
+  schemeUrl:   null,
+  imgW:        0,
+  imgH:        0,
+  scale:       1,  tx: 0,  ty: 0,
+  targetScale: 1,  targetTx: 0, targetTy: 0,
+  animating:   false,
+  zoomReady:   false,
+};
+
+function renderWellMapCard() {
   var body = document.getElementById('wells-map-body');
   if (!body) return;
-  if (!well || well.xLocal == null || well.yLocal == null) {
-    body.innerHTML = '<p class="form-hint" style="padding:20px 0">' +
-      (well ? 'Координаты скважины не заданы' : 'Скважина не выбрана') + '</p>';
+
+  if (_wellsMap.schemeUrl && _wellsMap.imgW && document.getElementById('wells-map-inner')) {
+    _renderWellMapMarkers();
     return;
   }
 
   body.innerHTML = '<p class="form-hint" style="padding:12px 0">Загрузка схемы...</p>';
-
   Schemes.getCurrentImage().then(function(url) {
     if (!url) { body.innerHTML = '<p class="form-hint" style="padding:20px 0">Схема не загружена</p>'; return; }
+    _wellsMap.schemeUrl  = url;
+    _wellsMap.scale      = 1; _wellsMap.tx      = 0; _wellsMap.ty      = 0;
+    _wellsMap.targetScale= 1; _wellsMap.targetTx= 0; _wellsMap.targetTy= 0;
+    _wellsMap.zoomReady  = false;
+    _buildWellMapDOM(body, url);
+  });
+}
 
-    var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;display:inline-block;width:100%';
-    var img = document.createElement('img');
-    img.src = url;
-    img.style.cssText = 'width:100%;height:auto;display:block;border-radius:6px';
-    img.alt = 'Схема карьера';
-    wrapper.appendChild(img);
-    body.innerHTML = '';
-    body.appendChild(wrapper);
+function _buildWellMapDOM(body, url) {
+  body.innerHTML = '';
 
-    img.onload = function() {
-      var px = (well.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * 100;
-      var py = (WELL_BOUNDS.Ymax - well.yLocal) / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * 100;
+  var inner = document.createElement('div');
+  inner.id = 'wells-map-inner';
+  inner.style.cssText = 'position:relative;transform-origin:0 0;will-change:transform;line-height:0';
 
-      var marker = document.createElement('div');
-      marker.style.cssText = 'position:absolute;left:' + px.toFixed(3) + '%;top:' + py.toFixed(3) + '%;transform:translate(-50%,-50%);pointer-events:none';
-      marker.innerHTML = '<svg width="22" height="22" viewBox="-11 -11 22 22" xmlns="http://www.w3.org/2000/svg">' +
-        '<circle cx="0" cy="0" r="8" fill="#f9ab00" stroke="#1a1200" stroke-width="1.5" opacity=".9"/>' +
-        '<circle cx="0" cy="0" r="3" fill="#1a1200"/></svg>';
+  var img = document.createElement('img');
+  img.src = url;
+  img.style.cssText = 'width:100%;height:auto;display:block;pointer-events:none;user-select:none;-webkit-user-drag:none;border-radius:4px';
+  img.draggable = false;
+  img.alt = 'Схема карьера';
 
-      var label = document.createElement('div');
-      label.textContent = well.name;
-      label.style.cssText = 'position:absolute;left:' + px.toFixed(3) + '%;top:calc(' + py.toFixed(3) + '% + 14px);' +
-        'transform:translateX(-50%);background:rgba(0,0,0,.75);color:#f9ab00;font-size:11px;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none';
+  inner.appendChild(img);
+  body.appendChild(inner);
 
-      wrapper.appendChild(marker);
-      wrapper.appendChild(label);
-    };
+  function onImgReady() {
+    _wellsMap.imgW = img.offsetWidth  || img.naturalWidth  || 400;
+    _wellsMap.imgH = img.offsetHeight || img.naturalHeight || 300;
+    _renderWellMapMarkers();
+    if (!_wellsMap.zoomReady) { _wellsMap.zoomReady = true; _setupWellMapZoom(body, inner); }
+  }
+
+  if (img.complete && img.naturalWidth) { onImgReady(); }
+  else { img.onload = onImgReady; }
+}
+
+function _renderWellMapMarkers() {
+  var inner = document.getElementById('wells-map-inner');
+  if (!inner || !_wellsMap.imgW) return;
+
+  inner.querySelectorAll('.wm-marker,.wm-label').forEach(function(el) { el.remove(); });
+
+  WellsState.list.forEach(function(w) {
+    if (w.xLocal == null || w.yLocal == null) return;
+
+    var fracX = (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin);
+    var fracY = (WELL_BOUNDS.Ymax - w.yLocal)  / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin);
+    var left  = fracX * _wellsMap.imgW;
+    var top   = fracY * _wellsMap.imgH;
+
+    var isSel   = w.id === WellsState.selectedId;
+    var color   = isSel ? (WELL_STATUS_COLORS[w.status] || '#9aa0a6') : '#8a9099';
+    var opacity = isSel ? 1 : 0.52;
+    var r       = isSel ? 10 : 7;
+    var svgSz   = r * 2 + 12;
+    var half    = svgSz / 2;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'wm-marker';
+    wrap.dataset.wellId = w.id;
+    wrap.style.cssText =
+      'position:absolute;left:' + left.toFixed(1) + 'px;top:' + top.toFixed(1) + 'px;' +
+      'transform:translate(-50%,-50%);cursor:pointer;z-index:' + (isSel ? 10 : 5) +
+      ';opacity:' + opacity;
+    wrap.title = w.name + (w.status ? ' — ' + w.status : '');
+
+    wrap.innerHTML =
+      '<svg width="' + svgSz + '" height="' + svgSz + '" viewBox="' + (-half) + ' ' + (-half) + ' ' + svgSz + ' ' + svgSz + '" ' +
+        'xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">' +
+        (isSel ? '<circle cx="0" cy="0" r="' + (r + 5) + '" fill="' + color + '" opacity=".22"/>' : '') +
+        '<circle cx="0" cy="0" r="' + r + '" fill="' + color + '" stroke="rgba(0,0,0,.65)" stroke-width="1.5"/>' +
+        '<circle cx="0" cy="0" r="3" fill="rgba(0,0,0,.7)"/>' +
+      '</svg>';
+
+    wrap.addEventListener('click', function(e) {
+      e.stopPropagation();
+      WellsState.selectedId = w.id;
+      renderWellRegistryList();
+      renderWellDetail();
+    });
+
+    inner.appendChild(wrap);
+
+    if (isSel) {
+      var lbl = document.createElement('div');
+      lbl.className = 'wm-label';
+      lbl.textContent = w.name;
+      lbl.style.cssText =
+        'position:absolute;left:' + left.toFixed(1) + 'px;top:' + (top + r + 5).toFixed(1) + 'px;' +
+        'transform:translateX(-50%);background:rgba(0,0,0,.82);color:' + color + ';' +
+        'font-size:11px;font-weight:600;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:11';
+      inner.appendChild(lbl);
+    }
+  });
+}
+
+function _setupWellMapZoom(body, inner) {
+  var z = _wellsMap;
+
+  function applyTransform() {
+    inner.style.transform =
+      'translate(' + z.tx.toFixed(2) + 'px,' + z.ty.toFixed(2) + 'px) scale(' + z.scale.toFixed(5) + ')';
+  }
+
+  function clamp(val, lo, hi) { return val < lo ? lo : val > hi ? hi : val; }
+
+  function clampTx(tx, s) { return clamp(tx, body.offsetWidth  * (1 - s), 0); }
+  function clampTy(ty, s) { return clamp(ty, z.imgH             * (1 - s), 0); }
+
+  function tick() {
+    if (!z.animating) return;
+    var LERP = 0.16;
+    z.scale += (z.targetScale - z.scale) * LERP;
+    z.tx    += (z.targetTx    - z.tx)    * LERP;
+    z.ty    += (z.targetTy    - z.ty)    * LERP;
+    applyTransform();
+    var done = Math.abs(z.targetScale - z.scale) < 3e-4 &&
+               Math.abs(z.targetTx - z.tx) < 0.05 &&
+               Math.abs(z.targetTy - z.ty) < 0.05;
+    if (done) {
+      z.scale = z.targetScale; z.tx = z.targetTx; z.ty = z.targetTy;
+      z.animating = false; applyTransform();
+    } else {
+      requestAnimationFrame(tick);
+    }
+  }
+
+  function startAnim() { if (!z.animating) { z.animating = true; requestAnimationFrame(tick); } }
+
+  // ── Wheel zoom ────────────────────────────────────────────
+  body.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var rect = body.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor    = e.deltaY > 0 ? 0.84 : 1.19;
+    var newScale  = clamp(z.targetScale * factor, 1, 10);
+    var sr        = newScale / z.targetScale;
+    var newTx     = clampTx(mx - (mx - z.targetTx) * sr, newScale);
+    var newTy     = clampTy(my - (my - z.targetTy) * sr, newScale);
+    z.targetScale = newScale;
+    z.targetTx    = newTx;
+    z.targetTy    = newTy;
+    startAnim();
+  }, { passive: false });
+
+  // ── Drag pan ──────────────────────────────────────────────
+  var dragging = false, dsx, dsy, dtx, dty;
+
+  body.addEventListener('mousedown', function(e) {
+    if (z.scale <= 1.02) return;
+    dragging = true;
+    dsx = e.clientX; dsy = e.clientY;
+    dtx = z.tx;      dty = z.ty;
+    body.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  function onMove(e) {
+    if (!dragging) return;
+    var nx = clampTx(dtx + e.clientX - dsx, z.scale);
+    var ny = clampTy(dty + e.clientY - dsy, z.scale);
+    z.tx = z.targetTx = nx;
+    z.ty = z.targetTy = ny;
+    applyTransform();
+  }
+
+  function onUp() {
+    if (!dragging) return;
+    dragging = false;
+    body.style.cursor = z.scale > 1.02 ? 'grab' : 'crosshair';
+  }
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+
+  // ── Double-click reset ────────────────────────────────────
+  body.addEventListener('dblclick', function() {
+    z.targetScale = 1; z.targetTx = 0; z.targetTy = 0;
+    startAnim();
   });
 }
 
