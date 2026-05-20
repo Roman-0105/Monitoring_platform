@@ -430,33 +430,50 @@
 
   <!-- Горизонтальные скважины -->
   <div class="page" id="page-wells">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <select id="wells-selector" class="form-control" style="flex:1;max-width:340px"></select>
-      <button id="btn-add-well" class="btn btn-primary btn-sm" style="display:none">+ Добавить скважину</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      <div class="card" style="padding:16px">
-        <div class="card-title">Паспорт скважины</div>
-        <div id="wells-info-body"></div>
+    <!-- Верхняя строка: паспорт+координаты | карта | реестр -->
+    <div style="display:grid;grid-template-columns:260px 1fr 220px;gap:12px;margin-bottom:12px;align-items:start">
+
+      <!-- Левая колонка: паспорт + координаты -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="card" style="padding:16px">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Паспорт скважины</span>
+            <button id="btn-add-well" class="btn btn-sm btn-outline" style="display:none;padding:2px 9px;font-size:12px">+ Добавить</button>
+          </div>
+          <div id="wells-info-body"></div>
+        </div>
+        <div class="card" style="padding:16px">
+          <div class="card-title">Координаты</div>
+          <div id="wells-coords-body"></div>
+        </div>
       </div>
-      <div class="card" style="padding:16px">
-        <div class="card-title">Координаты</div>
-        <div id="wells-coords-body"></div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+
+      <!-- Центр: карта -->
       <div class="card" style="padding:16px">
         <div class="card-title">Положение на схеме</div>
-        <div id="wells-map-body" style="position:relative;overflow:hidden;min-height:180px"></div>
+        <div id="wells-map-body" style="position:relative;overflow:hidden;min-height:220px"></div>
       </div>
-      <div class="card" style="padding:16px">
-        <div class="card-title">История замеров дебита</div>
-        <div id="wells-chart-body" style="overflow-x:auto"></div>
+
+      <!-- Правая колонка: реестр скважин -->
+      <div class="card" style="padding:16px;max-height:520px;display:flex;flex-direction:column">
+        <div class="card-title">Реестр скважин</div>
+        <div id="wells-registry-list" style="overflow-y:auto;flex:1"></div>
       </div>
     </div>
-    <div class="card" style="padding:16px">
-      <div class="card-title">Реестр скважин</div>
-      <div id="wells-registry-table"></div>
+
+    <!-- Нижняя строка: график | таблица замеров -->
+    <div style="display:grid;grid-template-columns:55% 45%;gap:12px">
+      <div class="card" style="padding:16px">
+        <div class="card-title">График дебита</div>
+        <div id="wells-chart-body" style="position:relative"></div>
+      </div>
+      <div class="card" style="padding:16px;display:flex;flex-direction:column">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Замеры</span>
+          <button id="btn-add-meas" class="btn btn-sm btn-outline" style="padding:2px 9px;font-size:12px">+ Замер</button>
+        </div>
+        <div id="wells-meas-table" style="overflow-y:auto;flex:1"></div>
+      </div>
     </div>
   </div>
 
