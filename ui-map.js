@@ -251,6 +251,9 @@ function clampMapTransform() {
   } else {
     _mapOffY = Math.min(0, Math.max(minY, _mapOffY));
   }
+  // Sync targets so animation convergence check works correctly
+  _mapOffXT = _mapOffX;
+  _mapOffYT = _mapOffY;
 }
 
 function redrawMap() {
@@ -296,36 +299,45 @@ function redrawMap() {
 function _startMapAnim() {
   if (_mapAnimId) return;
   function tick() {
-    var done = true;
     var LERP = 0.16;
     var EPS  = 0.0005;
 
     _mapScale += (_mapScaleT - _mapScale) * LERP;
-    _mapOffX  += (_mapOffXT  - _mapOffX)  * LERP;
-    _mapOffY  += (_mapOffYT  - _mapOffY)  * LERP;
 
-    if (Math.abs(_mapScaleT - _mapScale) > EPS ||
-        Math.abs(_mapOffXT  - _mapOffX)  > 0.2 ||
-        Math.abs(_mapOffYT  - _mapOffY)  > 0.2) {
-      done = false;
-    }
-
-    if (done) {
-      _mapScale = _mapScaleT;
-      _mapOffX  = _mapOffXT;
-      _mapOffY  = _mapOffYT;
-      _mapAnimId = null;
-    } else {
-      _mapAnimId = requestAnimationFrame(tick);
-    }
+    // clampMapTransform (called inside redrawMap) handles _mapOffX/Y and syncs targets
     redrawMap();
+
+    if (Math.abs(_mapScaleT - _mapScale) > EPS) {
+      _mapAnimId = requestAnimationFrame(tick);
+    } else {
+      _mapScale = _mapScaleT;
+      redrawMap();
+      _mapAnimId = null;
+    }
   }
   _mapAnimId = requestAnimationFrame(tick);
 }
 
 function _setMapTarget(newScale, newOffX, newOffY) {
   var lim = getMapZoomLimits();
-  _mapScaleT = Math.max(lim.min, Math.min(lim.max, newScale));
+  var s = Math.max(lim.min, Math.min(lim.max, newScale));
+  // Pre-clamp target offsets for the target scale
+  var canvas = document.getElementById('map-canvas');
+  if (canvas && _mapSchemeImg) {
+    var minX = canvas.width  - (_mapSchemeImg.width  * s);
+    var minY = canvas.height - (_mapSchemeImg.height * s);
+    if (_mapSchemeImg.width * s <= canvas.width) {
+      newOffX = (canvas.width  - _mapSchemeImg.width  * s) / 2;
+    } else {
+      newOffX = Math.min(0, Math.max(minX, newOffX));
+    }
+    if (_mapSchemeImg.height * s <= canvas.height) {
+      newOffY = (canvas.height - _mapSchemeImg.height * s) / 2;
+    } else {
+      newOffY = Math.min(0, Math.max(minY, newOffY));
+    }
+  }
+  _mapScaleT = s;
   _mapOffXT  = newOffX;
   _mapOffYT  = newOffY;
   _startMapAnim();
