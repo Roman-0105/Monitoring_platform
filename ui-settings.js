@@ -57,6 +57,14 @@ function refreshSchemesData() {
 function initSettingsTabs() {
   var tabs = document.querySelectorAll('[data-settings-tab]');
   if (!tabs || !tabs.length) return;
+
+  // Show/hide users tab based on role
+  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
+  var usersTabBtn = document.getElementById('btn-settings-tab-users');
+  if (usersTabBtn) {
+    usersTabBtn.style.display = isAdmin ? '' : 'none';
+  }
+
   tabs.forEach(function(btn) {
     if (btn._bound) return;
     btn._bound = true;
@@ -77,7 +85,7 @@ function switchSettingsTab(name) {
   });
 
   // Панели — сначала скрываем все, потом показываем нужную
-  ['settings-panel-main', 'settings-panel-legend', 'settings-panel-aliases', 'settings-panel-horizons', 'settings-panel-sync'].forEach(function(id) {
+  ['settings-panel-main', 'settings-panel-legend', 'settings-panel-aliases', 'settings-panel-horizons', 'settings-panel-sync', 'settings-panel-users'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
@@ -88,6 +96,7 @@ function switchSettingsTab(name) {
   if (tabName === 'horizons')  renderSettingsHorizons();
   if (tabName === 'sync')      renderSettingsSync();
   if (tabName === 'theme')     renderSettingsTheme();
+  if (tabName === 'users')     renderUsersPanel();
 }
 
 // ── Менеджер псевдонимов (вкладка "Связать точки") ────────
@@ -570,6 +579,155 @@ function renderSettingsSync() {
 
   if (syncNow) syncNow.addEventListener('click', function() {
     if (typeof syncAll === 'function') syncAll();
+  });
+}
+
+// ── Управление пользователями (только для admin) ──────────
+
+function renderUsersPanel() {
+  var wrap = document.getElementById('settings-panel-users');
+  if (!wrap) return;
+  if (!AppState.currentUser || AppState.currentUser.role !== 'admin') {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.innerHTML = '<div class="card"><div class="card-title">Пользователи системы</div>' +
+    '<div id="users-panel-content"><p class="form-hint">Загрузка...</p></div>' +
+    '<button class="btn btn-primary" id="btn-add-user" style="margin-top:12px">+ Добавить пользователя</button>' +
+    '</div>';
+
+  var addBtn = document.getElementById('btn-add-user');
+  if (addBtn) addBtn.addEventListener('click', showAddUserModal);
+
+  Auth.callAdminFunction({ action: 'list' }).then(function(data) {
+    var users = data.users || [];
+    var content = document.getElementById('users-panel-content');
+    if (!content) return;
+
+    if (!users.length) {
+      content.innerHTML = '<p class="form-hint">Пользователей нет</p>';
+      return;
+    }
+
+    var html = '<div style="overflow-x:auto"><table class="users-table" style="width:100%;border-collapse:collapse;font-size:13px">' +
+      '<thead><tr style="border-bottom:1px solid var(--line)">' +
+        '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Имя</th>' +
+        '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Email</th>' +
+        '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Роль</th>' +
+        '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Добавлен</th>' +
+        '<th style="padding:8px 10px"></th>' +
+      '</tr></thead><tbody>';
+
+    users.forEach(function(u) {
+      var isSelf = u.id === (AppState.currentUser && AppState.currentUser.id);
+      var roleLabel = u.role === 'admin' ? '<span style="color:#1a73e8">admin</span>' : 'user';
+      var createdDate = u.createdAt ? new Date(u.createdAt).toLocaleDateString('ru-RU') : '—';
+      html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05)">' +
+        '<td style="padding:8px 10px">' + escHTML(u.displayName || '—') + '</td>' +
+        '<td style="padding:8px 10px">' + escHTML(u.email || '') + '</td>' +
+        '<td style="padding:8px 10px">' + roleLabel + '</td>' +
+        '<td style="padding:8px 10px;color:var(--txt-3)">' + createdDate + '</td>' +
+        '<td style="padding:8px 10px">' +
+          (!isSelf ? '<button class="btn btn-sm btn-danger user-del-btn" data-uid="' + escHTML(u.id) + '" data-name="' + escHTML(u.displayName || u.email) + '" style="padding:3px 10px">Удалить</button>' : '<span style="color:var(--txt-3);font-size:11px">(вы)</span>') +
+        '</td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+
+    content.querySelectorAll('.user-del-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var uid  = this.dataset.uid;
+        var name = this.dataset.name;
+        if (!confirm('Удалить пользователя "' + name + '"?')) return;
+        btn.disabled = true;
+        Auth.callAdminFunction({ action: 'delete', userId: uid }).then(function() {
+          Toast.show('Пользователь удалён', 'success');
+          renderUsersPanel();
+        }).catch(function(err) {
+          Toast.show('Ошибка: ' + err.message, 'error');
+          btn.disabled = false;
+        });
+      });
+    });
+  }).catch(function(err) {
+    var content = document.getElementById('users-panel-content');
+    if (content) content.innerHTML = '<p class="form-hint" style="color:var(--red)">Ошибка: ' + escHTML(err.message) + '</p>';
+  });
+}
+
+function showAddUserModal() {
+  var existing = document.getElementById('add-user-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'add-user-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = [
+    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:28px 24px;width:min(420px,92vw);border:1px solid rgba(255,255,255,.08)">',
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">',
+        '<span style="font-size:16px;font-weight:600">Новый пользователь</span>',
+        '<button id="add-user-close" style="background:none;border:none;color:var(--txt-2);font-size:22px;cursor:pointer;line-height:1">✕</button>',
+      '</div>',
+      '<div class="form-group" style="margin-bottom:14px">',
+        '<label class="form-label">Имя (display_name)</label>',
+        '<input id="nu-name" type="text" class="form-control" placeholder="Иванов И.И." style="width:100%;box-sizing:border-box">',
+      '</div>',
+      '<div class="form-group" style="margin-bottom:14px">',
+        '<label class="form-label">Email</label>',
+        '<input id="nu-email" type="email" class="form-control" placeholder="user@example.com" style="width:100%;box-sizing:border-box">',
+      '</div>',
+      '<div class="form-group" style="margin-bottom:14px">',
+        '<label class="form-label">Пароль</label>',
+        '<input id="nu-password" type="password" class="form-control" placeholder="Минимум 6 символов" style="width:100%;box-sizing:border-box">',
+      '</div>',
+      '<div class="form-group" style="margin-bottom:20px">',
+        '<label class="form-label">Роль</label>',
+        '<select id="nu-role" class="form-control" style="width:100%;box-sizing:border-box">',
+          '<option value="user">user</option>',
+          '<option value="admin">admin</option>',
+        '</select>',
+      '</div>',
+      '<p id="nu-error" style="color:var(--red,#ea4335);font-size:13px;margin-bottom:10px;display:none"></p>',
+      '<button id="nu-submit" class="btn btn-primary btn-full">Создать пользователя</button>',
+    '</div>',
+  ].join('');
+
+  document.body.appendChild(modal);
+
+  document.getElementById('add-user-close').addEventListener('click', function() { modal.remove(); });
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('nu-submit').addEventListener('click', function() {
+    var name     = (document.getElementById('nu-name').value || '').trim();
+    var email    = (document.getElementById('nu-email').value || '').trim();
+    var password = document.getElementById('nu-password').value;
+    var role     = document.getElementById('nu-role').value;
+    var errEl    = document.getElementById('nu-error');
+    var submitBtn = document.getElementById('nu-submit');
+
+    if (!name || !email || !password) {
+      errEl.textContent = 'Все поля обязательны';
+      errEl.style.display = '';
+      return;
+    }
+    errEl.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Создание...';
+
+    Auth.callAdminFunction({ action: 'create', email: email, password: password, displayName: name, role: role })
+      .then(function() {
+        modal.remove();
+        Toast.show('Пользователь создан', 'success');
+        renderUsersPanel();
+      }).catch(function(err) {
+        errEl.textContent = err.message;
+        errEl.style.display = '';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Создать пользователя';
+      });
   });
 }
 

@@ -395,6 +395,7 @@ var Api = (function() {
   function getImage() { return Promise.resolve(null); }
 
   return {
+    client:              client,
     getPoints:           getPoints,
     getPoint:            getPoint,
     getWorkers:          getWorkers,
