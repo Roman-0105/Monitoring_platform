@@ -283,7 +283,7 @@ var Api = (function() {
 
     var { error: uploadError } = await client().storage
       .from('schemes').upload(path, blob, { upsert: true, contentType: params.mimeType });
-    if (uploadError) throw new Error(uploadError.message);
+    if (uploadError) throw new Error('Storage: ' + uploadError.message + ' (status ' + (uploadError.statusCode || uploadError.status || '?') + ')');
 
     var { error: dbError } = await client().from('schemes').upsert({
       week_key:     params.weekKey,
