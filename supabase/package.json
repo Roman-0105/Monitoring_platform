@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.0",
+    "csv-parse": "^6.2.1"
+  }
+}
