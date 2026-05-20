@@ -17,7 +17,7 @@ const http             = require('http');
 // ── ЗАПОЛНИТЕ ────────────────────────────────────────────────
 const CONFIG = {
   SUPABASE_URL: 'https://dusmrxvybojyrqmmqxjx.supabase.co',
-  SERVICE_KEY:  'ВСТАВЬТЕ_СЮДА_service_role_ключ',
+  SERVICE_KEY:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1c21yeHZ5Ym9qeXJxbW1xeGp4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTE4MTA4OCwiZXhwIjoyMDk0NzU3MDg4fQ.xqG1ao1_O2VryRUDLqG26vMuT6pskeudN8dnzLdUciI',
   CSV_FILE:     path.join(__dirname, 'csv', 'points-with-photos.csv'),
   DELAY_MS:     400,
 };
