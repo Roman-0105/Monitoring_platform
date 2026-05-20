@@ -89,6 +89,33 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // ── Update user ───────────────────────────────────────
+    if (body.action === 'update') {
+      const { userId, displayName, role, password } = body
+      if (!userId || !displayName) {
+        return new Response(JSON.stringify({ error: 'userId и displayName обязательны' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      const updateData: Record<string, unknown> = {}
+      if (password) updateData.password = password
+
+      if (Object.keys(updateData).length > 0) {
+        const { error: authErr } = await adminClient.auth.admin.updateUserById(userId, updateData)
+        if (authErr) return new Response(JSON.stringify({ error: authErr.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      const { error: profileErr } = await adminClient.from('profiles')
+        .update({ display_name: displayName, role: role === 'admin' ? 'admin' : 'user' })
+        .eq('id', userId)
+      if (profileErr) return new Response(JSON.stringify({ error: profileErr.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+      return new Response(JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     return new Response('Unknown action', { status: 400, headers: corsHeaders })
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }),

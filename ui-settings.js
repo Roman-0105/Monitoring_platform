@@ -628,14 +628,21 @@ function renderUsersPanel() {
         '<td style="padding:8px 10px">' + escHTML(u.email || '') + '</td>' +
         '<td style="padding:8px 10px">' + roleLabel + '</td>' +
         '<td style="padding:8px 10px;color:var(--txt-3)">' + createdDate + '</td>' +
-        '<td style="padding:8px 10px">' +
-          (!isSelf ? '<button class="btn btn-sm btn-danger user-del-btn" data-uid="' + escHTML(u.id) + '" data-name="' + escHTML(u.displayName || u.email) + '" style="padding:3px 10px">Удалить</button>' : '<span style="color:var(--txt-3);font-size:11px">(вы)</span>') +
+        '<td style="padding:8px 10px;white-space:nowrap">' +
+          '<button class="btn btn-sm btn-outline user-edit-btn" data-uid="' + escHTML(u.id) + '" data-name="' + escHTML(u.displayName || '') + '" data-role="' + escHTML(u.role) + '" style="padding:3px 10px;margin-right:6px">✏ Изменить</button>' +
+          (!isSelf ? '<button class="btn btn-sm btn-danger user-del-btn" data-uid="' + escHTML(u.id) + '" data-name="' + escHTML(u.displayName || u.email) + '" style="padding:3px 10px">Удалить</button>' : '') +
         '</td>' +
       '</tr>';
     });
 
     html += '</tbody></table></div>';
     content.innerHTML = html;
+
+    content.querySelectorAll('.user-edit-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        showEditUserModal(this.dataset.uid, this.dataset.name, this.dataset.role);
+      });
+    });
 
     content.querySelectorAll('.user-del-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -727,6 +734,82 @@ function showAddUserModal() {
         errEl.style.display = '';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Создать пользователя';
+      });
+  });
+}
+
+function showEditUserModal(uid, currentName, currentRole) {
+  var existing = document.getElementById('edit-user-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'edit-user-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = [
+    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:28px 24px;width:min(420px,92vw);border:1px solid rgba(255,255,255,.08)">',
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">',
+        '<span style="font-size:16px;font-weight:600">Редактировать пользователя</span>',
+        '<button id="eu-close" style="background:none;border:none;color:var(--txt-2);font-size:22px;cursor:pointer;line-height:1">✕</button>',
+      '</div>',
+      '<div class="form-group" style="margin-bottom:14px">',
+        '<label class="form-label">Имя (display_name)</label>',
+        '<input id="eu-name" type="text" class="form-control" value="' + escHTML(currentName) + '" style="width:100%;box-sizing:border-box">',
+      '</div>',
+      '<div class="form-group" style="margin-bottom:14px">',
+        '<label class="form-label">Новый пароль <span style="color:var(--txt-3);font-weight:400">(оставьте пустым, чтобы не менять)</span></label>',
+        '<input id="eu-password" type="password" class="form-control" placeholder="Минимум 6 символов" style="width:100%;box-sizing:border-box">',
+      '</div>',
+      '<div class="form-group" style="margin-bottom:20px">',
+        '<label class="form-label">Роль</label>',
+        '<select id="eu-role" class="form-control" style="width:100%;box-sizing:border-box">',
+          '<option value="user"' + (currentRole === 'user' ? ' selected' : '') + '>user</option>',
+          '<option value="admin"' + (currentRole === 'admin' ? ' selected' : '') + '>admin</option>',
+        '</select>',
+      '</div>',
+      '<p id="eu-error" style="color:var(--red,#ea4335);font-size:13px;margin-bottom:10px;display:none"></p>',
+      '<button id="eu-submit" class="btn btn-primary btn-full">Сохранить изменения</button>',
+    '</div>',
+  ].join('');
+
+  document.body.appendChild(modal);
+
+  document.getElementById('eu-close').addEventListener('click', function() { modal.remove(); });
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('eu-submit').addEventListener('click', function() {
+    var name     = (document.getElementById('eu-name').value || '').trim();
+    var password = document.getElementById('eu-password').value;
+    var role     = document.getElementById('eu-role').value;
+    var errEl    = document.getElementById('eu-error');
+    var submitBtn = document.getElementById('eu-submit');
+
+    if (!name) {
+      errEl.textContent = 'Имя не может быть пустым';
+      errEl.style.display = '';
+      return;
+    }
+    if (password && password.length < 6) {
+      errEl.textContent = 'Пароль должен быть не менее 6 символов';
+      errEl.style.display = '';
+      return;
+    }
+    errEl.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Сохранение...';
+
+    var payload = { action: 'update', userId: uid, displayName: name, role: role };
+    if (password) payload.password = password;
+
+    Auth.callAdminFunction(payload)
+      .then(function() {
+        modal.remove();
+        Toast.show('Пользователь обновлён', 'success');
+        renderUsersPanel();
+      }).catch(function(err) {
+        errEl.textContent = err.message;
+        errEl.style.display = '';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Сохранить изменения';
       });
   });
 }
