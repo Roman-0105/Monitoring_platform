@@ -31,6 +31,7 @@
           <button class="tab-btn active" data-tab="points"><span class="tab-icon">◻</span><span class="tab-label"> Список точек</span></button>
           <button class="tab-btn" data-tab="stats"><span class="tab-icon">◍</span><span class="tab-label"> Аналитика</span></button>
           <button class="tab-btn" data-tab="report"><span class="tab-icon">◈</span><span class="tab-label"> Отчёт</span></button>
+          <button class="tab-btn" data-tab="wells"><span class="tab-icon">⊛</span><span class="tab-label"> Гор. скважины</span></button>
         </div>
         <div class="sidebar-section">
           <span class="sidebar-section-label">Данные</span>
@@ -427,6 +428,38 @@
     <div id="report-root"></div>
   </div>
 
+  <!-- Горизонтальные скважины -->
+  <div class="page" id="page-wells">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <select id="wells-selector" class="form-control" style="flex:1;max-width:340px"></select>
+      <button id="btn-add-well" class="btn btn-primary btn-sm" style="display:none">+ Добавить скважину</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="card" style="padding:16px">
+        <div class="card-title">Паспорт скважины</div>
+        <div id="wells-info-body"></div>
+      </div>
+      <div class="card" style="padding:16px">
+        <div class="card-title">Координаты</div>
+        <div id="wells-coords-body"></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="card" style="padding:16px">
+        <div class="card-title">Положение на схеме</div>
+        <div id="wells-map-body" style="position:relative;overflow:hidden;min-height:180px"></div>
+      </div>
+      <div class="card" style="padding:16px">
+        <div class="card-title">История замеров дебита</div>
+        <div id="wells-chart-body" style="overflow-x:auto"></div>
+      </div>
+    </div>
+    <div class="card" style="padding:16px">
+      <div class="card-title">Реестр скважин</div>
+      <div id="wells-registry-table"></div>
+    </div>
+  </div>
+
   <!-- Диагностика -->
   <div class="page" id="page-diag">
     <div class="card">
@@ -811,6 +844,7 @@
 <script src="ui-heatmap.js"></script>
 <script src="ui-report.js"></script>
 <script src="ditch-3d-fix.js"></script>
+<script src="ui-wells.js"></script>
 <script src="app.js"></script>
 
 
