@@ -11,6 +11,7 @@ var WellsState = {
 };
 
 var _wellsTabInited = false;
+var _wellsChartZoom = { xScale: 1, yScale: 1 };
 
 var WELL_SECTION_OPTIONS = [
   '', 'Восточный', 'Западный', 'Северный',
@@ -365,78 +366,123 @@ function _drawWellChart(container, measurements) {
     return;
   }
   var data = measurements.filter(function(m) { return m.flowRate != null && m.measurementDate; });
+  data.sort(function(a, b) { return (a.measurementDate || '') > (b.measurementDate || '') ? 1 : -1; });
   if (!data.length) { container.innerHTML = '<p class="form-hint">Нет данных дебита</p>'; return; }
 
-  var W = 500, H = 170;
-  var pad = { t: 16, r: 16, b: 38, l: 50 };
-  var cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+  var xScale = _wellsChartZoom.xScale;
+  var yScale = _wellsChartZoom.yScale;
+
+  var PAD = { t: 20, r: 24, b: 42, l: 54 };
+  var n = data.length;
+  var pointSpacing = Math.round(90 * xScale);
+  var dynW = Math.max(700, n * pointSpacing + PAD.l + PAD.r);
+  var baseH = 200;
+  var W = dynW;
+  var cH = Math.round(baseH * yScale);
+  var H = cH + PAD.t + PAD.b;
+  var cW = W - PAD.l - PAD.r;
 
   var flows = data.map(function(m) { return m.flowRate; });
   var maxFlow = Math.max.apply(null, flows), minFlow = Math.min.apply(null, flows);
   var range = maxFlow - minFlow || 1;
   var yMax = maxFlow + range * 0.15, yMin = Math.max(0, minFlow - range * 0.15);
-  var n = data.length;
 
-  function px(i) { return pad.l + (n === 1 ? cW / 2 : i / (n - 1) * cW); }
-  function py(v)  { return pad.t + cH - (v - yMin) / (yMax - yMin) * cH; }
+  function px(i) { return PAD.l + (n === 1 ? cW / 2 : i / (n - 1) * cW); }
+  function py(v)  { return PAD.t + cH - (v - yMin) / (yMax - yMin) * cH; }
 
   var pts = data.map(function(m, i) { return { x: px(i), y: py(m.flowRate) }; });
   var linePath = _smoothCurve(pts);
-  var areaPath = linePath + ' L' + pts[pts.length-1].x.toFixed(1) + ',' + (pad.t+cH) + ' L' + pts[0].x.toFixed(1) + ',' + (pad.t+cH) + ' Z';
+  var areaPath = linePath + ' L' + pts[pts.length-1].x.toFixed(1) + ',' + (PAD.t+cH) + ' L' + pts[0].x.toFixed(1) + ',' + (PAD.t+cH) + ' Z';
 
   var grid = '', yLbls = '', xLbls = '';
-  for (var ti = 0; ti <= 4; ti++) {
-    var yv = yMin + (yMax - yMin) * ti / 4;
+  for (var ti = 0; ti <= 5; ti++) {
+    var yv = yMin + (yMax - yMin) * ti / 5;
     var yp = py(yv);
-    grid  += '<line x1="' + pad.l + '" y1="' + yp.toFixed(1) + '" x2="' + (pad.l+cW) + '" y2="' + yp.toFixed(1) + '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
-    yLbls += '<text x="' + (pad.l-6) + '" y="' + (yp+4).toFixed(1) + '" fill="var(--txt-3)" font-size="10" text-anchor="end">' + yv.toFixed(1) + '</text>';
+    grid  += '<line x1="' + PAD.l + '" y1="' + yp.toFixed(1) + '" x2="' + (PAD.l+cW) + '" y2="' + yp.toFixed(1) + '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
+    yLbls += '<text x="' + (PAD.l-6) + '" y="' + (yp+4).toFixed(1) + '" fill="var(--txt-3)" font-size="11" text-anchor="end">' + yv.toFixed(1) + '</text>';
   }
-  var step = Math.max(1, Math.floor(n / 5));
+  var step = Math.max(1, Math.ceil(n / Math.max(6, Math.floor(cW / 70))));
   data.forEach(function(m, i) {
-    if (i % step === 0 || i === n-1) {
-      xLbls += '<text x="' + px(i).toFixed(1) + '" y="' + (H-8) + '" fill="var(--txt-3)" font-size="10" text-anchor="middle">' + escHTML((m.measurementDate || '').slice(5)) + '</text>';
+    if (i % step === 0 || i === n - 1) {
+      xLbls += '<text x="' + px(i).toFixed(1) + '" y="' + (H - 8) + '" fill="var(--txt-3)" font-size="11" text-anchor="middle">' +
+        escHTML((m.measurementDate || '').slice(5)) + '</text>';
+    }
+  });
+
+  var vertLines = '';
+  data.forEach(function(m, i) {
+    if (i % step === 0 || i === n - 1) {
+      vertLines += '<line x1="' + px(i).toFixed(1) + '" y1="' + PAD.t + '" x2="' + px(i).toFixed(1) + '" y2="' + (PAD.t+cH) + '" stroke="rgba(255,255,255,.04)" stroke-width="1"/>';
     }
   });
 
   var dots = data.map(function(m, i) {
-    return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="4" fill="#f9ab00" stroke="var(--card-bg,#1e2530)" stroke-width="1.5" pointer-events="none"/>';
+    return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="5" fill="#f9ab00" stroke="var(--card-bg,#1e2530)" stroke-width="2" style="cursor:pointer"/>';
   }).join('');
 
-  container.innerHTML =
-    '<div style="position:relative;cursor:crosshair">' +
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">' +
-        '<defs><linearGradient id="wg-fill" x1="0" y1="0" x2="0" y2="1">' +
-          '<stop offset="0%" stop-color="#f9ab00" stop-opacity=".3"/>' +
-          '<stop offset="100%" stop-color="#f9ab00" stop-opacity=".03"/>' +
-        '</linearGradient></defs>' +
-        grid + yLbls +
-        '<path d="' + areaPath + '" fill="url(#wg-fill)"/>' +
-        '<path d="' + linePath + '" fill="none" stroke="#f9ab00" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>' +
-        dots + xLbls +
-        '<text x="' + (pad.l-30) + '" y="' + (pad.t+cH/2) + '" fill="var(--txt-3)" font-size="10" text-anchor="middle" transform="rotate(-90,' + (pad.l-30) + ',' + (pad.t+cH/2) + ')">м³/ч</text>' +
-      '</svg>' +
-      '<div id="wells-chart-tip" style="position:fixed;pointer-events:none;display:none;background:rgba(20,25,35,.95);color:#e8eaed;font-size:12px;padding:7px 11px;border-radius:7px;white-space:nowrap;z-index:9999;border:1px solid rgba(249,171,0,.5);box-shadow:0 3px 12px rgba(0,0,0,.6)"></div>' +
+  var zoomControls =
+    '<div style="display:flex;gap:4px;align-items:center;margin-bottom:8px;flex-wrap:wrap">' +
+      '<span style="font-size:11px;color:var(--txt-3);margin-right:2px">Ось X:</span>' +
+      '<button class="btn btn-sm btn-outline wc-zoom" data-axis="x" data-dir="-1" style="padding:1px 8px;font-size:13px;line-height:1.4" title="Уменьшить масштаб X">−</button>' +
+      '<button class="btn btn-sm btn-outline wc-zoom" data-axis="x" data-dir="1"  style="padding:1px 8px;font-size:13px;line-height:1.4" title="Увеличить масштаб X">+</button>' +
+      '<span style="font-size:11px;color:var(--txt-3);margin:0 2px 0 10px">Ось Y:</span>' +
+      '<button class="btn btn-sm btn-outline wc-zoom" data-axis="y" data-dir="-1" style="padding:1px 8px;font-size:13px;line-height:1.4" title="Уменьшить масштаб Y">−</button>' +
+      '<button class="btn btn-sm btn-outline wc-zoom" data-axis="y" data-dir="1"  style="padding:1px 8px;font-size:13px;line-height:1.4" title="Увеличить масштаб Y">+</button>' +
+      '<button class="btn btn-sm btn-outline wc-zoom" data-axis="reset" style="padding:1px 8px;font-size:11px;margin-left:8px" title="Сбросить масштаб">↺ Сброс</button>' +
+      '<span style="font-size:11px;color:var(--txt-3);margin-left:10px">X:' + xScale.toFixed(2) + '× Y:' + yScale.toFixed(2) + '×</span>' +
     '</div>';
 
-  var tip = container.querySelector('#wells-chart-tip');
+  container.innerHTML =
+    zoomControls +
+    '<div style="overflow-x:auto">' +
+      '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg" style="display:block;min-width:' + W + 'px">' +
+        '<defs><linearGradient id="wg-fill" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="#f9ab00" stop-opacity=".25"/>' +
+          '<stop offset="100%" stop-color="#f9ab00" stop-opacity=".02"/>' +
+        '</linearGradient></defs>' +
+        grid + vertLines + yLbls +
+        '<path d="' + areaPath + '" fill="url(#wg-fill)"/>' +
+        '<path d="' + linePath + '" fill="none" stroke="#f9ab00" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+        dots + xLbls +
+        '<text x="' + (PAD.l - 32) + '" y="' + (PAD.t + cH / 2) + '" fill="var(--txt-3)" font-size="11" text-anchor="middle" ' +
+          'transform="rotate(-90,' + (PAD.l - 32) + ',' + (PAD.t + cH / 2) + ')">м³/ч</text>' +
+      '</svg>' +
+    '</div>' +
+    '<div id="wells-chart-tip" style="position:fixed;pointer-events:none;display:none;background:rgba(20,25,35,.95);color:#e8eaed;font-size:12px;padding:7px 11px;border-radius:7px;white-space:nowrap;z-index:9999;border:1px solid rgba(249,171,0,.5);box-shadow:0 3px 12px rgba(0,0,0,.6)"></div>';
+
+  // Zoom buttons
+  container.querySelectorAll('.wc-zoom').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var axis = btn.dataset.axis;
+      var dir  = parseFloat(btn.dataset.dir || '0');
+      if (axis === 'reset') {
+        _wellsChartZoom.xScale = 1;
+        _wellsChartZoom.yScale = 1;
+      } else if (axis === 'x') {
+        _wellsChartZoom.xScale = Math.max(0.4, Math.min(6, _wellsChartZoom.xScale + dir * 0.25));
+      } else if (axis === 'y') {
+        _wellsChartZoom.yScale = Math.max(0.4, Math.min(5, _wellsChartZoom.yScale + dir * 0.25));
+      }
+      _drawWellChart(container, measurements);
+    });
+  });
+
+  // Tooltip — SVG has fixed pixel coords so e.clientX - rect.left = SVG X directly
+  var tip   = container.querySelector('#wells-chart-tip');
   var svgEl = container.querySelector('svg');
 
   svgEl.addEventListener('mousemove', function(e) {
-    var svgRect = svgEl.getBoundingClientRect();
-    var scaleX  = W / svgRect.width;
-    var scaleY  = H / svgRect.height;
-    var mouseX  = (e.clientX - svgRect.left) * scaleX;
-    var mouseY  = (e.clientY - svgRect.top)  * scaleY;
+    var rect   = svgEl.getBoundingClientRect();
+    var mouseX = e.clientX - rect.left;
 
     var closest = -1, minDist = Infinity;
     pts.forEach(function(pt, i) {
-      var d = Math.sqrt(Math.pow(pt.x - mouseX, 2) + Math.pow(pt.y - mouseY, 2));
+      var d = Math.abs(pt.x - mouseX);
       if (d < minDist) { minDist = d; closest = i; }
     });
 
-    var threshold = 22 * scaleX;
-    if (closest >= 0 && minDist < threshold) {
-      var m = data[closest];
+    if (closest >= 0 && minDist < 36) {
+      var m      = data[closest];
       var date   = m.measurementDate ? formatDate(m.measurementDate) : '—';
       var worker = m.worker ? '<br><span style="color:#9aa0a6">' + escHTML(m.worker) + '</span>' : '';
       tip.innerHTML = '<b style="color:#f9ab00">' + date + '</b><br>' + m.flowRate + ' м³/ч' + worker;
@@ -444,7 +490,7 @@ function _drawWellChart(container, measurements) {
       var tipW = tip.offsetWidth, tipH = tip.offsetHeight;
       var tx = e.clientX + 14;
       var ty = e.clientY - tipH - 10;
-      if (tx + tipW > window.innerWidth - 8)  tx = e.clientX - tipW - 10;
+      if (tx + tipW > window.innerWidth - 8) tx = e.clientX - tipW - 14;
       if (ty < 8) ty = e.clientY + 16;
       tip.style.left = tx + 'px';
       tip.style.top  = ty + 'px';
