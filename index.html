@@ -355,7 +355,7 @@
           <div id="scheme-preview"></div>
           <label class="photo-pick-btn" for="scheme-file">
             🗺 Выбрать PNG / JPG файл
-            <input type="file" id="scheme-file" accept="image/png,image/jpeg,image/svg+xml" style="display:none">
+            <input type="file" id="scheme-file" accept="image/png,image/jpeg,image/svg+xml,application/pdf" style="display:none">
           </label>
           <button class="btn btn-primary btn-full" id="btn-upload-scheme" style="margin-top:10px">
             ⬆️ Загрузить схему
@@ -905,6 +905,8 @@
 <script src="domens.js"></script>
 <script src="faults.js"></script>
 <script src="map.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
 <script src="schemes.js"></script>
 <!-- UI-модули -->
 <script src="ui-toast.js"></script>

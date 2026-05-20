@@ -279,6 +279,8 @@ var _wellsMap = {
   vbX: 0, vbY: 0, vbW: 0, vbH: 0,    // current viewBox
   tvbX: 0, tvbY: 0, tvbW: 0, tvbH: 0, // target viewBox (for animation)
   animating: false, ready: false,
+  // PDF state
+  pdfPage: null, pdfRendering: false, pdfLastScale: 0,
 };
 
 function renderWellMapCard() {
@@ -293,8 +295,10 @@ function renderWellMapCard() {
   body.innerHTML = '<p class="form-hint" style="padding:12px 0">Загрузка схемы...</p>';
   Schemes.getCurrentImage().then(function(url) {
     if (!url) { body.innerHTML = '<p class="form-hint" style="padding:20px 0">Схема не загружена</p>'; return; }
-    _wellsMap.schemeUrl = url;
-    _wellsMap.ready     = false;
+    _wellsMap.schemeUrl   = url;
+    _wellsMap.ready       = false;
+    _wellsMap.pdfPage     = null;
+    _wellsMap.pdfLastScale = 0;
     _buildWellMapDOM(body, url);
   });
 }
@@ -321,6 +325,13 @@ function _buildWellMapDOM(body, url) {
   svg.appendChild(marksG);
   body.appendChild(svg);
 
+  // PDF: render via PDF.js (re-rasterise at current zoom DPI on each zoom step)
+  if (/\.pdf(\?|#|$)/i.test(url)) {
+    _loadPdfScheme(url, body, svg, bgImg);
+    return;
+  }
+
+  // Raster image (PNG / JPEG / SVG)
   var tmp = new Image();
   tmp.onload = function() {
     var iw = tmp.naturalWidth  || 1500;
@@ -330,7 +341,6 @@ function _buildWellMapDOM(body, url) {
     bgImg.setAttribute('width',  iw);
     bgImg.setAttribute('height', ih);
 
-    // SVG height from aspect ratio of natural image
     svg.setAttribute('height', Math.round((body.offsetWidth || 600) * ih / iw));
 
     _wellsMap.vbX  = 0; _wellsMap.vbY  = 0; _wellsMap.vbW  = iw; _wellsMap.vbH  = ih;
@@ -342,6 +352,76 @@ function _buildWellMapDOM(body, url) {
     _setupWellMapZoom(body, svg);
   };
   tmp.src = url;
+}
+
+// ── PDF loading & rendering ───────────────────────────────
+
+function _loadPdfScheme(url, body, svg, bgImg) {
+  if (!window.pdfjsLib) {
+    body.innerHTML = '<p class="form-hint" style="color:var(--red)">PDF.js не загружен</p>';
+    return;
+  }
+  pdfjsLib.getDocument(url).promise.then(function(pdfDoc) {
+    return pdfDoc.getPage(1);
+  }).then(function(page) {
+    _wellsMap.pdfPage = page;
+    var vp = page.getViewport({ scale: 1 });
+    var iw = vp.width, ih = vp.height;
+    _wellsMap.imgW = iw;
+    _wellsMap.imgH = ih;
+
+    bgImg.setAttribute('width',  iw);
+    bgImg.setAttribute('height', ih);
+    svg.setAttribute('height', Math.round((body.offsetWidth || 600) * ih / iw));
+
+    _wellsMap.vbX  = 0; _wellsMap.vbY  = 0; _wellsMap.vbW  = iw; _wellsMap.vbH  = ih;
+    _wellsMap.tvbX = 0; _wellsMap.tvbY = 0; _wellsMap.tvbW = iw; _wellsMap.tvbH = ih;
+    _applyViewBox();
+
+    // Initial render at display resolution
+    var sw = body.offsetWidth || 600;
+    var dpr = window.devicePixelRatio || 1;
+    return _renderPdfPage(bgImg, sw / iw * dpr);
+  }).then(function() {
+    _wellsMap.ready = true;
+    _renderWellMapMarkers();
+    _setupWellMapZoom(body, document.getElementById('wells-map-svg'));
+  }).catch(function(err) {
+    var body2 = document.getElementById('wells-map-body');
+    if (body2) body2.innerHTML = '<p class="form-hint" style="color:var(--red)">Ошибка PDF: ' + escHTML(err.message) + '</p>';
+  });
+}
+
+function _renderPdfPage(bgImg, scale) {
+  var page = _wellsMap.pdfPage;
+  if (!page || _wellsMap.pdfRendering) return Promise.resolve();
+  _wellsMap.pdfRendering = true;
+  var vp      = page.getViewport({ scale: scale });
+  var canvas  = document.createElement('canvas');
+  canvas.width  = Math.round(vp.width);
+  canvas.height = Math.round(vp.height);
+  return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function() {
+    _wellsMap.pdfRendering  = false;
+    _wellsMap.pdfLastScale  = scale;
+    var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    bgImg.setAttribute('href', dataUrl);
+    bgImg.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', dataUrl);
+  }).catch(function() { _wellsMap.pdfRendering = false; });
+}
+
+function _maybePdfRerender() {
+  if (!_wellsMap.pdfPage || _wellsMap.pdfRendering) return;
+  var svg   = document.getElementById('wells-map-svg');
+  var bgImg = document.getElementById('wells-map-bg');
+  if (!svg || !bgImg) return;
+  var sw       = svg.getBoundingClientRect().width || 600;
+  var dpr      = window.devicePixelRatio || 1;
+  var newScale = sw / _wellsMap.vbW * dpr;   // higher zoom → bigger scale → more detail
+  var last     = _wellsMap.pdfLastScale;
+  // Only re-render if zoom changed by > 15 % (avoids thrashing on tiny adjustments)
+  if (last === 0 || Math.abs(newScale - last) / last > 0.15) {
+    _renderPdfPage(bgImg, newScale);
+  }
 }
 
 function _applyViewBox() {
@@ -667,6 +747,7 @@ function _setupWellMapZoom(body, svg) {
       z.animating = false;
       _applyViewBox();
       _renderWellMapMarkers(); // recluster after zoom settles
+      _maybePdfRerender();     // re-render PDF at new zoom resolution
     } else { requestAnimationFrame(tick); }
   }
 

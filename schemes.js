@@ -29,15 +29,19 @@ var Schemes = (function() {
 
   // ── Сжатие схемы ─────────────────────────────────────────
   function compressScheme(file) {
-    // SVG is vector — skip canvas re-encoding, pass through as-is
-    if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) {
+    // SVG / PDF are vector — skip canvas re-encoding, pass through as-is
+    var isVec = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name) ||
+                file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (isVec) {
+      var vecMime = (file.type === 'application/pdf' || /\.pdf$/i.test(file.name))
+        ? 'application/pdf' : 'image/svg+xml';
       return new Promise(function(resolve, reject) {
         var reader = new FileReader();
         reader.onload = function(e) {
           var d = e.target.result;
-          resolve({ base64: d.split(',')[1], mime: 'image/svg+xml' });
+          resolve({ base64: d.split(',')[1], mime: vecMime });
         };
-        reader.onerror = function() { reject(new Error('Ошибка чтения SVG')); };
+        reader.onerror = function() { reject(new Error('Ошибка чтения файла')); };
         reader.readAsDataURL(file);
       });
     }
