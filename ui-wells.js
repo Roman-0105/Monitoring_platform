@@ -2,14 +2,29 @@
 
 var WellsState = {
   list:         [],
-  measurements: {},  // { wellId: [measurement, ...] }
+  measurements: {},
   selectedId:   null,
   editingWell:  null,
   editingMeas:  null,
   measWellId:   null,
+  subTab:       'view',
 };
 
 var _wellsTabInited = false;
+
+var WELL_SECTION_OPTIONS = [
+  '', 'Восточный', 'Западный', 'Северный',
+  'Северо-восточный', 'Северо-западный',
+  'Южный', 'Юго-восточный', 'Юго-западный',
+];
+
+var WELL_STATUS_OPTIONS = ['Активная', 'Иссякает', 'Сухая'];
+
+var WELL_STATUS_COLORS = {
+  'Активная': '#4caf7d',
+  'Иссякает': '#f9ab00',
+  'Сухая':    '#ea4335',
+};
 
 function initWellsModule(callback) {
   Api.getWells().then(function(wells) {
@@ -23,19 +38,19 @@ function initWellsModule(callback) {
 
 function initWellsTab() {
   if (_wellsTabInited) {
-    renderWellsPage();
+    _switchWellsSubTab(WellsState.subTab);
     return;
   }
   _wellsTabInited = true;
 
-  var addBtn = document.getElementById('btn-add-well');
-  if (addBtn) {
-    if (AppState.currentUser && AppState.currentUser.role === 'admin') {
-      addBtn.style.display = '';
-    }
-    addBtn.addEventListener('click', openAddWellForm);
-  }
+  // Подвкладки
+  document.querySelectorAll('[data-wells-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _switchWellsSubTab(this.dataset.wellsTab);
+    });
+  });
 
+  // Кнопка + замер
   var addMeasBtn = document.getElementById('btn-add-meas');
   if (addMeasBtn) {
     addMeasBtn.addEventListener('click', function() {
@@ -44,7 +59,28 @@ function initWellsTab() {
     });
   }
 
-  renderWellsPage();
+  if (!WellsState.selectedId && WellsState.list.length) {
+    WellsState.selectedId = WellsState.list[0].id;
+  }
+
+  _switchWellsSubTab('view');
+}
+
+function _switchWellsSubTab(name) {
+  WellsState.subTab = name;
+  document.querySelectorAll('[data-wells-tab]').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.wellsTab === name);
+  });
+  var panels = { view: 'wells-panel-view', registry: 'wells-panel-registry' };
+  Object.keys(panels).forEach(function(k) {
+    var el = document.getElementById(panels[k]);
+    if (el) el.style.display = k === name ? '' : 'none';
+  });
+  if (name === 'view') {
+    renderWellsPage();
+  } else if (name === 'registry') {
+    renderWellsRegistryPanel();
+  }
 }
 
 function renderWellsPage() {
@@ -64,38 +100,32 @@ function renderWellDetail() {
   renderMeasurementsTable(well);
 }
 
-// ── Реестр скважин (список-колонка) ──────────────────────
+// ── Реестр: список для выбора (правая колонка) ────────────
 
 function renderWellRegistryList() {
   var wrap = document.getElementById('wells-registry-list');
   if (!wrap) return;
 
   if (!WellsState.list.length) {
-    wrap.innerHTML = '<p class="form-hint" style="font-size:12px">Скважины не добавлены</p>';
+    wrap.innerHTML = '<p class="form-hint" style="font-size:12px">Скважины не добавлены.<br>Перейдите во вкладку «Реестр».</p>';
     return;
   }
 
-  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
   var html = '';
-
   WellsState.list.forEach(function(w) {
     var isSelected = w.id === WellsState.selectedId;
+    var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
     html += '<div class="well-list-item" data-well-id="' + escHTML(w.id) + '" style="' +
       'padding:8px 10px;border-radius:6px;cursor:pointer;margin-bottom:4px;' +
       'border:1px solid ' + (isSelected ? '#f9ab00' : 'rgba(255,255,255,.07)') + ';' +
       'background:' + (isSelected ? 'rgba(249,171,0,.1)' : 'rgba(255,255,255,.02)') + '">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:13px;font-weight:' + (isSelected ? '600' : '400') + ';color:' + (isSelected ? '#f9ab00' : 'var(--txt-1)') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-            escHTML(w.name) +
-          '</div>' +
-          (w.domain ? '<div style="font-size:11px;color:var(--txt-3);margin-top:1px">' + escHTML(w.domain) + '</div>' : '') +
-          (w.depth != null ? '<div style="font-size:11px;color:var(--txt-3)">⬇ ' + w.depth + ' м</div>' : '') +
-        '</div>' +
-        (isAdmin ? '<div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">' +
-          '<button class="well-edit-btn btn btn-sm btn-outline" data-well-id="' + escHTML(w.id) + '" style="padding:1px 6px;font-size:11px" title="Редактировать">✏</button>' +
-          '<button class="well-del-btn btn btn-sm btn-danger" data-well-id="' + escHTML(w.id) + '" style="padding:1px 6px;font-size:11px" title="Удалить">✕</button>' +
-        '</div>' : '') +
+      '<div style="font-size:13px;font-weight:' + (isSelected ? '600' : '400') + ';color:' + (isSelected ? '#f9ab00' : 'var(--txt-1)') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        escHTML(w.name) +
+      '</div>' +
+      (w.quarry ? '<div style="font-size:11px;color:var(--txt-3);margin-top:1px">' + escHTML(w.quarry) + (w.quarrySection ? ' · ' + escHTML(w.quarrySection) : '') + '</div>' : '') +
+      '<div style="display:flex;gap:6px;margin-top:2px;align-items:center">' +
+        (w.depth != null ? '<span style="font-size:11px;color:var(--txt-3)">⬇ ' + w.depth + ' м</span>' : '') +
+        (w.status ? '<span style="font-size:10px;color:' + statusColor + ';font-weight:500">● ' + escHTML(w.status) + '</span>' : '') +
       '</div>' +
     '</div>';
   });
@@ -103,54 +133,98 @@ function renderWellRegistryList() {
   wrap.innerHTML = html;
 
   wrap.querySelectorAll('.well-list-item').forEach(function(item) {
-    item.addEventListener('click', function(e) {
-      if (e.target.closest('button')) return;
+    item.addEventListener('click', function() {
       WellsState.selectedId = this.dataset.wellId;
       renderWellRegistryList();
       renderWellDetail();
     });
   });
+}
+
+// ── Реестр: панель управления (подвкладка) ────────────────
+
+function renderWellsRegistryPanel() {
+  var wrap = document.getElementById('wells-registry-full-table');
+  if (!wrap) return;
+
+  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
+  var addBtn = document.getElementById('btn-add-well');
+  if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+
+  if (!WellsState.list.length) {
+    wrap.innerHTML = '<p class="form-hint">Скважины не добавлены</p>';
+    return;
+  }
+
+  var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    '<thead><tr style="border-bottom:1px solid var(--line)">' +
+      '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Название</th>' +
+      '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Карьер</th>' +
+      '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Участок</th>' +
+      '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Статус</th>' +
+      '<th style="text-align:right;padding:8px 10px;color:var(--txt-3);font-weight:500">Глубина</th>' +
+      '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Дата бурения</th>' +
+      '<th style="text-align:right;padding:8px 10px;color:var(--txt-3);font-weight:500">Дебит (посл.)</th>' +
+      (isAdmin ? '<th style="padding:8px 10px"></th>' : '') +
+    '</tr></thead><tbody>';
+
+  WellsState.list.forEach(function(w) {
+    var lastMeas = _getLastMeasurement(w.id);
+    var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
+    html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05)">' +
+      '<td style="padding:8px 10px;font-weight:500">' + escHTML(w.name) + '</td>' +
+      '<td style="padding:8px 10px;color:var(--txt-2)">' + escHTML(w.quarry || '—') + '</td>' +
+      '<td style="padding:8px 10px;color:var(--txt-2)">' + escHTML(w.quarrySection || '—') + '</td>' +
+      '<td style="padding:8px 10px"><span style="color:' + statusColor + ';font-weight:500">● ' + escHTML(w.status || '—') + '</span></td>' +
+      '<td style="padding:8px 10px;text-align:right">' + (w.depth != null ? w.depth + ' м' : '—') + '</td>' +
+      '<td style="padding:8px 10px;color:var(--txt-2)">' + (w.drillDate ? formatDate(w.drillDate) : '—') + '</td>' +
+      '<td style="padding:8px 10px;text-align:right">' + (lastMeas ? lastMeas.flowRate + ' м³/ч' : '—') + '</td>' +
+      (isAdmin ? '<td style="padding:8px 10px;white-space:nowrap">' +
+        '<button class="well-edit-btn btn btn-sm btn-outline" data-well-id="' + escHTML(w.id) + '" style="padding:2px 8px;margin-right:4px">✏ Изменить</button>' +
+        '<button class="well-del-btn btn btn-sm btn-danger" data-well-id="' + escHTML(w.id) + '" style="padding:2px 8px">Удалить</button>' +
+      '</td>' : '') +
+    '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
 
   if (isAdmin) {
     wrap.querySelectorAll('.well-edit-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
+      btn.addEventListener('click', function() {
         var well = WellsState.list.find(function(w) { return w.id === btn.dataset.wellId; });
         if (well) openEditWellForm(well);
       });
     });
     wrap.querySelectorAll('.well-del-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        deleteWellConfirm(btn.dataset.wellId);
-      });
+      btn.addEventListener('click', function() { deleteWellConfirm(btn.dataset.wellId); });
     });
   }
 }
 
-// ── Карточка паспорта скважины ────────────────────────────
+// ── Карточка паспорта ─────────────────────────────────────
 
 function renderWellInfoCard(well) {
   var body = document.getElementById('wells-info-body');
   if (!body) return;
-  if (!well) {
-    body.innerHTML = '<p class="form-hint">Скважина не выбрана</p>';
-    return;
-  }
+  if (!well) { body.innerHTML = '<p class="form-hint">Скважина не выбрана</p>'; return; }
 
-  function row(label, value) {
+  function row(label, value, color) {
     return '<div class="diag-row" style="padding:4px 0">' +
       '<span style="color:var(--txt-3);font-size:12px">' + escHTML(label) + '</span>' +
-      '<span style="font-weight:500;font-size:13px">' +
+      '<span style="font-weight:500;font-size:13px;' + (color ? 'color:' + color : '') + '">' +
         (value !== null && value !== undefined && value !== ''
-          ? escHTML(String(value))
-          : '<span style="color:var(--txt-3)">—</span>') +
+          ? escHTML(String(value)) : '<span style="color:var(--txt-3)">—</span>') +
       '</span></div>';
   }
 
   var lastMeas = _getLastMeasurement(well.id);
+  var statusColor = WELL_STATUS_COLORS[well.status] || '';
   var html = '';
   html += row('Название', well.name);
+  html += row('Статус', well.status ? '● ' + well.status : null, statusColor);
+  html += row('Карьер', well.quarry);
+  html += row('Участок', well.quarrySection);
   html += row('Домен', well.domain);
   html += row('Глубина', well.depth != null ? well.depth + ' м' : null);
   html += row('Угол наклона', well.inclination != null ? well.inclination + '°' : null);
@@ -169,10 +243,7 @@ function renderWellInfoCard(well) {
 function renderWellCoordsCard(well) {
   var body = document.getElementById('wells-coords-body');
   if (!body) return;
-  if (!well) {
-    body.innerHTML = '<p class="form-hint">Скважина не выбрана</p>';
-    return;
-  }
+  if (!well) { body.innerHTML = '<p class="form-hint">Скважина не выбрана</p>'; return; }
 
   function row(label, value, note) {
     return '<div class="diag-row" style="padding:4px 0">' +
@@ -210,19 +281,15 @@ function renderWellMapCard(well) {
   body.innerHTML = '<p class="form-hint" style="padding:12px 0">Загрузка схемы...</p>';
 
   Schemes.getCurrentImage().then(function(url) {
-    if (!url) {
-      body.innerHTML = '<p class="form-hint" style="padding:20px 0">Схема не загружена</p>';
-      return;
-    }
+    if (!url) { body.innerHTML = '<p class="form-hint" style="padding:20px 0">Схема не загружена</p>'; return; }
+
     var wrapper = document.createElement('div');
     wrapper.style.cssText = 'position:relative;display:inline-block;width:100%';
-
     var img = document.createElement('img');
     img.src = url;
     img.style.cssText = 'width:100%;height:auto;display:block;border-radius:6px';
     img.alt = 'Схема карьера';
     wrapper.appendChild(img);
-
     body.innerHTML = '';
     body.appendChild(wrapper);
 
@@ -231,20 +298,15 @@ function renderWellMapCard(well) {
       var py = (WELL_BOUNDS.Ymax - well.yLocal) / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * 100;
 
       var marker = document.createElement('div');
-      marker.title = well.name;
-      marker.style.cssText = 'position:absolute;left:' + px.toFixed(3) + '%;top:' + py.toFixed(3) +
-        '%;transform:translate(-50%,-50%);pointer-events:none';
-      marker.innerHTML =
-        '<svg width="22" height="22" viewBox="-11 -11 22 22" xmlns="http://www.w3.org/2000/svg">' +
-          '<circle cx="0" cy="0" r="8" fill="#f9ab00" stroke="#1a1200" stroke-width="1.5" opacity=".9"/>' +
-          '<circle cx="0" cy="0" r="3" fill="#1a1200"/>' +
-        '</svg>';
+      marker.style.cssText = 'position:absolute;left:' + px.toFixed(3) + '%;top:' + py.toFixed(3) + '%;transform:translate(-50%,-50%);pointer-events:none';
+      marker.innerHTML = '<svg width="22" height="22" viewBox="-11 -11 22 22" xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="0" cy="0" r="8" fill="#f9ab00" stroke="#1a1200" stroke-width="1.5" opacity=".9"/>' +
+        '<circle cx="0" cy="0" r="3" fill="#1a1200"/></svg>';
 
       var label = document.createElement('div');
       label.textContent = well.name;
-      label.style.cssText = 'position:absolute;left:' + px.toFixed(3) + '%;top:calc(' + py.toFixed(3) +
-        '% + 14px);transform:translateX(-50%);background:rgba(0,0,0,.75);color:#f9ab00;' +
-        'font-size:11px;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none';
+      label.style.cssText = 'position:absolute;left:' + px.toFixed(3) + '%;top:calc(' + py.toFixed(3) + '% + 14px);' +
+        'transform:translateX(-50%);background:rgba(0,0,0,.75);color:#f9ab00;font-size:11px;padding:2px 6px;border-radius:3px;white-space:nowrap;pointer-events:none';
 
       wrapper.appendChild(marker);
       wrapper.appendChild(label);
@@ -252,15 +314,12 @@ function renderWellMapCard(well) {
   });
 }
 
-// ── График замеров (сглаженный, с tooltip) ────────────────
+// ── График замеров ────────────────────────────────────────
 
 function renderWellChartCard(well) {
   var body = document.getElementById('wells-chart-body');
   if (!body) return;
-  if (!well) {
-    body.innerHTML = '<p class="form-hint">Скважина не выбрана</p>';
-    return;
-  }
+  if (!well) { body.innerHTML = '<p class="form-hint">Скважина не выбрана</p>'; return; }
 
   if (WellsState.measurements[well.id]) {
     _drawWellChart(body, WellsState.measurements[well.id]);
@@ -280,7 +339,8 @@ function renderWellChartCard(well) {
 }
 
 function _smoothCurve(pts) {
-  if (pts.length < 2) return pts.length === 1 ? 'M' + pts[0].x + ',' + pts[0].y : '';
+  if (!pts.length) return '';
+  if (pts.length === 1) return 'M' + pts[0].x + ',' + pts[0].y;
   var d = 'M' + pts[0].x.toFixed(1) + ',' + pts[0].y.toFixed(1);
   for (var i = 0; i < pts.length - 1; i++) {
     var p0 = pts[Math.max(0, i - 1)];
@@ -301,24 +361,17 @@ function _drawWellChart(container, measurements) {
     container.innerHTML = '<p class="form-hint">Замеры отсутствуют</p>';
     return;
   }
-
   var data = measurements.filter(function(m) { return m.flowRate != null && m.measurementDate; });
-  if (!data.length) {
-    container.innerHTML = '<p class="form-hint">Нет данных дебита</p>';
-    return;
-  }
+  if (!data.length) { container.innerHTML = '<p class="form-hint">Нет данных дебита</p>'; return; }
 
   var W = 500, H = 170;
   var pad = { t: 16, r: 16, b: 38, l: 50 };
-  var cW = W - pad.l - pad.r;
-  var cH = H - pad.t - pad.b;
+  var cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
 
   var flows = data.map(function(m) { return m.flowRate; });
-  var maxFlow = Math.max.apply(null, flows);
-  var minFlow = Math.min.apply(null, flows);
-  var range   = maxFlow - minFlow || 1;
-  var yMax    = maxFlow + range * 0.15;
-  var yMin    = Math.max(0, minFlow - range * 0.15);
+  var maxFlow = Math.max.apply(null, flows), minFlow = Math.min.apply(null, flows);
+  var range = maxFlow - minFlow || 1;
+  var yMax = maxFlow + range * 0.15, yMin = Math.max(0, minFlow - range * 0.15);
   var n = data.length;
 
   function px(i) { return pad.l + (n === 1 ? cW / 2 : i / (n - 1) * cW); }
@@ -326,89 +379,64 @@ function _drawWellChart(container, measurements) {
 
   var pts = data.map(function(m, i) { return { x: px(i), y: py(m.flowRate) }; });
   var linePath = _smoothCurve(pts);
-  var areaPath = linePath +
-    ' L' + pts[pts.length - 1].x.toFixed(1) + ',' + (pad.t + cH) +
-    ' L' + pts[0].x.toFixed(1) + ',' + (pad.t + cH) + ' Z';
+  var areaPath = linePath + ' L' + pts[pts.length-1].x.toFixed(1) + ',' + (pad.t+cH) + ' L' + pts[0].x.toFixed(1) + ',' + (pad.t+cH) + ' Z';
 
-  // Grid & labels
   var grid = '', yLbls = '', xLbls = '';
-  var Y_TICKS = 4;
-  for (var ti = 0; ti <= Y_TICKS; ti++) {
-    var yv = yMin + (yMax - yMin) * ti / Y_TICKS;
+  for (var ti = 0; ti <= 4; ti++) {
+    var yv = yMin + (yMax - yMin) * ti / 4;
     var yp = py(yv);
-    grid  += '<line x1="' + pad.l + '" y1="' + yp.toFixed(1) + '" x2="' + (pad.l + cW) + '" y2="' + yp.toFixed(1) + '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
-    yLbls += '<text x="' + (pad.l - 6) + '" y="' + (yp + 4).toFixed(1) + '" fill="var(--txt-3)" font-size="10" text-anchor="end">' + yv.toFixed(1) + '</text>';
+    grid  += '<line x1="' + pad.l + '" y1="' + yp.toFixed(1) + '" x2="' + (pad.l+cW) + '" y2="' + yp.toFixed(1) + '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
+    yLbls += '<text x="' + (pad.l-6) + '" y="' + (yp+4).toFixed(1) + '" fill="var(--txt-3)" font-size="10" text-anchor="end">' + yv.toFixed(1) + '</text>';
   }
   var step = Math.max(1, Math.floor(n / 5));
   data.forEach(function(m, i) {
-    if (i % step === 0 || i === n - 1) {
-      var d = m.measurementDate ? m.measurementDate.slice(5) : '';
-      xLbls += '<text x="' + px(i).toFixed(1) + '" y="' + (H - 8) + '" fill="var(--txt-3)" font-size="10" text-anchor="middle">' + escHTML(d) + '</text>';
+    if (i % step === 0 || i === n-1) {
+      xLbls += '<text x="' + px(i).toFixed(1) + '" y="' + (H-8) + '" fill="var(--txt-3)" font-size="10" text-anchor="middle">' + escHTML((m.measurementDate || '').slice(5)) + '</text>';
     }
   });
 
-  // Hit-area circles for tooltip (rendered invisibly over data points)
-  var hitCircles = data.map(function(m, i) {
-    return '<circle class="wc-dot" cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="12" fill="transparent"' +
-      ' data-date="' + escHTML(m.measurementDate || '') + '" data-flow="' + m.flowRate + '"' +
-      ' data-worker="' + escHTML(m.worker || '') + '"/>';
-  }).join('');
-
-  // Visible dots
   var dots = data.map(function(m, i) {
     return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="4" fill="#f9ab00" stroke="var(--card-bg,#1e2530)" stroke-width="1.5" pointer-events="none"/>';
   }).join('');
 
-  var svgContent =
-    '<defs>' +
-      '<linearGradient id="wg-fill" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0%" stop-color="#f9ab00" stop-opacity=".3"/>' +
-        '<stop offset="100%" stop-color="#f9ab00" stop-opacity=".03"/>' +
-      '</linearGradient>' +
-    '</defs>' +
-    grid + yLbls +
-    '<path d="' + areaPath + '" fill="url(#wg-fill)"/>' +
-    '<path d="' + linePath + '" fill="none" stroke="#f9ab00" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>' +
-    dots +
-    hitCircles +
-    xLbls +
-    '<text x="' + (pad.l - 30) + '" y="' + (pad.t + cH / 2) + '" fill="var(--txt-3)" font-size="10" text-anchor="middle"' +
-      ' transform="rotate(-90,' + (pad.l - 30) + ',' + (pad.t + cH / 2) + ')">м³/ч</text>';
+  var hits = data.map(function(m, i) {
+    return '<circle class="wc-dot" cx="' + px(i).toFixed(1) + '" cy="' + py(m.flowRate).toFixed(1) + '" r="14" fill="transparent"' +
+      ' data-date="' + escHTML(m.measurementDate||'') + '" data-flow="' + m.flowRate + '" data-worker="' + escHTML(m.worker||'') + '"/>';
+  }).join('');
 
   container.innerHTML =
     '<div style="position:relative">' +
       '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-height:180px" xmlns="http://www.w3.org/2000/svg">' +
-        svgContent +
+        '<defs><linearGradient id="wg-fill" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="#f9ab00" stop-opacity=".3"/>' +
+          '<stop offset="100%" stop-color="#f9ab00" stop-opacity=".03"/>' +
+        '</linearGradient></defs>' +
+        grid + yLbls +
+        '<path d="' + areaPath + '" fill="url(#wg-fill)"/>' +
+        '<path d="' + linePath + '" fill="none" stroke="#f9ab00" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>' +
+        dots + hits + xLbls +
+        '<text x="' + (pad.l-30) + '" y="' + (pad.t+cH/2) + '" fill="var(--txt-3)" font-size="10" text-anchor="middle" transform="rotate(-90,' + (pad.l-30) + ',' + (pad.t+cH/2) + ')">м³/ч</text>' +
       '</svg>' +
-      '<div id="wells-chart-tip" style="position:absolute;pointer-events:none;display:none;' +
-        'background:rgba(20,25,35,.95);color:var(--txt-1);font-size:12px;padding:6px 10px;' +
-        'border-radius:7px;white-space:nowrap;z-index:20;border:1px solid rgba(249,171,0,.4);box-shadow:0 2px 8px rgba(0,0,0,.5)">' +
-      '</div>' +
+      '<div id="wells-chart-tip" style="position:absolute;pointer-events:none;display:none;background:rgba(20,25,35,.95);color:var(--txt-1);font-size:12px;padding:6px 10px;border-radius:7px;white-space:nowrap;z-index:20;border:1px solid rgba(249,171,0,.4);box-shadow:0 2px 8px rgba(0,0,0,.5)"></div>' +
     '</div>';
 
-  // Tooltip events
   var tip = container.querySelector('#wells-chart-tip');
-  var svgEl = container.querySelector('svg');
-
   container.querySelectorAll('.wc-dot').forEach(function(dot) {
-    dot.addEventListener('mouseenter', function(e) {
-      var date   = dot.dataset.date   ? formatDate(dot.dataset.date) : '—';
-      var flow   = dot.dataset.flow;
+    dot.addEventListener('mouseenter', function() {
+      var date = dot.dataset.date ? formatDate(dot.dataset.date) : '—';
       var worker = dot.dataset.worker ? '<br><span style="color:var(--txt-3)">' + escHTML(dot.dataset.worker) + '</span>' : '';
-      tip.innerHTML = '<b>' + date + '</b><br>' + flow + ' м³/ч' + worker;
+      tip.innerHTML = '<b>' + date + '</b><br>' + dot.dataset.flow + ' м³/ч' + worker;
       tip.style.display = '';
     });
     dot.addEventListener('mousemove', function(e) {
       var rect = container.querySelector('div').getBoundingClientRect();
-      var tx = e.clientX - rect.left + 10;
-      var ty = e.clientY - rect.top  - 38;
-      if (tx + 160 > rect.width) tx = e.clientX - rect.left - 160;
+      var tx = e.clientX - rect.left + 12;
+      var ty = e.clientY - rect.top  - 42;
+      if (tx + 170 > rect.width) tx = e.clientX - rect.left - 170;
       tip.style.left = tx + 'px';
       tip.style.top  = ty + 'px';
     });
-    dot.addEventListener('mouseleave', function() {
-      tip.style.display = 'none';
-    });
+    dot.addEventListener('mouseleave', function() { tip.style.display = 'none'; });
   });
 }
 
@@ -417,10 +445,7 @@ function _drawWellChart(container, measurements) {
 function renderMeasurementsTable(well) {
   var wrap = document.getElementById('wells-meas-table');
   if (!wrap) return;
-  if (!well) {
-    wrap.innerHTML = '<p class="form-hint">Скважина не выбрана</p>';
-    return;
-  }
+  if (!well) { wrap.innerHTML = '<p class="form-hint">Скважина не выбрана</p>'; return; }
 
   var meas = WellsState.measurements[well.id];
   if (!meas) {
@@ -432,22 +457,17 @@ function renderMeasurementsTable(well) {
     return;
   }
 
-  if (!meas.length) {
-    wrap.innerHTML = '<p class="form-hint">Замеры не добавлены</p>';
-    return;
-  }
+  if (!meas.length) { wrap.innerHTML = '<p class="form-hint">Замеры не добавлены</p>'; return; }
 
   var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
-  var sorted  = meas.slice().sort(function(a, b) {
-    return (b.measurementDate || '') > (a.measurementDate || '') ? 1 : -1;
-  });
+  var sorted  = meas.slice().sort(function(a, b) { return (b.measurementDate||'') > (a.measurementDate||'') ? 1 : -1; });
 
   var html = '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
     '<thead><tr style="border-bottom:1px solid var(--line)">' +
       '<th style="text-align:left;padding:5px 8px;color:var(--txt-3);font-weight:500">Дата</th>' +
       '<th style="text-align:right;padding:5px 8px;color:var(--txt-3);font-weight:500">Дебит</th>' +
       '<th style="text-align:left;padding:5px 8px;color:var(--txt-3);font-weight:500">Сотрудник</th>' +
-      (isAdmin ? '<th style="padding:5px 8px"></th>' : '') +
+      (isAdmin ? '<th style="padding:5px 4px"></th>' : '') +
     '</tr></thead><tbody>';
 
   sorted.forEach(function(m) {
@@ -455,9 +475,9 @@ function renderMeasurementsTable(well) {
       '<td style="padding:5px 8px">' + (m.measurementDate ? formatDate(m.measurementDate) : '—') + '</td>' +
       '<td style="padding:5px 8px;text-align:right;font-weight:500">' + (m.flowRate != null ? m.flowRate + ' м³/ч' : '—') + '</td>' +
       '<td style="padding:5px 8px;color:var(--txt-2)">' + escHTML(m.worker || '—') + '</td>' +
-      (isAdmin ? '<td style="padding:5px 8px;white-space:nowrap">' +
-        '<button class="meas-edit-btn btn btn-sm btn-outline" data-meas-id="' + escHTML(m.id) + '" style="padding:1px 6px;font-size:11px">✏</button> ' +
-        '<button class="meas-del-btn btn btn-sm btn-danger" data-meas-id="' + escHTML(m.id) + '" style="padding:1px 6px;font-size:11px">✕</button>' +
+      (isAdmin ? '<td style="padding:5px 4px;white-space:nowrap">' +
+        '<button class="meas-edit-btn btn btn-sm btn-outline" data-meas-id="' + escHTML(m.id) + '" style="padding:1px 5px;font-size:11px">✏</button> ' +
+        '<button class="meas-del-btn btn btn-sm btn-danger" data-meas-id="' + escHTML(m.id) + '" style="padding:1px 5px;font-size:11px">✕</button>' +
       '</td>' : '') +
     '</tr>';
   });
@@ -473,9 +493,7 @@ function renderMeasurementsTable(well) {
       });
     });
     wrap.querySelectorAll('.meas-del-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        deleteMeasurementConfirm(btn.dataset.measId, well.id);
-      });
+      btn.addEventListener('click', function() { deleteMeasurementConfirm(btn.dataset.measId, well.id); });
     });
   }
 }
@@ -502,8 +520,16 @@ function _buildWellModal(title, well) {
 
   var w = well || {};
 
+  var sectionOpts = WELL_SECTION_OPTIONS.map(function(o) {
+    return '<option value="' + escHTML(o) + '"' + (o === (w.quarrySection||'') ? ' selected' : '') + '>' + (o || '—') + '</option>';
+  }).join('');
+
+  var statusOpts = WELL_STATUS_OPTIONS.map(function(o) {
+    return '<option value="' + escHTML(o) + '"' + (o === (w.status||'Активная') ? ' selected' : '') + '>' + escHTML(o) + '</option>';
+  }).join('');
+
   modal.innerHTML = [
-    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:24px;width:min(620px,95vw);border:1px solid rgba(255,255,255,.08);margin:auto">',
+    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:24px;width:min(640px,95vw);border:1px solid rgba(255,255,255,.08);margin:auto">',
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">',
         '<span style="font-size:16px;font-weight:600">' + escHTML(title) + '</span>',
         '<button id="wells-modal-close" style="background:none;border:none;color:var(--txt-2);font-size:22px;cursor:pointer">✕</button>',
@@ -511,6 +537,9 @@ function _buildWellModal(title, well) {
 
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">',
         _wf('Название *', 'wells-f-name', 'text', w.name || '', false, 'col-span'),
+        _wf('Карьер', 'wells-f-quarry', 'text', w.quarry || ''),
+        _wfSel('Участок карьера', 'wells-f-section', sectionOpts),
+        _wfSel('Статус', 'wells-f-status', statusOpts),
         _wf('Домен', 'wells-f-domain', 'text', w.domain || ''),
         _wf('Глубина, м', 'wells-f-depth', 'number', w.depth != null ? w.depth : ''),
         _wf('Угол наклона, °', 'wells-f-inclination', 'number', w.inclination != null ? w.inclination : ''),
@@ -541,14 +570,11 @@ function _buildWellModal(title, well) {
   ].join('');
 
   document.body.appendChild(modal);
-
   document.getElementById('wells-modal-close').addEventListener('click', closeWellModal);
   modal.addEventListener('click', function(e) { if (e.target === modal) closeWellModal(); });
-
   ['wells-f-x', 'wells-f-y'].forEach(function(id) {
     document.getElementById(id).addEventListener('input', _updateWellLatLon);
   });
-
   document.getElementById('wells-modal-save').addEventListener('click', saveWell);
 }
 
@@ -559,6 +585,12 @@ function _wf(label, id, type, value, readOnly, extra) {
     '<input id="' + id + '" type="' + type + '" class="form-control" value="' + escHTML(String(value)) + '"' +
       (readOnly ? ' readonly' : '') + (type === 'number' ? ' step="any"' : '') +
     ' style="width:100%;box-sizing:border-box"></div>';
+}
+
+function _wfSel(label, id, options) {
+  return '<div class="form-group" style="margin:0">' +
+    '<label class="form-label">' + escHTML(label) + '</label>' +
+    '<select id="' + id + '" class="form-control" style="width:100%;box-sizing:border-box">' + options + '</select></div>';
 }
 
 function _wfCheck(label, id, checked) {
@@ -585,8 +617,7 @@ function saveWell() {
   var saveBtn = document.getElementById('wells-modal-save');
   if (!name) { errEl.textContent = 'Название обязательно'; errEl.style.display = ''; return; }
   errEl.style.display = 'none';
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Сохранение...';
+  saveBtn.disabled = true; saveBtn.textContent = 'Сохранение...';
 
   function num(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
 
@@ -600,6 +631,9 @@ function saveWell() {
   var well = {
     id:             (WellsState.editingWell && WellsState.editingWell.id) || ('well_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
     name:           name,
+    quarry:         (document.getElementById('wells-f-quarry').value || '').trim(),
+    quarrySection:  document.getElementById('wells-f-section').value || '',
+    status:         document.getElementById('wells-f-status').value || 'Активная',
     domain:         (document.getElementById('wells-f-domain').value || '').trim(),
     depth:          num('wells-f-depth'),
     inclination:    num('wells-f-inclination'),
@@ -620,7 +654,11 @@ function saveWell() {
   }).then(function(list) {
     WellsState.list = list;
     if (!WellsState.selectedId) WellsState.selectedId = well.id;
-    renderWellsPage();
+    if (WellsState.subTab === 'registry') {
+      renderWellsRegistryPanel();
+    } else {
+      renderWellsPage();
+    }
   }).catch(function(err) {
     errEl.textContent = err.message; errEl.style.display = '';
     saveBtn.disabled = false;
@@ -639,7 +677,11 @@ function deleteWellConfirm(id) {
     return Api.getWells();
   }).then(function(list) {
     WellsState.list = list;
-    renderWellsPage();
+    if (WellsState.subTab === 'registry') {
+      renderWellsRegistryPanel();
+    } else {
+      renderWellsPage();
+    }
   }).catch(function(err) { Toast.show('Ошибка: ' + err.message, 'error'); });
 }
 
@@ -770,8 +812,6 @@ function closeMeasurementModal() {
 function _getLastMeasurement(wellId) {
   var meas = WellsState.measurements[wellId];
   if (!meas || !meas.length) return null;
-  var sorted = meas.slice().sort(function(a, b) {
-    return (b.measurementDate || '') > (a.measurementDate || '') ? 1 : -1;
-  });
+  var sorted = meas.slice().sort(function(a, b) { return (b.measurementDate||'') > (a.measurementDate||'') ? 1 : -1; });
   return sorted[0].flowRate != null ? sorted[0] : null;
 }
