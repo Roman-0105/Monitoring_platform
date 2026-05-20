@@ -75,20 +75,7 @@ function initPhotoLightbox() {
 
 // ── Инициализация ─────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', function() {
-  // Проверяем что все модули загружены
-  if (typeof Api === 'undefined' || typeof Points === 'undefined' || typeof Storage === 'undefined') {
-    console.error('Критическая ошибка: не все модули загружены.');
-    document.body.innerHTML =
-      '<div style="padding:32px;text-align:center;font-family:sans-serif">' +
-      '<h2 style="color:#ea4335">Ошибка загрузки</h2>' +
-      '<p>Не удалось загрузить компоненты сайта.<br>Обнови страницу (F5).</p>' +
-      '<button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;' +
-      'background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer">🔄 Обновить</button>' +
-      '</div>';
-    return;
-  }
-
+window.initApp = function() {
   showLoader('Загрузка...');
 
   // Настройки устройства
@@ -126,6 +113,22 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   initSettings();
   Diagnostics.render();
+
+  // Logout button
+  var logoutBtn = document.getElementById('btn-logout');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function() {
+      if (!confirm('Выйти из аккаунта?')) return;
+      Auth.signOut().then(function() {
+        location.reload();
+      });
+    });
+  }
+  // Show username in sidebar
+  var userDisplay = document.getElementById('sidebar-user-name');
+  if (userDisplay && AppState.currentUser) {
+    userDisplay.textContent = AppState.currentUser.displayName || AppState.currentUser.email;
+  }
 
   // Статус-бар: сеть
   function updateNetStatus() {
@@ -178,8 +181,54 @@ document.addEventListener('DOMContentLoaded', function() {
   };
   window.addEventListener('online', function() { Points.flushQueue(); syncAll(); });
 
-  // Инициализация темы — внутри основного блока, чтобы не было двух DOMContentLoaded
+  // Инициализация темы
   initThemePanel();
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Восстанавливаем тему до проверки авторизации
+  try {
+    var savedTheme = localStorage.getItem('app-theme') || '';
+    var validThemes = ['default', 'light'];
+    if (savedTheme && validThemes.indexOf(savedTheme) >= 0) applyTheme(savedTheme, null);
+    _updateThemeToggleUI(savedTheme || 'default');
+    if (localStorage.getItem('sidebar-collapsed')) {
+      var sidebar = document.getElementById('tab-bar');
+      if (sidebar) sidebar.classList.add('collapsed');
+    }
+  } catch(e) {}
+
+  if (typeof Api === 'undefined' || typeof Points === 'undefined' || typeof Storage === 'undefined') {
+    document.body.innerHTML =
+      '<div style="padding:32px;text-align:center;font-family:sans-serif">' +
+      '<h2 style="color:#ea4335">Ошибка загрузки</h2>' +
+      '<p>Не удалось загрузить компоненты сайта.<br>Обнови страницу (F5).</p>' +
+      '<button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;' +
+      'background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer">🔄 Обновить</button>' +
+      '</div>';
+    return;
+  }
+
+  // Проверяем сессию перед загрузкой приложения
+  Auth.getSession().then(function(session) {
+    if (!session) {
+      LoginScreen.show();
+      return;
+    }
+    return Auth.getProfile().then(function(profile) {
+      AppState.currentUser = profile;
+      initApp();
+    });
+  }).catch(function() {
+    LoginScreen.show();
+  });
+
+  // Слушаем изменения auth (например, истечение токена)
+  Auth.onAuthChange(function(event) {
+    if (event === 'SIGNED_OUT') {
+      LoginScreen.show();
+    }
+  });
 });
 
 // ── Переключатель темы (сайдбар) ─────────────────────────
@@ -266,7 +315,7 @@ function switchTab(name) {
   if (name === 'add')      resetAddForm();
   if (name === 'diag')     Diagnostics.render();
   if (name === 'map')      { _mapSchemeImg = null; initMapFilters(); renderMap(); initMapLegend(); updateMapLegendPoints(); }
-  if (name === 'settings') { refreshSchemesData(); renderSettingsColors(); switchSettingsTab('main'); }
+  if (name === 'settings') { refreshSchemesData(); renderSettingsColors(); switchSettingsTab('main'); if (typeof renderUsersPanel === 'function' && AppState.currentUser && AppState.currentUser.role === 'admin') renderUsersPanel(); }
   if (name === 'workers')  renderWorkerManageList();
   if (name === 'stats')    { renderStatsPage(); initStatsSubTabs(); }
 }

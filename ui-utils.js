@@ -340,7 +340,34 @@ function updateFlowHint(prefix) {
 
 function updateWorkerSelects() {
   var workers = Workers.getList();
-  ['f-worker', 'e-worker', 'dm-worker', 'ditch-filter-worker'].forEach(function(id) {
+  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
+
+  // For non-admin: worker fields are readonly, auto-filled from current user
+  ['f-worker', 'e-worker'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    if (!isAdmin) {
+      // Keep as select but set value and disable
+      var displayName = (AppState.currentUser && AppState.currentUser.displayName) || '';
+      sel.innerHTML = '<option value="' + escHTML(displayName) + '">' + escHTML(displayName) + '</option>';
+      sel.value = displayName;
+      sel.disabled = true;
+    } else {
+      var cur = sel.value;
+      sel.innerHTML = '<option value="">— выберите —</option>';
+      sel.disabled = false;
+      workers.forEach(function(w) {
+        var opt = document.createElement('option');
+        opt.value = w.name;
+        opt.textContent = w.name;
+        sel.appendChild(opt);
+      });
+      if (cur) sel.value = cur;
+    }
+  });
+
+  // Filter selects remain normal
+  ['dm-worker', 'ditch-filter-worker'].forEach(function(id) {
     var sel = document.getElementById(id);
     if (!sel) return;
     var cur = sel.value;

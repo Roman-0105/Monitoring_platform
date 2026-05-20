@@ -43,6 +43,11 @@
         </div>
       </div>
       <div class="sidebar-footer">
+        <div id="sidebar-user-name" style="padding:6px 10px 4px;font-size:12px;color:var(--txt-3,#9aa0b4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <button class="theme-toggle-btn" id="btn-logout" title="Выйти">
+          <span class="tab-icon">⏻</span>
+          <span class="tab-label"> Выйти</span>
+        </button>
         <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Сменить тему">
           <span class="tab-icon" id="theme-icon">☀</span>
           <span class="tab-label" id="theme-label"> Светлая тема</span>
@@ -317,6 +322,7 @@
       <button class="btn btn-sm btn-outline" id="btn-settings-tab-aliases" data-settings-tab="aliases">🔗 Связать точки</button>
       <button class="btn btn-sm btn-outline" id="btn-settings-tab-horizons" data-settings-tab="horizons">⛰️ Горизонты</button>
       <button class="btn btn-sm btn-outline" id="btn-settings-tab-sync" data-settings-tab="sync">⏱ Синхронизация</button>
+      <button class="btn btn-sm btn-outline" id="btn-settings-tab-users" data-settings-tab="users" style="display:none">👥 Пользователи</button>
     </div>
 
     <div class="settings-panel active" id="settings-panel-main">
@@ -408,6 +414,9 @@
         <div id="settings-sync-manager"></div>
       </div>
     </div>
+
+    <!-- Панель пользователей — только для admin -->
+    <div class="settings-panel" id="settings-panel-users"></div>
 
     <!-- Панель тем — рендерится через renderSettingsTheme() -->
     <div class="settings-panel" id="settings-panel-theme"></div>
@@ -779,6 +788,8 @@
 <script src="storage.js"></script>
 <script src="diagnostics.js"></script>
 <script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="ui-login.js"></script>
 <script src="workers.js"></script>
 <script src="points.js"></script>
 <script src="photos.js"></script>

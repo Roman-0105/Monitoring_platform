@@ -1112,6 +1112,11 @@ function resetAddForm() {
   // После reset восстанавливаем сегодняшнюю дату
   var fDate = document.getElementById('f-monitoring-date');
   if (fDate) fDate.value = todayISO();
+  // Auto-fill worker for non-admins
+  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
+  if (!isAdmin && AppState.currentUser) {
+    setField('f-worker', AppState.currentUser.displayName || '');
+  }
 }
 
 function saveNewPoint() {
@@ -1210,7 +1215,14 @@ function openEditModal(id) {
   fillHorizonsDatalist();
   setField('e-comment',   p.comment     || '');
   updateWorkerSelects();
-  setField('e-worker', p.worker || '');
+  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
+  if (isAdmin) {
+    setField('e-worker', p.worker || '');
+  } else {
+    // Non-admin: worker field is already set to their display_name by updateWorkerSelects
+    // Keep existing point worker if available, else use current user
+    setField('e-worker', p.worker || (AppState.currentUser && AppState.currentUser.displayName) || '');
+  }
 
   var coordInfo = document.getElementById('e-map-coord-info');
   if (coordInfo) coordInfo.textContent = '';
