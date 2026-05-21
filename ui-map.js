@@ -252,9 +252,7 @@ function clampMapTransform() {
   } else {
     _mapOffY = Math.min(0, Math.max(minY, _mapOffY));
   }
-  // Sync targets so animation convergence check works correctly
-  _mapOffXT = _mapOffX;
-  _mapOffYT = _mapOffY;
+  // Do NOT sync targets here — that would break zoom-to-pivot animation
 }
 
 function redrawMap() {
@@ -301,17 +299,22 @@ function _startMapAnim() {
   if (_mapAnimId) return;
   function tick() {
     var LERP = 0.16;
-    var EPS  = 0.0005;
+    var EPS_S = 0.0005;
+    var EPS_O = 0.3;
 
     _mapScale += (_mapScaleT - _mapScale) * LERP;
+    _mapOffX  += (_mapOffXT  - _mapOffX)  * LERP;
+    _mapOffY  += (_mapOffYT  - _mapOffY)  * LERP;
 
-    // clampMapTransform (called inside redrawMap) handles _mapOffX/Y and syncs targets
-    redrawMap();
+    redrawMap(); // clampMapTransform adjusts current offsets for display only
 
-    if (Math.abs(_mapScaleT - _mapScale) > EPS) {
+    var done = Math.abs(_mapScaleT - _mapScale) < EPS_S &&
+               Math.abs(_mapOffXT  - _mapOffX)  < EPS_O &&
+               Math.abs(_mapOffYT  - _mapOffY)  < EPS_O;
+    if (!done) {
       _mapAnimId = requestAnimationFrame(tick);
     } else {
-      _mapScale = _mapScaleT;
+      _mapScale = _mapScaleT; _mapOffX = _mapOffXT; _mapOffY = _mapOffYT;
       redrawMap();
       _mapAnimId = null;
     }
