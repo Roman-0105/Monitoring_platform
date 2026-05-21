@@ -151,10 +151,14 @@ function renderMapSchemeSelector() {
     html += '<option value="' + escAttr(s.weekKey) + '">' + Schemes.formatWeekKey(s.weekKey) + '</option>';
   });
   sel.innerHTML = html;
-  if (_mapSelectedWeekKey !== 'auto' && !Schemes.getByWeek(_mapSelectedWeekKey)) {
-    _mapSelectedWeekKey = 'auto';
+  if (_mapSelectedWeekKey === 'auto') {
+    // Первый запуск: автоматически выбираем последнюю загруженную схему
+    _mapSelectedWeekKey = list.length ? list[0].weekKey : 'auto';
+  } else if (_mapSelectedWeekKey !== 'auto' && !Schemes.getByWeek(_mapSelectedWeekKey)) {
+    // Ранее выбранная схема удалена — переключаемся на последнюю
+    _mapSelectedWeekKey = list.length ? list[0].weekKey : 'auto';
   }
-  sel.value = _mapSelectedWeekKey || 'auto';
+  sel.value = _mapSelectedWeekKey;
   if (!sel._bound) {
     sel._bound = true;
     sel.addEventListener('change', function() {
@@ -1625,65 +1629,172 @@ function closePoiCard() {
   if (card) card.remove();
 }
 
-// Открываем форму добавления, предзаполненную данными ТИ
+// Открываем модальное окно добавления замера для точки интереса
 function openAddFormFromPoi(p) {
-  // Переходим на вкладку «Добавить точку»
-  if (typeof switchTab === 'function') switchTab('add');
+  var old = document.getElementById('poi-add-meas-modal');
+  if (old) old.remove();
 
-  // Небольшая задержка чтобы DOM успел отрисоваться
-  setTimeout(function() {
-    var fields = {
-      'f-point-number':    p.pointNumber  || '',
-      'f-horizon':         p.horizon      || '',
-      'f-domain':          p.domain       || '',
-      'f-wall':            p.wall         || '',
-      'f-worker':          '',            // сотрудника не переносим
-      'f-status':          '',            // статус не переносим
-      'f-intensity':       '',
-      'f-flow-rate':       '',
-      'f-measure-method':  '',
-      'f-water-color':     p.waterColor   || '',
-      'f-comment':         '',
-    };
+  // Список сотрудников
+  var workers = (typeof Workers !== 'undefined') ? Workers.getList() : [];
+  var currentWorker = AppState.currentUser ? (AppState.currentUser.displayName || '') : '';
+  var workerOpts = workers.map(function(w) {
+    return '<option value="' + escAttr(w.name) + '"' + (w.name === currentWorker ? ' selected' : '') + '>' + escHTML(w.name) + '</option>';
+  }).join('');
+  if (!workerOpts) workerOpts = '<option value="">— выберите —</option>';
 
-    Object.keys(fields).forEach(function(id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      if (el.tagName === 'SELECT') {
-        // Ищем option с нужным значением
-        for (var i = 0; i < el.options.length; i++) {
-          if (el.options[i].value === fields[id]) {
-            el.selectedIndex = i; break;
-          }
-        }
-      } else {
-        el.value = fields[id];
-      }
+  // Опции из существующих select-ов (чтобы не дублировать)
+  function cloneOpts(id) {
+    var el = document.getElementById(id);
+    return el ? el.innerHTML : '<option value="">—</option>';
+  }
+  var domainOpts   = cloneOpts('f-domain');
+  var statusOpts   = cloneOpts('f-status');
+  var intensityOpts = cloneOpts('f-intensity');
+  var wallOpts     = cloneOpts('f-wall');
+  var measureOpts  = cloneOpts('f-measure');
+  var colorOpts    = cloneOpts('f-color');
+
+  var modal = document.createElement('div');
+  modal.id = 'poi-add-meas-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:8500;' +
+    'display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 10px';
+
+  modal.innerHTML = [
+    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:20px;width:min(480px,100%);',
+      'border:1px solid rgba(255,255,255,.08);margin:auto">',
+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">',
+      '<span style="font-size:15px;font-weight:600">+ Замер · Точка №' + escHTML(String(p.pointNumber || '?')) + '</span>',
+      '<button id="pam-close" style="background:none;border:none;color:var(--txt-2);font-size:20px;cursor:pointer;line-height:1">✕</button>',
+    '</div>',
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
+      '<div class="form-group" style="margin:0"><label class="form-label">Дата замера</label>',
+        '<input id="pm-monitoring-date" type="date" class="form-control" value="' + todayISO() + '" style="width:100%;box-sizing:border-box"></div>',
+      '<div class="form-group" style="margin:0"><label class="form-label">Сотрудник</label>',
+        '<select id="pm-worker" class="form-control" style="width:100%;box-sizing:border-box">' + workerOpts + '</select></div>',
+    '</div>',
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
+      '<div class="form-group" style="margin:0"><label class="form-label">Статус</label>',
+        '<select id="pm-status" class="form-control" style="width:100%;box-sizing:border-box">' + statusOpts + '</select></div>',
+      '<div class="form-group" style="margin:0"><label class="form-label">Интенсивность</label>',
+        '<select id="pm-intensity" class="form-control" style="width:100%;box-sizing:border-box">' + intensityOpts + '</select></div>',
+    '</div>',
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
+      '<div class="form-group" style="margin:0"><label class="form-label">Дебит, л/с</label>',
+        '<input id="pm-flowrate" type="number" step="any" min="0" class="form-control" placeholder="0.00"',
+          ' style="width:100%;box-sizing:border-box"></div>',
+      '<div class="form-group" style="margin:0"><label class="form-label">Метод замера</label>',
+        '<select id="pm-measure" class="form-control" style="width:100%;box-sizing:border-box">' + measureOpts + '</select></div>',
+    '</div>',
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
+      '<div class="form-group" style="margin:0"><label class="form-label">Домен</label>',
+        '<select id="pm-domain" class="form-control" style="width:100%;box-sizing:border-box">' + domainOpts + '</select></div>',
+      '<div class="form-group" style="margin:0"><label class="form-label">Борт</label>',
+        '<select id="pm-wall" class="form-control" style="width:100%;box-sizing:border-box">' + wallOpts + '</select></div>',
+    '</div>',
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
+      '<div class="form-group" style="margin:0"><label class="form-label">Горизонт</label>',
+        '<input id="pm-horizon" type="text" class="form-control" value="' + escAttr(p.horizon || '') + '"',
+          ' list="horizons-datalist" style="width:100%;box-sizing:border-box"></div>',
+      '<div class="form-group" style="margin:0"><label class="form-label">Цвет воды</label>',
+        '<select id="pm-color" class="form-control" style="width:100%;box-sizing:border-box">' + colorOpts + '</select></div>',
+    '</div>',
+
+    '<div class="form-group" style="margin-bottom:10px"><label class="form-label">Комментарий</label>',
+      '<textarea id="pm-comment" class="form-control" rows="2"',
+        ' style="width:100%;box-sizing:border-box;resize:vertical"></textarea></div>',
+
+    '<div class="form-group" style="margin-bottom:14px"><label class="form-label">Фото</label>',
+      '<div id="pm-photo-preview" style="margin-bottom:6px"></div>',
+      '<div id="pm-photo-progress" style="display:none"></div>',
+      '<input type="file" id="pm-photo" accept="image/*"',
+        ' style="position:fixed;top:-200px;left:-200px;opacity:0;width:1px;height:1px;overflow:hidden">',
+      '<button type="button" id="pm-photo-btn" class="btn btn-sm btn-outline">📷 Загрузить фото</button>',
+    '</div>',
+
+    '<input type="hidden" id="pm-num"    value="' + escAttr(String(p.pointNumber || '')) + '">',
+    '<input type="hidden" id="pm-lat"    value="' + (p.lat    != null ? p.lat    : '') + '">',
+    '<input type="hidden" id="pm-lon"    value="' + (p.lon    != null ? p.lon    : '') + '">',
+    '<input type="hidden" id="pm-xlocal" value="' + (p.xLocal != null ? p.xLocal : '') + '">',
+    '<input type="hidden" id="pm-ylocal" value="' + (p.yLocal != null ? p.yLocal : '') + '">',
+
+    '<p id="pam-err" style="color:var(--red,#ea4335);font-size:13px;margin-bottom:8px;display:none"></p>',
+    '<button id="pam-save" class="btn btn-primary btn-full">Сохранить замер</button>',
+    '</div>',
+  ].join('');
+
+  document.body.appendChild(modal);
+
+  // Восстанавливаем выбранные значения из данных точки (select.value после innerHTML)
+  var domSel = document.getElementById('pm-domain');
+  if (domSel && p.domain) domSel.value = p.domain;
+  var wallSel = document.getElementById('pm-wall');
+  if (wallSel && p.wall) wallSel.value = p.wall;
+  var colorSel = document.getElementById('pm-color');
+  if (colorSel && p.waterColor) colorSel.value = p.waterColor;
+
+  // Закрытие
+  document.getElementById('pam-close').addEventListener('click', function() { modal.remove(); });
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+  // Фото
+  document.getElementById('pm-photo-btn').addEventListener('click', function() {
+    var hasPhoto = !!(document.getElementById('pm-photo-preview').querySelector('img'));
+    showPhotoSourceModal('pm-photo', 'pm-photo-preview', 'pm-photo-progress', hasPhoto);
+  });
+
+  // Сохранение
+  document.getElementById('pam-save').addEventListener('click', function() {
+    var saveBtn = document.getElementById('pam-save');
+    var errEl   = document.getElementById('pam-err');
+    var data    = readFormFields('pm');
+
+    errEl.style.display = 'none';
+    if (!data.pointNumber) {
+      errEl.textContent = 'Номер точки не определён'; errEl.style.display = ''; return;
+    }
+
+    saveBtn.disabled = true; saveBtn.textContent = 'Сохранение...';
+
+    var photoFile = Photos.getFile('pm-photo');
+    var tid = Toast.progress('save-poi-meas', 'Сохранение замера...');
+
+    Points.create(data).then(function(savedPoint) {
+      if (!photoFile || !savedPoint || !savedPoint.id) return null;
+      Toast.progress('save-poi-meas', 'Загрузка фото...', 50);
+      var sizeMb = (photoFile.size / 1024 / 1024).toFixed(2) + ' МБ';
+      showPhotoProgress('pm-photo-progress', 'compressing', sizeMb);
+      var _extra = { pointNumber: data.pointNumber, monitoringDate: data.monitoringDate, flowRate: data.flowRate };
+      return Photos.upload(photoFile, savedPoint.id, _extra).then(function(driveUrl) {
+        showPhotoProgress('pm-photo-progress', 'done');
+        var pt = Points.getById(savedPoint.id);
+        if (pt) { pt.photoUrls = [driveUrl]; Storage.cachePoints(Points.getList()); }
+      }).catch(function(photoErr) {
+        showPhotoProgress('pm-photo-progress', 'error', photoErr.message);
+        Toast.show('Замер сохранён, фото не загрузилось', 'warning');
+      });
+    }).then(function() {
+      modal.remove();
+      return Points.load();
+    }).then(function() {
+      if (typeof renderPointsList === 'function') renderPointsList();
+      if (typeof _mapSchemeImg !== 'undefined' && _mapSchemeImg) redrawMap();
+      Toast.done('save-poi-meas', 'Замер добавлен');
+    }).catch(function(err) {
+      errEl.textContent = 'Ошибка: ' + err.message; errEl.style.display = '';
+      saveBtn.disabled = false; saveBtn.textContent = 'Сохранить замер';
+      Toast.fail('save-poi-meas', 'Ошибка: ' + err.message);
     });
+  });
 
-    // Координаты — скрытые поля
-    if (p.xLocal != null) {
-      var fx = document.getElementById('f-x-local');
-      var fy = document.getElementById('f-y-local');
-      if (fx) fx.value = p.xLocal;
-      if (fy) fy.value = p.yLocal;
-    }
-
-    // Дата — ставим сегодня
-    var fDate = document.getElementById('f-monitoring-date');
-    if (fDate && !fDate.value) {
-      fDate.value = new Date().toISOString().slice(0, 10);
-    }
-
-    // Показываем тост-подсказку
-    if (typeof Toast !== 'undefined') {
-      Toast.show('Форма заполнена данными точки №' + p.pointNumber +
-        ' · Проверьте поля и добавьте новые данные замера', 'info');
-    }
-
-    // Фокус на поле дебита
-    var fFlow = document.getElementById('f-flow-rate');
-    if (fFlow) fFlow.focus();
-
-  }, 150);
+  // Фокус на дебите
+  setTimeout(function() {
+    var fl = document.getElementById('pm-flowrate');
+    if (fl) fl.focus();
+  }, 100);
 }
