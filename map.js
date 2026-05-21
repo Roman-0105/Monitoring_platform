@@ -39,7 +39,7 @@ var MapModule = (function() {
     simpleColor: '#ff8c00',
     intensityColor: '#ff8c00',
     combinedBaseColor: '#ff8c00',
-    zoom: { min: 0.35, max: 6 },
+    zoom: { min: 0.05, max: 6 },
     labels: { showFromScale: 0.85 },
     statusColors: {
       'Новая':      '#1a73e8',

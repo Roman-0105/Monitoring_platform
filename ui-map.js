@@ -211,13 +211,12 @@ function renderMap() {
         setTimeout(function() { HeatMap.init(); }, 100);
       }
       var wrap = document.getElementById('map-scheme-wrap');
+      var lim  = getMapZoomLimits();
       if (wrap) {
         var fitScale = Math.min(wrap.clientWidth / img.width, wrap.clientHeight / img.height);
-        var lim = getMapZoomLimits();
-        _mapScale = Math.max(lim.min, Math.min(lim.max, fitScale > 0 ? fitScale : 1));
+        _mapScale = Math.min(lim.max, fitScale > 0 ? fitScale : 1); // no min clamp on fit
       } else {
-        var lim2 = getMapZoomLimits();
-        _mapScale = Math.max(lim2.min, Math.min(lim2.max, 1));
+        _mapScale = 1;
       }
       _mapOffX = 0; _mapOffY = 0;
       _mapScaleT = _mapScale; _mapOffXT = 0; _mapOffYT = 0;
@@ -361,12 +360,16 @@ function fitMap() {
   if (!_mapSchemeImg) return;
   var canvas = document.getElementById('map-canvas');
   if (!canvas) return;
-  var fitScale = Math.min(canvas.width / _mapSchemeImg.width, canvas.height / _mapSchemeImg.height);
+  // No min clamp — fit always shows the full image regardless of zoom limits
+  var s  = Math.min(canvas.width / _mapSchemeImg.width, canvas.height / _mapSchemeImg.height);
+  if (s <= 0) s = 1;
   var lim = getMapZoomLimits();
-  var s = Math.max(lim.min, Math.min(lim.max, fitScale > 0 ? fitScale : 1));
+  s = Math.min(s, lim.max);
   var ox = (canvas.width  - _mapSchemeImg.width  * s) / 2;
   var oy = (canvas.height - _mapSchemeImg.height * s) / 2;
-  _setMapTarget(s, ox, oy);
+  // Bypass _setMapTarget min-clamp for fit
+  _mapScaleT = s; _mapOffXT = ox; _mapOffYT = oy;
+  _startMapAnim();
 }
 
 function initMapZoomButtons() {
