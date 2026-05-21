@@ -572,33 +572,121 @@ function _mkC(NS, cx, cy, r2, fill, stroke, sw2, cls) {
   return c;
 }
 
+function _pinPathD(cx, cy, r) {
+  var hcy = cy - r * 2.5;
+  var lx  = cx - r;
+  var rx  = cx + r;
+  var f   = function(v) { return v.toFixed(2); };
+  return 'M' + f(cx) + ',' + f(cy) +
+    ' C' + f(cx - r * 0.4) + ',' + f(cy - r * 0.5) +
+    ' ' + f(lx) + ',' + f(hcy + r * 0.8) +
+    ' ' + f(lx) + ',' + f(hcy) +
+    ' A' + f(r) + ',' + f(r) + ' 0 0 0 ' + f(rx) + ',' + f(hcy) +
+    ' C' + f(rx) + ',' + f(hcy + r * 0.8) +
+    ' ' + f(cx + r * 0.4) + ',' + f(cy - r * 0.5) +
+    ' ' + f(cx) + ',' + f(cy) + ' Z';
+}
+
 function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   var isSel   = w.id === WellsState.selectedId;
-  var color   = WELL_STATUS_COLORS[w.status] || '#9aa0a6'; // status color for ALL wells
+  var color   = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
   var r       = (isSel ? 11 : 7) * p2s;
   var strokeW = 1.5 * p2s;
+  var hcy     = cy - r * 2.5;
 
   var g = document.createElementNS(NS, 'g');
   g.setAttribute('data-well-id', w.id);
-  g.setAttribute('data-sel', isSel ? '1' : '0');
+  g.setAttribute('data-sel',     isSel ? '1' : '0');
+  g.setAttribute('data-cx',      cx.toFixed(2));
+  g.setAttribute('data-cy',      cy.toFixed(2));
+  g.setAttribute('data-azimuth', w.azimuth != null ? String(w.azimuth) : '');
+  g.setAttribute('data-depth',   w.depth   != null ? String(w.depth)   : '');
   g.style.cursor = 'pointer';
 
   if (isSel) {
-    // Yellow glow + yellow ring background = selection indicator independent of status color
-    g.appendChild(_mkC(NS, cx, cy, r * 2.2, '#f9ab00', null, 0, 'wm-halo'));
-    g.appendChild(_mkC(NS, cx, cy, r + 3.5 * p2s, '#f9ab00', null, 0, 'wm-sel-bg'));
+    var halo = document.createElementNS(NS, 'circle');
+    halo.setAttribute('cx', cx.toFixed(1)); halo.setAttribute('cy', hcy.toFixed(1));
+    halo.setAttribute('r', (r * 2.0).toFixed(2));
+    halo.setAttribute('fill', '#f9ab0028');
+    halo.setAttribute('class', 'wm-halo');
+    g.appendChild(halo);
+
+    var selRing = document.createElementNS(NS, 'circle');
+    selRing.setAttribute('cx', cx.toFixed(1)); selRing.setAttribute('cy', hcy.toFixed(1));
+    selRing.setAttribute('r', (r + 3 * p2s).toFixed(2));
+    selRing.setAttribute('fill', 'none');
+    selRing.setAttribute('stroke', '#f9ab00');
+    selRing.setAttribute('stroke-width', (2 * p2s).toFixed(2));
+    selRing.setAttribute('class', 'wm-sel-ring');
+    g.appendChild(selRing);
   }
-  g.appendChild(_mkC(NS, cx, cy, r,       color,            'rgba(0,0,0,.6)', strokeW, 'wm-dot'));
-  g.appendChild(_mkC(NS, cx, cy, r * 0.3, 'rgba(0,0,0,.7)', null,             0,       'wm-inner'));
-  g.appendChild(_mkC(NS, cx, cy, r * 2.5, 'transparent',    null,             0,       'wm-hit'));
+
+  // Azimuth arrow: direction from azimuth, length from depth
+  if (w.azimuth != null) {
+    var azRad    = w.azimuth * Math.PI / 180;
+    var adx      = Math.sin(azRad);
+    var ady      = -Math.cos(azRad);
+    var arrowLen = (w.depth != null ? Math.min(50, Math.max(8, w.depth * 0.2)) : 20) * p2s;
+    var ax2 = cx + adx * arrowLen;
+    var ay2 = hcy + ady * arrowLen;
+    var headSz = 5 * p2s;
+    var px = -ady, py = adx;
+
+    var shaft = document.createElementNS(NS, 'line');
+    shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', hcy.toFixed(2));
+    shaft.setAttribute('x2', ax2.toFixed(2)); shaft.setAttribute('y2', ay2.toFixed(2));
+    shaft.setAttribute('stroke', color);
+    shaft.setAttribute('stroke-width', (2 * p2s).toFixed(2));
+    shaft.setAttribute('stroke-linecap', 'round');
+    shaft.setAttribute('pointer-events', 'none');
+    shaft.setAttribute('class', 'wm-arrow-shaft');
+    g.appendChild(shaft);
+
+    var arHead = document.createElementNS(NS, 'polygon');
+    arHead.setAttribute('points',
+      ax2.toFixed(2)+','+ay2.toFixed(2)+' '+
+      (ax2 - adx*headSz + px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + py*headSz*0.5).toFixed(2)+' '+
+      (ax2 - adx*headSz - px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - py*headSz*0.5).toFixed(2));
+    arHead.setAttribute('fill', color);
+    arHead.setAttribute('pointer-events', 'none');
+    arHead.setAttribute('class', 'wm-arrow-head');
+    g.appendChild(arHead);
+  }
+
+  // Teardrop pin body: tip at (cx, cy), head circle at (cx, hcy)
+  var pin = document.createElementNS(NS, 'path');
+  pin.setAttribute('d', _pinPathD(cx, cy, r));
+  pin.setAttribute('fill', color);
+  pin.setAttribute('stroke', 'rgba(255,255,255,.7)');
+  pin.setAttribute('stroke-width', strokeW.toFixed(2));
+  pin.setAttribute('stroke-linejoin', 'round');
+  pin.setAttribute('class', 'wm-pin');
+  g.appendChild(pin);
+
+  // Number inside pin head
+  var numMatch = w.name ? w.name.match(/(\d+)/) : null;
+  var numLabel = numMatch ? numMatch[1].slice(-2) : (w.name ? w.name.slice(0, 2) : '?');
+  var numFS = Math.min(10 * p2s, r * 1.1);
+  var numEl = document.createElementNS(NS, 'text');
+  numEl.setAttribute('x', cx.toFixed(1));
+  numEl.setAttribute('y', (hcy + numFS * 0.38).toFixed(1));
+  numEl.setAttribute('text-anchor', 'middle');
+  numEl.setAttribute('font-size', numFS.toFixed(2));
+  numEl.setAttribute('font-weight', '700');
+  numEl.setAttribute('font-family', 'sans-serif');
+  numEl.setAttribute('fill', '#ffffff');
+  numEl.setAttribute('pointer-events', 'none');
+  numEl.setAttribute('class', 'wm-num');
+  numEl.textContent = numLabel;
+  g.appendChild(numEl);
 
   if (isSel) {
-    var fs  = 11 * p2s;
+    var nameFS = 11 * p2s;
     var lbl = document.createElementNS(NS, 'text');
     lbl.setAttribute('x',             cx.toFixed(1));
-    lbl.setAttribute('y',             (cy + r + (fs + 5 * p2s)).toFixed(1));
+    lbl.setAttribute('y',             (cy + nameFS + 4 * p2s).toFixed(1));
     lbl.setAttribute('text-anchor',   'middle');
-    lbl.setAttribute('font-size',     fs.toFixed(2));
+    lbl.setAttribute('font-size',     nameFS.toFixed(2));
     lbl.setAttribute('font-weight',   '600');
     lbl.setAttribute('font-family',   'sans-serif');
     lbl.setAttribute('fill',          color);
@@ -611,9 +699,13 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
     g.appendChild(lbl);
   }
 
+  g.appendChild(_mkC(NS, cx, hcy, r * 2.5, 'transparent', null, 0, 'wm-hit'));
+
   var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
   var tipHtml = '<b>' + escHTML(w.name) + '</b>' +
-    (w.status ? ' <span style="color:' + statusColor + '">● ' + escHTML(w.status) + '</span>' : '');
+    (w.status   ? ' <span style="color:' + statusColor + '">● ' + escHTML(w.status) + '</span>' : '') +
+    (w.depth    != null ? '<br><span style="color:#9aa0a6">Глубина: ' + w.depth + ' м</span>' : '') +
+    (w.azimuth  != null ? '  ·  Аз: ' + w.azimuth + '°' : '');
 
   g.addEventListener('mouseenter', function(e) { _showWmTip(tipHtml, e); });
   g.addEventListener('mousemove',  function(e) { _moveWmTip(e); });
@@ -629,34 +721,49 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
 }
 
 function _appendClusterMarker(marksG, cluster, NS, p2s) {
-  var cx  = cluster.cx, cy = cluster.cy;
-  var n   = cluster.wells.length;
-  var r   = 13 * p2s;
-  var fs  = Math.round(Math.min(13, 8 + n)) * p2s;
+  var cx = cluster.cx, cy = cluster.cy;
+  var n  = cluster.wells.length;
+  var r  = 13 * p2s;
+  var fs = Math.min(13, 8 + n) * p2s;
 
   var g = document.createElementNS(NS, 'g');
   g.setAttribute('data-cluster', '1');
+  g.setAttribute('data-cx', cx.toFixed(2));
+  g.setAttribute('data-cy', cy.toFixed(2));
+  g.setAttribute('data-n',  String(n));
   g.style.cursor = 'pointer';
 
-  // Outer glow ring
-  g.appendChild(_mkC(NS, cx, cy, r * 1.5, 'rgba(255,255,255,.08)', null, 0, ''));
-  // Cluster body
-  g.appendChild(_mkC(NS, cx, cy, r, '#3d4b5c', 'rgba(255,255,255,.25)', 1.5 * p2s, 'wm-cluster-dot'));
+  // Glow ring
+  g.appendChild(_mkC(NS, cx, cy, r * 1.6, 'rgba(26,115,232,.12)', null, 0, 'wm-cl-glow'));
+  // Blue cluster body
+  g.appendChild(_mkC(NS, cx, cy, r, '#1a73e8', 'rgba(255,255,255,.2)', 1.5 * p2s, 'wm-cluster-dot'));
 
+  // Count text
   var txt = document.createElementNS(NS, 'text');
-  txt.setAttribute('x',           cx.toFixed(1));
-  txt.setAttribute('y',           (cy + fs * 0.36).toFixed(1));
-  txt.setAttribute('text-anchor', 'middle');
-  txt.setAttribute('font-size',   fs.toFixed(2));
-  txt.setAttribute('font-weight', '700');
-  txt.setAttribute('font-family', 'sans-serif');
-  txt.setAttribute('fill',        '#ffffff');
+  txt.setAttribute('x',              cx.toFixed(1));
+  txt.setAttribute('y',              (cy + fs * 0.36).toFixed(1));
+  txt.setAttribute('text-anchor',    'middle');
+  txt.setAttribute('font-size',      fs.toFixed(2));
+  txt.setAttribute('font-weight',    '700');
+  txt.setAttribute('font-family',    'sans-serif');
+  txt.setAttribute('fill',           '#ffffff');
   txt.setAttribute('pointer-events', 'none');
+  txt.setAttribute('class',          'wm-cl-txt');
   txt.textContent = n;
   g.appendChild(txt);
 
-  // Transparent hit area
-  g.appendChild(_mkC(NS, cx, cy, r * 1.5, 'transparent', null, 0, ''));
+  // Status dots on perimeter (up to 8)
+  var dotsN = Math.min(n, 8);
+  for (var i = 0; i < dotsN; i++) {
+    var ang = (i / dotsN) * 2 * Math.PI - Math.PI / 2;
+    var ddx = Math.cos(ang) * (r + 4.5 * p2s);
+    var ddy = Math.sin(ang) * (r + 4.5 * p2s);
+    var dc  = WELL_STATUS_COLORS[cluster.wells[i].status] || '#9aa0a6';
+    g.appendChild(_mkC(NS, cx + ddx, cy + ddy, 3 * p2s, dc, '#0f1420', 1 * p2s, 'wm-cl-sdot'));
+  }
+
+  // Hit area
+  g.appendChild(_mkC(NS, cx, cy, r * 2, 'transparent', null, 0, 'wm-cl-hit'));
 
   var names = cluster.wells.map(function(w) {
     var sc = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
@@ -685,32 +792,108 @@ function _updateMarkerSizes() {
 
   marksG.querySelectorAll('g[data-well-id]').forEach(function(g) {
     var isSel   = g.getAttribute('data-sel') === '1';
-    var r       = (isSel ? 11 : 7) * p2s;
-    var strokeW = 1.5 * p2s;
+    var cx      = parseFloat(g.getAttribute('data-cx'));
+    var cy      = parseFloat(g.getAttribute('data-cy'));
+    var azAttr  = g.getAttribute('data-azimuth');
+    var depAttr = g.getAttribute('data-depth');
+    var azimuth = azAttr  !== '' ? parseFloat(azAttr)  : null;
+    var depth   = depAttr !== '' ? parseFloat(depAttr) : null;
+
+    var r   = (isSel ? 11 : 7) * p2s;
+    var hcy = cy - r * 2.5;
+
     var halo    = g.querySelector('.wm-halo');
-    var selBg   = g.querySelector('.wm-sel-bg');
-    var dot     = g.querySelector('.wm-dot');
-    var inner   = g.querySelector('.wm-inner');
+    var selRing = g.querySelector('.wm-sel-ring');
+    var pin     = g.querySelector('.wm-pin');
+    var num     = g.querySelector('.wm-num');
     var hit     = g.querySelector('.wm-hit');
     var lbl     = g.querySelector('.wm-label');
-    if (halo)  halo.setAttribute('r',  (r * 2.2).toFixed(2));
-    if (selBg) selBg.setAttribute('r', (r + 3.5 * p2s).toFixed(2));
-    if (dot)   { dot.setAttribute('r', r.toFixed(2)); dot.setAttribute('stroke-width', strokeW.toFixed(2)); }
-    if (inner) inner.setAttribute('r', (r * 0.3).toFixed(2));
-    if (hit)   hit.setAttribute('r',   (r * 2.5).toFixed(2));
-    if (lbl && dot) {
-      var fs = 11 * p2s;
-      var cy = parseFloat(dot.getAttribute('cy'));
-      lbl.setAttribute('font-size',   fs.toFixed(2));
-      lbl.setAttribute('stroke-width',(2.5 * p2s).toFixed(2));
-      lbl.setAttribute('y', (cy + r + (fs + 5 * p2s)).toFixed(1));
+    var shaft   = g.querySelector('.wm-arrow-shaft');
+    var arHead  = g.querySelector('.wm-arrow-head');
+
+    if (halo) {
+      halo.setAttribute('cx', cx.toFixed(1)); halo.setAttribute('cy', hcy.toFixed(1));
+      halo.setAttribute('r', (r * 2.0).toFixed(2));
+    }
+    if (selRing) {
+      selRing.setAttribute('cx', cx.toFixed(1)); selRing.setAttribute('cy', hcy.toFixed(1));
+      selRing.setAttribute('r', (r + 3 * p2s).toFixed(2));
+      selRing.setAttribute('stroke-width', (2 * p2s).toFixed(2));
+    }
+    if (pin) {
+      pin.setAttribute('d', _pinPathD(cx, cy, r));
+      pin.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
+    }
+    if (num) {
+      var numFS = Math.min(10 * p2s, r * 1.1);
+      num.setAttribute('x', cx.toFixed(1));
+      num.setAttribute('y', (hcy + numFS * 0.38).toFixed(1));
+      num.setAttribute('font-size', numFS.toFixed(2));
+    }
+    if (hit) {
+      hit.setAttribute('cx', cx.toFixed(1)); hit.setAttribute('cy', hcy.toFixed(1));
+      hit.setAttribute('r', (r * 2.5).toFixed(2));
+    }
+    if (lbl) {
+      var nameFS = 11 * p2s;
+      lbl.setAttribute('x', cx.toFixed(1));
+      lbl.setAttribute('y', (cy + nameFS + 4 * p2s).toFixed(1));
+      lbl.setAttribute('font-size', nameFS.toFixed(2));
+      lbl.setAttribute('stroke-width', (2.5 * p2s).toFixed(2));
+    }
+    if (shaft && azimuth != null) {
+      var azRad    = azimuth * Math.PI / 180;
+      var adx      = Math.sin(azRad);
+      var ady      = -Math.cos(azRad);
+      var arrowLen = (depth != null ? Math.min(50, Math.max(8, depth * 0.2)) : 20) * p2s;
+      var ax2 = cx + adx * arrowLen;
+      var ay2 = hcy + ady * arrowLen;
+      shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', hcy.toFixed(2));
+      shaft.setAttribute('x2', ax2.toFixed(2)); shaft.setAttribute('y2', ay2.toFixed(2));
+      shaft.setAttribute('stroke-width', (2 * p2s).toFixed(2));
+      if (arHead) {
+        var headSz = 5 * p2s;
+        var px = -ady, py = adx;
+        arHead.setAttribute('points',
+          ax2.toFixed(2)+','+ay2.toFixed(2)+' '+
+          (ax2 - adx*headSz + px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + py*headSz*0.5).toFixed(2)+' '+
+          (ax2 - adx*headSz - px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - py*headSz*0.5).toFixed(2));
+      }
     }
   });
 
   marksG.querySelectorAll('g[data-cluster]').forEach(function(g) {
     var r  = 13 * p2s;
-    var cd = g.querySelector('.wm-cluster-dot');
-    if (cd) { cd.setAttribute('r', r.toFixed(2)); cd.setAttribute('stroke-width', (1.5 * p2s).toFixed(2)); }
+    var cx = parseFloat(g.getAttribute('data-cx') || 0);
+    var cy = parseFloat(g.getAttribute('data-cy') || 0);
+    var n  = parseInt(g.getAttribute('data-n') || 1);
+
+    var glow = g.querySelector('.wm-cl-glow');
+    var cd   = g.querySelector('.wm-cluster-dot');
+    var txt  = g.querySelector('.wm-cl-txt');
+    var hit  = g.querySelector('.wm-cl-hit');
+
+    if (glow) glow.setAttribute('r', (r * 1.6).toFixed(2));
+    if (cd) {
+      cd.setAttribute('r', r.toFixed(2));
+      cd.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
+    }
+    if (txt) {
+      var fs = Math.min(13, 8 + n) * p2s;
+      txt.setAttribute('font-size', fs.toFixed(2));
+      txt.setAttribute('y', (cy + fs * 0.36).toFixed(1));
+    }
+    if (hit) hit.setAttribute('r', (r * 2).toFixed(2));
+
+    var sdots = g.querySelectorAll('.wm-cl-sdot');
+    var dotsN = sdots.length;
+    sdots.forEach(function(dot, i) {
+      var ang = (i / dotsN) * 2 * Math.PI - Math.PI / 2;
+      dot.setAttribute('cx', (cx + Math.cos(ang) * (r + 4.5 * p2s)).toFixed(2));
+      dot.setAttribute('cy', (cy + Math.sin(ang) * (r + 4.5 * p2s)).toFixed(2));
+      dot.setAttribute('r',  (3 * p2s).toFixed(2));
+      dot.setAttribute('stroke-width', (1 * p2s).toFixed(2));
+    });
   });
 }
 

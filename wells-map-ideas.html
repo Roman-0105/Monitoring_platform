@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Идеи стилей карты скважин</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
+  h1  { font-size: 20px; font-weight: 700; color: #e6edf3; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #8b949e; margin-bottom: 32px; }
+  .section  { margin-bottom: 48px; }
+  .section-title { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #58a6ff; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #21262d; }
+
+  .ideas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+  .idea-card  { background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; cursor: pointer; transition: border-color .15s, transform .15s; }
+  .idea-card:hover  { border-color: #58a6ff; transform: translateY(-2px); }
+  .idea-card.chosen { border-color: #3fb950; box-shadow: 0 0 0 3px rgba(63,185,80,.15); }
+
+  .card-header  { padding: 14px 16px 10px; display: flex; align-items: center; gap: 10px; }
+  .badge-rec    { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 20px; background: rgba(63,185,80,.15); color: #3fb950; }
+  .badge-new    { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 20px; background: rgba(88,166,255,.15); color: #58a6ff; }
+  .card-title   { font-size: 14px; font-weight: 700; color: #e6edf3; }
+  .card-desc    { font-size: 12px; color: #8b949e; padding: 0 16px 14px; line-height: 1.5; }
+  svg.preview   { display: block; width: 100%; }
+
+  .choose-btn   { display: block; width: calc(100% - 32px); margin: 0 16px 16px; padding: 8px; border-radius: 8px; border: 1px solid #30363d; background: transparent; color: #8b949e; font-size: 12px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+  .choose-btn:hover  { background: rgba(88,166,255,.1); color: #58a6ff; border-color: #58a6ff; }
+  .choose-btn.chosen { background: rgba(63,185,80,.1); color: #3fb950; border-color: #3fb950; }
+  .note { font-size: 11px; color: #8b949e; margin-top: 24px; padding: 12px 16px; background: rgba(249,171,0,.05); border: 1px solid rgba(249,171,0,.15); border-radius: 8px; }
+</style>
+</head>
+<body>
+<h1>Идеи стилей карты скважин</h1>
+<p class="subtitle">Три состояния: обычная • выбранная • кластер. Кликни — выберем.</p>
+
+<div class="section">
+  <div class="section-title">Маркеры скважин + кластеры</div>
+  <div class="ideas-grid" id="grid"></div>
+</div>
+
+<div class="note">💡 Выбери один стиль — он применяется ко всем трём состояниям сразу.</div>
+
+<script>
+var W = 440, H = 200;
+var STATUS = { 'Активная':'#4caf7d', 'Иссякает':'#f9ab00', 'Сухая':'#ea4335' };
+var SEL_COL = '#f9ab00';
+
+// Sample wells layout
+var WELLS = [
+  { name: 'ГС-1',  status: 'Активная', x: 70,  y: 100, sel: false },
+  { name: 'ГС-4',  status: 'Иссякает', x: 150, y: 65,  sel: false },
+  { name: 'ГС-7',  status: 'Сухая',    x: 230, y: 120, sel: true  },
+  { name: 'ГС-12', status: 'Активная', x: 310, y: 75,  sel: false },
+];
+// cluster
+var CLUSTER = { x: 390, y: 130, n: 4, statuses: ['Активная','Активная','Иссякает','Сухая'] };
+
+function ns(tag) { return document.createElementNS('http://www.w3.org/2000/svg', tag); }
+function mkSvg(h) {
+  var svg = ns('svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + h);
+  svg.setAttribute('class', 'preview');
+  // subtle grid
+  var defs = ns('defs');
+  var pat = ns('pattern');
+  pat.setAttribute('id', 'grid-' + Math.random().toString(36).slice(2));
+  pat.setAttribute('width','40'); pat.setAttribute('height','40');
+  pat.setAttribute('patternUnits','userSpaceOnUse');
+  var l1 = ns('line'); l1.setAttribute('x1','40'); l1.setAttribute('y1','0'); l1.setAttribute('x2','40'); l1.setAttribute('y2','40'); l1.setAttribute('stroke','rgba(255,255,255,.04)'); l1.setAttribute('stroke-width','1');
+  var l2 = ns('line'); l2.setAttribute('x1','0'); l2.setAttribute('y1','40'); l2.setAttribute('x2','40'); l2.setAttribute('y2','40'); l2.setAttribute('stroke','rgba(255,255,255,.04)'); l2.setAttribute('stroke-width','1');
+  pat.appendChild(l1); pat.appendChild(l2);
+  defs.appendChild(pat); svg.appendChild(defs);
+  var bg = ns('rect'); bg.setAttribute('width',W); bg.setAttribute('height',h);
+  bg.setAttribute('fill','#0d1117'); svg.appendChild(bg);
+  var grid = ns('rect'); grid.setAttribute('width',W); grid.setAttribute('height',h);
+  grid.setAttribute('fill','url(#' + pat.getAttribute('id') + ')'); svg.appendChild(grid);
+  return svg;
+}
+
+function txt(svg, x, y, content, size, weight, col, anchor, stroke, sWidth) {
+  var t = ns('text');
+  t.setAttribute('x', x); t.setAttribute('y', y);
+  t.setAttribute('text-anchor', anchor||'middle');
+  t.setAttribute('dominant-baseline','middle');
+  t.setAttribute('font-size', size||12);
+  t.setAttribute('font-weight', weight||'400');
+  t.setAttribute('font-family','sans-serif');
+  t.setAttribute('fill', col||'#fff');
+  if (stroke) { t.setAttribute('stroke', stroke); t.setAttribute('stroke-width', sWidth||2); t.setAttribute('paint-order','stroke'); }
+  t.textContent = content;
+  svg.appendChild(t); return t;
+}
+function circ(svg, cx, cy, r, fill, stroke, sw, opa) {
+  var c = ns('circle'); c.setAttribute('cx',cx); c.setAttribute('cy',cy); c.setAttribute('r',r);
+  c.setAttribute('fill', fill||'none');
+  if (stroke) { c.setAttribute('stroke',stroke); c.setAttribute('stroke-width',sw||1); }
+  if (opa != null) c.setAttribute('opacity', opa);
+  svg.appendChild(c); return c;
+}
+function poly(svg, pts, fill, stroke, sw, opa) {
+  var p = ns('polygon');
+  p.setAttribute('points', pts.map(function(pp){return pp[0]+','+pp[1];}).join(' '));
+  p.setAttribute('fill', fill||'none');
+  if (stroke){p.setAttribute('stroke',stroke);p.setAttribute('stroke-width',sw||1);}
+  if(opa!=null)p.setAttribute('opacity',opa);
+  svg.appendChild(p); return p;
+}
+function line(svg, x1, y1, x2, y2, stroke, sw, opa) {
+  var l = ns('line');
+  l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+  l.setAttribute('stroke',stroke||'#fff'); l.setAttribute('stroke-width',sw||1);
+  if(opa!=null)l.setAttribute('opacity',opa);
+  svg.appendChild(l); return l;
+}
+function hexPts(cx, cy, r, rot) {
+  rot = rot || 0;
+  var pts = [];
+  for (var i=0; i<6; i++) { var a=(Math.PI/3)*i+rot; pts.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]); }
+  return pts;
+}
+function linearGrad(defs, id, x1, y1, x2, y2, stops) {
+  var g = ns('linearGradient');
+  g.setAttribute('id',id); g.setAttribute('x1',x1); g.setAttribute('y1',y1); g.setAttribute('x2',x2); g.setAttribute('y2',y2);
+  g.setAttribute('gradientUnits','userSpaceOnUse');
+  stops.forEach(function(s){ var st=ns('stop'); st.setAttribute('offset',s[0]); st.setAttribute('stop-color',s[1]); if(s[2]!=null)st.setAttribute('stop-opacity',s[2]); g.appendChild(st); });
+  defs.appendChild(g); return g;
+}
+
+// ── STYLE A: Current ──────────────────────────────────────────
+function styleA(svg) {
+  WELLS.forEach(function(w) {
+    var col = STATUS[w.status]||'#9aa0a6';
+    var r = w.sel ? 14 : 9;
+    if (w.sel) {
+      circ(svg, w.x, w.y, r*2.2, '#f9ab00', null, 0, 0.15);
+      circ(svg, w.x, w.y, r+4,   '#f9ab00', null, 0);
+    }
+    circ(svg, w.x, w.y, r,       col,       'rgba(0,0,0,.6)', 1.5);
+    circ(svg, w.x, w.y, r*0.3,   'rgba(0,0,0,.7)');
+    if (w.sel) txt(svg, w.x, w.y+r+14, w.name, 11, '600', col, 'middle', 'rgba(0,0,0,.8)', 2.5);
+  });
+  // cluster
+  circ(svg, CLUSTER.x, CLUSTER.y, 20, 'rgba(255,255,255,.08)');
+  circ(svg, CLUSTER.x, CLUSTER.y, 13, '#3d4b5c', 'rgba(255,255,255,.25)', 1.5);
+  txt(svg, CLUSTER.x, CLUSTER.y+1, CLUSTER.n, 11, '700', '#fff');
+}
+
+// ── STYLE B: Pin с именем (всегда видно) ─────────────────────
+function styleB(svg) {
+  WELLS.forEach(function(w) {
+    var col = STATUS[w.status]||'#9aa0a6';
+    var r = w.sel ? 18 : 12;
+    if (w.sel) {
+      circ(svg, w.x, w.y, r*1.8, col, null, 0, 0.12);
+      circ(svg, w.x, w.y, r*1.3, col, null, 0, 0.2);
+    }
+    // outer ring
+    circ(svg, w.x, w.y, r+2, col, null, 0, 0.2);
+    // main
+    circ(svg, w.x, w.y, r, col, 'rgba(255,255,255,.7)', 1.5);
+    // name inside
+    var fs = w.sel ? 9 : 7;
+    txt(svg, w.x, w.y+0.5, w.name, fs, '700', '#fff');
+  });
+  // cluster — gradient
+  var d = svg.querySelector('defs');
+  linearGrad(d, 'cg1', CLUSTER.x-13, CLUSTER.y, CLUSTER.x+13, CLUSTER.y, [['0%','#3d5a80'],['100%','#293241']]);
+  circ(svg, CLUSTER.x, CLUSTER.y, 18, 'rgba(88,166,255,.12)');
+  var cc = circ(svg, CLUSTER.x, CLUSTER.y, 13, 'url(#cg1)', '#58a6ff', 1.2);
+  txt(svg, CLUSTER.x, CLUSTER.y+0.5, CLUSTER.n, 11, '700', '#fff');
+}
+
+// ── STYLE C: Hexagon (геологический) ─────────────────────────
+function styleC(svg) {
+  WELLS.forEach(function(w) {
+    var col = STATUS[w.status]||'#9aa0a6';
+    var r = w.sel ? 17 : 11;
+    if (w.sel) {
+      // outer glow hexagon
+      var pts0 = hexPts(w.x, w.y, r*1.9, Math.PI/6);
+      poly(svg, pts0, col, null, 0, 0.08);
+      var pts1 = hexPts(w.x, w.y, r*1.3, Math.PI/6);
+      poly(svg, pts1, col, null, 0, 0.18);
+    }
+    var pts = hexPts(w.x, w.y, r, Math.PI/6);
+    poly(svg, pts, col, 'rgba(255,255,255,.55)', 1.5);
+    // inner hexagon ring
+    var pts2 = hexPts(w.x, w.y, r*0.55, Math.PI/6);
+    poly(svg, pts2, 'transparent', 'rgba(255,255,255,.4)', 1);
+    // name
+    var fs = w.sel ? 8 : 7;
+    txt(svg, w.x, w.y+0.5, w.name, fs, '700', '#fff');
+  });
+  // cluster hexagon
+  var cpts = hexPts(CLUSTER.x, CLUSTER.y, 16, Math.PI/6);
+  poly(svg, cpts, 'rgba(88,166,255,.15)', null, 0);
+  var cpts2 = hexPts(CLUSTER.x, CLUSTER.y, 13, Math.PI/6);
+  poly(svg, cpts2, '#1c2a3a', 'rgba(88,166,255,.5)', 1.5);
+  txt(svg, CLUSTER.x, CLUSTER.y+0.5, CLUSTER.n, 11, '700', '#58a6ff');
+}
+
+// ── STYLE D: Wellhead icon (скважина) ─────────────────────────
+function styleD(svg) {
+  WELLS.forEach(function(w) {
+    var col = STATUS[w.status]||'#9aa0a6';
+    var r = w.sel ? 10 : 7;
+    var lineH = r * 1.6;  // horizontal line length (горизонтальная скважина →)
+    if (w.sel) {
+      circ(svg, w.x, w.y, r*2.4, col, null, 0, 0.1);
+      circ(svg, w.x, w.y, r*1.5, col, null, 0, 0.15);
+    }
+    // circle (устье скважины)
+    circ(svg, w.x, w.y, r, col, 'rgba(255,255,255,.6)', 1.5);
+    // cross: vertical (ствол)
+    line(svg, w.x, w.y, w.x, w.y-r*0.6, 'rgba(255,255,255,.7)', w.sel?2:1.2);
+    // horizontal line → (горизонтальный ствол)
+    line(svg, w.x, w.y, w.x+lineH, w.y, col, w.sel?2.5:1.8);
+    // arrow head
+    line(svg, w.x+lineH, w.y, w.x+lineH-5, w.y-3, col, w.sel?2:1.3);
+    line(svg, w.x+lineH, w.y, w.x+lineH-5, w.y+3, col, w.sel?2:1.3);
+    // name
+    if (w.sel) txt(svg, w.x, w.y+r+13, w.name, 10, '700', col, 'middle', 'rgba(0,0,0,.8)', 2.5);
+  });
+  // cluster
+  circ(svg, CLUSTER.x, CLUSTER.y, 19, 'rgba(88,166,255,.08)');
+  circ(svg, CLUSTER.x, CLUSTER.y, 14, '#1c2a3a', '#58a6ff', 1.5);
+  // mini wells inside cluster
+  [[-4,-4],[4,-4],[-4,4],[4,4]].slice(0, Math.min(4, CLUSTER.n)).forEach(function(d, i){
+    var sc = STATUS[CLUSTER.statuses[i]]||'#9aa0a6';
+    circ(svg, CLUSTER.x+d[0], CLUSTER.y+d[1], 2.5, sc);
+  });
+  txt(svg, CLUSTER.x+12, CLUSTER.y+1, '×'+CLUSTER.n, 9, '700', '#fff', 'start');
+}
+
+// ── STYLE E: Кольца дебита (concentric) ──────────────────────
+function styleE(svg) {
+  WELLS.forEach(function(w) {
+    var col = STATUS[w.status]||'#9aa0a6';
+    var r = w.sel ? 12 : 8;
+    if (w.sel) {
+      // animated-looking rings
+      circ(svg, w.x, w.y, r*2.8, col, null, 0, 0.05);
+      circ(svg, w.x, w.y, r*2.1, col, null, 0, 0.1);
+    }
+    circ(svg, w.x, w.y, r*1.55, col, null, 0, 0.18);
+    circ(svg, w.x, w.y, r, col, 'rgba(255,255,255,.7)', 1.5);
+    circ(svg, w.x, w.y, r*0.42, 'rgba(255,255,255,.85)');
+    // small dot center
+    circ(svg, w.x, w.y, r*0.18, col);
+    if (w.sel) txt(svg, w.x, w.y+r+13, w.name, 10, '700', col, 'middle', 'rgba(0,0,0,.8)', 2.5);
+  });
+  // cluster — pie segments by status
+  var cx = CLUSTER.x, cy = CLUSTER.y;
+  var r2 = 13;
+  var angle = 0;
+  CLUSTER.statuses.forEach(function(st) {
+    var segCol = STATUS[st]||'#9aa0a6';
+    var a1 = angle, a2 = angle + Math.PI*2/CLUSTER.statuses.length;
+    var path = ns('path');
+    var x1 = cx + r2*Math.cos(a1), y1 = cy + r2*Math.sin(a1);
+    var x2 = cx + r2*Math.cos(a2), y2 = cy + r2*Math.sin(a2);
+    path.setAttribute('d','M'+cx+','+cy+' L'+x1+','+y1+' A'+r2+','+r2+' 0 0 1 '+x2+','+y2+' Z');
+    path.setAttribute('fill', segCol);
+    path.setAttribute('opacity','0.85');
+    svg.appendChild(path);
+    angle = a2;
+  });
+  circ(svg, cx, cy, r2*0.55, '#0d1117');
+  txt(svg, cx, cy+0.5, CLUSTER.n, 10, '700', '#fff');
+}
+
+// ── STYLE F: Badge-pin (рекомендован) ─────────────────────────
+function styleF(svg) {
+  WELLS.forEach(function(w) {
+    var col = STATUS[w.status]||'#9aa0a6';
+    var r = w.sel ? 16 : 11;
+    var pinH = r * 2.0; // tail length
+
+    // Aura
+    if (w.sel) {
+      circ(svg, w.x, w.y, r*2.1, col, null, 0, 0.1);
+      circ(svg, w.x, w.y, r*1.5, col, null, 0, 0.15);
+    } else {
+      circ(svg, w.x, w.y, r*1.45, col, null, 0, 0.12);
+    }
+
+    // Pin teardrop
+    var path = ns('path');
+    var d = 'M ' + w.x + ',' + (w.y - r) +
+      ' A ' + r + ',' + r + ' 0 1 1 ' + (w.x + 0.01) + ',' + (w.y - r) +
+      ' L ' + w.x + ',' + (w.y + pinH) + ' Z';
+    path.setAttribute('d', d);
+    path.setAttribute('fill', col);
+    path.setAttribute('stroke', 'rgba(255,255,255,.45)');
+    path.setAttribute('stroke-width', '1.5');
+    svg.appendChild(path);
+
+    // White circle inside pin head
+    circ(svg, w.x, w.y - r*0.1, r*0.55, 'rgba(255,255,255,.92)');
+    // name
+    txt(svg, w.x, w.y - r*0.05, w.name.replace('ГС-',''), r > 12 ? 8 : 6, '700', col);
+
+    // selection tick
+    if (w.sel) {
+      circ(svg, w.x, w.y-r*0.1, r*0.65, 'transparent', '#fff', 2);
+    }
+  });
+
+  // cluster
+  var cx = CLUSTER.x, cy = CLUSTER.y;
+  circ(svg, cx, cy, 20, 'rgba(88,166,255,.1)');
+  circ(svg, cx, cy, 14, '#1a2535', '#58a6ff', 2);
+  // mini status dots
+  var ang = -Math.PI*0.6;
+  CLUSTER.statuses.forEach(function(st) {
+    var sc = STATUS[st]||'#9aa0a6';
+    circ(svg, cx + 14*Math.cos(ang), cy + 14*Math.sin(ang), 3.5, sc, '#0d1117', 1);
+    ang += Math.PI*2/CLUSTER.statuses.length;
+  });
+  circ(svg, cx, cy, 9, '#1a2535', '#58a6ff', 1.5);
+  txt(svg, cx, cy+0.5, CLUSTER.n, 9, '700', '#fff');
+}
+
+// ── Build cards ──────────────────────────────────────────────
+var DEFS = [
+  { id:'A', title:'A — Текущий стиль',      badge:null,     fn:styleA,
+    desc:'Цветной круг + тёмная точка. Выбранный — желтый halo. Кластер — серый круг с числом.' },
+  { id:'B', title:'B — Круг с именем',       badge:'Новый',  fn:styleB,
+    desc:'Имя скважины всегда внутри маркера. Цвет = статус. Аура + горизонт. кольцо при выборе. Кластер — синий.' },
+  { id:'C', title:'C — Шестигранник',        badge:null,     fn:styleC,
+    desc:'Геологический вид. Шестигранник с вложенным кольцом = уровень. При выборе — тройное свечение. Кластер — синий hex.' },
+  { id:'D', title:'D — Устье + горизонт',   badge:'Новый',  fn:styleD,
+    desc:'Круг (устье) + горизонтальная стрелка → (ствол). Сразу читается: "горизонтальная скважина". В кластере — мини-точки по статусу.' },
+  { id:'E', title:'E — Концентрические кольца', badge:null,  fn:styleE,
+    desc:'Кольца вокруг маркера — намекают на дебит/поток. При выборе — дополнительные кольца. Кластер — пирог по статусам.' },
+  { id:'F', title:'F — Pin с номером',       badge:'Рекомендован', fn:styleF,
+    desc:'Каплевидный pin (как Google Maps), номер внутри. Аура вокруг при любом состоянии. Кластер: синий круг + мини-точки по периметру.' },
+];
+
+var grid = document.getElementById('grid');
+DEFS.forEach(function(def) {
+  var card = document.createElement('div');
+  card.className = 'idea-card';
+
+  var badge = '';
+  if (def.badge === 'Рекомендован') badge = '<span class="badge-rec">★ Рекомендован</span>';
+  else if (def.badge === 'Новый')    badge = '<span class="badge-new">Новый</span>';
+
+  card.innerHTML = '<div class="card-header">' + badge + '<span class="card-title">' + def.title + '</span></div>' +
+                   '<div id="svgwrap-' + def.id + '"></div>' +
+                   '<div class="card-desc">' + def.desc + '</div>' +
+                   '<button class="choose-btn">Выбрать этот стиль</button>';
+  grid.appendChild(card);
+
+  var svg = mkSvg(H);
+  svg.setAttribute('height', H);
+  def.fn(svg);
+  document.getElementById('svgwrap-' + def.id).appendChild(svg);
+
+  card.querySelector('.choose-btn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    grid.querySelectorAll('.idea-card').forEach(function(c) { c.classList.remove('chosen'); });
+    grid.querySelectorAll('.choose-btn').forEach(function(b) { b.textContent = 'Выбрать этот стиль'; b.classList.remove('chosen'); });
+    card.classList.add('chosen');
+    this.textContent = '✓ Выбрано';
+    this.classList.add('chosen');
+  });
+});
+</script>
+</body>
+</html>
