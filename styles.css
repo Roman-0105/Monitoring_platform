@@ -553,6 +553,12 @@ body {
 .map-intensity-dot.i-strong { width: 11px; height: 11px; }
 .map-intensity-dot.i-vstrong{ width: 14px; height: 14px; }
 
+/* Карточная легенда (Style LD) */
+.map-legend-cards     { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.map-legend-card      { border-radius: 6px; padding: 4px 6px; display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.map-legend-card-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.map-legend-card-name { font-size: 10px; font-weight: 600; line-height: 1.2; color: var(--txt-2); }
+
 /* ── Всплывающая карточка точки ───────────────────────────── */
 .map-point-card {
   position: absolute; top: 14px; left: 14px; width: 270px;

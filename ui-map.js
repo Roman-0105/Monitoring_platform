@@ -791,37 +791,44 @@ function renderMapModeLegend() {
   var mode = MapModule.getMarkerMode();
   var html = '';
 
-  function statusRows() {
-    var rows = '';
+  function statusCards() {
+    var cards = '<div class="map-legend-cards">';
     ['Новая', 'Активная', 'Иссякает', 'Пересохла', 'Паводковая', 'Перелив'].forEach(function(s) {
       var c = cfg.statusColors[s] || '#777';
-      rows += '<div class="map-legend-item"><span class="map-legend-dot" style="background:' + c + '"></span><span>' + s + '</span></div>';
+      cards += '<div class="map-legend-card" style="border-color:' + c + '44">' +
+               '<span class="map-legend-card-dot" style="background:' + c + '"></span>' +
+               '<span class="map-legend-card-name" style="color:' + c + '">' + s + '</span>' +
+               '</div>';
     });
-    return rows;
+    cards += '</div>';
+    return cards;
   }
-  function intensityRows() {
-    var rows = '<div class="map-legend-subtitle">Интенсивность (размер маркера)</div>';
+
+  function intensityCards() {
+    var cards = '<div class="map-legend-cards">';
     [['Слабая (капёж)', 'i-weak'], ['Умеренная', 'i-mid'], ['Сильная (поток)', 'i-strong'], ['Очень сильная', 'i-vstrong']].forEach(function(pair) {
-      rows += '<div class="map-legend-item"><span class="map-legend-dot map-intensity-dot ' + pair[1] + '"></span><span>' + pair[0] + '</span></div>';
+      cards += '<div class="map-legend-card">' +
+               '<span class="map-legend-dot map-intensity-dot ' + pair[1] + '" style="flex-shrink:0"></span>' +
+               '<span class="map-legend-card-name">' + pair[0] + '</span>' +
+               '</div>';
     });
-    return rows;
+    cards += '</div>';
+    return cards;
   }
 
   if (mode === 'simple') {
-    html += '<div class="map-legend-subtitle">Simple</div>';
-    html += '<div class="map-legend-item"><span class="map-legend-dot" style="background:' + cfg.simpleColor + '"></span><span>Единый цвет точек</span></div>';
+    html += '<div class="map-legend-subtitle">Цвет точек</div>';
+    html += '<div class="map-legend-cards"><div class="map-legend-card">' +
+            '<span class="map-legend-card-dot" style="background:' + cfg.simpleColor + '"></span>' +
+            '<span class="map-legend-card-name">Единый цвет</span></div></div>';
   } else if (mode === 'status') {
-    html += '<div class="map-legend-subtitle">Status</div>' + statusRows();
+    html += '<div class="map-legend-subtitle">Статус точки</div>' + statusCards();
   } else if (mode === 'intensity') {
-    html += '<div class="map-legend-subtitle">Intensity</div>';
-    html += '<div class="map-legend-item"><span class="map-legend-dot" style="background:' + cfg.intensityColor + '"></span><span>Единый цвет</span></div>';
-    html += intensityRows();
+    html += '<div class="map-legend-subtitle">Интенсивность (размер)</div>' + intensityCards();
   } else {
-    html += '<div class="map-legend-subtitle">Combined</div>';
-    html += '<div class="form-hint" style="margin-bottom:6px">Размер = интенсивность, badge = статус</div>';
-    html += intensityRows();
-    html += '<hr style="border:none;border-top:1px solid var(--line-2);margin:8px 0">';
-    html += statusRows();
+    // combined — показываем оба
+    html += '<div class="map-legend-subtitle">Статус точки</div>' + statusCards();
+    html += '<div class="map-legend-subtitle" style="margin-top:8px">Интенсивность (размер)</div>' + intensityCards();
   }
   container.innerHTML = html;
 }
@@ -888,9 +895,10 @@ function updateMapLegendPoints() {
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<b>Канавы</b><b>' + filteredDitches.length + '</b></div>';
     html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
-      '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;' +
-      'border-radius:4px;background:#4090e8;color:#fff;font-size:10px;font-weight:700">≈</span>' +
-      '<span style="font-size:12px">Канава водопритока</span></div>';
+      '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px 2px 5px;border-radius:20px;' +
+      'background:linear-gradient(90deg,#4090e8,#4090e8cc);color:#fff;font-size:10px;font-weight:700;' +
+      'border:1px solid rgba(255,255,255,0.25)">≈ <span style="font-size:9px">канава</span></span>' +
+      '<span style="font-size:12px">Водоприток</span></div>';
     var byDitchStatus = {};
     filteredDitches.forEach(function(d){
       var s = d.status || 'Активная';
