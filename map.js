@@ -324,6 +324,7 @@ var MapModule = (function() {
   }
 
   function drawPoints(ctx, points, imgW, imgH, viewScale) {
+    var scale = normalizeScale(viewScale);
     for (var i = 0; i < points.length; i++) {
       var p = points[i];
       var x = p.xLocal, y = p.yLocal;
@@ -332,46 +333,35 @@ var MapModule = (function() {
         x = xy.x; y = xy.y;
       }
       if (x == null || y == null) continue;
-      var pos = xyToPixel(x, y, imgW, imgH);
+      var pos    = xyToPixel(x, y, imgW, imgH);
       var marker = getMarkerStyle(p, MARKER_MODE, viewScale);
       var radius = marker.size;
-      ctx.shadowColor = 'rgba(0,0,0,0.25)';
-      ctx.shadowBlur  = 5;
+      var col    = STATUS_COLORS[p.status] || '#888888';
+
+      // Аура — полупрозрачное кольцо цвета статуса
       ctx.beginPath();
-      ctx.arc(pos.px, pos.py, radius, 0, Math.PI*2);
-      ctx.fillStyle = marker.color;
+      ctx.arc(pos.px, pos.py, radius * 1.6, 0, Math.PI * 2);
+      ctx.fillStyle = col + '30';
       ctx.fill();
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur  = 0;
-      ctx.strokeStyle = marker.stroke || MAP_STYLE.markerStroke;
-      ctx.lineWidth   = 1.8;
+
+      // Основной круг — заливка цветом статуса
+      ctx.beginPath();
+      ctx.arc(pos.px, pos.py, radius, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth   = 1.5 / scale;
       ctx.stroke();
-      if (marker.showBadge) {
-        var br = Math.max(3, Math.min(6, radius * 0.45));
-        var bx = pos.px + radius * 0.55;
-        var by = pos.py - radius * 0.55;
-        ctx.beginPath();
-        ctx.arc(bx, by, br, 0, Math.PI * 2);
-        ctx.fillStyle = marker.badgeColor || '#666';
-        ctx.fill();
-        ctx.lineWidth = 1.2;
-        ctx.strokeStyle = '#ffffff';
-        ctx.stroke();
-      }
-      var scale = normalizeScale(viewScale);
-      if (scale >= (MAP_STYLE.labels.showFromScale || 1)) {
-        var fs = clamp(11 / scale, 7, 14);
-        ctx.fillStyle = '#0b0f14';
-        ctx.font = '700 ' + fs.toFixed(1) + 'px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        var labelText = String(p.pointNumber || '?');
-        ctx.fillText(labelText, pos.px + (radius / 3), pos.py - radius - (2 / scale));
-        ctx.fillStyle = '#f6f7fb';
-        ctx.fillText(labelText, pos.px, pos.py - radius - (3 / scale));
-      }
+
+      // Номер точки внутри маркера
+      var fs = clamp(radius * 1.05, 4.5 / scale, 12 / scale);
+      ctx.fillStyle    = '#ffffff';
+      ctx.font         = '700 ' + fs.toFixed(1) + 'px sans-serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(p.pointNumber || '?'), pos.px, pos.py + 0.5 / scale);
     }
-    // Рисуем кольца пульсации поверх всех точек
+    // Кольца пульсации поверх всех точек
     drawPointPulses(ctx, points, imgW, imgH, viewScale);
   }
 
@@ -394,22 +384,21 @@ var MapModule = (function() {
     return null;
   }
 
-  // ── Рендер канав (квадратные маркеры) ──────────────────
+  // ── Рендер канав (pill-маркеры) ─────────────────────────
   function drawDitches(ctx, ditches, imgW, imgH, viewScale) {
     if (!ditches || !ditches.length) return;
     var scale = normalizeScale(viewScale);
-    var sz = clamp(14 / scale, 8, 18); // полуразмер квадрата
 
     var statusColors = {
       'Активная':  '#4090e8',
       'Новая':     '#40b8ff',
+      'Иссякает':  '#f9ab00',
       'Пересохла': '#e8a030',
       'Заилилась': '#8060c0',
     };
 
     for (var i = 0; i < ditches.length; i++) {
       var d = ditches[i];
-      // Предпочитаем локальные координаты с карты, иначе GPS
       var posX, posY;
       if (d.xLocal != null && d.yLocal != null) {
         posX = d.xLocal; posY = d.yLocal;
@@ -422,58 +411,61 @@ var MapModule = (function() {
       var pos = xyToPixel(posX, posY, imgW, imgH);
       var col = statusColors[d.status] || '#4090e8';
 
-      // Тень
-      ctx.shadowColor = 'rgba(0,0,0,0.35)';
-      ctx.shadowBlur  = 6;
+      // Pill dimensions — scale-aware image pixels
+      var ph = clamp(20 / scale, 10, 24); // total height
+      var pw = clamp(52 / scale, 28, 58); // total width
+      var pr = ph / 2;                    // full corner radius
+      var cx = pos.px, cy = pos.py;
 
-      // Квадрат с скруглёнными углами
-      var r = Math.max(2, sz * 0.28); // радиус скругления
-      var x = pos.px - sz, y = pos.py - sz, w = sz*2, h = sz*2;
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur  = 5 / scale;
+
+      // Pill path
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.arcTo(x+w, y, x+w, y+r, r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
-      ctx.lineTo(x + r, y + h);
-      ctx.arcTo(x, y+h, x, y+h-r, r);
-      ctx.lineTo(x, y + r);
-      ctx.arcTo(x, y, x+r, y, r);
+      ctx.moveTo(cx - pw/2 + pr, cy - ph/2);
+      ctx.lineTo(cx + pw/2 - pr, cy - ph/2);
+      ctx.arc(cx + pw/2 - pr, cy, pr, -Math.PI/2, Math.PI/2);
+      ctx.lineTo(cx - pw/2 + pr, cy + ph/2);
+      ctx.arc(cx - pw/2 + pr, cy, pr, Math.PI/2, -Math.PI/2);
       ctx.closePath();
 
-      // Заливка с градиентом
-      var grd = ctx.createLinearGradient(pos.px-sz, pos.py-sz, pos.px+sz, pos.py+sz);
+      var grd = ctx.createLinearGradient(cx - pw/2, cy, cx + pw/2, cy);
       grd.addColorStop(0, col);
-      grd.addColorStop(1, col + 'bb');
+      grd.addColorStop(1, col + 'cc');
       ctx.fillStyle = grd;
       ctx.fill();
 
-      ctx.shadowColor = 'transparent';
       ctx.shadowBlur  = 0;
-
-      // Обводка
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth   = 1.8;
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth   = 1.2 / scale;
       ctx.stroke();
 
-      // Иконка волны внутри
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.font = 'bold ' + Math.round(sz * 0.95) + 'px sans-serif';
+      // Иконка волны — в левой полукруглой зоне
+      var iconX = cx - pw/2 + pr;
+      ctx.fillStyle    = 'rgba(255,255,255,0.92)';
+      ctx.font         = '700 ' + (ph * 0.62).toFixed(1) + 'px sans-serif';
       ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('≈', pos.px, pos.py + 0.5);
+      ctx.fillText('≈', iconX, cy);
 
-      // Подпись названия
-      if (scale >= 1.0) {
-        var fs = clamp(10 / scale, 7, 13);
-        ctx.font = '600 ' + fs.toFixed(1) + 'px sans-serif';
-        ctx.textBaseline = 'bottom';
-        // Тень текста
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillText(d.ditchName || '', pos.px + 1, pos.py - sz - 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(d.ditchName || '', pos.px, pos.py - sz - 3);
-      }
+      // Разделитель
+      var divX = cx - pw/2 + pr * 2.1;
+      ctx.beginPath();
+      ctx.moveTo(divX, cy - ph * 0.32);
+      ctx.lineTo(divX, cy + ph * 0.32);
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth   = 1 / scale;
+      ctx.stroke();
+
+      // Название канавы — в правой зоне
+      var nameX  = (divX + cx + pw/2) / 2;
+      var nameFs = clamp(ph * 0.46, 5 / scale, 10 / scale);
+      ctx.fillStyle    = '#ffffff';
+      ctx.font         = '700 ' + nameFs.toFixed(1) + 'px sans-serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(d.ditchName || '', nameX, cy);
     }
   }
 
@@ -481,7 +473,8 @@ var MapModule = (function() {
   function findDitchAt(imgX, imgY, ditches, imgW, imgH, viewScale) {
     if (!ditches || !ditches.length) return null;
     var scale = normalizeScale(viewScale);
-    var sz    = clamp(14 / scale, 8, 18) + 4; // +4 для удобства клика
+    var hw = clamp(52 / scale, 28, 58) / 2 + 4; // half pill width + padding
+    var hh = clamp(20 / scale, 10, 24) / 2 + 4; // half pill height + padding
     for (var i = 0; i < ditches.length; i++) {
       var d = ditches[i];
       var fx, fy;
@@ -494,7 +487,7 @@ var MapModule = (function() {
         continue;
       }
       var pos = xyToPixel(fx, fy, imgW, imgH);
-      if (Math.abs(imgX - pos.px) <= sz && Math.abs(imgY - pos.py) <= sz) return d;
+      if (Math.abs(imgX - pos.px) <= hw && Math.abs(imgY - pos.py) <= hh) return d;
     }
     return null;
   }
