@@ -31,29 +31,16 @@ var ReportState = {
 // Рендер текста от AI: экранирует HTML + рендерит **bold** и переносы строк
 function renderAIText(text) {
   if (!text) return '';
-  return escHtml(text)
+  return escAttr(text)
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     .replace(/\n/g, '<br>');
 }
 
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 function fmtDate(d) {
   if (!d) return '—';
   var p = String(d).split('-');
   return p.length === 3 ? p[2]+'.'+p[1]+'.'+p[0] : d;
 }
-function getRField(id) {
-  var el = document.getElementById(id);
-  return el ? el.value.trim() : '';
-}
-function setRField(id, val) {
-  var el = document.getElementById(id);
-  if (el) el.value = val || '';
-}
-function lpsToM3h(v) { return (v || 0) * 3.6; }
-
 function dateToWeekKey(dateStr) {
   if (!dateStr) return null;
   var d = new Date(dateStr);
@@ -82,7 +69,7 @@ function fillDateDropdown(id, dates, selected) {
   }).join('');
 }
 function onReportDateChange() {
-  var a = getRField('rp-date-a'), b = getRField('rp-date-b');
+  var a = getField('rp-date-a'), b = getField('rp-date-b');
   var el = document.getElementById('rp-dates-status');
   if (!el) return;
   if (a && b && a !== b) {
@@ -106,11 +93,11 @@ function initReportTab() {
 function restoreSettings() {
   var s = {};
   try { s = JSON.parse(localStorage.getItem('report-settings') || '{}'); } catch(e) {}
-  if (s.author)        setRField('rp-author',        s.author);
-  if (s.position)      setRField('rp-position',      s.position);
-  if (s.apiKey)        setRField('rp-apikey',        s.apiKey);
-  if (s.customPrompt)  setRField('rp-custom-prompt', s.customPrompt);
-  setRField('rp-date', new Date().toISOString().slice(0, 10));
+  if (s.author)        setField('rp-author',        s.author);
+  if (s.position)      setField('rp-position',      s.position);
+  if (s.apiKey)        setField('rp-apikey',        s.apiKey);
+  if (s.customPrompt)  setField('rp-custom-prompt', s.customPrompt);
+  setField('rp-date', new Date().toISOString().slice(0, 10));
 
   // Если данные уже были загружены — восстанавливаем даты
   var allDates = ReportState.allDates || [];
@@ -148,10 +135,10 @@ function restoreSettings() {
 function saveReportSettings() {
   try {
     localStorage.setItem('report-settings', JSON.stringify({
-      author:        getRField('rp-author'),
-      position:      getRField('rp-position'),
-      apiKey:        getRField('rp-apikey'),
-      customPrompt:  getRField('rp-custom-prompt'),
+      author:        getField('rp-author'),
+      position:      getField('rp-position'),
+      apiKey:        getField('rp-apikey'),
+      customPrompt:  getField('rp-custom-prompt'),
       reportVersion: ReportState.settings.reportVersion,
       reportMode:    ReportState.settings.reportMode || 'single'
     }));
@@ -176,7 +163,7 @@ function fillPresetSelect(keepValue) {
 
 function onPresetChange(sel) {
   if (!sel.value) return;
-  setRField('rp-custom-prompt', sel.value);
+  setField('rp-custom-prompt', sel.value);
   saveReportSettings();
   // НЕ сбрасываем sel.value — пусть отображается название
   Toast.show('Промпт загружен — можно редактировать', 'success');
@@ -267,7 +254,7 @@ function updatePromptInBank(id, name, desc, text) {
 }
 
 function applyPrompt(text) {
-  setRField('rp-custom-prompt', text);
+  setField('rp-custom-prompt', text);
   saveReportSettings();
   Toast.show('Промпт применён', 'success');
 }
@@ -287,12 +274,12 @@ function renderPromptsTab() {
     html += '<div style="border:0.5px solid var(--line-2);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--card-bg)">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="font-weight:600;font-size:13px;color:var(--txt-1);margin-bottom:3px">' + escHtml(p.name) +
+          '<div style="font-weight:600;font-size:13px;color:var(--txt-1);margin-bottom:3px">' + escAttr(p.name) +
             (isDefault ? '<span style="font-size:10px;font-weight:400;color:#1a73e8;margin-left:6px;padding:1px 6px;background:#e8f0fe;border-radius:3px">встроенный</span>' : '') +
           '</div>' +
-          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">' + escHtml(p.desc || '—') + '</div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">' + escAttr(p.desc || '—') + '</div>' +
           '<div style="font-size:12px;color:var(--txt-2);background:var(--card-bg2,#1e2535);padding:8px 10px;border-radius:6px;border-left:2px solid ' + borderColor + ';white-space:pre-wrap">' +
-            escHtml(p.text.slice(0, 120)) + (p.text.length > 120 ? '…' : '') +
+            escAttr(p.text.slice(0, 120)) + (p.text.length > 120 ? '…' : '') +
           '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' +
@@ -639,22 +626,22 @@ function loadDitchesHistory() {
 
 // ── Генерация AI заключения ───────────────────────────────
 function generateAIConclusion() {
-  var apiKey = getRField('rp-apikey');
+  var apiKey = getField('rp-apikey');
   if (!apiKey) { Toast.show('Введите Anthropic API ключ', 'error'); return; }
   var btn = document.getElementById('rp-ai-concl-btn');
   if (btn) { btn.disabled = true; btn.textContent = '✨ Генерирую...'; }
 
   // Обновляем настройки из формы перед вызовом AI
   var s = ReportState.settings;
-  s.author   = getRField('rp-author') || s.author;
-  s.dateA    = getRField('rp-date-a') || s.dateA;
-  s.dateB    = getRField('rp-date-b') || s.dateB;
+  s.author   = getField('rp-author') || s.author;
+  s.dateA    = getField('rp-date-a') || s.dateA;
+  s.dateB    = getField('rp-date-b') || s.dateB;
   var modeEl = document.getElementById('rp-mode-single');
   if (modeEl && modeEl.classList.contains('active')) s.reportMode = 'single';
   // buildAIContext сам вычислит ptsA/ptsB/Q из allPoints
   var ctx = buildAIContext(s);
   // Используем пользовательский промпт если задан
-  var userPrompt = (getRField('rp-custom-prompt') || s.customPrompt || '').trim();
+  var userPrompt = (getField('rp-custom-prompt') || s.customPrompt || '').trim();
   var prompt;
   if (userPrompt) {
     prompt = userPrompt + buildDataContext(ctx, ctx.isSingle);
@@ -699,8 +686,8 @@ function callClaudeAPI(apiKey, prompt) {
 function buildAIContext(s) {
   // Строит полный контекст для AI — работает в обоих режимах
   // Всегда читаем dateA/dateB из формы для актуальности
-  var dateAForm = getRField('rp-date-a') || s.dateA || '';
-  var dateBForm = getRField('rp-date-b') || s.dateB || '';
+  var dateAForm = getField('rp-date-a') || s.dateA || '';
+  var dateBForm = getField('rp-date-b') || s.dateB || '';
   var modeSingleBtn = document.getElementById('rp-mode-single');
   var modeForm = (modeSingleBtn && modeSingleBtn.classList.contains('active')) ? 'single'
     : (s.reportMode || 'compare');
@@ -980,17 +967,17 @@ function generateReport() {
   if (btn) { btn.textContent = '⏳ Формирую...'; btn.disabled = true; }
 
   var s = ReportState.settings;
-  s.author      = getRField('rp-author');
-  s.position    = getRField('rp-position');
-  s.dateReport  = getRField('rp-date');
+  s.author      = getField('rp-author');
+  s.position    = getField('rp-position');
+  s.dateReport  = getField('rp-date');
   s.reportMode  = ReportState.settings.reportMode || 'compare';
-  s.dateA       = getRField('rp-date-a');
-  s.dateB       = s.reportMode === 'single' ? s.dateA : getRField('rp-date-b');
+  s.dateA       = getField('rp-date-a');
+  s.dateB       = s.reportMode === 'single' ? s.dateA : getField('rp-date-b');
   s.weekA       = getWeekNumber(s.dateA);
   s.weekB       = s.reportMode === 'single' ? s.weekA : getWeekNumber(s.dateB);
-  s.conclusions  = getRField('rp-conclusions');
-  s.apiKey       = getRField('rp-apikey');
-  s.customPrompt = getRField('rp-custom-prompt');
+  s.conclusions  = getField('rp-conclusions');
+  s.apiKey       = getField('rp-apikey');
+  s.customPrompt = getField('rp-custom-prompt');
   s.includeDomens  = !!(document.getElementById('rp-inc-domens')  || {checked:true}).checked;
   s.includeDitches = !!(document.getElementById('rp-inc-ditches') || {checked:true}).checked;
   s.includePhotos   = !!(document.getElementById('rp-inc-photos')   || {checked:true}).checked;
@@ -1083,7 +1070,7 @@ function buildDonutSVG(counts, keys, colors, total) {
     return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11px">' +
       '<span style="display:flex;align-items:center;gap:5px">' +
         '<span style="width:10px;height:10px;border-radius:50%;background:' + (colors[k]||'#888') + ';display:inline-block;flex-shrink:0"></span>' +
-        escHtml(k) + '</span><b>' + counts[k] + '</b></div>';
+        escAttr(k) + '</span><b>' + counts[k] + '</b></div>';
   }).join('');
   return '<div style="display:flex;align-items:center;gap:14px">' +
     '<svg viewBox="0 0 140 140" width="100" height="100" style="flex-shrink:0">' +
@@ -1118,7 +1105,7 @@ function buildHorizonTable(pts, label, color) {
     var bar    = maxLps > 0 ? (d.total / maxLps * 100).toFixed(0) : 0;
     return '<tr style="border-bottom:1px solid #f0f0f0">' +
       '<td style="padding:5px 8px;font-weight:' + (isUnk?'400':'600') + ';color:' + (isUnk?'#aaa':'#1a1a2e') + '">' +
-        (isUnk ? '— не указан —' : '⛰ ' + escHtml(k)) + '</td>' +
+        (isUnk ? '— не указан —' : '⛰ ' + escAttr(k)) + '</td>' +
       '<td style="padding:5px 8px;text-align:center">' + d.count + '</td>' +
       '<td style="padding:5px 8px;text-align:right;color:#1a73e8;font-weight:600">' + sumLps + '</td>' +
       '<td style="padding:5px 8px;text-align:right;color:#f9ab00">' + sumM3h + '</td>' +
@@ -1144,7 +1131,7 @@ function buildHorizonTable(pts, label, color) {
   }
 
   return '<div style="margin-top:10px">' +
-    (label ? '<div style="font-size:11px;font-weight:600;color:' + (color||'#1a73e8') + ';margin-bottom:5px">' + escHtml(label) + '</div>' : '') +
+    (label ? '<div style="font-size:11px;font-weight:600;color:' + (color||'#1a73e8') + ';margin-bottom:5px">' + escAttr(label) + '</div>' : '') +
     '<table class="rp-table" style="width:100%">' +
       '<thead><tr><th>Горизонт</th><th style="text-align:center">Точек</th>' +
         '<th style="text-align:right">Σ л/с</th><th style="text-align:right">Σ м³/ч</th>' +
@@ -1354,7 +1341,7 @@ function buildPointCard(pb, pa, s) {
 
   function photoBlock(src, weekLabel, dateLabel, labelBg) {
     var imgHtml = src
-      ? '<img src="' + src + '" style="width:100%;height:190px;object-fit:cover;display:block" alt="' + escHtml(weekLabel) + '">'
+      ? '<img src="' + src + '" style="width:100%;height:190px;object-fit:cover;display:block" alt="' + escAttr(weekLabel) + '">'
       : '<div style="height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f8f9fa">' +
           '<div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;' +
             'background:' + (labelBg === '#888' ? '#e8e8e8' : '#e8f0fe') + ';color:' + labelBg + '">' +
@@ -1365,17 +1352,17 @@ function buildPointCard(pb, pa, s) {
       imgHtml +
       '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-top:1px solid #e0e6f0">' +
         '<span style="width:8px;height:8px;border-radius:50%;background:' + labelBg + ';flex-shrink:0"></span>' +
-        '<span style="font-size:10px;font-weight:600;color:#444">' + escHtml(weekLabel) + '</span>' +
-        '<span style="font-size:10px;color:#888;margin-left:auto">' + escHtml(dateLabel) + '</span>' +
+        '<span style="font-size:10px;font-weight:600;color:#444">' + escAttr(weekLabel) + '</span>' +
+        '<span style="font-size:10px;color:#888;margin-left:auto">' + escAttr(dateLabel) + '</span>' +
       '</div>' +
     '</div>';
   }
 
   // ── Шапка
   var header = '<div style="display:flex;align-items:center;gap:8px;background:#f7f9fc;padding:8px 14px;border-bottom:1px solid #e0e6f0">' +
-    '<span style="font-size:15px;font-weight:700;color:#1a1a2e">#' + escHtml(String(pb.pointNumber)) + '</span>' +
-    '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#e6f4ea;color:#188038;font-weight:600">' + escHtml(pb.status || '—') + '</span>' +
-    '<span style="font-size:11px;color:#666">' + escHtml(pb.intensity || '') + (pb.waterColor ? ' · ' + escHtml(pb.waterColor) : '') + (pb.horizon ? ' · гор. ' + escHtml(String(pb.horizon)) : '') + '</span>' +
+    '<span style="font-size:15px;font-weight:700;color:#1a1a2e">#' + escAttr(String(pb.pointNumber)) + '</span>' +
+    '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#e6f4ea;color:#188038;font-weight:600">' + escAttr(pb.status || '—') + '</span>' +
+    '<span style="font-size:11px;color:#666">' + escAttr(pb.intensity || '') + (pb.waterColor ? ' · ' + escAttr(pb.waterColor) : '') + (pb.horizon ? ' · гор. ' + escAttr(String(pb.horizon)) : '') + '</span>' +
     '<div style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px">' +
       (qa != null ? '<span style="color:#888">' +
         (isSingle
@@ -1397,16 +1384,16 @@ function buildPointCard(pb, pa, s) {
     var srcA = getPhotoSrc(pb.pointNumber, 'a');
     var srcB = getPhotoSrc(pb.pointNumber, 'b');
     photosRow = '<div style="display:flex;gap:0;border-bottom:1px solid #e0e6f0">' +
-      photoBlock(srcA, 'Неделя А', fmtDate(s.dateA) + ' · ' + escHtml(s.weekA), '#888') +
+      photoBlock(srcA, 'Неделя А', fmtDate(s.dateA) + ' · ' + escAttr(s.weekA), '#888') +
       '<div style="width:1px;background:#e0e6f0;flex-shrink:0"></div>' +
-      photoBlock(srcB, 'Неделя Б', fmtDate(s.dateB) + ' · ' + escHtml(s.weekB), '#1a73e8') +
+      photoBlock(srcB, 'Неделя Б', fmtDate(s.dateB) + ' · ' + escAttr(s.weekB), '#1a73e8') +
     '</div>';
   } else if (s.includePhotos) {
     var srcB2 = getPhotoSrc(pb.pointNumber, 'b') || getPhotoSrc(pb.pointNumber, 'a');
     if (srcB2) {
       photosRow = '<div style="border-bottom:1px solid #e0e6f0">' +
         '<img src="' + srcB2 + '" style="width:100%;max-height:200px;object-fit:cover;display:block">' +
-        '<div style="padding:4px 10px;font-size:10px;color:#888;background:#f8f9fa">' + fmtDate(s.dateB) + ' · ' + escHtml(s.weekB) + '</div>' +
+        '<div style="padding:4px 10px;font-size:10px;color:#888;background:#f8f9fa">' + fmtDate(s.dateB) + ' · ' + escAttr(s.weekB) + '</div>' +
       '</div>';
     }
   }
@@ -1430,7 +1417,7 @@ function buildPointCard(pb, pa, s) {
       ? '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">" + (isSingle && pa && pa.monitoringDate ? normDateISO(pa.monitoringDate).slice(5).split("-").reverse().join(".") : "Q нед. А") + "</div>' +
           '<div style="font-size:14px;font-weight:700;color:#1a1a2e">' + qa.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>'
       : '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Метод</div>' +
-          '<div style="font-size:11px;color:#555">' + escHtml(pb.measureMethod || '—') + '</div></div>') +
+          '<div style="font-size:11px;color:#555">' + escAttr(pb.measureMethod || '—') + '</div></div>') +
     '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">" + (isSingle && pb.monitoringDate ? normDateISO(pb.monitoringDate).slice(5).split("-").reverse().join(".") : "Q нед. Б") + "</div>' +
       '<div style="font-size:14px;font-weight:700;color:#1a73e8">' + qb.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>' +
     '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Изменение</div>' +
@@ -1447,7 +1434,7 @@ function buildPointCard(pb, pa, s) {
         'background:#fffde7;border-left:3px solid #f9ab00">' +
         '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;' +
           'color:#b8860b;font-weight:700;margin-bottom:4px">Полевое наблюдение</div>' +
-        '<div style="font-size:12px;line-height:1.6;color:#333">' + escHtml(pb.comment) + '</div>' +
+        '<div style="font-size:12px;line-height:1.6;color:#333">' + escAttr(pb.comment) + '</div>' +
       '</div>'
     : '';
 
@@ -1465,18 +1452,18 @@ function buildPhotosBlock(points) {
     if (!b64) { var raw = (p.photoUrls && p.photoUrls[0]) || p.photoUrl || ''; if (raw) b64 = raw; }
     if (!b64) return;
     html += '<div class="rp-photo-row">' +
-      '<div class="rp-photo-img-wrap"><img src="' + b64 + '" alt="Точка #' + escHtml(String(p.pointNumber)) + '" class="rp-photo-img">' +
-        '<div class="rp-photo-label">Точка #' + escHtml(String(p.pointNumber)) + '</div></div>' +
+      '<div class="rp-photo-img-wrap"><img src="' + b64 + '" alt="Точка #' + escAttr(String(p.pointNumber)) + '" class="rp-photo-img">' +
+        '<div class="rp-photo-label">Точка #' + escAttr(String(p.pointNumber)) + '</div></div>' +
       '<div class="rp-photo-info">' +
-        '<div class="rp-photo-info-title">Точка #' + escHtml(String(p.pointNumber)) + '</div>' +
+        '<div class="rp-photo-info-title">Точка #' + escAttr(String(p.pointNumber)) + '</div>' +
         '<table class="rp-photo-meta">' +
-          (p.status    ? '<tr><td>Статус</td><td>'       + escHtml(p.status)    + '</td></tr>' : '') +
-          (p.intensity ? '<tr><td>Интенсивность</td><td>'+ escHtml(p.intensity) + '</td></tr>' : '') +
+          (p.status    ? '<tr><td>Статус</td><td>'       + escAttr(p.status)    + '</td></tr>' : '') +
+          (p.intensity ? '<tr><td>Интенсивность</td><td>'+ escAttr(p.intensity) + '</td></tr>' : '') +
           '<tr><td>Q</td><td>' + (parseFloat(p.flowRate)||0).toFixed(2) + ' л/с</td></tr>' +
-          (p.waterColor ? '<tr><td>Цвет воды</td><td>'  + escHtml(p.waterColor) + '</td></tr>' : '') +
+          (p.waterColor ? '<tr><td>Цвет воды</td><td>'  + escAttr(p.waterColor) + '</td></tr>' : '') +
         '</table>' +
         (p.comment
-          ? '<div class="rp-photo-comment"><b>Комментарий:</b> ' + escHtml(p.comment) + '</div>'
+          ? '<div class="rp-photo-comment"><b>Комментарий:</b> ' + escAttr(p.comment) + '</div>'
           : '<div class="rp-photo-comment rp-photo-comment--empty">Комментарий отсутствует</div>') +
       '</div></div>';
   });
@@ -1492,16 +1479,16 @@ function buildDitchPhotos(d) {
     var b64 = cache['dt_' + (d.id || d.ditchName) + '_' + i] || url;
     if (!b64) return;
     html += '<div class="rp-photo-row">' +
-      '<div class="rp-photo-img-wrap"><img src="' + b64 + '" alt="' + escHtml(d.ditchName) + '" class="rp-photo-img">' +
-        '<div class="rp-photo-label">' + escHtml(d.ditchName) + ' · фото ' + (i+1) + '</div></div>' +
+      '<div class="rp-photo-img-wrap"><img src="' + b64 + '" alt="' + escAttr(d.ditchName) + '" class="rp-photo-img">' +
+        '<div class="rp-photo-label">' + escAttr(d.ditchName) + ' · фото ' + (i+1) + '</div></div>' +
       '<div class="rp-photo-info">' +
-        '<div class="rp-photo-info-title">' + escHtml(d.ditchName) + '</div>' +
+        '<div class="rp-photo-info-title">' + escAttr(d.ditchName) + '</div>' +
         '<table class="rp-photo-meta">' +
           '<tr><td>Дата</td><td>' + fmtDate(d.monitoringDate) + '</td></tr>' +
-          '<tr><td>Статус</td><td>' + escHtml(d.status||'—') + '</td></tr>' +
+          '<tr><td>Статус</td><td>' + escAttr(d.status||'—') + '</td></tr>' +
           '<tr><td>Q</td><td>' + (d.flowM3h!=null?d.flowM3h.toFixed(3)+' м³/ч':'—') + '</td></tr>' +
         '</table>' +
-        (d.comment ? '<div class="rp-photo-comment"><b>Комментарий:</b> ' + escHtml(d.comment) + '</div>' : '') +
+        (d.comment ? '<div class="rp-photo-comment"><b>Комментарий:</b> ' + escAttr(d.comment) + '</div>' : '') +
       '</div></div>';
   });
   return html ? '<div class="rp-photos-block">' + html + '</div>' : '';
@@ -1580,11 +1567,11 @@ function buildDitch2DSVG(ditch) {
 function buildDitchHistTable(name, hist) {
   if (!hist || !hist.length) return '';
   var rows = hist.map(function(h) {
-    return '<tr><td>' + escHtml(String(h.monitoringDate||'—')) + '</td>' +
+    return '<tr><td>' + escAttr(String(h.monitoringDate||'—')) + '</td>' +
       '<td>' + (h.area!=null?h.area.toFixed(4):'—') + '</td>' +
       '<td><b>' + (h.flowM3h!=null?h.flowM3h.toFixed(3):'—') + '</b></td>' +
       '<td>' + (h.velocity!=null?h.velocity.toFixed(3):'—') + '</td>' +
-      '<td>' + escHtml(h.worker||'—') + '</td></tr>';
+      '<td>' + escAttr(h.worker||'—') + '</td></tr>';
   }).join('');
   return '<div class="rp-ditch-hist"><div class="rp-section-sub">История замеров</div>' +
     '<table class="rp-table"><thead><tr><th>Дата</th><th>S, м²</th><th>Q, м³/ч</th><th>v, м/с</th><th>Сотрудник</th></tr></thead>' +
@@ -1622,11 +1609,11 @@ function buildReportHTML(s) {
     '<h1 class="rp-title-main">Отчёт по мониторингу<br>подземных вод</h1>' +
     '<div class="rp-title-sub">Карьер ЮРГ · Пулково-42</div>' +
     '<div class="rp-title-period">' + (isSingle
-      ? 'Дата: ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escHtml(s.weekB) + ')' : '')
-      : fmtDate(s.dateA) + ' (' + escHtml(s.weekA) + ') → ' + fmtDate(s.dateB) + ' (' + escHtml(s.weekB) + ')'
+      ? 'Дата: ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escAttr(s.weekB) + ')' : '')
+      : fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ') → ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')'
     ) + '</div>' +
     '<div class="rp-title-meta">' +
-      '<div>Составил: <b>' + escHtml(s.author||'—') + '</b> · ' + escHtml(s.position||'') + '</div>' +
+      '<div>Составил: <b>' + escAttr(s.author||'—') + '</b> · ' + escAttr(s.position||'') + '</div>' +
       '<div>Дата: <b>' + fmtDate(s.dateReport) + '</b></div>' +
       '<div style="margin-top:6px;opacity:.5;font-size:11px">v' + s.reportVersion + '</div>' +
     '</div></div>';
@@ -1710,11 +1697,11 @@ function buildReportHTML(s) {
     var qDB = dB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
     var dd  = qDB - qDA;
     if (isSingle) {
-      return '<tr><td><b>' + escHtml(dom) + '</b></td>' +
+      return '<tr><td><b>' + escAttr(dom) + '</b></td>' +
         '<td style="text-align:center">' + dB.length + '</td>' +
         '<td style="text-align:right;color:#1a73e8;font-weight:600">' + qDB.toFixed(2) + '</td></tr>';
     }
-    return '<tr><td><b>' + escHtml(dom) + '</b></td>' +
+    return '<tr><td><b>' + escAttr(dom) + '</b></td>' +
       '<td style="text-align:center">' + dA.length + '</td>' +
       '<td style="text-align:right">' + qDA.toFixed(2) + '</td>' +
       '<td style="text-align:center">' + dB.length + '</td>' +
@@ -1740,15 +1727,15 @@ function buildReportHTML(s) {
     if (isSingle && imgs.imgB) {
       mapSection = '<section class="rp-section"><h2>2. Схема карьера ЮРГ</h2>' +
         '<div class="rp-map-wrap"><img src="' + imgs.imgB + '" alt="Схема" style="width:100%;border:1px solid #dee2e6;border-radius:4px">' +
-        '<div class="rp-map-caption">Рис. 1. Схема карьера · ' + fmtDate(s.dateB) + ' (' + escHtml(s.weekB) + ')</div></div></section>';
+        '<div class="rp-map-caption">Рис. 1. Схема карьера · ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')</div></div></section>';
     } else {
       mapSection = '<section class="rp-section"><h2>2. Схемы карьера ЮРГ — сравнение</h2>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
           (imgs.imgA ? '<div class="rp-map-wrap"><img src="' + imgs.imgA + '" alt="Нед. А" style="width:100%;border:1px solid #dee2e6;border-radius:4px">' +
-            '<div class="rp-map-caption">Нед. А · ' + fmtDate(s.dateA) + ' (' + escHtml(s.weekA) + ')</div></div>'
+            '<div class="rp-map-caption">Нед. А · ' + fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ')</div></div>'
             : '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;padding:40px;text-align:center;color:#aaa;font-size:12px">Схема нед. А не загружена</div>') +
           (imgs.imgB ? '<div class="rp-map-wrap"><img src="' + imgs.imgB + '" alt="Нед. Б" style="width:100%;border:2px solid #1a73e8;border-radius:4px">' +
-            '<div class="rp-map-caption" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + ' (' + escHtml(s.weekB) + ')</div></div>'
+            '<div class="rp-map-caption" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')</div></div>'
             : '<div style="background:#e8f0fe;border:2px solid #1a73e8;border-radius:4px;padding:40px;text-align:center;color:#1a73e8;font-size:12px">Схема нед. Б не загружена</div>') +
         '</div></section>';
     }
@@ -1769,7 +1756,7 @@ function buildReportHTML(s) {
       // Сводная строка домена
       var domHeader = '<div class="rp-domen-block">' +
         '<div class="rp-domen-header">' +
-          '<span class="rp-domen-name">' + escHtml(dom) + '</span>' +
+          '<span class="rp-domen-name">' + escAttr(dom) + '</span>' +
           '<span class="rp-domen-badge">' + (isSingle?dB.length:dA.length+'→'+dB.length) + ' точек</span>' +
           '<span class="rp-domen-q">Q = ' + qDB.toFixed(2) + ' л/с</span>' +
           (!isSingle && qDA>0 ? '<span class="rp-delta ' + (dd>=0?'up':'down') + '">' + (dd>=0?'▲+':'▼') + dd.toFixed(2) + ' л/с</span>' : '') +
@@ -1782,14 +1769,14 @@ function buildReportHTML(s) {
         var qb = parseFloat(pb.flowRate)||0;
         var delta = qa!==null ? qb-qa : null;
         return '<tr>' +
-          '<td><b>' + escHtml(String(pb.pointNumber)) + '</b></td>' +
-          '<td>' + escHtml(pb.status||'—') + '</td>' +
-          '<td>' + escHtml(pb.intensity||'—') + '</td>' +
+          '<td><b>' + escAttr(String(pb.pointNumber)) + '</b></td>' +
+          '<td>' + escAttr(pb.status||'—') + '</td>' +
+          '<td>' + escAttr(pb.intensity||'—') + '</td>' +
           (isSingle ? '' : '<td>' + (qa!==null?qa.toFixed(2):'—') + '</td>') +
           '<td><b>' + qb.toFixed(2) + '</b></td>' +
           (isSingle ? '' : '<td class="' + (delta!==null?(delta>=0?'rp-up':'rp-down'):'') + '">' + (delta!==null?(delta>=0?'+':'')+delta.toFixed(2):'—') + '</td>') +
-          '<td>' + escHtml(pb.waterColor||'—') + '</td>' +
-          '<td>' + escHtml(pb.measureMethod||'—') + '</td>' +
+          '<td>' + escAttr(pb.waterColor||'—') + '</td>' +
+          '<td>' + escAttr(pb.measureMethod||'—') + '</td>' +
         '</tr>';
       }).join('');
 
@@ -1830,20 +1817,20 @@ function buildReportHTML(s) {
           '<div class="rp-ditch-block">' +
             '<div class="rp-ditch-header">' +
               '<span class="rp-ditch-icon">≈</span>' +
-              '<span class="rp-ditch-name">' + escHtml(d.ditchName) + '</span>' +
-              '<span class="rp-ditch-status">' + escHtml(d.status||'Активная') + '</span>' +
+              '<span class="rp-ditch-name">' + escAttr(d.ditchName) + '</span>' +
+              '<span class="rp-ditch-status">' + escAttr(d.status||'Активная') + '</span>' +
             '</div>' +
             '<div class="rp-ditch-grid">' +
               '<div class="rp-param"><span class="rp-param-l">Дата</span><span class="rp-param-v">' + fmtDate(d.monitoringDate) + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">Сотрудник</span><span class="rp-param-v">' + escHtml(d.worker||'—') + '</span></div>' +
+              '<div class="rp-param"><span class="rp-param-l">Сотрудник</span><span class="rp-param-v">' + escAttr(d.worker||'—') + '</span></div>' +
               '<div class="rp-param"><span class="rp-param-l">Ширина B</span><span class="rp-param-v">' + (d.width!=null?d.width.toFixed(2)+' м':'—') + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">Метод v</span><span class="rp-param-v">' + escHtml(d.velMethod==='float'?'Поплавок':d.velMethod==='multi'?'По точкам':'Одна v') + '</span></div>' +
+              '<div class="rp-param"><span class="rp-param-l">Метод v</span><span class="rp-param-v">' + escAttr(d.velMethod==='float'?'Поплавок':d.velMethod==='multi'?'По точкам':'Одна v') + '</span></div>' +
               '<div class="rp-param"><span class="rp-param-l">v, м/с</span><span class="rp-param-v">' + (d.velocity!=null?d.velocity.toFixed(3):'—') + '</span></div>' +
               '<div class="rp-param"><span class="rp-param-l">S, м²</span><span class="rp-param-v">' + (d.area!=null?d.area.toFixed(4):'—') + '</span></div>' +
               '<div class="rp-param rp-param--accent"><span class="rp-param-l">Q, м³/ч</span><span class="rp-param-v">' + (d.flowM3h!=null?d.flowM3h.toFixed(3):'—') + '</span></div>' +
               '<div class="rp-param"><span class="rp-param-l">Глубины</span><span class="rp-param-v">' + (Array.isArray(d.depths)?d.depths.map(function(h){return (h*100).toFixed(1)+'см';}).join(', '):'—') + '</span></div>' +
             '</div>' +
-            (d.comment ? '<div class="rp-comment"><b>Комментарий:</b> ' + escHtml(d.comment) + '</div>' : '') +
+            (d.comment ? '<div class="rp-comment"><b>Комментарий:</b> ' + escAttr(d.comment) + '</div>' : '') +
             buildDitch2DSVG(d) +
             buildDitchHistTable(d.ditchName, hist) +
             (s.includePhotos ? buildDitchPhotos(d) : '') +
@@ -1865,17 +1852,17 @@ function buildReportHTML(s) {
       var pct   = (qa&&qa>0) ? (qb-qa)/qa*100 : null;
       var alert = delta!==null&&Math.abs(pct)>=30 ? (delta>0?'⚠ рост':'✓ снижение') : '';
       return '<tr class="' + (alert?'rp-row--alert':'') + '">' +
-        '<td><b>' + escHtml(String(pb.pointNumber)) + '</b></td>' +
-        '<td>' + escHtml(pb.domain||pb.domen||'—') + '</td>' +
-        '<td>' + escHtml(pb.status||'—') + '</td>' +
+        '<td><b>' + escAttr(String(pb.pointNumber)) + '</b></td>' +
+        '<td>' + escAttr(pb.domain||pb.domen||'—') + '</td>' +
+        '<td>' + escAttr(pb.status||'—') + '</td>' +
         '<td>' + (qa!==null?qa.toFixed(2):'—') + '</td>' +
         '<td><b>' + qb.toFixed(2) + '</b></td>' +
         '<td class="' + (delta!==null?(delta>=0?'rp-up':'rp-down'):'') + '">' + (delta!==null?(delta>=0?'+':'')+delta.toFixed(2):'—') + '</td>' +
         '<td class="' + (pct!==null?(pct>=0?'rp-up':'rp-down'):'') + '">' + (pct!==null?(pct>=0?'+':'')+pct.toFixed(0)+'%':'—') + '</td>' +
-        '<td>' + escHtml(alert) + '</td></tr>';
+        '<td>' + escAttr(alert) + '</td></tr>';
     }).join('');
     var cnSec = 5;
-    compareSection = '<section class="rp-section"><h2>' + cnSec + '. Сравнение: ' + fmtDate(s.dateA) + ' (' + escHtml(s.weekA) + ') vs ' + fmtDate(s.dateB) + ' (' + escHtml(s.weekB) + ')</h2>' +
+    compareSection = '<section class="rp-section"><h2>' + cnSec + '. Сравнение: ' + fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ') vs ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')</h2>' +
       cmpAI +
       '<table class="rp-table"><thead><tr><th>№</th><th>Домен</th><th>Статус</th>' +
         '<th>Q нед. А, л/с</th><th>Q нед. Б, л/с</th><th>Δ, л/с</th><th>Δ, %</th><th>Оценка</th></tr></thead><tbody>' +
@@ -1892,7 +1879,7 @@ function buildReportHTML(s) {
   var concl = '<section class="rp-section"><h2>6. Заключение и рекомендации</h2>' +
     aiRec +
     (s.conclusions
-      ? '<div class="rp-conclusion-text">' + escHtml(s.conclusions).replace(/\n/g,'<br>') + '</div>'
+      ? '<div class="rp-conclusion-text">' + escAttr(s.conclusions).replace(/\n/g,'<br>') + '</div>'
       : '<div class="rp-conclusion-text rp-conclusion-text--empty">Заключение не заполнено</div>') +
   '</section>';
 

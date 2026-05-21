@@ -321,9 +321,13 @@ var Api = (function() {
     return photoUrl;
   }
 
-  async function deletePhoto(pointId) {
+  async function deletePhoto(pointId, photoUrl) {
+    var { data: row, error: fetchError } = await client()
+      .from('points').select('photos').eq('id', pointId).maybeSingle();
+    if (fetchError) throw new Error(fetchError.message);
+    var remaining = ((row && row.photos) || []).filter(function(u) { return u !== photoUrl; });
     var { error } = await client()
-      .from('points').update({ photos: [] }).eq('id', pointId);
+      .from('points').update({ photos: remaining }).eq('id', pointId);
     if (error) throw new Error(error.message);
   }
 

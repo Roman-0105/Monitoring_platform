@@ -399,6 +399,7 @@ function buildDateFilterWidget(containerId, selectedDates, onChange) {
 
   var dates = getAllMonitoringDates(); // ['2026-03-29', '2026-03-28', ...]
   var selected = selectedDates ? selectedDates.slice() : [];
+  var _closeHandler = null;
 
   function getLabel() {
     if (!selected.length) return '📅 Все даты';
@@ -481,13 +482,14 @@ function buildDateFilterWidget(containerId, selectedDates, onChange) {
       dropdown.classList.toggle('open');
     });
 
-    // Закрытие по клику вне
-    document.addEventListener('click', function closeHandler(e) {
+    // Закрытие по клику вне — удаляем предыдущий обработчик перед добавлением нового
+    if (_closeHandler) document.removeEventListener('click', _closeHandler);
+    _closeHandler = function(e) {
       if (!wrap.contains(e.target)) {
         dropdown.classList.remove('open');
-        document.removeEventListener('click', closeHandler);
       }
-    });
+    };
+    document.addEventListener('click', _closeHandler);
 
     wrap.appendChild(btn);
     wrap.appendChild(dropdown);
