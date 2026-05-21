@@ -497,8 +497,26 @@ body {
 .filter-select--compact { min-width: 200px; max-width: 270px; }
 .map-add-hint { color: var(--gold); font-size: 12px; }
 .map-container { flex: 1; display: flex; min-height: 0; }
-.map-scheme-wrap { flex: 1; position: relative; overflow: auto; padding: 14px; background: var(--bg-0); }
-#map-canvas { border-radius: var(--r-sm); border: 1px solid rgba(88,166,255,.3); background: #0a0e15; }
+.map-scheme-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg-0); }
+#map-canvas { display: block; border-radius: 0; border: none; background: #f5ede2; cursor: grab; }
+#map-canvas.adding-mode { cursor: crosshair; }
+
+/* Zoom controls overlay */
+.map-zoom-controls {
+  position: absolute; top: 10px; right: 10px;
+  display: flex; flex-direction: column; gap: 3px; z-index: 100;
+}
+.map-zoom-btn {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg-1); color: var(--txt-1);
+  font-size: 17px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  transition: background .12s;
+}
+.map-zoom-btn:hover { background: var(--bg-2); }
+.map-zoom-btn.map-zoom-label { font-size: 11px; color: var(--txt-2); }
 .map-no-scheme {
   position: absolute; inset: 14px; border-radius: var(--r);
   border: 1px dashed var(--line); display: grid; place-items: center;

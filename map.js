@@ -80,9 +80,10 @@ var MapModule = (function() {
   }
 
   function getScaleAwareSize(base, viewScale) {
-    // zoom out => scale меньше => маркер больше
-    var raw = base / normalizeScale(viewScale);
-    return clamp(raw, MAP_STYLE.minMarkerSize, MAP_STYLE.maxMarkerSize);
+    // base, min, max are SCREEN pixels; return IMAGE-space pixels (divided by scale)
+    var s = normalizeScale(viewScale);
+    var screenR = clamp(base, MAP_STYLE.minMarkerSize, MAP_STYLE.maxMarkerSize);
+    return screenR / s;
   }
 
   function getScreenRadius(intensity, viewScale) {

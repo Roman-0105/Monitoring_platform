@@ -131,8 +131,10 @@ function setupMapCanvas(canvas) {
   if (!canvas) return;
   var wrap = document.getElementById('map-scheme-wrap');
   if (!wrap) return;
-  canvas.width  = wrap.clientWidth  || 400;
+  canvas.width  = wrap.clientWidth  || 800;
   canvas.height = wrap.clientHeight || 600;
+  // Sync targets after resize so clamp works correctly
+  _mapOffXT = _mapOffX; _mapOffYT = _mapOffY; _mapScaleT = _mapScale;
 }
 
 // ── Схема — селектор ─────────────────────────────────────
@@ -270,7 +272,7 @@ function redrawMap() {
   // Тепловая карта рисуется в координатах схемы — масштабируется вместе с картой
   if (typeof HeatMap !== 'undefined') HeatMap.draw();
   if (typeof Domens !== 'undefined') {
-    Domens.draw(ctx, _mapSchemeImg.width, _mapSchemeImg.height);
+    Domens.draw(ctx, _mapSchemeImg.width, _mapSchemeImg.height, _mapScale);
   }
   if (typeof Faults !== 'undefined') {
     Faults.draw(ctx, _mapSchemeImg.width, _mapSchemeImg.height);
@@ -379,10 +381,10 @@ function initMapZoomButtons() {
   var controls = document.createElement('div');
   controls.className = 'map-zoom-controls';
   controls.innerHTML =
-    '<button class="map-zoom-btn" id="map-zoom-in"  title="Приблизить (прокрутка вверх)">+</button>' +
-    '<button class="map-zoom-btn map-zoom-label" id="map-zoom-pct" title="Сбросить масштаб" style="font-size:11px;min-width:42px">100%</button>' +
-    '<button class="map-zoom-btn" id="map-zoom-out" title="Отдалить (прокрутка вниз)">−</button>' +
-    '<button class="map-zoom-btn" id="map-zoom-fit" title="По размеру (двойной клик)" style="font-size:13px">⊡</button>';
+    '<button class="map-zoom-btn" id="map-zoom-in"  title="Приблизить">+</button>' +
+    '<button class="map-zoom-btn map-zoom-label" id="map-zoom-pct" title="По размеру">100%</button>' +
+    '<button class="map-zoom-btn" id="map-zoom-out" title="Отдалить">−</button>' +
+    '<button class="map-zoom-btn" id="map-zoom-fit" title="По размеру">⊡</button>';
   wrap.appendChild(controls);
 
   document.getElementById('map-zoom-in').addEventListener('click',  function() { zoomMap(1.3); });
@@ -390,8 +392,6 @@ function initMapZoomButtons() {
   document.getElementById('map-zoom-fit').addEventListener('click', function() { fitMap(); });
   document.getElementById('map-zoom-pct').addEventListener('click', function() { fitMap(); });
 
-  // Обновляем индикатор масштаба в кнопке
-  var origRedraw = redrawMap;
   window._mapZoomPctEl = document.getElementById('map-zoom-pct');
 }
 
@@ -628,6 +628,21 @@ function initMapInteraction(canvas) {
   });
 
   canvas.style.cursor = 'grab';
+
+  // Resize canvas when wrapper changes size (e.g. window resize, legend collapse)
+  if (typeof ResizeObserver !== 'undefined') {
+    var _mapRO = new ResizeObserver(function() {
+      if (!_mapSchemeImg) return;
+      var wrap2 = document.getElementById('map-scheme-wrap');
+      if (!wrap2) return;
+      canvas.width  = wrap2.clientWidth;
+      canvas.height = wrap2.clientHeight;
+      // Re-clamp and redraw; targets stay valid
+      clampMapTransform();
+      redrawMap();
+    });
+    _mapRO.observe(document.getElementById('map-scheme-wrap'));
+  }
 }
 
 // ── Фильтры карты ─────────────────────────────────────────

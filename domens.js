@@ -551,9 +551,11 @@ var Domens = (function() {
   function toggle() { _visible = !_visible; return _visible; }
 
   // ── Отрисовка поверх canvas ──────────────────────────────
-  // xyToPixel — функция из MapModule
-  function draw(ctx, imgW, imgH) {
+  // viewScale — текущий зум карты (ctx уже отмасштабирован); используем для
+  // постоянного размера текста на экране независимо от зума.
+  function draw(ctx, imgW, imgH, viewScale) {
     if (!_visible || typeof MapModule === 'undefined') return;
+    var s = (typeof viewScale === 'number' && viewScale > 0) ? viewScale : 1;
     POLYGONS.forEach(function(domen) {
       if (!domen.pts || domen.pts.length < 3) return;
       ctx.save();
@@ -568,10 +570,10 @@ var Domens = (function() {
       ctx.fillStyle   = domen.fill;
       ctx.fill();
       ctx.strokeStyle = domen.stroke;
-      ctx.lineWidth   = 1.5;
+      ctx.lineWidth   = 1.5 / s;
       ctx.setLineDash([]);
       ctx.stroke();
-      // Подпись в центре полигона
+      // Подпись в центре полигона — размер шрифта постоянный в экранных px
       var cx = 0, cy = 0;
       domen.pts.forEach(function(pt) {
         var px = MapModule.xyToPixel(pt[0], pt[1], imgW, imgH);
@@ -579,13 +581,13 @@ var Domens = (function() {
       });
       cx /= domen.pts.length;
       cy /= domen.pts.length;
+      var fs = Math.round(14 / s); // 14 screen-px независимо от зума
       ctx.fillStyle    = domen.stroke;
-      ctx.font         = 'bold 13px sans-serif';
+      ctx.font         = '700 ' + fs + 'px sans-serif';
       ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
-      // Белая обводка текста
-      ctx.strokeStyle  = 'rgba(255,255,255,0.85)';
-      ctx.lineWidth    = 3;
+      ctx.strokeStyle  = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth    = 4 / s;
       ctx.strokeText(domen.name, cx, cy);
       ctx.fillText(domen.name, cx, cy);
       ctx.restore();
