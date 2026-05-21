@@ -25,6 +25,7 @@ var _poiDate           = '';      // Выбранная дата для ТИ
 var _mapUiState        = { showFilter: true, showLegend: true };
 var _mapSelectedWeekKey = 'auto';
 var _tooltipEl         = null;
+var _mapZoomPctEl      = null;
 
 // ── Вспомогательные ──────────────────────────────────────
 
@@ -289,8 +290,8 @@ function redrawMap() {
   ctx.restore();
   var sbScale = document.getElementById('sb-scale');
   if (sbScale) sbScale.textContent = 'x' + _mapScale.toFixed(2);
-  var pctEl = window._mapZoomPctEl || document.getElementById('map-zoom-pct');
-  if (pctEl) pctEl.textContent = Math.round(_mapScale * 100) + '%';
+  if (!_mapZoomPctEl) _mapZoomPctEl = document.getElementById('map-zoom-pct');
+  if (_mapZoomPctEl) _mapZoomPctEl.textContent = Math.round(_mapScale * 100) + '%';
 }
 
 // ── Анимация зума (rAF lerp) ──────────────────────────────
@@ -395,7 +396,7 @@ function initMapZoomButtons() {
   document.getElementById('map-zoom-fit').addEventListener('click', function() { fitMap(); });
   document.getElementById('map-zoom-pct').addEventListener('click', function() { fitMap(); });
 
-  window._mapZoomPctEl = document.getElementById('map-zoom-pct');
+  _mapZoomPctEl = document.getElementById('map-zoom-pct');
 }
 
 // ── Взаимодействие ───────────────────────────────────────
@@ -601,8 +602,8 @@ function initMapInteraction(canvas) {
     }
 
     if (_mapAddMode && typeof MapModule !== 'undefined') {
-      var local = MapModule.pixelToXY(imgX, imgY, _mapSchemeImg.width, _mapSchemeImg.height);
-      openAddPointModal(local.x, local.y);
+      var localAdd = MapModule.pixelToXY(imgX, imgY, _mapSchemeImg.width, _mapSchemeImg.height);
+      openAddPointModal(localAdd.x, localAdd.y);
       return;
     }
 
@@ -1060,7 +1061,7 @@ function showMapPointCard(p) {
   }
   if (p.horizon) html += '<div class="mpc-row"><span class="mpc-label">Горизонт</span><span>' + escAttr(p.horizon) + '</span></div>';
   if (p.measureMethod) html += '<div class="mpc-row"><span class="mpc-label">Метод замера</span><span>' + escAttr(p.measureMethod) + '</span></div>';
-  if (p.comment) html += '<div class="mpc-comment">' + p.comment + '</div>';
+  if (p.comment) html += '<div class="mpc-comment">' + escHTML(p.comment) + '</div>';
   html += '</div>';
 
   html +=
@@ -1102,7 +1103,7 @@ function showMapPointCard(p) {
     if (!confirm('Удалить точку #' + (p.pointNumber || pid) + '?')) return;
     card.remove();
     AppState.syncing = true;
-    var dtid = Toast.progress('del-point', 'Удаление точки...');
+    Toast.progress('del-point', 'Удаление точки...');
     Points.remove(pid).then(function() {
       return Points.load();
     }).then(function() {
@@ -1199,167 +1200,7 @@ function showDitchMapCard(ditch) {
   }
   html += '</div>';
   html += '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:' + col + '22;color:' + col + ';border:1px solid ' + col + '44">' + escAttr(ditch.status || 'Активная') + '</span>';
-  html += '<button class="mpc-close" onclick="this.closest(\'.map-point-card\').remove()">✕</button>';
-  html += '</div>';
-
-  html += '<div class="mpc-body">';
-  html += '<div class="mpc-row"><span class="mpc-label">Дата</span><span>' + escAttr(ditch.monitoringDate || '—') + '</span></div>';
-  html += '<div class="mpc-row"><span class="mpc-label">Сотрудник</span><span>' + escAttr(ditch.worker || '—') + '</span></div>';
-  if (ditch.width != null) {
-    html += '<div class="mpc-row"><span class="mpc-label">Ширина</span><span>' + ditch.width.toFixed(2) + ' м</span></div>';
-  }
-  if (ditch.area != null) {
-    html += '<div class="mpc-row"><span class="mpc-label">Площадь S</span><span>' + ditch.area.toFixed(3) + ' м²</span></div>';
-  }
-  if (ditch.flowM3h != null) {
-    html += '<div class="mpc-row" style="color:#f9ab00;font-weight:600"><span class="mpc-label" style="color:var(--txt-2)">Водоприток Q</span><span>' + ditch.flowM3h.toFixed(3) + ' м³/ч</span></div>';
-  }
-  if (ditch.comment) {
-    html += '<div class="mpc-row"><span class="mpc-label">Комментарий</span><span>' + escAttr(ditch.comment) + '</span></div>';
-  }
-  html += '</div>';
-
-  // Фото
-  if (ditch.photoUrls && ditch.photoUrls[0]) {
-    html += '<div class="mpc-photo-wrap">';
-    html += '<img class="mpc-photo" id="dmc-photo-' + escAttr(ditch.id) + '" src="" alt="фото">';
-    html += '</div>';
-  }
-
-  // Кнопки — data-атрибуты вместо inline onclick
-  html += '<div class="mpc-actions">';
-  html += '<button class="btn btn-sm btn-outline dmc-edit-btn" data-did="' + escAttr(ditch.id) + '">✏️ Изменить</button>';
-  html += '<button class="btn btn-sm btn-outline dmc-hist-btn" data-did="' + escAttr(ditch.id) + '" data-dname="' + escAttr(ditch.ditchName) + '">📈 История</button>';
-  html += '<button class="btn btn-sm btn-outline dmc-move-btn" data-did="' + escAttr(ditch.id) + '" style="color:var(--gold);border-color:rgba(200,160,18,.35)" title="Кликните на карте чтобы уточнить позицию маркера">🎯 Позиция</button>';
-  html += '<button class="btn btn-sm btn-outline dmc-del-btn" data-did="' + escAttr(ditch.id) + '" data-dname="' + escAttr(ditch.ditchName) + '" style="color:var(--red,#e05050);border-color:rgba(224,80,80,.3)">🗑 Удалить</button>';
-  html += '</div>';
-  html += '<div class="dmc-hist-panel" style="display:none;max-height:200px;overflow-y:auto"></div>';
-
-  card.innerHTML = html;
-
-  var mapWrap = document.getElementById('map-scheme-wrap');
-  if (!mapWrap) mapWrap = document.getElementById('page-map');
-  mapWrap.appendChild(card);
-
-  if (hasPhoto) {
-    var imgEl = document.getElementById('mpc-photo-img');
-    if (imgEl) Photos.setImageSrc(imgEl, p.photoUrls[0]);
-  }
-
-  document.getElementById('map-card-close').addEventListener('click', function() { card.remove(); });
-  card.querySelector('.mpc-edit').addEventListener('click', function() {
-    card.remove();
-    openEditModal(this.dataset.pid);
-  });
-  card.querySelector('.mpc-chart').addEventListener('click', function() {
-    toggleMapPointChart(this.dataset.pid, this.dataset.pnum, this);
-  });
-  card.querySelector('.mpc-print').addEventListener('click', function() {
-    printPointCard(this.dataset.pid);
-  });
-  card.querySelector('.mpc-del').addEventListener('click', function() {
-    var pid = this.dataset.pid;
-    if (!confirm('Удалить точку #' + (p.pointNumber || pid) + '?')) return;
-    card.remove();
-    AppState.syncing = true;
-    var dtid = Toast.progress('del-point', 'Удаление точки...');
-    Points.remove(pid).then(function() {
-      return Points.load();
-    }).then(function() {
-      renderPointsList();
-      if (_mapSchemeImg) redrawMap();
-      AppState.syncing = false;
-      Toast.done('del-point', 'Точка удалена');
-    }).catch(function(err) {
-      Toast.fail('del-point', 'Ошибка: ' + err.message);
-      AppState.syncing = false;
-    });
-  });
-}
-
-// ── График на карточке карты ──────────────────────────────
-
-function toggleMapPointChart(pointId, pointNumber, btn) {
-  var wrap = document.getElementById('mpc-chart-' + pointId);
-  if (!wrap) return;
-
-  if (wrap.style.display !== 'none') {
-    wrap.style.display = 'none';
-    btn.style.background = '';
-    btn.style.color = '';
-    btn.style.borderColor = '';
-    return;
-  }
-
-  wrap.style.display = 'block';
-  btn.style.background = 'var(--blue, #1a73e8)';
-  btn.style.color = '#fff';
-  btn.style.borderColor = 'var(--blue, #1a73e8)';
-  wrap.innerHTML = '<p style="font-size:11px;color:rgba(180,190,210,.6);padding:8px 14px">⏳ Загрузка...</p>';
-
-  Api.getHistory(pointNumber).then(function(history) {
-    if (!history || !history.length) {
-      wrap.innerHTML = '<p style="font-size:11px;color:rgba(180,190,210,.5);padding:8px 14px">Нет истории замеров</p>';
-      return;
-    }
-    // Переиспользуем renderPointChart из ui-points.js
-    if (typeof renderPointChart === 'function') {
-      renderPointChart(wrap, history, pointNumber);
-    }
-  }).catch(function(err) {
-    wrap.innerHTML = '<p style="font-size:11px;color:#ea4335;padding:8px 14px">Ошибка: ' + err.message + '</p>';
-  });
-}
-
-// ── Тултип канавы ─────────────────────────────────────────
-
-function showDitchMapTooltip(d, clientX, clientY) {
-  var el = document.getElementById('map-tooltip');
-  if (!el) return;
-  el.innerHTML =
-    '<b style="color:#4090e8">🌊 ' + escAttr(d.ditchName) + '</b>' +
-    (d.status ? ' · ' + escAttr(d.status) : '') + '<br>' +
-    (d.flowM3h != null ? '<span style="color:#f9ab00">' + d.flowM3h.toFixed(3) + ' м³/ч</span>' : '');
-  el.style.display = '';
-
-  var canvas = document.getElementById('map-canvas');
-  var rect = canvas ? canvas.getBoundingClientRect() : { left:0, top:0 };
-  var lx = clientX - rect.left + 12;
-  var ly = clientY - rect.top  - 10;
-  el.style.left = lx + 'px';
-  el.style.top  = ly + 'px';
-}
-
-// ── Карточка канавы на карте ──────────────────────────────
-
-function showDitchMapCard(ditch) {
-  var mapWrap = document.getElementById('map-scheme-wrap');
-  if (!mapWrap) return;
-
-  // Убираем старую карточку точки если открыта
-  var old = mapWrap.querySelector('.map-point-card');
-  if (old) old.remove();
-  hideMapTooltip();
-
-  var card = document.createElement('div');
-  card.className = 'map-point-card ditch-map-card';
-  card.style.cssText = 'border-left:3px solid #4090e8';
-
-  var statusColors = {
-    'Активная':'#4090e8','Новая':'#40b8ff','Пересохла':'#e8a030','Заилилась':'#8060c0'
-  };
-  var col = statusColors[ditch.status] || '#4090e8';
-
-  var html = '<div class="mpc-header">';
-  html += '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">';
-  html += '<span style="font-size:16px">🌊</span>';
-  html += '<span class="mpc-num" style="color:#4090e8">' + escAttr(ditch.ditchName) + '</span>';
-  if (ditch.pointNumber) {
-    html += '<span style="font-size:10px;color:var(--txt-3)">· T' + escAttr(ditch.pointNumber) + '</span>';
-  }
-  html += '</div>';
-  html += '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:' + col + '22;color:' + col + ';border:1px solid ' + col + '44">' + escAttr(ditch.status || 'Активная') + '</span>';
-  html += '<button class="mpc-close" onclick="this.closest(\'.map-point-card\').remove()">✕</button>';
+  html += '<button class="mpc-close">✕</button>';
   html += '</div>';
 
   html += '<div class="mpc-body">';
@@ -1399,6 +1240,8 @@ function showDitchMapCard(ditch) {
   mapWrap.appendChild(card);
 
   // Навешиваем обработчики
+  var closeBtn = card.querySelector('.mpc-close');
+  if (closeBtn) closeBtn.addEventListener('click', function() { card.remove(); });
   var editBtn = card.querySelector('.dmc-edit-btn');
   if (editBtn) {
     editBtn.addEventListener('click', function() {

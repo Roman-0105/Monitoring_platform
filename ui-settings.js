@@ -280,9 +280,8 @@ function uploadScheme() {
 
   var uploadBtn = document.getElementById('btn-upload-scheme');
   if (statusEl) statusEl.textContent = '⏳ Загрузка ' + Schemes.formatWeekKey(weekKey) + '...';
-  if (statusEl)  statusEl.textContent = '⏳ Загрузка...';
   if (uploadBtn) uploadBtn.disabled = true;
-  var stid = Toast.progress('scheme-upload', 'Загрузка схемы карьера...', 30);
+  Toast.progress('scheme-upload', 'Загрузка схемы карьера...', 30);
 
   Schemes.upload(file, weekKey, Storage.getDeviceId()).then(function() {
     if (statusEl)  statusEl.textContent = '✅ Схема загружена';
@@ -370,7 +369,6 @@ function renderSettingsColors() {
   bindSwatch('set-domain-5', 'swatch-domain-5');
 
   var btnStatus = document.getElementById('btn-save-status-colors');
-  if (btnStatus) btnStatus._bound = false; // сбрасываем чтобы переинициализировать с новыми полями
   if (btnStatus && !btnStatus._bound) {
     btnStatus._bound = true;
     btnStatus.addEventListener('click', function() {

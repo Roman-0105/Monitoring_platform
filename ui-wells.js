@@ -60,10 +60,6 @@ function initWellsTab() {
     });
   }
 
-  if (!WellsState.selectedId && WellsState.list.length) {
-    WellsState.selectedId = WellsState.list[0].id;
-  }
-
   _switchWellsSubTab('view');
 }
 
@@ -1361,6 +1357,8 @@ function closeMeasurementModal() {
 function _getLastMeasurement(wellId) {
   var meas = WellsState.measurements[wellId];
   if (!meas || !meas.length) return null;
-  var sorted = meas.slice().sort(function(a, b) { return (b.measurementDate||'') > (a.measurementDate||'') ? 1 : -1; });
-  return sorted[0].flowRate != null ? sorted[0] : null;
+  var latest = meas.reduce(function(best, m) {
+    return (m.measurementDate || '') > (best.measurementDate || '') ? m : best;
+  });
+  return latest.flowRate != null ? latest : null;
 }
