@@ -1451,8 +1451,9 @@ function getCurrentWeekNumbers() {
   var nums = {};
   Points.getList().forEach(function(p) {
     var d = (p.monitoringDate || '').slice(0, 10);
-    // Any measurement date OTHER than the reference date counts as "done this period"
-    if (d && d !== _poiDate) {
+    // Point is "done this period" only if measured AFTER the reference date
+    // d > _poiDate works correctly for ISO strings (YYYY-MM-DD)
+    if (d && d > _poiDate) {
       nums[p.pointNumber] = true;
     }
   });
