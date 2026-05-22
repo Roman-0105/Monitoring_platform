@@ -1107,7 +1107,11 @@ function fillHorizonsDatalist() {
 function resetAddForm() {
   var form = document.getElementById('add-form');
   if (form) form.reset();
-  Photos.clearInput('f-photo', 'f-photo-preview');
+  ['f-photo-cam', 'f-photo-gal'].forEach(function(id) {
+    var inp = document.getElementById(id); if (inp) inp.value = '';
+  });
+  var fPhPrev = document.getElementById('f-photo-preview');
+  if (fPhPrev) fPhPrev.innerHTML = '';
   updateFlowHint('f');
   // После reset восстанавливаем сегодняшнюю дату
   var fDate = document.getElementById('f-monitoring-date');
@@ -1125,7 +1129,7 @@ function saveNewPoint() {
   AppState.syncing = true;
   showLoader('Сохранение...');
 
-  var photoFile = Photos.getFile('f-photo');
+  var photoFile = Photos.getFileAny(['f-photo-cam', 'f-photo-gal']);
   var tid = Toast.progress('save-point', 'Сохранение точки...');
   Points.create(data).then(function(savedPoint) {
     if (!photoFile || !savedPoint || !savedPoint.id) return null;
@@ -1189,7 +1193,8 @@ function initEditModal() {
   var addMapBtn = document.getElementById('btn-map-add-point');
   if (addMapBtn) addMapBtn.addEventListener('click', toggleMapAddMode);
 
-  Photos.initPhotoInput('e-photo', 'e-new-photo-preview');
+  Photos.initPreview('e-photo-cam', 'e-new-photo-preview');
+  Photos.initPreview('e-photo-gal', 'e-new-photo-preview');
 }
 
 function openEditModal(id) {
@@ -1253,17 +1258,13 @@ function openEditModal(id) {
   var ePhotoBtn = document.getElementById('e-photo-btn');
   if (ePhotoBtn) {
     ePhotoBtn.textContent = hasPhoto ? '📷 Заменить фото' : '📷 Загрузить фото';
-    if (!ePhotoBtn._photoModalBound) {
-      ePhotoBtn._photoModalBound = true;
-      ePhotoBtn.addEventListener('click', function() {
-        var curHasPhoto = !!(document.getElementById('e-photo-preview') &&
-          document.getElementById('e-photo-preview').querySelector('img'));
-        showPhotoSourceModal('e-photo', 'e-new-photo-preview', 'e-photo-progress', curHasPhoto);
-      });
-    }
   }
 
-  Photos.clearInput('e-photo', 'e-new-photo-preview');
+  ['e-photo-cam', 'e-photo-gal'].forEach(function(id) {
+    var inp = document.getElementById(id); if (inp) inp.value = '';
+  });
+  var eNewPrev = document.getElementById('e-new-photo-preview');
+  if (eNewPrev) eNewPrev.innerHTML = '';
   document.getElementById('edit-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
@@ -1305,7 +1306,7 @@ function saveEditedPoint() {
   AppState.syncing = true;
   var chain;
 
-  var ePhotoFile = Photos.getFile('e-photo');
+  var ePhotoFile = Photos.getFileAny(['e-photo-cam', 'e-photo-gal']);
 
   if (isMapAdd) {
     chain = Points.create(data).then(function(savedPoint) {

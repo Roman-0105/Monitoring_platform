@@ -103,14 +103,10 @@ window.initApp = function() {
   initAddForm();
   initEditModal();
   initDiagButtons();
-  Photos.initPhotoInput('f-photo', 'f-photo-preview');
-  // Кнопка "Загрузить фото" — открывает выбор источника
-  var fPhotoBtn = document.getElementById('f-photo-btn');
-  if (fPhotoBtn) {
-    fPhotoBtn.addEventListener('click', function() {
-      showPhotoSourceModal('f-photo', 'f-photo-preview', 'f-photo-progress', false);
-    });
-  }
+  Photos.initPreview('f-photo-cam', 'f-photo-preview');
+  Photos.initPreview('f-photo-gal', 'f-photo-preview');
+  Photos.initPreview('e-photo-cam', 'e-new-photo-preview');
+  Photos.initPreview('e-photo-gal', 'e-new-photo-preview');
   initSettings();
   Diagnostics.render();
 
