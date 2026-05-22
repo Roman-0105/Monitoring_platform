@@ -314,10 +314,14 @@ function _buildWellMapDOM(body, url) {
   bgImg.setAttribute('href', url);
   bgImg.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url);
 
+  var shaftsG = document.createElementNS(NS, 'g');
+  shaftsG.id = 'wells-map-shafts';
+
   var marksG = document.createElementNS(NS, 'g');
   marksG.id = 'wells-map-markers';
 
   svg.appendChild(bgImg);
+  svg.appendChild(shaftsG);  // shafts always below markers
   svg.appendChild(marksG);
   body.appendChild(svg);
 
@@ -540,6 +544,52 @@ function _zoomToCluster(cluster) {
 
 // ── Marker rendering ──────────────────────────────────────
 
+function _renderWellShafts(p2s) {
+  var shaftsG = document.getElementById('wells-map-shafts');
+  if (!shaftsG || !_wellsMap.imgW) return;
+  while (shaftsG.firstChild) shaftsG.removeChild(shaftsG.firstChild);
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var z  = _wellsMap;
+  var scaleX = z.imgW / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin);
+  var scaleY = z.imgH / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin);
+
+  WellsState.list.forEach(function(w) {
+    if (w.xLocal == null || w.yLocal == null) return;
+    if (w.azimuth == null || w.depth == null || w.depth <= 0) return;
+
+    var cx  = (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * z.imgW;
+    var cy  = (WELL_BOUNDS.Ymax - w.yLocal)  / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * z.imgH;
+    var color  = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
+    var isSel  = w.id === WellsState.selectedId;
+    var azRad  = w.azimuth * Math.PI / 180;
+    var inclDeg = w.inclination != null ? w.inclination : 90;
+    var reach  = w.depth * Math.sin(inclDeg * Math.PI / 180);
+    var eCx    = cx + reach * Math.sin(azRad) * scaleX;
+    var eCy    = cy - reach * Math.cos(azRad) * scaleY;
+
+    var line = document.createElementNS(NS, 'line');
+    line.setAttribute('x1', cx.toFixed(2));  line.setAttribute('y1', cy.toFixed(2));
+    line.setAttribute('x2', eCx.toFixed(2)); line.setAttribute('y2', eCy.toFixed(2));
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', isSel ? '3' : '2');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('vector-effect', 'non-scaling-stroke');
+    line.setAttribute('pointer-events', 'none');
+    line.setAttribute('opacity', isSel ? '1' : '0.7');
+    shaftsG.appendChild(line);
+
+    var dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', eCx.toFixed(2)); dot.setAttribute('cy', eCy.toFixed(2));
+    dot.setAttribute('r',  (4 * p2s).toFixed(2));
+    dot.setAttribute('fill', color);
+    dot.setAttribute('stroke', 'rgba(0,0,0,.6)');
+    dot.setAttribute('stroke-width', (1 * p2s).toFixed(2));
+    dot.setAttribute('pointer-events', 'none');
+    shaftsG.appendChild(dot);
+  });
+}
+
 function _renderWellMapMarkers() {
   var marksG = document.getElementById('wells-map-markers');
   var svg    = document.getElementById('wells-map-svg');
@@ -550,6 +600,8 @@ function _renderWellMapMarkers() {
   var NS   = 'http://www.w3.org/2000/svg';
   var sw   = svg.getBoundingClientRect().width || 600;
   var p2s  = _wellsMap.vbW / sw;
+
+  _renderWellShafts(p2s);
 
   var clusters = _clusterWells(svg);
 
@@ -602,39 +654,6 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   g.setAttribute('data-azimuth', w.azimuth != null ? String(w.azimuth) : '');
   g.setAttribute('data-depth',   w.depth   != null ? String(w.depth)   : '');
   g.style.cursor = 'pointer';
-
-  // Ствол скважины: линия от устья до забоя в координатах карты
-  if (w.azimuth != null && w.depth != null && w.depth > 0) {
-    var azRad0  = w.azimuth * Math.PI / 180;
-    var inclDeg = w.inclination != null ? w.inclination : 90; // по умолчанию горизонтальная
-    var reach   = w.depth * Math.sin(inclDeg * Math.PI / 180);
-    var scaleX  = _wellsMap.imgW / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin);
-    var scaleY  = _wellsMap.imgH / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin);
-    var eCx     = cx + reach * Math.sin(azRad0) * scaleX;
-    var eCy     = cy - reach * Math.cos(azRad0) * scaleY;
-
-    var shaftEl = document.createElementNS(NS, 'line');
-    shaftEl.setAttribute('class', 'wm-shaft');
-    shaftEl.setAttribute('x1', cx.toFixed(2));  shaftEl.setAttribute('y1', cy.toFixed(2));
-    shaftEl.setAttribute('x2', eCx.toFixed(2)); shaftEl.setAttribute('y2', eCy.toFixed(2));
-    shaftEl.setAttribute('stroke', color);
-    shaftEl.setAttribute('stroke-width', isSel ? '3' : '2');
-    shaftEl.setAttribute('stroke-linecap', 'round');
-    shaftEl.setAttribute('vector-effect', 'non-scaling-stroke');
-    shaftEl.setAttribute('pointer-events', 'none');
-    shaftEl.setAttribute('opacity', isSel ? '1' : '0.75');
-    g.appendChild(shaftEl);
-
-    var shaftEndEl = document.createElementNS(NS, 'circle');
-    shaftEndEl.setAttribute('class', 'wm-shaft-end');
-    shaftEndEl.setAttribute('cx', eCx.toFixed(2)); shaftEndEl.setAttribute('cy', eCy.toFixed(2));
-    shaftEndEl.setAttribute('r', (4 * p2s).toFixed(2));
-    shaftEndEl.setAttribute('fill', color);
-    shaftEndEl.setAttribute('stroke', 'rgba(0,0,0,.6)');
-    shaftEndEl.setAttribute('stroke-width', (1 * p2s).toFixed(2));
-    shaftEndEl.setAttribute('pointer-events', 'none');
-    g.appendChild(shaftEndEl);
-  }
 
   if (isSel) {
     var halo = document.createElementNS(NS, 'circle');
@@ -893,12 +912,16 @@ function _updateMarkerSizes() {
           (ax2 - adx*headSz - px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - py*headSz*0.5).toFixed(2));
       }
     }
-    var shaftEnd = g.querySelector('.wm-shaft-end');
-    if (shaftEnd) {
-      shaftEnd.setAttribute('r', (4 * p2s).toFixed(2));
-      shaftEnd.setAttribute('stroke-width', (1 * p2s).toFixed(2));
-    }
   });
+
+  // Update shaft-layer endpoint dot radii to match current zoom
+  var shaftsG = document.getElementById('wells-map-shafts');
+  if (shaftsG) {
+    shaftsG.querySelectorAll('circle').forEach(function(c) {
+      c.setAttribute('r', (4 * p2s).toFixed(2));
+      c.setAttribute('stroke-width', (1 * p2s).toFixed(2));
+    });
+  }
 
   marksG.querySelectorAll('g[data-cluster]').forEach(function(g) {
     var r  = 13 * p2s;
