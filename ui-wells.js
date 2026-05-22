@@ -603,6 +603,39 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   g.setAttribute('data-depth',   w.depth   != null ? String(w.depth)   : '');
   g.style.cursor = 'pointer';
 
+  // Ствол скважины: линия от устья до забоя в координатах карты
+  if (w.azimuth != null && w.depth != null && w.depth > 0) {
+    var azRad0  = w.azimuth * Math.PI / 180;
+    var inclDeg = w.inclination != null ? w.inclination : 90; // по умолчанию горизонтальная
+    var reach   = w.depth * Math.sin(inclDeg * Math.PI / 180);
+    var scaleX  = _wellsMap.imgW / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin);
+    var scaleY  = _wellsMap.imgH / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin);
+    var eCx     = cx + reach * Math.sin(azRad0) * scaleX;
+    var eCy     = cy - reach * Math.cos(azRad0) * scaleY;
+
+    var shaftEl = document.createElementNS(NS, 'line');
+    shaftEl.setAttribute('class', 'wm-shaft');
+    shaftEl.setAttribute('x1', cx.toFixed(2));  shaftEl.setAttribute('y1', cy.toFixed(2));
+    shaftEl.setAttribute('x2', eCx.toFixed(2)); shaftEl.setAttribute('y2', eCy.toFixed(2));
+    shaftEl.setAttribute('stroke', color);
+    shaftEl.setAttribute('stroke-width', isSel ? '3' : '2');
+    shaftEl.setAttribute('stroke-linecap', 'round');
+    shaftEl.setAttribute('vector-effect', 'non-scaling-stroke');
+    shaftEl.setAttribute('pointer-events', 'none');
+    shaftEl.setAttribute('opacity', isSel ? '1' : '0.75');
+    g.appendChild(shaftEl);
+
+    var shaftEndEl = document.createElementNS(NS, 'circle');
+    shaftEndEl.setAttribute('class', 'wm-shaft-end');
+    shaftEndEl.setAttribute('cx', eCx.toFixed(2)); shaftEndEl.setAttribute('cy', eCy.toFixed(2));
+    shaftEndEl.setAttribute('r', (4 * p2s).toFixed(2));
+    shaftEndEl.setAttribute('fill', color);
+    shaftEndEl.setAttribute('stroke', 'rgba(0,0,0,.6)');
+    shaftEndEl.setAttribute('stroke-width', (1 * p2s).toFixed(2));
+    shaftEndEl.setAttribute('pointer-events', 'none');
+    g.appendChild(shaftEndEl);
+  }
+
   if (isSel) {
     var halo = document.createElementNS(NS, 'circle');
     halo.setAttribute('cx', cx.toFixed(1)); halo.setAttribute('cy', hcy.toFixed(1));
@@ -859,6 +892,11 @@ function _updateMarkerSizes() {
           (ax2 - adx*headSz + px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + py*headSz*0.5).toFixed(2)+' '+
           (ax2 - adx*headSz - px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - py*headSz*0.5).toFixed(2));
       }
+    }
+    var shaftEnd = g.querySelector('.wm-shaft-end');
+    if (shaftEnd) {
+      shaftEnd.setAttribute('r', (4 * p2s).toFixed(2));
+      shaftEnd.setAttribute('stroke-width', (1 * p2s).toFixed(2));
     }
   });
 
