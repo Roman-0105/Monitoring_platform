@@ -570,50 +570,96 @@
       <button class="btn btn-sm btn-outline" data-stats-tab="ditches">🌊 Канавы</button>
     </div>
 
-    <!-- Подвкладка: Сводка -->
+    <!-- Подвкладка: Сводка — новая аналитическая панель -->
     <div id="stats-panel-summary" class="stats-subpanel active">
-      <div class="card">
-        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-          <span>Фильтры аналитики</span>
-          <div id="stats-export-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
-            <button id="btn-export-csv"  class="btn btn-sm btn-outline" style="white-space:nowrap">⬇️ CSV</button>
-            <button id="btn-export-xlsx" class="btn btn-sm btn-outline" style="white-space:nowrap;color:#217346;border-color:#217346">⬇️ Excel</button>
-          </div>
+
+      <!-- Фильтр-бар -->
+      <div class="anl-bar">
+        <div class="anl-bar-group">
+          <span class="anl-bar-lbl">Обход</span>
+          <select id="anl-period" class="anl-sel"></select>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Дата мониторинга</label>
-            <div id="stats-date-filter-wrap"></div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="stats-worker">Сотрудник</label>
-            <select id="stats-worker" class="form-select"></select>
-          </div>
+        <div class="anl-bar-group">
+          <span class="anl-bar-lbl">Сравнить с</span>
+          <select id="anl-compare" class="anl-sel"></select>
+        </div>
+        <div class="anl-bar-sep"></div>
+        <div class="anl-bar-group">
+          <span class="anl-bar-lbl">Домен</span>
+          <select id="anl-domain" class="anl-sel"></select>
+        </div>
+        <div class="anl-bar-group">
+          <span class="anl-bar-lbl">Сотрудник</span>
+          <select id="anl-worker" class="anl-sel"></select>
+        </div>
+        <div class="anl-bar-sep"></div>
+        <span id="anl-chip" class="anl-chip"></span>
+        <button id="anl-reset" class="anl-reset-btn" title="Сбросить фильтры">↺</button>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button id="btn-export-csv"  class="btn btn-sm btn-outline" style="white-space:nowrap">⬇ CSV</button>
+          <button id="btn-export-xlsx" class="btn btn-sm btn-outline" style="white-space:nowrap;color:#217346;border-color:#217346">⬇ Excel</button>
         </div>
       </div>
-      <div class="stats-grid" id="stats-grid"></div>
-      <div class="stats-charts-grid">
+
+      <!-- KPI-строка -->
+      <div class="anl-kpi-grid" id="anl-kpi-grid"></div>
+
+      <!-- Тренд дебита + Алерты -->
+      <div class="anl-row-21">
         <div class="card">
-          <div class="card-title">Диаграмма по статусам</div>
-          <div id="stats-status-chart"></div>
+          <div class="card-title">📈 Суммарный дебит по обходам</div>
+          <div id="anl-trend"></div>
         </div>
         <div class="card">
-          <div class="card-title">Диаграмма по интенсивности</div>
-          <div id="stats-intensity-chart"></div>
+          <div class="card-title">⚠ Требует внимания</div>
+          <div id="anl-alerts"></div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-title">Разбивка по статусам</div>
-        <div id="stats-status-list"></div>
+
+      <!-- Статусы по обходам + Покрытие -->
+      <div class="anl-row-2">
+        <div class="card">
+          <div class="card-title">📊 Изменение статусов по обходам</div>
+          <div id="anl-status-bars"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📅 Покрытие мониторинга — последние 13 обходов</div>
+          <div id="anl-coverage"></div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-title">Разбивка по доменам</div>
-        <div id="stats-domain-list"></div>
+
+      <!-- Домены -->
+      <div class="anl-sec-div"><div class="anl-sec-line"></div><span class="anl-sec-lbl">Анализ доменов</span><div class="anl-sec-line"></div></div>
+      <div class="anl-domain-cards" id="anl-domain-cards"></div>
+      <div class="anl-row-3">
+        <div class="card">
+          <div class="card-title">🔢 Матрица: Домен × Статус</div>
+          <div id="anl-matrix"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🧭 Распределение по бортам</div>
+          <div id="anl-walls"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">⛰ Дебит по горизонтам</div>
+          <div id="anl-horizons"></div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-title">Разбивка по горизонтам / уступам</div>
-        <div id="stats-horizon-list"></div>
+
+      <!-- Скважины -->
+      <div class="anl-sec-div"><div class="anl-sec-line"></div><span class="anl-sec-lbl">Скважины</span><div class="anl-sec-line"></div></div>
+      <div class="anl-kpi-grid" id="anl-well-kpi-grid"></div>
+      <div class="anl-row-2" style="margin-bottom:0">
+        <div class="card">
+          <div class="card-title">🕳 Рейтинг скважин по дебиту</div>
+          <div id="anl-well-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📈 Динамика дебита по скважинам</div>
+          <div id="anl-well-trend"></div>
+        </div>
       </div>
+
     </div>
 
     <!-- Подвкладка: История -->

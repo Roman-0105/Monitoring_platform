@@ -1,35 +1,127 @@
 /**
  * ui-stats.js — страница аналитики.
- * Извлечено из app.js.
- * Зависит от: ui-utils.js, Points, Workers, Schemes
+ * Зависит от: ui-utils.js, Points, Workers, WellsState
  */
 
-var _statsFilters = { dates: [], worker: 'all' };
+// ════════════════════════════════════════════════════════════
+// НОВАЯ АНАЛИТИЧЕСКАЯ ПАНЕЛЬ
+// ════════════════════════════════════════════════════════════
+
+var _anlDate    = '';   // выбранный обход (YYYY-MM-DD)
+var _anlCompare = '';   // сравниваемый обход
+var _anlDomain  = 'all';
+var _anlWorker  = 'all';
+
+// ── Вспомогательные ─────────────────────────────────────────
+
+function _anlPtsForDate(date) {
+  return Points.getList().filter(function(p) {
+    return (p.monitoringDate || '').slice(0, 10) === date;
+  });
+}
+
+function _anlCurrentPts() {
+  var pts = _anlPtsForDate(_anlDate);
+  if (_anlDomain !== 'all') pts = pts.filter(function(p) { return p.domain === _anlDomain; });
+  if (_anlWorker !== 'all') pts = pts.filter(function(p) { return p.worker === _anlWorker; });
+  return pts;
+}
+
+function _anlTotalQ(pts) {
+  var q = 0;
+  pts.forEach(function(p) { var f = parseFloat(p.flowRate); if (!isNaN(f) && f > 0) q += f; });
+  return q;
+}
+
+function _anlPeriods(n) {
+  return getAllMonitoringDates().slice(0, n).map(function(d) {
+    var pts = _anlPtsForDate(d);
+    var byStatus = {};
+    pts.forEach(function(p) { var s = p.status || 'Неизвестно'; byStatus[s] = (byStatus[s] || 0) + 1; });
+    return { date: d, pts: pts, totalQ: _anlTotalQ(pts), byStatus: byStatus, count: pts.length };
+  });
+}
+
+function _anlGetDomains() {
+  var set = {};
+  Points.getList().forEach(function(p) { if (p.domain) set[p.domain] = true; });
+  return Object.keys(set).sort();
+}
+
+function _anlSparkPoints(values, w, h) {
+  if (!values.length) return '';
+  var max = Math.max.apply(null, values) || 1;
+  var step = w / Math.max(values.length - 1, 1);
+  return values.map(function(v, i) {
+    return (i * step).toFixed(1) + ',' + ((1 - v / max) * h * 0.85 + h * 0.075).toFixed(1);
+  }).join(' ');
+}
+
+// ── Инициализация фильтров ───────────────────────────────────
 
 function initStatsFilters() {
-  var workerSel = document.getElementById('stats-worker');
-  if (!workerSel) return;
+  var periodSel  = document.getElementById('anl-period');
+  var compareSel = document.getElementById('anl-compare');
+  var domainSel  = document.getElementById('anl-domain');
+  var workerSel  = document.getElementById('anl-worker');
+  if (!periodSel) return;
 
-  // Виджет дат — пересобираем каждый раз
-  buildDateFilterWidget('stats-date-filter-wrap', _statsFilters.dates, function(newDates) {
-    _statsFilters.dates = newDates;
+  var dates = getAllMonitoringDates();
+
+  // Период
+  var savedPeriod = _anlDate || (dates[0] || '');
+  periodSel.innerHTML = dates.map(function(d, i) {
+    return '<option value="' + d + '"' + (d === savedPeriod ? ' selected' : '') + '>' +
+      formatMonitoringDate(d) + (i === 0 ? ' (тек.)' : '') + '</option>';
+  }).join('') || '<option value="">— нет данных —</option>';
+  _anlDate = periodSel.value || savedPeriod;
+
+  // Сравнение
+  var savedCompare = _anlCompare || (dates[1] || '');
+  compareSel.innerHTML = '<option value="">— без сравнения —</option>' +
+    dates.filter(function(d) { return d !== _anlDate; }).map(function(d) {
+      return '<option value="' + d + '"' + (d === savedCompare ? ' selected' : '') + '>' +
+        formatMonitoringDate(d) + '</option>';
+    }).join('');
+  if (!_anlCompare && dates[1]) { _anlCompare = dates[1]; compareSel.value = dates[1]; }
+
+  // Домены
+  var domains = _anlGetDomains();
+  domainSel.innerHTML = '<option value="all">Все домены</option>' + domains.map(function(d) {
+    return '<option value="' + d + '"' + (d === _anlDomain ? ' selected' : '') + '>' + escHTML(d) + '</option>';
+  }).join('');
+
+  // Сотрудники
+  var workerSet = {};
+  Points.getList().forEach(function(p) { if (p.worker) workerSet[p.worker] = true; });
+  workerSel.innerHTML = '<option value="all">Все сотрудники</option>' + Object.keys(workerSet).sort().map(function(w) {
+    return '<option value="' + escAttr(w) + '"' + (w === _anlWorker ? ' selected' : '') + '>' + escHTML(w) + '</option>';
+  }).join('');
+
+  // Чип
+  var chip = document.getElementById('anl-chip');
+  if (chip) chip.textContent = formatMonitoringDate(_anlDate) + ' · ' + _anlCurrentPts().length + ' замеров';
+
+  // Привязка событий (один раз)
+  if (periodSel._anlBound) return;
+  periodSel._anlBound = true;
+
+  periodSel.addEventListener('change',  function() { _anlDate    = this.value; renderStatsPage(); });
+  compareSel.addEventListener('change', function() { _anlCompare = this.value; renderStatsPage(); });
+  domainSel.addEventListener('change',  function() { _anlDomain  = this.value; renderStatsPage(); });
+  workerSel.addEventListener('change',  function() { _anlWorker  = this.value; renderStatsPage(); });
+
+  var resetBtn = document.getElementById('anl-reset');
+  if (resetBtn) resetBtn.addEventListener('click', function() {
+    _anlDomain = 'all'; _anlWorker = 'all';
+    domainSel.value = 'all'; workerSel.value = 'all';
     renderStatsPage();
   });
 
-  // Список сотрудников
-  var workerSet = {};
-  Points.getList().forEach(function(p) { if (p.worker) workerSet[p.worker] = true; });
-  Workers.getList().forEach(function(w) { if (w.name) workerSet[w.name] = true; });
-  var workers = Object.keys(workerSet).sort().map(function(w) { return { value: w, label: w }; });
-  fillSelectOptions(workerSel, workers, _statsFilters.worker, 'Все сотрудники');
-
-  if (!workerSel._bound) {
-    workerSel._bound = true;
-    workerSel.addEventListener('change', function() {
-      _statsFilters.worker = workerSel.value || 'all';
-      renderStatsPage();
-    });
-  }
+  var btnCsv = document.getElementById('btn-export-csv');
+  var btnXls = document.getElementById('btn-export-xlsx');
+  if (btnCsv) btnCsv.addEventListener('click', function() { exportPointsCSV(_anlCurrentPts()); });
+  if (btnXls) btnXls.addEventListener('click', function() { exportPointsXLSX(_anlCurrentPts()); });
 }
 
 // Возвращает актуальную палитру статусов — единый источник из MapModule
@@ -48,81 +140,600 @@ function getStatusPalette() {
 
 function renderStatsPage() {
   initStatsFilters();
-  var points        = getFilteredPoints(_statsFilters);
-  renderExportButton(points);
-  var grid          = document.getElementById('stats-grid');
-  var statusList    = document.getElementById('stats-status-list');
-  var domainList    = document.getElementById('stats-domain-list');
-  var horizonList   = document.getElementById('stats-horizon-list');
-  var statusChart   = document.getElementById('stats-status-chart');
-  var intensityChart = document.getElementById('stats-intensity-chart');
-  if (!grid || !statusList || !domainList || !statusChart || !intensityChart) return;
+  _anlRenderKpis();
+  _anlRenderTrend();
+  _anlRenderAlerts();
+  _anlRenderStatusBars();
+  _anlRenderCoverage();
+  _anlRenderDomains();
+  _anlRenderMatrix();
+  _anlRenderWalls();
+  _anlRenderHorizons();
+  _anlRenderWells();
+}
 
-  var totalFlow = 0, withFlow = 0, withPhoto = 0, active = 0;
-  points.forEach(function(p) {
-    var flow = parseFloat(p.flowRate);
-    if (!isNaN(flow)) { totalFlow += flow; withFlow++; }
-    if (p.photoUrls && p.photoUrls[0]) withPhoto++;
-    if (p.status === 'Активная' || p.status === 'Паводковая' || p.status === 'Перелив') active++;
-  });
+// ── KPI-строка ───────────────────────────────────────────────
+function _anlRenderKpis() {
+  var el = document.getElementById('anl-kpi-grid');
+  if (!el) return;
+  var pts     = _anlCurrentPts();
+  var prevPts = _anlCompare ? _anlPtsForDate(_anlCompare) : [];
 
-  var avgFlow = withFlow ? (totalFlow / withFlow) : null;
+  var totalQ = _anlTotalQ(pts);
+  var prevQ  = _anlTotalQ(prevPts);
+  var qDiff  = prevQ > 0 ? ((totalQ - prevQ) / prevQ * 100) : null;
 
-  grid.innerHTML =
-    '<div class="stats-kpi"><div class="stats-kpi__label">Всего точек</div><div class="stats-kpi__value">' + points.length + '</div></div>' +
-    '<div class="stats-kpi"><div class="stats-kpi__label">Активных</div><div class="stats-kpi__value">' + active + '</div></div>' +
-    '<div class="stats-kpi"><div class="stats-kpi__label">С фото</div><div class="stats-kpi__value">' + withPhoto + '</div></div>' +
-    '<div class="stats-kpi"><div class="stats-kpi__label">Средний водоприток</div><div class="stats-kpi__value">' +
-      (avgFlow != null ? avgFlow.toFixed(2) : '—') + ' л/с<small>' +
-      (avgFlow != null ? lpsToM3h(avgFlow).toFixed(2) : '—') + ' м³/ч</small></div></div>' +
-    '<div class="stats-kpi"><div class="stats-kpi__label">Суммарный водоприток</div><div class="stats-kpi__value">' +
-      totalFlow.toFixed(2) + ' л/с<small>' + lpsToM3h(totalFlow).toFixed(2) + ' м³/ч</small></div></div>';
+  var active = pts.filter(function(p) { return p.status === 'Активная' || p.status === 'Паводковая' || p.status === 'Перелив'; }).length;
+  var drying = pts.filter(function(p) { return p.status === 'Иссякает'; }).length;
+  var prevDrying = prevPts.filter(function(p) { return p.status === 'Иссякает'; }).length;
 
-  var byStatus    = {};
-  var byDomain    = {};
-  var byIntensity = {};
-  var byHorizon   = {};   // { name: { count, totalLps, withFlow } }
+  // Покрытие: текущий обход vs предыдущий
+  var allDates  = getAllMonitoringDates();
+  var refDate   = allDates[1] || '';
+  var refNums   = {}; (refDate ? _anlPtsForDate(refDate) : pts).forEach(function(p) { refNums[p.pointNumber] = true; });
+  var currNums  = {}; pts.forEach(function(p) { currNums[p.pointNumber] = true; });
+  var refCount  = Math.max(Object.keys(refNums).length, 1);
+  var coverage  = Math.min(100, Math.round(Object.keys(currNums).length / refCount * 100));
 
-  points.forEach(function(p) {
-    var s = p.status    || 'Неизвестно';
-    var d = p.domain    || '—';
-    var i = p.intensity || 'Не указана';
-    var h = p.horizon   || '—';
-    byStatus[s]    = (byStatus[s]    || 0) + 1;
-    byDomain[d]    = (byDomain[d]    || 0) + 1;
-    byIntensity[i] = (byIntensity[i] || 0) + 1;
+  var periods8  = _anlPeriods(8).reverse();
+  var qVals     = periods8.map(function(p) { return p.totalQ; });
+  var dryVals   = periods8.map(function(p) { return p.byStatus['Иссякает'] || 0; });
+  var covVals   = periods8.map(function(p) { return p.count; });
 
-    if (!byHorizon[h]) byHorizon[h] = { count: 0, totalLps: 0, withFlow: 0 };
-    byHorizon[h].count++;
-    var flow = parseFloat(p.flowRate);
-    if (!isNaN(flow)) {
-      byHorizon[h].totalLps += flow;
-      byHorizon[h].withFlow++;
-    }
-  });
-
-  function renderBreakdown(obj) {
-    var keys = Object.keys(obj).sort(function(a, b) { return obj[b] - obj[a]; });
-    if (!keys.length) return '<p class="form-hint">Нет данных по фильтру.</p>';
-    var html = '<div class="stats-list">';
-    keys.forEach(function(k) {
-      html += '<div class="stats-list-row"><span>' + k + '</span><b>' + obj[k] + '</b></div>';
-    });
-    return html + '</div>';
+  function trendHtml(diff, invertColor) {
+    if (diff === null) return '<span class="anl-eq">→</span>';
+    var up = invertColor ? 'anl-dn' : 'anl-up';
+    var dn = invertColor ? 'anl-up' : 'anl-dn';
+    if (diff > 5)  return '<span class="' + up + '">↑ +' + diff.toFixed(0) + '%</span>';
+    if (diff < -5) return '<span class="' + dn + '">↓ ' + diff.toFixed(0) + '%</span>';
+    return '<span class="anl-eq">→ стабильно</span>';
   }
 
-  statusList.innerHTML = renderBreakdown(byStatus);
-  domainList.innerHTML = renderBreakdown(byDomain);
-  if (horizonList) horizonList.innerHTML = renderHorizonBreakdown(byHorizon);
+  function kpi(lbl, val, sub, trend, sparkPts, color, areaClr) {
+    var sp = sparkPts ? sparkPts : '';
+    var poly = sp ? '<polyline points="' + sp + '" fill="none" stroke="' + color + '" stroke-width="1.8"/>' : '';
+    var area = sp ? (function() {
+      var last = sp.split(' ').pop().split(',')[0];
+      return '<polygon points="' + sp + ' ' + last + ',32 0,32" fill="' + areaClr + '" stroke="none"/>';
+    })() : '';
+    return '<div class="anl-kpi">' +
+      '<div class="anl-kpi-lbl">' + lbl + '</div>' +
+      '<div class="anl-kpi-val" style="color:' + color + '">' + val + '</div>' +
+      '<div class="anl-kpi-sub">' + sub + '</div>' +
+      '<div class="anl-kpi-trend">' + trend + '</div>' +
+      '<svg class="anl-spark" viewBox="0 0 120 32">' + area + poly + '</svg>' +
+    '</div>';
+  }
 
-  renderPieChart(statusChart, byStatus, getStatusPalette());
-  renderPieChart(intensityChart, byIntensity, {
-    'Слабая (капёж)': '#8bc8ff',
-    'Умеренная':      '#39d98a',
-    'Сильная (поток)':'#f3bf4a',
-    'Очень сильная':  '#ff8a4a',
-    'Не указана':     '#8f9aae',
+  el.innerHTML =
+    kpi('Всего точек', pts.length,
+        'активных: ' + active,
+        '<span class="anl-eq">→ без изм.</span>',
+        _anlSparkPoints(covVals, 120, 32), '#58a6ff', 'rgba(88,166,255,.07)') +
+    kpi('Суммарный дебит', totalQ.toFixed(2) + ' <small>л/с</small>',
+        lpsToM3h(totalQ).toFixed(2) + ' м³/ч',
+        trendHtml(qDiff, false),
+        _anlSparkPoints(qVals, 120, 32), '#f9ab00', 'rgba(249,171,0,.07)') +
+    kpi('Иссякающих', drying,
+        'было ' + prevDrying + ' в прошлом обходе',
+        prevDrying > drying ? '<span class="anl-dn">↓ −' + (prevDrying - drying) + ' улучшение</span>' :
+        prevDrying < drying ? '<span class="anl-up">↑ +' + (drying - prevDrying) + '</span>' : '<span class="anl-eq">→</span>',
+        _anlSparkPoints(dryVals, 120, 32), '#3fb950', 'rgba(63,185,80,.07)') +
+    kpi('Покрытие обхода', coverage + '<small>%</small>',
+        Object.keys(currNums).length + ' из ' + refCount + ' точек',
+        coverage < 100 ? '<span class="anl-eq">→ цель: 100%</span>' : '<span class="anl-dn">✓ Полное</span>',
+        _anlSparkPoints(covVals, 120, 32), '#bc8cff', 'rgba(188,140,255,.07)');
+}
+
+// ── Тренд дебита ─────────────────────────────────────────────
+function _anlRenderTrend() {
+  var el = document.getElementById('anl-trend');
+  if (!el) return;
+  var periods = _anlPeriods(12).reverse();
+  if (!periods.length) { el.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:20px">Нет данных</p>'; return; }
+
+  var maxQ = (Math.max.apply(null, periods.map(function(p) { return p.totalQ; })) || 1) * 1.2;
+  var W = 680, H = 170, PL = 44, PR = 12, PT = 10, PB = 28;
+  var cW = W - PL - PR, cH = H - PT - PB;
+  var n  = periods.length;
+
+  function px(i) { return PL + (i / Math.max(n - 1, 1)) * cW; }
+  function py(q)  { return PT + (1 - q / maxQ) * cH; }
+
+  var ySteps = [0, maxQ / 3, 2 * maxQ / 3, maxQ];
+  var grid = ySteps.map(function(q) {
+    var y = py(q).toFixed(1);
+    return '<line x1="' + PL + '" y1="' + y + '" x2="' + (W - PR) + '" y2="' + y + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
+           '<text x="' + (PL - 4) + '" y="' + (parseFloat(y) + 3) + '" fill="#6e7681" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
+  }).join('');
+
+  var linePts = periods.map(function(p, i) { return px(i).toFixed(1) + ',' + py(p.totalQ).toFixed(1); }).join(' ');
+  var areaPts = linePts + ' ' + px(n - 1).toFixed(1) + ',' + (PT + cH) + ' ' + PL + ',' + (PT + cH);
+
+  var dots = periods.map(function(p, i) {
+    var isCur = p.date === _anlDate, isCmp = p.date === _anlCompare;
+    var r = isCur ? 4.5 : 2.5, fill = isCmp ? '#f9ab00' : '#58a6ff';
+    return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(p.totalQ).toFixed(1) + '" r="' + r + '" fill="' + fill + '"' + (isCur ? ' stroke="var(--bg-0,#0d1117)" stroke-width="1.5"' : '') + '/>';
+  }).join('');
+
+  var step = Math.ceil(n / 7);
+  var xLbls = periods.map(function(p, i) {
+    if (i % step !== 0 && i !== n - 1) return '';
+    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (p.date === _anlDate ? '#58a6ff' : '#6e7681') + '" font-size="8" text-anchor="middle">' + formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</text>';
+  }).join('');
+
+  var legend = '<text x="' + PL + '" y="' + (H - 14) + '" fill="#8b949e" font-size="8">● текущий</text>' +
+    (_anlCompare ? '<text x="' + (PL + 70) + '" y="' + (H - 14) + '" fill="#f9ab00" font-size="8">● сравниваемый</text>' : '');
+
+  el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+    '<defs><linearGradient id="anlTG" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0%" stop-color="#58a6ff" stop-opacity=".18"/><stop offset="100%" stop-color="#58a6ff" stop-opacity="0"/>' +
+    '</linearGradient></defs>' +
+    grid +
+    '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
+    '<polygon points="' + areaPts + '" fill="url(#anlTG)"/>' +
+    '<polyline points="' + linePts + '" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>' +
+    dots + xLbls + legend +
+    '<text x="14" y="' + (PT + cH / 2) + '" fill="#6e7681" font-size="9" text-anchor="middle" transform="rotate(-90 14 ' + (PT + cH / 2) + ')">л/с</text>' +
+  '</svg>';
+}
+
+// ── Алерты ───────────────────────────────────────────────────
+function _anlRenderAlerts() {
+  var el = document.getElementById('anl-alerts');
+  if (!el) return;
+
+  var curPts   = _anlCurrentPts();
+  var prevDate = getAllMonitoringDates()[1] || '';
+  var prevPts  = prevDate ? _anlPtsForDate(prevDate) : [];
+  var curMap = {}, prevMap = {};
+  curPts.forEach(function(p)  { curMap[p.pointNumber]  = p; });
+  prevPts.forEach(function(p) { prevMap[p.pointNumber] = p; });
+
+  var alerts = [];
+
+  // Резкий рост дебита
+  var risers = [];
+  Object.keys(curMap).forEach(function(num) {
+    var c = parseFloat(curMap[num].flowRate);
+    var pv = prevMap[num] ? parseFloat(prevMap[num].flowRate) : NaN;
+    if (!isNaN(c) && !isNaN(pv) && pv > 0 && c > pv * 1.3)
+      risers.push({ num: num, pct: Math.round((c - pv) / pv * 100) });
   });
+  risers.sort(function(a, b) { return b.pct - a.pct; });
+  if (risers.length) {
+    var top = risers.slice(0, 3).map(function(r) { return '№' + r.num + ' (+' + r.pct + '%)'; }).join(', ');
+    alerts.push({ cls: 'err', ico: '🔴', ttl: 'Резкий рост дебита: ' + top, desc: risers.length + ' точек требуют проверки' });
+  }
+
+  // Незамеренные точки
+  var missing = Object.keys(prevMap).filter(function(num) { return !curMap[num]; });
+  if (missing.length)
+    alerts.push({ cls: 'warn', ico: '🟡', ttl: missing.length + ' точек не замерено в этом обходе',
+      desc: '№' + missing.slice(0, 5).join(', №') + (missing.length > 5 ? '...' : '') });
+
+  // Смена статуса → Иссякает
+  var driers = Object.keys(curMap).filter(function(num) {
+    return curMap[num].status === 'Иссякает' && prevMap[num] && prevMap[num].status === 'Активная';
+  });
+  if (driers.length)
+    alerts.push({ cls: 'warn', ico: '🟡', ttl: driers.length + ' точек: «Активная» → «Иссякает»',
+      desc: driers.slice(0, 4).map(function(n) { return '№' + n; }).join(', ') });
+
+  // Снижение суммарного дебита (хорошая новость)
+  var tQ = _anlTotalQ(curPts), pQ = _anlTotalQ(prevPts);
+  if (pQ > 0 && tQ < pQ * 0.9)
+    alerts.push({ cls: 'ok', ico: '🟢', ttl: 'Дебит снизился на ' + Math.round((pQ - tQ) / pQ * 100) + '%',
+      desc: 'Относительно предыдущего обхода · позитивная динамика' });
+
+  if (!alerts.length)
+    alerts.push({ cls: 'ok', ico: '🟢', ttl: 'Аномалий не обнаружено', desc: 'Все показатели в норме' });
+
+  var html = alerts.map(function(a) {
+    return '<div class="anl-alert anl-alert-' + a.cls + '">' +
+      '<div class="anl-alert-ico">' + a.ico + '</div>' +
+      '<div><div class="anl-alert-ttl">' + escHTML(a.ttl) + '</div>' +
+      '<div class="anl-alert-desc">' + escHTML(a.desc) + '</div></div></div>';
+  }).join('');
+
+  if (missing.length) {
+    html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">' +
+      '<div style="font-size:10px;color:var(--txt-3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">Незамеренные точки</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
+      missing.slice(0, 10).map(function(n) { return '<span class="anl-pill anl-pill-r">№' + escHTML(n) + '</span>'; }).join('') +
+      (missing.length > 10 ? '<span class="anl-pill anl-pill-gray">+' + (missing.length - 10) + '</span>' : '') +
+      '</div></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ── Стекованные статусы ──────────────────────────────────────
+function _anlRenderStatusBars() {
+  var el = document.getElementById('anl-status-bars');
+  if (!el) return;
+  var periods = _anlPeriods(7).reverse();
+  if (!periods.length) { el.innerHTML = ''; return; }
+
+  var statuses = ['Активная', 'Паводковая', 'Иссякает', 'Пересохла', 'Новая'];
+  var clrs     = { 'Активная': '#3fb950', 'Паводковая': '#58a6ff', 'Иссякает': '#f9ab00', 'Пересохла': '#ea4335', 'Новая': '#8b949e' };
+  var maxTotal = Math.max.apply(null, periods.map(function(p) { return p.count; })) || 1;
+
+  var W = 420, H = 165, PL = 6, PB = 22, PT = 20, PR = 6;
+  var cW = W - PL - PR, cH = H - PT - PB;
+  var gap = cW / periods.length, barW = Math.max(10, Math.floor(gap * 0.68));
+
+  var bars = '';
+  periods.forEach(function(p, i) {
+    var x = PL + i * gap + (gap - barW) / 2;
+    var isCur = p.date === _anlDate, yOff = PT + cH;
+    statuses.forEach(function(s) {
+      var cnt = p.byStatus[s] || 0;
+      if (!cnt) return;
+      var bH = (cnt / maxTotal) * cH;
+      yOff -= bH;
+      bars += '<rect x="' + x.toFixed(1) + '" y="' + yOff.toFixed(1) + '" width="' + barW + '" height="' + bH.toFixed(1) + '" fill="' + clrs[s] + '" opacity="' + (isCur ? '1' : '.7') + '" rx="1"/>';
+    });
+    bars += '<text x="' + (x + barW / 2).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (isCur ? '#58a6ff' : '#6e7681') + '" font-size="8" text-anchor="middle">' +
+      formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</text>';
+    if (isCur)
+      bars += '<rect x="' + (x - 1).toFixed(1) + '" y="' + (PT + (1 - p.count / maxTotal) * cH - 2).toFixed(1) + '" width="' + (barW + 2) + '" height="' + (p.count / maxTotal * cH + 2).toFixed(1) + '" fill="none" stroke="rgba(88,166,255,.4)" stroke-width="1.5" rx="2"/>';
+  });
+
+  var legHtml = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">' + statuses.map(function(s) {
+    return '<span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--txt-2)">' +
+      '<span style="width:9px;height:9px;border-radius:2px;background:' + clrs[s] + ';display:inline-block"></span>' + escHTML(s) + '</span>';
+  }).join('') + '</div>';
+
+  el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+    '<line x1="' + PL + '" y1="' + (PT + cH) + '" x2="' + (W - PR) + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.06)" stroke-width="1"/>' +
+    bars + '</svg>' + legHtml;
+}
+
+// ── Тепловой календарь покрытия ──────────────────────────────
+function _anlRenderCoverage() {
+  var el = document.getElementById('anl-coverage');
+  if (!el) return;
+  var periods  = _anlPeriods(13).reverse();
+  var maxCount = Math.max.apply(null, periods.map(function(p) { return p.count; })) || 1;
+
+  var cells = periods.map(function(p) {
+    var alpha = Math.max(0.05, p.count / maxCount).toFixed(2);
+    var isCur = p.date === _anlDate;
+    return '<div title="' + escAttr(formatMonitoringDate(p.date)) + ': ' + p.count + ' замеров" style="aspect-ratio:1;border-radius:3px;background:rgba(63,185,80,' + alpha + ');' + (isCur ? 'outline:2px solid rgba(88,166,255,.6);outline-offset:1px' : '') + '"></div>';
+  }).join('');
+
+  // Сотрудники текущего обхода
+  var curPts = _anlCurrentPts(), wcnt = {};
+  curPts.forEach(function(p) { var w = p.worker || '—'; wcnt[w] = (wcnt[w] || 0) + 1; });
+  var topW = Object.keys(wcnt).sort(function(a, b) { return wcnt[b] - wcnt[a]; }).slice(0, 3);
+  var maxW = topW.length ? wcnt[topW[0]] : 1;
+
+  var wRows = topW.map(function(w) {
+    var pct = Math.round(wcnt[w] / maxW * 100);
+    return '<div class="anl-pb-row">' +
+      '<span class="anl-pb-lbl">' + escHTML((w + '').split(' ')[0]) + '</span>' +
+      '<div class="anl-pb-trk"><div style="width:' + pct + '%;height:100%;border-radius:3px;background:#58a6ff"></div></div>' +
+      '<span style="font-size:11px;color:var(--txt-2)">' + wcnt[w] + '</span></div>';
+  }).join('');
+
+  var missed = periods.filter(function(p) { return p.count === 0; }).length;
+  var avg    = periods.length ? Math.round(periods.reduce(function(s, p) { return s + p.count; }, 0) / periods.length) : 0;
+
+  el.innerHTML =
+    '<div style="font-size:10px;color:var(--txt-3);margin-bottom:6px">Интенсивность замеров (темнее = больше)</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(13,1fr);gap:3px;margin-bottom:8px">' + cells + '</div>' +
+    '<div style="display:flex;gap:4px;align-items:center;font-size:10px;color:var(--txt-3);margin-bottom:10px">' +
+      '<span>Меньше</span>' +
+      '<div style="width:10px;height:10px;border-radius:2px;background:rgba(63,185,80,.06)"></div>' +
+      '<div style="width:10px;height:10px;border-radius:2px;background:rgba(63,185,80,.35)"></div>' +
+      '<div style="width:10px;height:10px;border-radius:2px;background:rgba(63,185,80,.7)"></div>' +
+      '<div style="width:10px;height:10px;border-radius:2px;background:rgba(63,185,80,1)"></div>' +
+      '<span>Больше</span>' +
+      (missed ? '<span style="margin-left:8px;color:#ea4335">⚠ ' + missed + ' пропуск(а)</span>' : '') +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--txt-2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">По сотруднику (тек. обход)</div>' +
+    wRows +
+    '<div style="font-size:11px;color:var(--txt-3);margin-top:8px">Среднее: ' + avg + ' замеров/обход</div>';
+}
+
+// ── Карточки доменов ─────────────────────────────────────────
+function _anlRenderDomains() {
+  var el = document.getElementById('anl-domain-cards');
+  if (!el) return;
+  var pts  = _anlCurrentPts();
+  var prev = _anlCompare ? _anlPtsForDate(_anlCompare) : [];
+  var domains = _anlGetDomains();
+  if (!domains.length) { el.innerHTML = ''; return; }
+
+  var clrs = { 'Активная': '#3fb950', 'Паводковая': '#58a6ff', 'Иссякает': '#f9ab00', 'Пересохла': '#ea4335' };
+
+  el.innerHTML = domains.map(function(d) {
+    var dPts = pts.filter(function(p) { return p.domain === d; });
+    var prevQ = _anlTotalQ(prev.filter(function(p) { return p.domain === d; }));
+    var q = _anlTotalQ(dPts);
+    var diff = prevQ > 0 ? ((q - prevQ) / prevQ * 100) : null;
+    var isAlert = diff !== null && diff > 15;
+    var trendTxt = diff === null ? '' : diff > 5 ? ' · <span class="anl-up">↑ +' + diff.toFixed(0) + '%</span>' :
+      diff < -5 ? ' · <span class="anl-dn">↓ ' + diff.toFixed(0) + '%</span>' : ' · <span class="anl-eq">→</span>';
+    var bars = ['Активная', 'Иссякает', 'Пересохла'].map(function(s) {
+      var cnt = dPts.filter(function(p) { return p.status === s; }).length;
+      var pct = dPts.length ? Math.round(cnt / dPts.length * 100) : 0;
+      return '<div class="anl-pb-row" style="margin-bottom:2px">' +
+        '<span class="anl-pb-lbl" style="font-size:10px">' + escHTML(s.slice(0, 6)) + '.</span>' +
+        '<div class="anl-pb-trk"><div style="width:' + pct + '%;height:100%;border-radius:3px;background:' + (clrs[s] || '#8b949e') + '"></div></div>' +
+        '<span style="font-size:10px;color:var(--txt-2)">' + cnt + '</span></div>';
+    }).join('');
+    return '<div class="anl-dc' + (isAlert ? ' anl-dc-alert' : '') + '">' +
+      '<div class="anl-dc-name">' + escHTML(d) + ' <span style="font-weight:400;color:var(--txt-2);font-size:10px">' + dPts.length + ' т.</span></div>' +
+      '<div class="anl-dc-q" style="color:' + (isAlert ? '#ea4335' : 'var(--gold)') + '">' + q.toFixed(2) + ' л/с</div>' +
+      '<div class="anl-dc-sub">' + lpsToM3h(q).toFixed(2) + ' м³/ч' + trendTxt + '</div>' +
+      bars + '</div>';
+  }).join('');
+}
+
+// ── Матрица Домен × Статус ───────────────────────────────────
+function _anlRenderMatrix() {
+  var el = document.getElementById('anl-matrix');
+  if (!el) return;
+  var pts = _anlCurrentPts();
+  var domains  = _anlGetDomains();
+  var statuses = ['Активная', 'Паводковая', 'Иссякает', 'Пересохла'];
+  var sClrs    = { 'Активная': '#3fb950', 'Паводковая': '#58a6ff', 'Иссякает': '#f9ab00', 'Пересохла': '#ea4335' };
+  if (!domains.length) { el.innerHTML = '<p style="color:var(--txt-3);font-size:12px">Нет данных</p>'; return; }
+
+  var mx = {}, dQ = {}, dTotal = {}, sTot = {};
+  domains.forEach(function(d) { mx[d] = {}; dQ[d] = 0; dTotal[d] = 0; });
+  pts.forEach(function(p) {
+    var d = p.domain || '—', s = p.status || 'Неизвестно';
+    if (!mx[d]) { mx[d] = {}; dQ[d] = 0; dTotal[d] = 0; }
+    mx[d][s] = (mx[d][s] || 0) + 1; dTotal[d]++;
+    var q = parseFloat(p.flowRate); if (!isNaN(q) && q > 0) dQ[d] += q;
+    if (statuses.indexOf(s) >= 0) sTot[s] = (sTot[s] || 0) + 1;
+  });
+
+  var maxCell = 0;
+  domains.forEach(function(d) { statuses.forEach(function(s) { if ((mx[d][s] || 0) > maxCell) maxCell = mx[d][s]; }); });
+
+  function hc(v) {
+    if (!v) return 'anl-h0';
+    var r = v / (maxCell || 1);
+    return r < .15 ? 'anl-h1' : r < .35 ? 'anl-h2' : r < .55 ? 'anl-h3' : r < .75 ? 'anl-h4' : 'anl-h5';
+  }
+
+  var hdr = '<tr><th>Домен</th>' + statuses.map(function(s) {
+    return '<th style="color:' + sClrs[s] + '">' + escHTML(s.slice(0, 4)) + '.</th>';
+  }).join('') + '<th>∑</th><th>Q л/с</th></tr>';
+
+  var rows = domains.map(function(d) {
+    return '<tr><td><b>' + escHTML(d.replace(/[Дd]омен-?/i, 'Д-').replace(/[Dd]omen-?/i, 'Д-')) + '</b></td>' +
+      statuses.map(function(s) { var v = mx[d][s] || 0; return '<td class="' + hc(v) + '">' + (v || '—') + '</td>'; }).join('') +
+      '<td><b>' + dTotal[d] + '</b></td><td style="color:var(--gold)">' + dQ[d].toFixed(2) + '</td></tr>';
+  }).join('');
+
+  var foot = '<tr style="background:rgba(255,255,255,.025)"><td><b>∑</b></td>' +
+    statuses.map(function(s) { return '<td><b>' + (sTot[s] || 0) + '</b></td>'; }).join('') +
+    '<td><b>' + pts.length + '</b></td><td><b>' + _anlTotalQ(pts).toFixed(2) + '</b></td></tr>';
+
+  el.innerHTML = '<div style="overflow-x:auto"><table class="anl-mx"><thead>' + hdr + '</thead><tbody>' + rows + foot + '</tbody></table></div>';
+}
+
+// ── Распределение по бортам ──────────────────────────────────
+function _anlRenderWalls() {
+  var el = document.getElementById('anl-walls');
+  if (!el) return;
+  var pts = _anlCurrentPts();
+  var wallDefs = [
+    { key: 'Северный', lbl: 'Северный', clr: '#58a6ff' },
+    { key: 'Южный',    lbl: 'Южный',    clr: '#f9ab00' },
+    { key: 'Западный', lbl: 'Западный', clr: '#3fb950' },
+    { key: 'Восточный',lbl: 'Восточный',clr: '#ea4335' },
+  ];
+  var wStats = {}; wallDefs.forEach(function(w) { wStats[w.key] = { count: 0, q: 0 }; });
+  var other  = { count: 0, q: 0 };
+  pts.forEach(function(p) {
+    var w = wallDefs.find(function(wd) { return wd.key === p.wall; });
+    var q = parseFloat(p.flowRate) || 0;
+    if (w) { wStats[p.wall].count++; wStats[p.wall].q += q; }
+    else   { other.count++; other.q += q; }
+  });
+  var maxQ = Math.max.apply(null, wallDefs.map(function(w) { return wStats[w.key].q; })) || 1;
+
+  var html = wallDefs.map(function(w) {
+    var s = wStats[w.key];
+    var pct = Math.round(s.q / maxQ * 100);
+    var isMax = s.q > 0 && s.q === maxQ;
+    return '<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+        '<span style="font-size:12px;font-weight:600;color:' + w.clr + '">' + escHTML(w.lbl) + ' борт</span>' +
+        '<span style="font-size:12px;font-weight:700">' + s.q.toFixed(2) + ' л/с' +
+          (isMax ? ' <span style="color:#ea4335;font-size:10px">↑↑</span>' : '') + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div style="flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">' +
+          '<div style="width:' + pct + '%;height:100%;border-radius:3px;background:' + w.clr + '"></div>' +
+        '</div>' +
+        '<span style="font-size:11px;color:var(--txt-2);width:40px;text-align:right">' + s.count + ' т.</span>' +
+      '</div></div>';
+  }).join('');
+
+  if (other.count)
+    html += '<div style="padding:7px 0;font-size:11px;color:var(--txt-3)">Прочие / не указан: ' + other.count + ' т. · ' + other.q.toFixed(2) + ' л/с</div>';
+
+  el.innerHTML = html || '<p style="color:var(--txt-3);font-size:12px">Нет данных о бортах</p>';
+}
+
+// ── Горизонты ────────────────────────────────────────────────
+function _anlRenderHorizons() {
+  var el = document.getElementById('anl-horizons');
+  if (!el) return;
+  var allDates = getAllMonitoringDates();
+  var periods  = allDates.slice(0, 3).map(function(d) { return { date: d, pts: _anlPtsForDate(d) }; });
+  var curPts   = _anlCurrentPts();
+
+  var horizSet = {};
+  curPts.forEach(function(p) { if (p.horizon) horizSet[p.horizon] = true; });
+  var horizons = Object.keys(horizSet).sort();
+  if (!horizons.length) { el.innerHTML = '<p style="color:var(--txt-3);font-size:12px">Нет данных о горизонтах</p>'; return; }
+
+  function hQ(pts, h) {
+    var q = 0;
+    pts.forEach(function(p) { if (p.horizon === h) { var f = parseFloat(p.flowRate); if (!isNaN(f) && f > 0) q += f; } });
+    return q;
+  }
+
+  var maxBarQ = Math.max.apply(null, horizons.map(function(h) { return hQ(curPts, h); })) || 1;
+
+  var hdr = '<tr><th>Горизонт</th>' + periods.map(function(p) {
+    return '<th>' + formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</th>';
+  }).join('') + '<th>↕</th></tr>';
+
+  var rows = horizons.map(function(h) {
+    var qs   = periods.map(function(p) { return hQ(p.pts, h); });
+    var cur  = qs[0], prev = qs[1] || 0;
+    var diff = prev > 0 ? ((cur - prev) / prev * 100) : null;
+    var td   = diff === null ? '<span class="anl-eq">—</span>' :
+      diff > 5 ? '<span class="anl-up">↑ +' + diff.toFixed(0) + '%</span>' :
+      diff < -5 ? '<span class="anl-dn">↓ ' + diff.toFixed(0) + '%</span>' : '<span class="anl-eq">→</span>';
+    return '<tr><td><b>' + escHTML(h) + '</b></td>' +
+      qs.map(function(q) { return '<td>' + (q > 0 ? q.toFixed(2) : '—') + '</td>'; }).join('') +
+      '<td>' + td + '</td></tr>';
+  }).join('');
+
+  var bars = horizons.map(function(h) {
+    var q = hQ(curPts, h), pct = Math.round(q / maxBarQ * 100);
+    var prev = periods[1] ? hQ(periods[1].pts, h) : 0;
+    var diff = prev > 0 ? ((q - prev) / prev * 100) : null;
+    var clr  = diff !== null && diff > 5 ? '#ea4335' : diff !== null && diff < -5 ? '#3fb950' : '#58a6ff';
+    return '<div class="anl-pb-row">' +
+      '<span class="anl-pb-lbl">' + escHTML(h) + '</span>' +
+      '<div class="anl-pb-trk"><div style="width:' + pct + '%;height:100%;border-radius:3px;background:' + clr + '"></div></div>' +
+      '<span style="font-size:10px">' + q.toFixed(2) + '</span></div>';
+  }).join('');
+
+  el.innerHTML = '<div style="overflow-x:auto;margin-bottom:10px">' +
+    '<table class="anl-tbl"><thead>' + hdr + '</thead><tbody>' + rows + '</tbody></table></div>' + bars;
+}
+
+// ── Скважины ─────────────────────────────────────────────────
+function _anlRenderWells() {
+  var wells = (typeof WellsState !== 'undefined') ? WellsState.list : [];
+
+  // KPI
+  var kpiEl = document.getElementById('anl-well-kpi-grid');
+  if (kpiEl) {
+    var active  = wells.filter(function(w) { return w.status === 'Активная'; }).length;
+    var dry     = wells.filter(function(w) { return w.status === 'Сухая'; }).length;
+    var depths  = wells.filter(function(w) { return w.depth > 0; }).map(function(w) { return w.depth; });
+    var avgD    = depths.length ? Math.round(depths.reduce(function(a, b) { return a + b; }, 0) / depths.length) : 0;
+    var totalQ  = 0;
+    wells.forEach(function(w) {
+      var m = WellsState.measurements[w.id];
+      if (m && m.length) { var f = parseFloat(m[0].flowRate); if (!isNaN(f) && f > 0) totalQ += f; }
+    });
+    var loaded = Object.keys(WellsState.measurements).length;
+
+    kpiEl.innerHTML =
+      '<div class="anl-kpi"><div class="anl-kpi-lbl">Скважин всего</div><div class="anl-kpi-val" style="color:var(--gold)">' + wells.length + '</div><div class="anl-kpi-sub">' + active + ' акт. · ' + dry + ' сухих</div></div>' +
+      '<div class="anl-kpi"><div class="anl-kpi-lbl">Q скважин сумм.</div><div class="anl-kpi-val" style="color:var(--warn)">' + totalQ.toFixed(2) + ' <small>л/с</small></div><div class="anl-kpi-sub">' + lpsToM3h(totalQ).toFixed(2) + ' м³/ч</div></div>' +
+      '<div class="anl-kpi"><div class="anl-kpi-lbl">Средняя глубина</div><div class="anl-kpi-val">' + (avgD || '—') + ' <small>' + (avgD ? 'м' : '') + '</small></div><div class="anl-kpi-sub">мин: ' + (Math.min.apply(null, depths.length ? depths : [0]) || '—') + ' · макс: ' + (Math.max.apply(null, depths.length ? depths : [0]) || '—') + '</div></div>' +
+      '<div class="anl-kpi"><div class="anl-kpi-lbl">Замеры загружены</div><div class="anl-kpi-val" style="color:var(--ok)">' + loaded + '</div><div class="anl-kpi-sub">из ' + wells.length + ' скважин</div></div>';
+  }
+
+  // Рейтинг скважин
+  var listEl = document.getElementById('anl-well-list');
+  if (listEl) {
+    var sorted = wells.slice().sort(function(a, b) {
+      var qa = 0, qb = 0;
+      var ma = WellsState.measurements[a.id], mb = WellsState.measurements[b.id];
+      if (ma && ma.length) { var fa = parseFloat(ma[0].flowRate); if (!isNaN(fa)) qa = fa; }
+      if (mb && mb.length) { var fb = parseFloat(mb[0].flowRate); if (!isNaN(fb)) qb = fb; }
+      return qb - qa;
+    });
+    var sPills = { 'Активная': 'pg', 'Иссякает': 'py', 'Сухая': 'pr' };
+
+    listEl.innerHTML = sorted.slice(0, 8).map(function(w) {
+      var meas = WellsState.measurements[w.id];
+      var q = 0; if (meas && meas.length) { var fq = parseFloat(meas[0].flowRate); if (!isNaN(fq) && fq > 0) q = fq; }
+      var pill = sPills[w.status] || 'p_';
+      var spark = '';
+      if (meas && meas.length >= 2) {
+        var vals = meas.slice(0, 6).reverse().map(function(m) { return parseFloat(m.flowRate) || 0; });
+        var maxV = Math.max.apply(null, vals) || 1;
+        var spts = vals.map(function(v, i) { return (i / (vals.length - 1) * 70).toFixed(1) + ',' + ((1 - v / maxV) * 20 + 1).toFixed(1); }).join(' ');
+        var sclr = vals[vals.length - 1] >= vals[0] ? '#ea4335' : '#3fb950';
+        spark = '<svg viewBox="0 0 70 22" width="70" height="22"><polyline points="' + spts + '" fill="none" stroke="' + sclr + '" stroke-width="1.8"/></svg>';
+      } else {
+        spark = '<svg viewBox="0 0 70 22" width="70" height="22"><line x1="0" y1="11" x2="70" y2="11" stroke="rgba(255,255,255,.1)" stroke-width="1.5" stroke-dasharray="3,3"/></svg>';
+      }
+      return '<div class="anl-wr"><div style="flex:1">' +
+        '<div class="anl-wr-name">' + escHTML(w.name) + ' <span class="anl-pill anl-pill-' + pill + '">' + escHTML(w.status || '—') + '</span></div>' +
+        '<div class="anl-wr-info">' + (w.depth || '—') + ' м' + (w.azimuth != null ? ' · аз. ' + w.azimuth + '°' : '') + (w.inclination != null ? ' · нак. ' + w.inclination + '°' : '') + '</div>' +
+        '</div>' + spark +
+        '<div style="text-align:right"><div class="anl-wr-q">' + q.toFixed(2) + '</div><div class="anl-wr-qu">л/с</div></div>' +
+      '</div>';
+    }).join('') || '<p style="color:var(--txt-3);font-size:12px;padding:10px">Нет данных о скважинах</p>';
+  }
+
+  // Тренд скважин
+  var trendEl = document.getElementById('anl-well-trend');
+  if (trendEl) {
+    var withMeas = wells.filter(function(w) {
+      return WellsState.measurements[w.id] && WellsState.measurements[w.id].length >= 2;
+    }).slice(0, 3);
+
+    if (!withMeas.length) {
+      trendEl.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">Откройте скважины в разделе «Скважины» для загрузки истории</p>';
+      return;
+    }
+
+    var clrs = ['#58a6ff', '#3fb950', '#f9ab00'];
+    var allD = [];
+    withMeas.forEach(function(w) {
+      WellsState.measurements[w.id].forEach(function(m) {
+        var d = (m.measurementDate || '').slice(0, 10);
+        if (d && allD.indexOf(d) < 0) allD.push(d);
+      });
+    });
+    allD.sort();
+
+    var allQ = [];
+    withMeas.forEach(function(w) { WellsState.measurements[w.id].forEach(function(m) { var f = parseFloat(m.flowRate); if (!isNaN(f)) allQ.push(f); }); });
+    var maxQ = (Math.max.apply(null, allQ) || 1) * 1.15;
+
+    var W = 440, H = 185, PL = 40, PR = 10, PT = 10, PB = 30;
+    var cW = W - PL - PR, cH = H - PT - PB;
+    var n  = allD.length;
+    function px(i) { return PL + (i / Math.max(n - 1, 1)) * cW; }
+    function py(q)  { return PT + (1 - q / maxQ) * cH; }
+
+    var grid = [0, maxQ / 2, maxQ].map(function(q) {
+      return '<line x1="' + PL + '" y1="' + py(q).toFixed(1) + '" x2="' + (W - PR) + '" y2="' + py(q).toFixed(1) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
+             '<text x="' + (PL - 4) + '" y="' + (py(q) + 3).toFixed(1) + '" fill="#6e7681" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
+    }).join('');
+
+    var series = withMeas.map(function(w, si) {
+      var clr = clrs[si], mMap = {};
+      WellsState.measurements[w.id].forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
+      var spts = allD.map(function(d, i) { return mMap[d] != null ? px(i).toFixed(1) + ',' + py(mMap[d]).toFixed(1) : null; }).filter(Boolean).join(' ');
+      return '<polyline points="' + spts + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round"' + (si > 0 ? ' stroke-dasharray="' + (si * 4 + 4) + ',3"' : '') + '/>';
+    }).join('');
+
+    var step = Math.ceil(n / 5);
+    var xL = allD.filter(function(_, i) { return i % step === 0 || i === n - 1; }).map(function(d) {
+      return '<text x="' + px(allD.indexOf(d)).toFixed(1) + '" y="' + (H - PB + 14) + '" fill="#6e7681" font-size="8" text-anchor="middle">' + formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
+    }).join('');
+
+    var leg = withMeas.map(function(w, i) {
+      var lx = PL + i * 130;
+      return '<line x1="' + lx + '" y1="' + (H - 13) + '" x2="' + (lx + 18) + '" y2="' + (H - 13) + '" stroke="' + clrs[i] + '" stroke-width="2"/>' +
+             '<text x="' + (lx + 22) + '" y="' + (H - 10) + '" fill="#8b949e" font-size="8.5">' + escHTML(w.name) + '</text>';
+    }).join('');
+
+    trendEl.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+      '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
+      grid + series + xL + leg + '</svg>';
+  }
 }
 
 function renderHorizonBreakdown(byHorizon) {

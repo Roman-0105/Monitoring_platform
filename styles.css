@@ -807,3 +807,110 @@ body {
 .dash-top-domain { color:var(--txt-2); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .dash-top-q { font-weight:600; color:var(--txt-1); text-align:right; }
 .dash-top-trend { text-align:center; font-size:13px; }
+
+/* ════════════════════════════════════════════════════════════
+   АНАЛИТИЧЕСКАЯ ПАНЕЛЬ (anl-*)
+════════════════════════════════════════════════════════════ */
+.anl-bar { display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;margin-bottom:14px }
+.anl-bar-group { display:flex;align-items:center;gap:6px }
+.anl-bar-lbl { font-size:11px;color:var(--txt-2);white-space:nowrap }
+.anl-bar-sep { width:1px;height:20px;background:var(--line);margin:0 2px }
+.anl-sel { background:var(--bg-2);border:1px solid var(--line);color:var(--txt-1);padding:5px 8px;border-radius:6px;font-size:12px;cursor:pointer;outline:none;transition:border-color .15s }
+.anl-sel:focus { border-color:rgba(88,166,255,.5) }
+.anl-chip { background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:#58a6ff;font-size:11px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap }
+.anl-reset-btn { background:none;border:1px solid var(--line);color:var(--txt-3);font-size:12px;padding:4px 9px;border-radius:6px;cursor:pointer;transition:color .15s }
+.anl-reset-btn:hover { color:var(--txt-1) }
+
+/* KPI */
+.anl-kpi-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px }
+.anl-kpi { background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;overflow:hidden }
+.anl-kpi-lbl { font-size:10px;color:var(--txt-2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px }
+.anl-kpi-val { font-size:26px;font-weight:700;line-height:1.1;margin-bottom:2px }
+.anl-kpi-val small { font-size:14px;font-weight:400 }
+.anl-kpi-sub { font-size:11px;color:var(--txt-2) }
+.anl-kpi-trend { font-size:11px;font-weight:600;margin-top:2px }
+.anl-spark { width:100%;height:32px;display:block;margin-top:8px }
+
+/* Цветовые классы тренда */
+.anl-up { color:#ea4335 }
+.anl-dn { color:var(--ok) }
+.anl-eq { color:var(--txt-3) }
+
+/* Лэйауты */
+.anl-row-21 { display:grid;grid-template-columns:2fr 1.2fr;gap:12px;margin-bottom:14px }
+.anl-row-2  { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px }
+.anl-row-3  { display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px }
+
+/* Разделитель секции */
+.anl-sec-div { display:flex;align-items:center;gap:10px;margin:20px 0 14px }
+.anl-sec-lbl { font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-3);white-space:nowrap }
+.anl-sec-line { flex:1;height:1px;background:var(--line) }
+
+/* Карточки доменов */
+.anl-domain-cards { display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px }
+.anl-dc { background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px }
+.anl-dc-alert { border-color:rgba(234,67,53,.3) }
+.anl-dc-name { font-size:12px;font-weight:700;margin-bottom:4px }
+.anl-dc-q { font-size:19px;font-weight:700;color:var(--gold);line-height:1;margin-bottom:1px }
+.anl-dc-sub { font-size:10px;color:var(--txt-2);margin-bottom:8px }
+
+/* Матрица */
+.anl-mx { border-collapse:collapse;font-size:11px;width:100% }
+.anl-mx th,.anl-mx td { border:1px solid var(--line);padding:6px 8px;text-align:center }
+.anl-mx th { background:rgba(255,255,255,.03);color:var(--txt-2);font-size:10px;font-weight:600 }
+.anl-h0 { color:var(--txt-3) }
+.anl-h1 { background:rgba(88,166,255,.08) }
+.anl-h2 { background:rgba(88,166,255,.18) }
+.anl-h3 { background:rgba(88,166,255,.32) }
+.anl-h4 { background:rgba(88,166,255,.52);color:#fff }
+.anl-h5 { background:rgba(88,166,255,.72);color:#fff;font-weight:700 }
+
+/* Таблица горизонтов */
+.anl-tbl { width:100%;border-collapse:collapse;font-size:12px }
+.anl-tbl th { text-align:left;padding:6px 8px;color:var(--txt-2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line) }
+.anl-tbl td { padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.04) }
+
+/* Прогресс-бар */
+.anl-pb-row { display:flex;align-items:center;gap:8px;margin-bottom:5px }
+.anl-pb-lbl { width:64px;color:var(--txt-2);flex-shrink:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.anl-pb-trk { flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden }
+
+/* Алерты */
+.anl-alert { display:flex;gap:9px;padding:9px 11px;border-radius:7px;margin-bottom:6px }
+.anl-alert:last-child { margin-bottom:0 }
+.anl-alert-err  { background:rgba(234,67,53,.08);border-left:3px solid #ea4335 }
+.anl-alert-warn { background:rgba(249,171,0,.08);border-left:3px solid var(--warn) }
+.anl-alert-ok   { background:rgba(63,185,80,.08);border-left:3px solid var(--ok) }
+.anl-alert-ico  { font-size:14px;line-height:1.5;flex-shrink:0 }
+.anl-alert-ttl  { font-size:12px;font-weight:600 }
+.anl-alert-desc { font-size:11px;color:var(--txt-2);margin-top:1px }
+
+/* Пилюли статусов */
+.anl-pill { display:inline-flex;align-items:center;padding:1px 6px;border-radius:99px;font-size:11px;font-weight:500 }
+.anl-pill-pg { background:rgba(63,185,80,.12);color:#3fb950 }
+.anl-pill-py { background:rgba(249,171,0,.12);color:var(--warn) }
+.anl-pill-pr,.anl-pill-r { background:rgba(234,67,53,.12);color:#ea4335 }
+.anl-pill-pb { background:rgba(88,166,255,.12);color:#58a6ff }
+.anl-pill-p_ { background:rgba(139,148,158,.1);color:var(--txt-2) }
+.anl-pill-gray { background:rgba(139,148,158,.12);color:var(--txt-2) }
+
+/* Строки скважин */
+.anl-wr { display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05) }
+.anl-wr:last-child { border-bottom:none }
+.anl-wr-name { font-size:12px;font-weight:600 }
+.anl-wr-info { font-size:10px;color:var(--txt-2) }
+.anl-wr-q  { font-size:15px;font-weight:700;color:var(--gold) }
+.anl-wr-qu { font-size:10px;color:var(--txt-2) }
+
+/* Адаптив */
+@media(max-width:1100px) {
+  .anl-kpi-grid { grid-template-columns:repeat(2,1fr) }
+  .anl-domain-cards { grid-template-columns:repeat(3,1fr) }
+  .anl-row-21 { grid-template-columns:1fr }
+  .anl-row-3 { grid-template-columns:1fr 1fr }
+}
+@media(max-width:740px) {
+  .anl-kpi-grid { grid-template-columns:1fr 1fr }
+  .anl-domain-cards { grid-template-columns:1fr 1fr }
+  .anl-row-2,.anl-row-3 { grid-template-columns:1fr }
+}
