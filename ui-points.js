@@ -1312,7 +1312,7 @@ function saveEditedPoint() {
     chain = Points.create(data).then(function(savedPoint) {
       if (!ePhotoFile || !savedPoint || !savedPoint.id) return null;
       showLoader('Загрузка фото...');
-      var _extra2 = { pointNumber: eData.pointNumber, monitoringDate: eData.monitoringDate, flowRate: eData.flowRate };
+      var _extra2 = { pointNumber: data.pointNumber, monitoringDate: data.monitoringDate, flowRate: data.flowRate };
       return Photos.upload(ePhotoFile, savedPoint.id, _extra2).catch(function(photoErr) {
         Diagnostics.setError('photo', photoErr.message);
         alert('Точка сохранена, но фото не загрузилось: ' + photoErr.message);
@@ -1322,7 +1322,7 @@ function saveEditedPoint() {
     });
   } else if (ePhotoFile) {
     showLoader('Загрузка фото...');
-    var _extra3 = { pointNumber: eData.pointNumber, monitoringDate: eData.monitoringDate, flowRate: eData.flowRate };
+    var _extra3 = { pointNumber: data.pointNumber, monitoringDate: data.monitoringDate, flowRate: data.flowRate };
     chain = Photos.upload(ePhotoFile, id, _extra3).then(function(driveUrl) {
       data.photoUrls = [driveUrl];
       return Points.update(id, data);
