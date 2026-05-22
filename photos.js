@@ -230,6 +230,8 @@ function triggerPhotoInput(inputId, previewId, capture, onFileSelected) {
   } else {
     newInp.removeAttribute('capture');
   }
+  // Визуально скрываем, но НЕ через display:none — iOS блокирует .click() на hidden-элементах
+  newInp.style.cssText = 'position:fixed;top:-200px;left:-200px;opacity:0;width:1px;height:1px;overflow:hidden';
   // Запрещаем вставку из буфера обмена
   newInp.onpaste = function(e) { e.preventDefault(); return false; };
   inp.parentNode.replaceChild(newInp, inp);
