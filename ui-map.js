@@ -1447,13 +1447,12 @@ function getPoiPoints() {
 
 // Получаем номера точек уже замеренных в текущую неделю
 function getCurrentWeekNumbers() {
-  var today     = new Date().toISOString().slice(0, 10);
-  var allDates  = getAllMonitoringDates();
-  // "Текущая неделя" = самая последняя дата (не совпадающая с _poiDate)
-  var curDate   = allDates.filter(function(d) { return d !== _poiDate; })[0] || today;
+  if (!_poiDate) return {};
   var nums = {};
   Points.getList().forEach(function(p) {
-    if ((p.monitoringDate || '').slice(0, 10) === curDate) {
+    var d = (p.monitoringDate || '').slice(0, 10);
+    // Any measurement date OTHER than the reference date counts as "done this period"
+    if (d && d !== _poiDate) {
       nums[p.pointNumber] = true;
     }
   });
@@ -1798,7 +1797,11 @@ function openAddFormFromPoi(p) {
       return Points.load();
     }).then(function() {
       if (typeof renderPointsList === 'function') renderPointsList();
-      if (typeof _mapSchemeImg !== 'undefined' && _mapSchemeImg) redrawMap();
+      updatePoiProgress();
+      if (typeof _mapSchemeImg !== 'undefined' && _mapSchemeImg) {
+        if (typeof HeatMap !== 'undefined') HeatMap.markDirty();
+        redrawMap();
+      }
       Toast.done('save-poi-meas', 'Замер добавлен');
     }).catch(function(err) {
       errEl.textContent = 'Ошибка: ' + err.message; errEl.style.display = '';
