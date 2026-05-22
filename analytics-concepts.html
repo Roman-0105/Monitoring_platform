@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Аналитика — концепции дизайна</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --card2: #1e2530;
+    --line: rgba(255,255,255,.08);
+    --txt1: #e6edf3;
+    --txt2: #8b949e;
+    --txt3: #6e7681;
+    --ok: #3fb850;
+    --warn: #f9ab00;
+    --err: #ea4335;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --orange: #d29922;
+    --teal: #39d353;
+    --r: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt1); font-family: 'Segoe UI', Inter, sans-serif; font-size: 14px; line-height: 1.5; }
+
+  /* === TOP NAV === */
+  .top-nav { background: var(--card); border-bottom: 1px solid var(--line); padding: 0 20px; display: flex; align-items: center; gap: 0; position: sticky; top: 0; z-index: 100; }
+  .top-nav h1 { font-size: 14px; font-weight: 600; color: var(--txt2); padding: 14px 20px 14px 0; border-right: 1px solid var(--line); margin-right: 16px; }
+  .tab-btn { padding: 14px 18px; font-size: 13px; font-weight: 500; cursor: pointer; background: none; border: none; color: var(--txt2); border-bottom: 2px solid transparent; transition: all .15s; }
+  .tab-btn:hover { color: var(--txt1); }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .badge { background: var(--blue); color: #000; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 10px; margin-left: 6px; }
+
+  /* === SECTIONS === */
+  .section { display: none; padding: 24px; max-width: 1280px; margin: 0 auto; }
+  .section.active { display: block; }
+  .section-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .section-desc { color: var(--txt2); font-size: 13px; margin-bottom: 24px; }
+
+  /* === CARDS === */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; }
+  .card-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--txt2); margin-bottom: 12px; }
+
+  /* === GRIDS === */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 12px; margin-bottom: 16px; }
+  @media(max-width:900px) { .grid-4,.grid-3 { grid-template-columns: 1fr 1fr; } }
+  @media(max-width:600px) { .grid-4,.grid-3,.grid-2 { grid-template-columns: 1fr; } }
+
+  /* === KPI CARDS === */
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; position: relative; overflow: hidden; }
+  .kpi-label { font-size: 11px; color: var(--txt2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .kpi-val { font-size: 30px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+  .kpi-sub { font-size: 12px; color: var(--txt2); }
+  .kpi-trend { position: absolute; top: 14px; right: 14px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 3px; }
+  .trend-up { color: var(--err); }
+  .trend-dn { color: var(--ok); }
+  .trend-eq { color: var(--txt3); }
+  .sparkline { width: 100%; height: 36px; margin-top: 10px; }
+
+  /* === STATUS PILLS === */
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 500; }
+  .pill-green  { background: rgba(63,184,80,.15); color: #3fb850; }
+  .pill-yellow { background: rgba(249,171,0,.15);  color: #f9ab00; }
+  .pill-red    { background: rgba(234,67,53,.15);  color: #ea4335; }
+  .pill-gray   { background: rgba(139,148,158,.15); color: #8b949e; }
+  .pill-blue   { background: rgba(88,166,255,.15); color: #58a6ff; }
+
+  /* === CHART CONTAINERS === */
+  .chart-wrap { width: 100%; }
+  svg text { font-family: inherit; }
+
+  /* === TABLE === */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; padding: 8px 12px; color: var(--txt2); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--line); }
+  .data-table td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* === PROGRESS BAR === */
+  .pbar-wrap { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .pbar { flex: 1; height: 5px; background: rgba(255,255,255,.08); border-radius: 3px; overflow: hidden; }
+  .pbar-fill { height: 100%; border-radius: 3px; }
+
+  /* === CONCEPT LABEL === */
+  .concept-chip { display: inline-block; background: rgba(88,166,255,.12); color: var(--blue); border: 1px solid rgba(88,166,255,.3); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; margin-bottom: 12px; }
+
+  /* === ALERT CARDS === */
+  .alert { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; }
+  .alert-warn { background: rgba(249,171,0,.08); border-left: 3px solid var(--warn); }
+  .alert-err  { background: rgba(234,67,53,.08);  border-left: 3px solid var(--err); }
+  .alert-ok   { background: rgba(63,184,80,.08);  border-left: 3px solid var(--ok); }
+  .alert-icon { font-size: 16px; line-height: 1.3; }
+  .alert-title { font-size: 13px; font-weight: 600; }
+  .alert-desc  { font-size: 12px; color: var(--txt2); margin-top: 2px; }
+
+  /* === HEATMAP CALENDAR === */
+  .cal-grid { display: grid; grid-template-columns: repeat(13,1fr); gap: 3px; }
+  .cal-cell { aspect-ratio: 1; border-radius: 3px; }
+  .cal-0 { background: rgba(255,255,255,.04); }
+  .cal-1 { background: rgba(63,184,80,.2); }
+  .cal-2 { background: rgba(63,184,80,.45); }
+  .cal-3 { background: rgba(63,184,80,.7); }
+  .cal-4 { background: rgba(63,184,80,1); }
+
+  /* === DOMAIN CARDS === */
+  .domain-card { background: var(--card2); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  .domain-name { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .domain-q { font-size: 22px; font-weight: 700; color: var(--blue); line-height: 1; margin-bottom: 2px; }
+  .domain-sub { font-size: 11px; color: var(--txt2); margin-bottom: 10px; }
+  .mini-bar-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+  .mini-bar-label { width: 60px; color: var(--txt2); }
+  .mini-bar { flex: 1; height: 4px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+
+  /* === MATRIX TABLE === */
+  .matrix { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .matrix th, .matrix td { border: 1px solid var(--line); padding: 7px 10px; text-align: center; }
+  .matrix th { background: rgba(255,255,255,.03); color: var(--txt2); font-weight: 600; font-size: 11px; }
+  .matrix td.heat-0 { background: transparent; }
+  .matrix td.heat-1 { background: rgba(88,166,255,.08); }
+  .matrix td.heat-2 { background: rgba(88,166,255,.18); }
+  .matrix td.heat-3 { background: rgba(88,166,255,.32); }
+  .matrix td.heat-4 { background: rgba(88,166,255,.5); color: #fff; }
+  .matrix td.heat-5 { background: rgba(88,166,255,.7); color: #fff; font-weight: 700; }
+
+  /* === TIMELINE === */
+  .timeline-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .timeline-row:last-child { border-bottom: none; }
+  .tl-date { width: 80px; font-size: 11px; color: var(--txt2); }
+  .tl-bar-wrap { flex: 1; }
+  .tl-bar { height: 22px; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; }
+  .tl-count { width: 30px; text-align: right; font-size: 12px; color: var(--txt2); }
+
+  /* === PERIOD HEATMAP === */
+  .period-grid { display: grid; gap: 2px; }
+  .period-cell { height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; cursor: pointer; transition: opacity .1s; }
+  .period-cell:hover { opacity: .8; }
+
+  /* === SCROLL === */
+  .scroll-x { overflow-x: auto; }
+
+  /* === WELL MINI CHART === */
+  .well-stat-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .well-stat-row:last-child { border-bottom: none; }
+  .well-name { font-size: 13px; font-weight: 600; }
+  .well-depth { font-size: 11px; color: var(--txt2); }
+</style>
+</head>
+<body>
+
+<div class="top-nav">
+  <h1>📊 Аналитика — концепции</h1>
+  <button class="tab-btn active" onclick="show('a')">Концепция A — Сводная панель</button>
+  <button class="tab-btn" onclick="show('b')">Концепция B — Тренды и периоды</button>
+  <button class="tab-btn" onclick="show('c')">Концепция C — Зоны и домены</button>
+  <button class="tab-btn" onclick="show('d')">Концепция D — Скважины</button>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     КОНЦЕПЦИЯ A — СВОДНАЯ ИСПОЛНИТЕЛЬНАЯ ПАНЕЛЬ
+════════════════════════════════════════════════════════════ -->
+<div id="sec-a" class="section active">
+  <div class="concept-chip">Концепция A</div>
+  <div class="section-title">Сводная исполнительная панель</div>
+  <div class="section-desc">Общая картина одним взглядом: ключевые показатели с трендами, алерты аномалий, карта покрытия мониторинга. Подходит для ежедневной сводки и руководства.</div>
+
+  <!-- KPI Row -->
+  <div class="grid-4">
+    <div class="kpi">
+      <div class="kpi-label">Всего точек</div>
+      <div class="kpi-val" style="color:var(--blue)">87</div>
+      <div class="kpi-sub">из них активных: 34</div>
+      <div class="kpi-trend trend-eq">→ без изм.</div>
+      <svg class="sparkline" viewBox="0 0 120 36">
+        <polyline points="0,30 20,28 40,26 60,25 80,24 100,23 120,23" fill="none" stroke="rgba(88,166,255,.4)" stroke-width="1.5"/>
+        <polyline points="0,30 20,28 40,26 60,25 80,24 100,23 120,23 120,36 0,36" fill="rgba(88,166,255,.06)" stroke="none"/>
+      </svg>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Суммарный дебит</div>
+      <div class="kpi-val" style="color:var(--warn)">4.82 <span style="font-size:16px;font-weight:400">л/с</span></div>
+      <div class="kpi-sub">17.35 м³/ч</div>
+      <div class="kpi-trend trend-up">↑ +12% к пред. обходу</div>
+      <svg class="sparkline" viewBox="0 0 120 36">
+        <polyline points="0,28 20,26 40,30 60,22 80,20 100,18 120,15" fill="none" stroke="rgba(249,171,0,.5)" stroke-width="1.5"/>
+        <polyline points="0,28 20,26 40,30 60,22 80,20 100,18 120,15 120,36 0,36" fill="rgba(249,171,0,.06)" stroke="none"/>
+      </svg>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Иссякающих точек</div>
+      <div class="kpi-val" style="color:var(--ok)">8</div>
+      <div class="kpi-sub">было 12 в прошлом обходе</div>
+      <div class="kpi-trend trend-dn">↓ −4 улучшение</div>
+      <svg class="sparkline" viewBox="0 0 120 36">
+        <polyline points="0,10 20,12 40,14 60,16 80,18 100,22 120,26" fill="none" stroke="rgba(63,184,80,.4)" stroke-width="1.5"/>
+        <polyline points="0,10 20,12 40,14 60,16 80,18 100,22 120,26 120,36 0,36" fill="rgba(63,184,80,.06)" stroke="none"/>
+      </svg>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Покрытие обхода</div>
+      <div class="kpi-val" style="color:var(--purple)">91<span style="font-size:16px;font-weight:400">%</span></div>
+      <div class="kpi-sub">79 из 87 точек замерено</div>
+      <div class="kpi-trend trend-eq">→ цель: 100%</div>
+      <svg class="sparkline" viewBox="0 0 120 36">
+        <polyline points="0,30 20,25 40,20 60,16 80,14 100,12 120,8" fill="none" stroke="rgba(188,140,255,.4)" stroke-width="1.5"/>
+        <polyline points="0,30 20,25 40,20 60,16 80,14 100,12 120,8 120,36 0,36" fill="rgba(188,140,255,.06)" stroke="none"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Алерты -->
+    <div class="card">
+      <div class="card-title">⚠ Требует внимания</div>
+      <div class="alert alert-err">
+        <div class="alert-icon">🔴</div>
+        <div>
+          <div class="alert-title">Точки №12, №34 — резкий рост дебита</div>
+          <div class="alert-desc">+85% за последние 2 обхода · Домен-3, горизонт +280</div>
+        </div>
+      </div>
+      <div class="alert alert-warn">
+        <div class="alert-icon">🟡</div>
+        <div>
+          <div class="alert-title">8 точек не замерено &gt;14 дней</div>
+          <div class="alert-desc">Последний замер: 02 мая 2026 · Западный борт</div>
+        </div>
+      </div>
+      <div class="alert alert-warn">
+        <div class="alert-icon">🟡</div>
+        <div>
+          <div class="alert-title">Точка №67 изменила статус</div>
+          <div class="alert-desc">Активная → Иссякает · 3 обхода подряд</div>
+        </div>
+      </div>
+      <div class="alert alert-ok">
+        <div class="alert-icon">🟢</div>
+        <div>
+          <div class="alert-title">Домен-1: снижение дебита −18%</div>
+          <div class="alert-desc">Относительно прошлого квартала · 22 активных точки</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Покрытие мониторинга -->
+    <div class="card">
+      <div class="card-title">📅 Покрытие мониторинга — последние 13 недель</div>
+      <div style="margin-bottom:8px;font-size:11px;color:var(--txt2)">Количество замеров по неделям</div>
+      <div class="cal-grid" style="margin-bottom:14px">
+        <div class="cal-cell cal-0" title="0 замеров"></div>
+        <div class="cal-cell cal-1" title="12"></div>
+        <div class="cal-cell cal-2" title="34"></div>
+        <div class="cal-cell cal-3" title="56"></div>
+        <div class="cal-cell cal-4" title="87"></div>
+        <div class="cal-cell cal-3" title="71"></div>
+        <div class="cal-cell cal-2" title="40"></div>
+        <div class="cal-cell cal-4" title="82"></div>
+        <div class="cal-cell cal-4" title="87"></div>
+        <div class="cal-cell cal-3" title="65"></div>
+        <div class="cal-cell cal-4" title="83"></div>
+        <div class="cal-cell cal-3" title="60"></div>
+        <div class="cal-cell cal-2" title="38 (тек.)"></div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px">
+          <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">По сотруднику (тек. обход)</div>
+          <div class="timeline-row" style="padding:5px 0">
+            <div class="tl-date" style="width:90px;font-size:12px">Иванов А.</div>
+            <div class="tl-bar-wrap"><div class="tl-bar" style="width:80%;background:rgba(88,166,255,.2);color:var(--blue)">38 замеров</div></div>
+          </div>
+          <div class="timeline-row" style="padding:5px 0">
+            <div class="tl-date" style="width:90px;font-size:12px">Петров В.</div>
+            <div class="tl-bar-wrap"><div class="tl-bar" style="width:52%;background:rgba(63,184,80,.15);color:var(--ok)">25 замеров</div></div>
+          </div>
+          <div class="timeline-row" style="padding:5px 0">
+            <div class="tl-date" style="width:90px;font-size:12px">Сидоров К.</div>
+            <div class="tl-bar-wrap"><div class="tl-bar" style="width:33%;background:rgba(249,171,0,.15);color:var(--warn)">16 замеров</div></div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:120px">
+          <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">Незамеренные точки</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">
+            <span class="pill pill-red">№8</span>
+            <span class="pill pill-red">№15</span>
+            <span class="pill pill-yellow">№23</span>
+            <span class="pill pill-yellow">№31</span>
+            <span class="pill pill-red">№44</span>
+            <span class="pill pill-yellow">№51</span>
+            <span class="pill pill-yellow">№58</span>
+            <span class="pill pill-red">№72</span>
+          </div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:8px">🔴 не замерено 14+ дн &nbsp;&nbsp; 🟡 7–14 дн</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Топ-10 точек по дебиту -->
+  <div class="card">
+    <div class="card-title">🏆 Топ-10 точек по дебиту</div>
+    <div class="scroll-x">
+      <table class="data-table">
+        <thead>
+          <tr><th>№ точки</th><th>Домен</th><th>Горизонт</th><th>Борт</th><th>Статус</th><th>Дебит л/с</th><th>Дебит м³/ч</th><th>Тренд</th><th>Последний замер</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>#12</b></td><td>Домен-3</td><td>+280</td><td>Восточный</td><td><span class="pill pill-green">Активная</span></td><td><b>0.87</b></td><td>3.13</td><td><span style="color:var(--err)">↑↑ +85%</span></td><td>22 мая 2026</td></tr>
+          <tr><td><b>#34</b></td><td>Домен-3</td><td>+300</td><td>Западный</td><td><span class="pill pill-green">Активная</span></td><td><b>0.71</b></td><td>2.56</td><td><span style="color:var(--err)">↑ +42%</span></td><td>22 мая 2026</td></tr>
+          <tr><td><b>#5</b></td><td>Домен-1</td><td>+240</td><td>Северный</td><td><span class="pill pill-blue">Паводковая</span></td><td><b>0.58</b></td><td>2.09</td><td><span style="color:var(--ok)">↓ −15%</span></td><td>21 мая 2026</td></tr>
+          <tr><td><b>#67</b></td><td>Домен-2</td><td>+260</td><td>Восточный</td><td><span class="pill pill-yellow">Иссякает</span></td><td><b>0.44</b></td><td>1.58</td><td><span style="color:var(--ok)">↓ −28%</span></td><td>20 мая 2026</td></tr>
+          <tr><td><b>#23</b></td><td>Домен-4</td><td>+320</td><td>Западный</td><td><span class="pill pill-green">Активная</span></td><td><b>0.39</b></td><td>1.40</td><td><span style="color:var(--txt3)">→ стабильно</span></td><td>22 мая 2026</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     КОНЦЕПЦИЯ B — ТРЕНДЫ И ПЕРИОДЫ
+════════════════════════════════════════════════════════════ -->
+<div id="sec-b" class="section">
+  <div class="concept-chip">Концепция B</div>
+  <div class="section-title">Тренды и динамика по периодам</div>
+  <div class="section-desc">Изменения дебита и статусов во времени. Отвечает на вопрос: "Что меняется?"  Идеально для выявления сезонных паттернов и долгосрочных тенденций.</div>
+
+  <!-- Главный трендовый график -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">📈 Суммарный дебит по обходам — последние 12 периодов</div>
+    <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:5px">
+        <span style="display:inline-block;width:20px;height:3px;background:#58a6ff;border-radius:2px"></span> Все точки
+      </label>
+      <label style="font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:5px">
+        <span style="display:inline-block;width:20px;height:3px;background:#3fb850;border-radius:2px"></span> Домен-1
+      </label>
+      <label style="font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:5px">
+        <span style="display:inline-block;width:20px;height:3px;background:#f9ab00;border-radius:2px;border-top:2px dashed #f9ab00;height:0"></span> Домен-3
+      </label>
+    </div>
+    <svg viewBox="0 0 800 200" style="width:100%;display:block">
+      <!-- Grid lines -->
+      <line x1="60" y1="10" x2="60" y2="170" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+      <line x1="60" y1="50" x2="780" y2="50"  stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+      <line x1="60" y1="90" x2="780" y2="90"  stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+      <line x1="60" y1="130" x2="780" y2="130" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+      <line x1="60" y1="170" x2="780" y2="170" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+      <!-- Y labels -->
+      <text x="55" y="54"  fill="#8b949e" font-size="10" text-anchor="end">6.0</text>
+      <text x="55" y="94"  fill="#8b949e" font-size="10" text-anchor="end">4.0</text>
+      <text x="55" y="134" fill="#8b949e" font-size="10" text-anchor="end">2.0</text>
+      <text x="55" y="174" fill="#8b949e" font-size="10" text-anchor="end">0</text>
+      <text x="20" y="90"  fill="#8b949e" font-size="10" text-anchor="middle" transform="rotate(-90 20 90)">л/с</text>
+      <!-- X labels -->
+      <text x="90"  y="185" fill="#8b949e" font-size="9" text-anchor="middle">июн'25</text>
+      <text x="150" y="185" fill="#8b949e" font-size="9" text-anchor="middle">июл</text>
+      <text x="210" y="185" fill="#8b949e" font-size="9" text-anchor="middle">авг</text>
+      <text x="270" y="185" fill="#8b949e" font-size="9" text-anchor="middle">сен</text>
+      <text x="330" y="185" fill="#8b949e" font-size="9" text-anchor="middle">окт</text>
+      <text x="390" y="185" fill="#8b949e" font-size="9" text-anchor="middle">ноя</text>
+      <text x="450" y="185" fill="#8b949e" font-size="9" text-anchor="middle">дек</text>
+      <text x="510" y="185" fill="#8b949e" font-size="9" text-anchor="middle">янв'26</text>
+      <text x="570" y="185" fill="#8b949e" font-size="9" text-anchor="middle">фев</text>
+      <text x="630" y="185" fill="#8b949e" font-size="9" text-anchor="middle">мар</text>
+      <text x="690" y="185" fill="#8b949e" font-size="9" text-anchor="middle">апр</text>
+      <text x="750" y="185" fill="#8b949e" font-size="9" text-anchor="middle">май</text>
+      <!-- ALL points area fill -->
+      <defs>
+        <linearGradient id="grad-blue" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#58a6ff" stop-opacity=".18"/>
+          <stop offset="100%" stop-color="#58a6ff" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="grad-green" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3fb850" stop-opacity=".15"/>
+          <stop offset="100%" stop-color="#3fb850" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points="90,130 150,125 210,120 270,115 330,108 390,118 450,125 510,140 570,120 630,110 690,100 750,95 750,170 90,170" fill="url(#grad-blue)"/>
+      <!-- ALL line -->
+      <polyline points="90,130 150,125 210,120 270,115 330,108 390,118 450,125 510,140 570,120 630,110 690,100 750,95" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
+      <!-- Domain-1 line -->
+      <polyline points="90,150 150,148 210,145 270,142 330,138 390,145 450,148 510,155 570,145 630,140 690,136 750,133" fill="none" stroke="#3fb850" stroke-width="1.8" stroke-linejoin="round"/>
+      <!-- Domain-3 dashed -->
+      <polyline points="90,165 150,162 210,158 270,155 330,148 390,152 450,158 510,163 570,148 630,140 690,130 750,120" fill="none" stroke="#f9ab00" stroke-width="1.8" stroke-dasharray="5,3" stroke-linejoin="round"/>
+      <!-- Annotation -->
+      <rect x="620" y="60" width="140" height="30" rx="5" fill="rgba(234,67,53,.12)" stroke="rgba(234,67,53,.3)" stroke-width="1"/>
+      <text x="628" y="72" fill="#ea4335" font-size="9" font-weight="600">↑ Рост дебита +12%</text>
+      <text x="628" y="83" fill="#8b949e" font-size="8">относит. апреля</text>
+      <line x1="680" y1="90" x2="750" y2="95" stroke="rgba(234,67,53,.4)" stroke-width="1" stroke-dasharray="3,2"/>
+    </svg>
+  </div>
+
+  <div class="grid-2">
+    <!-- Статусная гистограмма -->
+    <div class="card">
+      <div class="card-title">📊 Изменение статусов по обходам</div>
+      <svg viewBox="0 0 400 180" style="width:100%;display:block">
+        <!-- Legend -->
+        <rect x="10" y="5" width="10" height="10" rx="2" fill="#3fb850"/>
+        <text x="24" y="14" fill="#8b949e" font-size="9">Активная</text>
+        <rect x="90" y="5" width="10" height="10" rx="2" fill="#f9ab00"/>
+        <text x="104" y="14" fill="#8b949e" font-size="9">Иссякает</text>
+        <rect x="180" y="5" width="10" height="10" rx="2" fill="#ea4335"/>
+        <text x="194" y="14" fill="#8b949e" font-size="9">Пересохла</text>
+        <rect x="270" y="5" width="10" height="10" rx="2" fill="#8b949e"/>
+        <text x="284" y="14" fill="#8b949e" font-size="9">Новая</text>
+        <!-- Stacked bars -->
+        <!-- Period 1 -->
+        <rect x="30"  y="130" width="24" height="40" fill="#3fb850" opacity=".8" rx="2"/>
+        <rect x="30"  y="115" width="24" height="15" fill="#f9ab00" opacity=".8"/>
+        <rect x="30"  y="108" width="24" height="7"  fill="#ea4335" opacity=".8"/>
+        <!-- Period 2 -->
+        <rect x="70"  y="125" width="24" height="45" fill="#3fb850" opacity=".8" rx="2"/>
+        <rect x="70"  y="110" width="24" height="15" fill="#f9ab00" opacity=".8"/>
+        <rect x="70"  y="104" width="24" height="6"  fill="#ea4335" opacity=".8"/>
+        <!-- Period 3 -->
+        <rect x="110" y="118" width="24" height="52" fill="#3fb850" opacity=".8" rx="2"/>
+        <rect x="110" y="106" width="24" height="12" fill="#f9ab00" opacity=".8"/>
+        <rect x="110" y="100" width="24" height="6"  fill="#ea4335" opacity=".8"/>
+        <!-- Period 4 -->
+        <rect x="150" y="120" width="24" height="50" fill="#3fb850" opacity=".8" rx="2"/>
+        <rect x="150" y="110" width="24" height="10" fill="#f9ab00" opacity=".8"/>
+        <rect x="150" y="104" width="24" height="6"  fill="#ea4335" opacity=".8"/>
+        <!-- Period 5 last -->
+        <rect x="190" y="115" width="24" height="55" fill="#3fb850" opacity=".9" rx="2"/>
+        <rect x="190" y="105" width="24" height="10" fill="#f9ab00" opacity=".9"/>
+        <rect x="190" y="97" width="24" height="8"  fill="#ea4335" opacity=".9"/>
+        <!-- Now period -->
+        <rect x="230" y="108" width="24" height="62" fill="#3fb850" rx="2" stroke="#3fb850" stroke-width="1"/>
+        <rect x="230" y="100" width="24" height="8"  fill="#f9ab00"/>
+        <rect x="230" y="94" width="24" height="6"  fill="#ea4335"/>
+        <text x="242" y="88" fill="#8b949e" font-size="8" text-anchor="middle">тек.</text>
+        <!-- Baseline -->
+        <line x1="20" y1="170" x2="390" y2="170" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+        <!-- X labels -->
+        <text x="42"  y="175" fill="#6e7681" font-size="8" text-anchor="middle">дек</text>
+        <text x="82"  y="175" fill="#6e7681" font-size="8" text-anchor="middle">янв</text>
+        <text x="122" y="175" fill="#6e7681" font-size="8" text-anchor="middle">фев</text>
+        <text x="162" y="175" fill="#6e7681" font-size="8" text-anchor="middle">мар</text>
+        <text x="202" y="175" fill="#6e7681" font-size="8" text-anchor="middle">апр</text>
+        <text x="242" y="175" fill="#6e7681" font-size="8" text-anchor="middle">май</text>
+      </svg>
+    </div>
+
+    <!-- Мониторинговый календарь -->
+    <div class="card">
+      <div class="card-title">📅 Тепловая карта замеров (последние 26 недель)</div>
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Количество замеров в неделю · темнее = больше замеров</div>
+      <div style="display:grid;grid-template-columns:repeat(26,1fr);gap:3px;margin-bottom:8px">
+        <!-- 26 weeks of monitoring density -->
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.08);border-radius:2px" title="0"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.12);border-radius:2px" title="5"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.25);border-radius:2px" title="22"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.45);border-radius:2px" title="40"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.70);border-radius:2px" title="60"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,1.0);border-radius:2px" title="87"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.80);border-radius:2px" title="70"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.60);border-radius:2px" title="52"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.08);border-radius:2px" title="2"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.90);border-radius:2px" title="78"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,1.0);border-radius:2px" title="87"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.70);border-radius:2px" title="61"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.55);border-radius:2px" title="48"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.40);border-radius:2px" title="35"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,1.0);border-radius:2px" title="87"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.85);border-radius:2px" title="74"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.65);border-radius:2px" title="57"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.08);border-radius:2px" title="0"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.80);border-radius:2px" title="70"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,1.0);border-radius:2px" title="87"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.90);border-radius:2px" title="79"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.75);border-radius:2px" title="65"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,1.0);border-radius:2px" title="85"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.90);border-radius:2px" title="79"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.80);border-radius:2px" title="70"></div>
+        <div style="aspect-ratio:1;background:rgba(63,184,80,.45);border-radius:2px" title="38 (тек.)"></div>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;font-size:10px;color:var(--txt3)">
+        <span>Меньше</span>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(63,184,80,.08)"></div>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(63,184,80,.3)"></div>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(63,184,80,.6)"></div>
+        <div style="width:12px;height:12px;border-radius:2px;background:rgba(63,184,80,1)"></div>
+        <span>Больше</span>
+      </div>
+      <div style="margin-top:14px;font-size:11px;color:var(--txt2)">
+        Пропуски: <span style="color:var(--err)">2 недели без замеров</span> · Среднее: 68 замеров/неделю
+      </div>
+    </div>
+  </div>
+
+  <!-- Горизонт-тренд -->
+  <div class="card">
+    <div class="card-title">⛰ Дебит по горизонтам — сравнение периодов</div>
+    <div class="scroll-x">
+    <table class="data-table">
+      <thead>
+        <tr><th>Горизонт</th><th>Точек</th><th>Март 2026</th><th>Апрель 2026</th><th>Май 2026</th><th>Изменение</th><th>График</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>+240</b></td><td>18</td>
+          <td>1.24 л/с</td><td>1.31 л/с</td><td>1.47 л/с</td>
+          <td><span style="color:var(--err)">↑ +18.5%</span></td>
+          <td><svg viewBox="0 0 80 20" width="80" height="20"><polyline points="0,16 40,12 80,6" fill="none" stroke="#ea4335" stroke-width="2"/></svg></td>
+        </tr>
+        <tr>
+          <td><b>+260</b></td><td>22</td>
+          <td>1.56 л/с</td><td>1.49 л/с</td><td>1.52 л/с</td>
+          <td><span style="color:var(--txt3)">→ −2.6%</span></td>
+          <td><svg viewBox="0 0 80 20" width="80" height="20"><polyline points="0,8 40,12 80,10" fill="none" stroke="#8b949e" stroke-width="2"/></svg></td>
+        </tr>
+        <tr>
+          <td><b>+280</b></td><td>15</td>
+          <td>0.98 л/с</td><td>0.87 л/с</td><td>0.76 л/с</td>
+          <td><span style="color:var(--ok)">↓ −22.4%</span></td>
+          <td><svg viewBox="0 0 80 20" width="80" height="20"><polyline points="0,6 40,10 80,16" fill="none" stroke="#3fb850" stroke-width="2"/></svg></td>
+        </tr>
+        <tr>
+          <td><b>+300</b></td><td>12</td>
+          <td>0.72 л/с</td><td>0.80 л/с</td><td>0.91 л/с</td>
+          <td><span style="color:var(--err)">↑ +26.4%</span></td>
+          <td><svg viewBox="0 0 80 20" width="80" height="20"><polyline points="0,15 40,11 80,5" fill="none" stroke="#ea4335" stroke-width="2"/></svg></td>
+        </tr>
+        <tr>
+          <td><b>+320</b></td><td>8</td>
+          <td>0.33 л/с</td><td>0.31 л/с</td><td>0.29 л/с</td>
+          <td><span style="color:var(--ok)">↓ −12.1%</span></td>
+          <td><svg viewBox="0 0 80 20" width="80" height="20"><polyline points="0,6 40,9 80,13" fill="none" stroke="#3fb850" stroke-width="2"/></svg></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     КОНЦЕПЦИЯ C — ЗОНЫ И ДОМЕНЫ
+════════════════════════════════════════════════════════════ -->
+<div id="sec-c" class="section">
+  <div class="concept-chip">Концепция C</div>
+  <div class="section-title">Анализ зон и доменов</div>
+  <div class="section-desc">Пространственная разбивка водопритока по доменам, горизонтам и бортам. Помогает понять где сосредоточены проблемы. Идеально для геологов и горных инженеров.</div>
+
+  <!-- Domain cards -->
+  <div style="font-size:12px;color:var(--txt2);margin-bottom:10px;font-weight:500">Сводка по доменам</div>
+  <div class="grid-auto" style="margin-bottom:16px">
+    <div class="domain-card">
+      <div class="domain-name">Домен-1 <span style="font-weight:400;color:var(--txt2);font-size:11px">22 точки</span></div>
+      <div class="domain-q">1.84 л/с</div>
+      <div class="domain-sub">6.62 м³/ч · ↓ −8%</div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Активная</div><div class="mini-bar"><div class="mini-bar-fill" style="width:73%;background:#3fb850"></div></div><span style="font-size:10px">16</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Иссякает</div><div class="mini-bar"><div class="mini-bar-fill" style="width:18%;background:#f9ab00"></div></div><span style="font-size:10px">4</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Пересохла</div><div class="mini-bar"><div class="mini-bar-fill" style="width:9%;background:#ea4335"></div></div><span style="font-size:10px">2</span></div>
+    </div>
+    <div class="domain-card" style="border-color:rgba(234,67,53,.3)">
+      <div class="domain-name">Домен-3 <span style="font-weight:400;color:var(--txt2);font-size:11px">18 точек</span></div>
+      <div class="domain-q" style="color:var(--err)">1.58 л/с</div>
+      <div class="domain-sub">5.69 м³/ч · <span style="color:var(--err)">↑ +22%</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Активная</div><div class="mini-bar"><div class="mini-bar-fill" style="width:61%;background:#3fb850"></div></div><span style="font-size:10px">11</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Иссякает</div><div class="mini-bar"><div class="mini-bar-fill" style="width:22%;background:#f9ab00"></div></div><span style="font-size:10px">4</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Пересохла</div><div class="mini-bar"><div class="mini-bar-fill" style="width:17%;background:#ea4335"></div></div><span style="font-size:10px">3</span></div>
+    </div>
+    <div class="domain-card">
+      <div class="domain-name">Домен-2 <span style="font-weight:400;color:var(--txt2);font-size:11px">15 точек</span></div>
+      <div class="domain-q">0.81 л/с</div>
+      <div class="domain-sub">2.92 м³/ч · → стабильно</div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Активная</div><div class="mini-bar"><div class="mini-bar-fill" style="width:53%;background:#3fb850"></div></div><span style="font-size:10px">8</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Иссякает</div><div class="mini-bar"><div class="mini-bar-fill" style="width:27%;background:#f9ab00"></div></div><span style="font-size:10px">4</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Пересохла</div><div class="mini-bar"><div class="mini-bar-fill" style="width:20%;background:#ea4335"></div></div><span style="font-size:10px">3</span></div>
+    </div>
+    <div class="domain-card">
+      <div class="domain-name">Домен-4 <span style="font-weight:400;color:var(--txt2);font-size:11px">14 точек</span></div>
+      <div class="domain-q">0.43 л/с</div>
+      <div class="domain-sub">1.55 м³/ч · ↓ −5%</div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Активная</div><div class="mini-bar"><div class="mini-bar-fill" style="width:43%;background:#3fb850"></div></div><span style="font-size:10px">6</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Иссякает</div><div class="mini-bar"><div class="mini-bar-fill" style="width:29%;background:#f9ab00"></div></div><span style="font-size:10px">4</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Пересохла</div><div class="mini-bar"><div class="mini-bar-fill" style="width:29%;background:#ea4335"></div></div><span style="font-size:10px">4</span></div>
+    </div>
+    <div class="domain-card">
+      <div class="domain-name">Домен-5 <span style="font-weight:400;color:var(--txt2);font-size:11px">18 точек</span></div>
+      <div class="domain-q">0.16 л/с</div>
+      <div class="domain-sub">0.58 м³/ч · ↓ −31%</div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Активная</div><div class="mini-bar"><div class="mini-bar-fill" style="width:28%;background:#3fb850"></div></div><span style="font-size:10px">5</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Иссякает</div><div class="mini-bar"><div class="mini-bar-fill" style="width:22%;background:#f9ab00"></div></div><span style="font-size:10px">4</span></div>
+      <div class="mini-bar-row"><div class="mini-bar-label">Пересохла</div><div class="mini-bar"><div class="mini-bar-fill" style="width:50%;background:#ea4335"></div></div><span style="font-size:10px">9</span></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Борт-сравнение -->
+    <div class="card">
+      <div class="card-title">🧭 Распределение по бортам</div>
+      <svg viewBox="0 0 380 200" style="width:100%;display:block">
+        <!-- Background sectors hint -->
+        <text x="190" y="15" fill="#8b949e" font-size="10" text-anchor="middle">Северный борт</text>
+        <text x="190" y="192" fill="#8b949e" font-size="10" text-anchor="middle">Южный борт</text>
+        <text x="18"  y="104" fill="#8b949e" font-size="10" text-anchor="middle" transform="rotate(-90 18 104)">Западный</text>
+        <text x="368" y="104" fill="#8b949e" font-size="10" text-anchor="middle" transform="rotate(90 368 104)">Восточный</text>
+        <!-- Central bars: N S W E -->
+        <!-- North bar -->
+        <rect x="160" y="30" width="60" height="40" fill="#58a6ff" opacity=".7" rx="3"/>
+        <text x="190" y="56" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">1.82 л/с</text>
+        <text x="190" y="68" fill="#8b949e" font-size="9" text-anchor="middle">21 точка</text>
+        <!-- South bar -->
+        <rect x="160" y="130" width="60" height="30" fill="#f9ab00" opacity=".7" rx="3"/>
+        <text x="190" y="150" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">0.98 л/с</text>
+        <text x="190" y="162" fill="#8b949e" font-size="9" text-anchor="middle">14 точек</text>
+        <!-- West bar -->
+        <rect x="60" y="85" width="80" height="30" fill="#3fb850" opacity=".7" rx="3"/>
+        <text x="100" y="105" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">1.47 л/с</text>
+        <text x="100" y="116" fill="#8b949e" font-size="9" text-anchor="middle">27 точек</text>
+        <!-- East bar -->
+        <rect x="240" y="85" width="90" height="50" fill="#ea4335" opacity=".7" rx="3"/>
+        <text x="285" y="112" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">1.55 л/с</text>
+        <text x="285" y="123" fill="#8b949e" font-size="9" text-anchor="middle">25 точек · ↑↑</text>
+        <!-- Center cross -->
+        <line x1="190" y1="70" x2="190" y2="130" stroke="rgba(255,255,255,.1)" stroke-width="1"/>
+        <line x1="140" y1="100" x2="240" y2="100" stroke="rgba(255,255,255,.1)" stroke-width="1"/>
+      </svg>
+    </div>
+
+    <!-- Матрица Домен × Статус -->
+    <div class="card">
+      <div class="card-title">🔢 Матрица: Домен × Статус (кол-во точек)</div>
+      <div class="scroll-x">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Домен</th>
+            <th style="color:#3fb850">Активная</th>
+            <th style="color:#58a6ff">Паводковая</th>
+            <th style="color:#f9ab00">Иссякает</th>
+            <th style="color:#ea4335">Пересохла</th>
+            <th style="color:#8b949e">Всего</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>Домен-1</b></td><td class="heat-4">16</td><td class="heat-1">2</td><td class="heat-2">4</td><td class="heat-1">2</td><td><b>24</b></td></tr>
+          <tr><td><b>Домен-2</b></td><td class="heat-3">8</td><td class="heat-1">1</td><td class="heat-2">4</td><td class="heat-2">3</td><td><b>16</b></td></tr>
+          <tr><td><b>Домен-3</b></td><td class="heat-3">11</td><td class="heat-0">0</td><td class="heat-2">4</td><td class="heat-2">3</td><td><b>18</b></td></tr>
+          <tr><td><b>Домен-4</b></td><td class="heat-2">6</td><td class="heat-1">1</td><td class="heat-2">4</td><td class="heat-2">4</td><td><b>15</b></td></tr>
+          <tr><td><b>Домен-5</b></td><td class="heat-1">5</td><td class="heat-0">0</td><td class="heat-2">4</td><td class="heat-4">9</td><td><b>18</b></td></tr>
+          <tr style="background:rgba(255,255,255,.03)"><td><b>Итого</b></td><td><b>46</b></td><td><b>4</b></td><td><b>20</b></td><td><b>21</b></td><td><b>91</b></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div style="margin-top:14px">
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:8px">Дебит (л/с) по домену</div>
+        <div class="pbar-wrap" style="margin-bottom:6px"><span style="width:60px;color:var(--txt1)">Домен-1</span><div class="pbar"><div class="pbar-fill" style="width:38%;background:#58a6ff"></div></div><span>1.84</span></div>
+        <div class="pbar-wrap" style="margin-bottom:6px"><span style="width:60px;color:var(--txt1)">Домен-3</span><div class="pbar"><div class="pbar-fill" style="width:33%;background:#ea4335"></div></div><span style="color:var(--err)">1.58 ↑</span></div>
+        <div class="pbar-wrap" style="margin-bottom:6px"><span style="width:60px;color:var(--txt1)">Домен-2</span><div class="pbar"><div class="pbar-fill" style="width:17%;background:#3fb850"></div></div><span>0.81</span></div>
+        <div class="pbar-wrap" style="margin-bottom:6px"><span style="width:60px;color:var(--txt1)">Домен-4</span><div class="pbar"><div class="pbar-fill" style="width:9%;background:#f9ab00"></div></div><span>0.43</span></div>
+        <div class="pbar-wrap"><span style="width:60px;color:var(--txt1)">Домен-5</span><div class="pbar"><div class="pbar-fill" style="width:3%;background:#8b949e"></div></div><span>0.16</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     КОНЦЕПЦИЯ D — СКВАЖИНЫ
+════════════════════════════════════════════════════════════ -->
+<div id="sec-d" class="section">
+  <div class="concept-chip">Концепция D</div>
+  <div class="section-title">Аналитика скважин</div>
+  <div class="section-desc">Отдельный блок для горизонтальных скважин: дебит по каждой, динамика замеров, сравнение скважин между собой. Сейчас аналитика по скважинам отсутствует полностью.</div>
+
+  <!-- Well KPIs -->
+  <div class="grid-4" style="margin-bottom:16px">
+    <div class="kpi">
+      <div class="kpi-label">Скважин всего</div>
+      <div class="kpi-val" style="color:var(--blue)">12</div>
+      <div class="kpi-sub">9 активных · 3 сухих</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Суммарный Q скважин</div>
+      <div class="kpi-val" style="color:var(--warn)">8.3 <span style="font-size:16px;font-weight:400">л/с</span></div>
+      <div class="kpi-sub">29.9 м³/ч</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Средняя глубина</div>
+      <div class="kpi-val" style="color:var(--txt1)">485 <span style="font-size:16px;font-weight:400">м</span></div>
+      <div class="kpi-sub">мин: 210 · макс: 820</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Замеров за месяц</div>
+      <div class="kpi-val" style="color:var(--ok)">34</div>
+      <div class="kpi-sub">по 9 скважинам</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Well list with mini-charts -->
+    <div class="card">
+      <div class="card-title">🕳 Рейтинг скважин по дебиту</div>
+      <div class="well-stat-row">
+        <div style="flex:1">
+          <div class="well-name">HBS-04 <span class="pill pill-green" style="font-size:10px">Активная</span></div>
+          <div class="well-depth">глубина 620 м · аз. 135° · нак. 6°</div>
+        </div>
+        <svg viewBox="0 0 80 24" width="80"><polyline points="0,20 20,16 40,14 60,12 80,8" fill="none" stroke="#3fb850" stroke-width="1.8"/></svg>
+        <div style="width:70px;text-align:right">
+          <div style="font-size:16px;font-weight:700;color:#58a6ff">2.14</div>
+          <div style="font-size:10px;color:var(--txt2)">л/с</div>
+        </div>
+      </div>
+      <div class="well-stat-row">
+        <div style="flex:1">
+          <div class="well-name">HBS-07 <span class="pill pill-green" style="font-size:10px">Активная</span></div>
+          <div class="well-depth">глубина 820 м · аз. 280° · нак. 8°</div>
+        </div>
+        <svg viewBox="0 0 80 24" width="80"><polyline points="0,18 20,15 40,18 60,14 80,10" fill="none" stroke="#3fb850" stroke-width="1.8"/></svg>
+        <div style="width:70px;text-align:right">
+          <div style="font-size:16px;font-weight:700;color:#58a6ff">1.87</div>
+          <div style="font-size:10px;color:var(--txt2)">л/с</div>
+        </div>
+      </div>
+      <div class="well-stat-row">
+        <div style="flex:1">
+          <div class="well-name">HBS-01 <span class="pill pill-yellow" style="font-size:10px">Иссякает</span></div>
+          <div class="well-depth">глубина 540 м · аз. 90° · нак. 5°</div>
+        </div>
+        <svg viewBox="0 0 80 24" width="80"><polyline points="0,8 20,10 40,14 60,18 80,21" fill="none" stroke="#f9ab00" stroke-width="1.8"/></svg>
+        <div style="width:70px;text-align:right">
+          <div style="font-size:16px;font-weight:700;color:#f9ab00">1.22</div>
+          <div style="font-size:10px;color:var(--txt2)">л/с ↓</div>
+        </div>
+      </div>
+      <div class="well-stat-row">
+        <div style="flex:1">
+          <div class="well-name">HBS-09 <span class="pill pill-green" style="font-size:10px">Активная</span></div>
+          <div class="well-depth">глубина 480 м · аз. 225° · нак. 7°</div>
+        </div>
+        <svg viewBox="0 0 80 24" width="80"><polyline points="0,20 20,19 40,18 60,17 80,16" fill="none" stroke="#8b949e" stroke-width="1.8"/></svg>
+        <div style="width:70px;text-align:right">
+          <div style="font-size:16px;font-weight:700;color:#58a6ff">0.95</div>
+          <div style="font-size:10px;color:var(--txt2)">л/с</div>
+        </div>
+      </div>
+      <div class="well-stat-row" style="border-bottom:none">
+        <div style="flex:1">
+          <div class="well-name">HBS-03 <span class="pill pill-red" style="font-size:10px">Сухая</span></div>
+          <div class="well-depth">глубина 210 м · аз. 45°</div>
+        </div>
+        <svg viewBox="0 0 80 24" width="80"><polyline points="0,10 20,14 40,18 60,21 80,22" fill="none" stroke="#ea4335" stroke-width="1.8"/></svg>
+        <div style="width:70px;text-align:right">
+          <div style="font-size:16px;font-weight:700;color:var(--txt3)">0.00</div>
+          <div style="font-size:10px;color:var(--txt2)">л/с</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Well trend chart -->
+    <div class="card">
+      <div class="card-title">📈 Динамика дебита скважин (HBS-04 и HBS-07)</div>
+      <svg viewBox="0 0 400 190" style="width:100%;display:block">
+        <defs>
+          <linearGradient id="g4" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#58a6ff" stop-opacity=".2"/>
+            <stop offset="100%" stop-color="#58a6ff" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line x1="40" y1="10" x2="40" y2="155" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <line x1="40" y1="50" x2="390" y2="50"  stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <line x1="40" y1="90" x2="390" y2="90"  stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <line x1="40" y1="130" x2="390" y2="130" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <line x1="40" y1="155" x2="390" y2="155" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+        <text x="35" y="53"  fill="#6e7681" font-size="9" text-anchor="end">2.5</text>
+        <text x="35" y="93"  fill="#6e7681" font-size="9" text-anchor="end">1.5</text>
+        <text x="35" y="133" fill="#6e7681" font-size="9" text-anchor="end">0.5</text>
+        <!-- HBS-04 area -->
+        <polygon points="60,130 110,120 160,110 210,100 260,90 310,80 360,72 360,155 60,155" fill="url(#g4)"/>
+        <!-- HBS-04 line -->
+        <polyline points="60,130 110,120 160,110 210,100 260,90 310,80 360,72" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- HBS-07 line -->
+        <polyline points="60,120 110,125 160,115 210,118 260,110 310,105 360,98" fill="none" stroke="#3fb850" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6,3"/>
+        <!-- Dots HBS-04 -->
+        <circle cx="60"  cy="130" r="3" fill="#58a6ff"/>
+        <circle cx="160" cy="110" r="3" fill="#58a6ff"/>
+        <circle cx="260" cy="90"  r="3" fill="#58a6ff"/>
+        <circle cx="360" cy="72"  r="3" fill="#58a6ff"/>
+        <!-- X labels -->
+        <text x="60"  y="168" fill="#6e7681" font-size="8" text-anchor="middle">дек'25</text>
+        <text x="160" y="168" fill="#6e7681" font-size="8" text-anchor="middle">фев'26</text>
+        <text x="260" y="168" fill="#6e7681" font-size="8" text-anchor="middle">апр'26</text>
+        <text x="360" y="168" fill="#6e7681" font-size="8" text-anchor="middle">май'26</text>
+        <!-- Legend -->
+        <line x1="40" y1="178" x2="65" y2="178" stroke="#58a6ff" stroke-width="2.5"/>
+        <text x="70" y="181" fill="#8b949e" font-size="9">HBS-04 (2.14 л/с)</text>
+        <line x1="170" y1="178" x2="195" y2="178" stroke="#3fb850" stroke-width="2" stroke-dasharray="5,2"/>
+        <text x="200" y="181" fill="#8b949e" font-size="9">HBS-07 (1.87 л/с)</text>
+      </svg>
+      <div style="margin-top:4px;padding:10px;background:rgba(255,255,255,.03);border-radius:6px;font-size:12px">
+        <b>Вывод:</b> HBS-04 показывает стабильный рост (+28% за 6 мес). Рекомендуется проверить состояние скважины.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+</script>
+</body>
+</html>
