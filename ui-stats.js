@@ -57,6 +57,57 @@ function _anlSparkPoints(values, w, h) {
   }).join(' ');
 }
 
+// Converts "x1,y1 x2,y2 ..." coordinate string into a smooth Catmull-Rom bezier SVG path
+function _anlPtsToSmooth(ptsStr) {
+  if (!ptsStr) return '';
+  var coords = ptsStr.trim().split(' ').map(function(p) {
+    var xy = p.split(',');
+    return { x: parseFloat(xy[0]), y: parseFloat(xy[1]) };
+  }).filter(function(c) { return !isNaN(c.x) && !isNaN(c.y); });
+  if (!coords.length) return '';
+  if (coords.length === 1) return 'M' + coords[0].x.toFixed(1) + ',' + coords[0].y.toFixed(1);
+  var d = 'M' + coords[0].x.toFixed(1) + ',' + coords[0].y.toFixed(1);
+  for (var i = 0; i < coords.length - 1; i++) {
+    var p0 = coords[Math.max(i - 1, 0)];
+    var p1 = coords[i];
+    var p2 = coords[i + 1];
+    var p3 = coords[Math.min(i + 2, coords.length - 1)];
+    var cp1x = p1.x + (p2.x - p0.x) / 6;
+    var cp1y = p1.y + (p2.y - p0.y) / 6;
+    var cp2x = p2.x - (p3.x - p1.x) / 6;
+    var cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ' C' + cp1x.toFixed(1) + ',' + cp1y.toFixed(1) + ' ' + cp2x.toFixed(1) + ',' + cp2y.toFixed(1) + ' ' + p2.x.toFixed(1) + ',' + p2.y.toFixed(1);
+  }
+  return d;
+}
+
+// Returns well measurements that fall within the monitoring period for a given date
+function _anlGetWellMeasurementsForDate(meas, date) {
+  if (!meas || !date) return [];
+  var dates = getAllMonitoringDates(); // newest first
+  var idx = dates.indexOf(date);
+  var prevDate = (idx >= 0 && idx < dates.length - 1) ? dates[idx + 1] : '';
+  return meas.filter(function(m) {
+    var d = (m.measurementDate || '').slice(0, 10);
+    return d <= date && (prevDate === '' || d > prevDate);
+  });
+}
+
+// Loads measurements for all wells that haven't been fetched yet
+function _anlEnsureWellMeasurements() {
+  var wells = (typeof WellsState !== 'undefined') ? WellsState.list : [];
+  if (!wells.length) return Promise.resolve();
+  var toLoad = wells.filter(function(w) { return !WellsState.measurements[w.id]; });
+  if (!toLoad.length) return Promise.resolve();
+  return Promise.all(toLoad.map(function(w) {
+    return Api.getWellMeasurements(w.id).then(function(meas) {
+      WellsState.measurements[w.id] = meas;
+    }).catch(function() {
+      WellsState.measurements[w.id] = [];
+    });
+  }));
+}
+
 // ── Инициализация фильтров ───────────────────────────────────
 
 function initStatsFilters() {
@@ -150,6 +201,10 @@ function renderStatsPage() {
   _anlRenderWalls();
   _anlRenderHorizons();
   _anlRenderWells();
+  _anlEnsureWellMeasurements().then(function() {
+    _anlRenderWells();
+    _anlRenderKpis();
+  });
 }
 
 // ── KPI-строка ───────────────────────────────────────────────
@@ -161,7 +216,24 @@ function _anlRenderKpis() {
 
   var totalQ = _anlTotalQ(pts);
   var prevQ  = _anlTotalQ(prevPts);
-  var qDiff  = prevQ > 0 ? ((totalQ - prevQ) / prevQ * 100) : null;
+
+  // Wells Q for the current and previous monitoring period
+  var wells = (typeof WellsState !== 'undefined') ? WellsState.list : [];
+  var wellsQ = 0, prevWellsQ = 0;
+  wells.forEach(function(w) {
+    var meas = WellsState.measurements[w.id];
+    if (meas) {
+      var wm = _anlGetWellMeasurementsForDate(meas, _anlDate);
+      if (wm.length) { var f = parseFloat(wm[wm.length - 1].flowRate); if (!isNaN(f) && f > 0) wellsQ += f; }
+      if (_anlCompare) {
+        var pm = _anlGetWellMeasurementsForDate(meas, _anlCompare);
+        if (pm.length) { var pf = parseFloat(pm[pm.length - 1].flowRate); if (!isNaN(pf) && pf > 0) prevWellsQ += pf; }
+      }
+    }
+  });
+  var combinedQ = totalQ + wellsQ;
+  var prevCombinedQ = prevQ + prevWellsQ;
+  var qDiff  = prevCombinedQ > 0 ? ((combinedQ - prevCombinedQ) / prevCombinedQ * 100) : null;
 
   var active = pts.filter(function(p) { return p.status === 'Активная' || p.status === 'Паводковая' || p.status === 'Перелив'; }).length;
   var drying = pts.filter(function(p) { return p.status === 'Иссякает'; }).length;
@@ -191,11 +263,14 @@ function _anlRenderKpis() {
 
   function kpi(lbl, val, sub, trend, sparkPts, color, areaClr) {
     var sp = sparkPts ? sparkPts : '';
-    var poly = sp ? '<polyline points="' + sp + '" fill="none" stroke="' + color + '" stroke-width="1.8"/>' : '';
-    var area = sp ? (function() {
-      var last = sp.split(' ').pop().split(',')[0];
-      return '<polygon points="' + sp + ' ' + last + ',32 0,32" fill="' + areaClr + '" stroke="none"/>';
-    })() : '';
+    var linePath = sp ? _anlPtsToSmooth(sp) : '';
+    var poly = linePath ? '<path d="' + linePath + '" fill="none" stroke="' + color + '" stroke-width="1.8"/>' : '';
+    var area = '';
+    if (linePath) {
+      var pts2 = sp.trim().split(' ');
+      var lastX = pts2[pts2.length - 1].split(',')[0];
+      area = '<path d="' + linePath + ' L' + lastX + ',32 L0,32 Z" fill="' + areaClr + '" stroke="none"/>';
+    }
     return '<div class="anl-kpi">' +
       '<div class="anl-kpi-lbl">' + lbl + '</div>' +
       '<div class="anl-kpi-val" style="color:' + color + '">' + val + '</div>' +
@@ -205,13 +280,16 @@ function _anlRenderKpis() {
     '</div>';
   }
 
+  var qSubParts = ['т: ' + totalQ.toFixed(2)];
+  if (wellsQ > 0) qSubParts.push('скв: ' + wellsQ.toFixed(2));
+
   el.innerHTML =
     kpi('Всего точек', pts.length,
         'активных: ' + active,
         '<span class="anl-eq">→ без изм.</span>',
         _anlSparkPoints(covVals, 120, 32), '#58a6ff', 'rgba(88,166,255,.07)') +
-    kpi('Суммарный дебит', totalQ.toFixed(2) + ' <small>л/с</small>',
-        lpsToM3h(totalQ).toFixed(2) + ' м³/ч',
+    kpi('Суммарный дебит', combinedQ.toFixed(2) + ' <small>л/с</small>',
+        qSubParts.join(' · ') + ' · ' + lpsToM3h(combinedQ).toFixed(2) + ' м³/ч',
         trendHtml(qDiff, false),
         _anlSparkPoints(qVals, 120, 32), '#f9ab00', 'rgba(249,171,0,.07)') +
     kpi('Иссякающих', drying,
@@ -248,7 +326,8 @@ function _anlRenderTrend() {
   }).join('');
 
   var linePts = periods.map(function(p, i) { return px(i).toFixed(1) + ',' + py(p.totalQ).toFixed(1); }).join(' ');
-  var areaPts = linePts + ' ' + px(n - 1).toFixed(1) + ',' + (PT + cH) + ' ' + PL + ',' + (PT + cH);
+  var smoothLine = _anlPtsToSmooth(linePts);
+  var areaPts = smoothLine + ' L' + px(n - 1).toFixed(1) + ',' + (PT + cH) + ' L' + PL + ',' + (PT + cH) + ' Z';
 
   var dots = periods.map(function(p, i) {
     var isCur = p.date === _anlDate, isCmp = p.date === _anlCompare;
@@ -271,8 +350,8 @@ function _anlRenderTrend() {
     '</linearGradient></defs>' +
     grid +
     '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
-    '<polygon points="' + areaPts + '" fill="url(#anlTG)"/>' +
-    '<polyline points="' + linePts + '" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>' +
+    '<path d="' + areaPts + '" fill="url(#anlTG)"/>' +
+    '<path d="' + smoothLine + '" fill="none" stroke="#58a6ff" stroke-width="2.5"/>' +
     dots + xLbls + legend +
     '<text x="14" y="' + (PT + cH / 2) + '" fill="#6e7681" font-size="9" text-anchor="middle" transform="rotate(-90 14 ' + (PT + cH / 2) + ')">л/с</text>' +
   '</svg>';
@@ -524,10 +603,14 @@ function _anlRenderWalls() {
   if (!el) return;
   var pts = _anlCurrentPts();
   var wallDefs = [
-    { key: 'Северный', lbl: 'Северный', clr: '#58a6ff' },
-    { key: 'Южный',    lbl: 'Южный',    clr: '#f9ab00' },
-    { key: 'Западный', lbl: 'Западный', clr: '#3fb950' },
-    { key: 'Восточный',lbl: 'Восточный',clr: '#ea4335' },
+    { key: 'Северный',         lbl: 'Северный',         clr: '#58a6ff' },
+    { key: 'Северо-восточный', lbl: 'Северо-восточный', clr: '#7ecfff' },
+    { key: 'Восточный',        lbl: 'Восточный',        clr: '#ea4335' },
+    { key: 'Юго-восточный',    lbl: 'Юго-восточный',   clr: '#ff7961' },
+    { key: 'Южный',            lbl: 'Южный',            clr: '#f9ab00' },
+    { key: 'Юго-западный',     lbl: 'Юго-западный',    clr: '#ffcc57' },
+    { key: 'Западный',         lbl: 'Западный',         clr: '#3fb950' },
+    { key: 'Северо-западный',  lbl: 'Северо-западный', clr: '#85e89d' },
   ];
   var wStats = {}; wallDefs.forEach(function(w) { wStats[w.key] = { count: 0, q: 0 }; });
   var other  = { count: 0, q: 0 };
@@ -626,16 +709,19 @@ function _anlRenderWells() {
     var dry     = wells.filter(function(w) { return w.status === 'Сухая'; }).length;
     var depths  = wells.filter(function(w) { return w.depth > 0; }).map(function(w) { return w.depth; });
     var avgD    = depths.length ? Math.round(depths.reduce(function(a, b) { return a + b; }, 0) / depths.length) : 0;
-    var totalQ  = 0;
+    var wTotalQ = 0;
     wells.forEach(function(w) {
-      var m = WellsState.measurements[w.id];
-      if (m && m.length) { var f = parseFloat(m[0].flowRate); if (!isNaN(f) && f > 0) totalQ += f; }
+      var meas = WellsState.measurements[w.id];
+      if (meas) {
+        var wm = _anlGetWellMeasurementsForDate(meas, _anlDate);
+        if (wm.length) { var f = parseFloat(wm[wm.length - 1].flowRate); if (!isNaN(f) && f > 0) wTotalQ += f; }
+      }
     });
     var loaded = Object.keys(WellsState.measurements).length;
 
     kpiEl.innerHTML =
       '<div class="anl-kpi"><div class="anl-kpi-lbl">Скважин всего</div><div class="anl-kpi-val" style="color:var(--gold)">' + wells.length + '</div><div class="anl-kpi-sub">' + active + ' акт. · ' + dry + ' сухих</div></div>' +
-      '<div class="anl-kpi"><div class="anl-kpi-lbl">Q скважин сумм.</div><div class="anl-kpi-val" style="color:var(--warn)">' + totalQ.toFixed(2) + ' <small>л/с</small></div><div class="anl-kpi-sub">' + lpsToM3h(totalQ).toFixed(2) + ' м³/ч</div></div>' +
+      '<div class="anl-kpi"><div class="anl-kpi-lbl">Q скважин сумм.</div><div class="anl-kpi-val" style="color:var(--warn)">' + wTotalQ.toFixed(2) + ' <small>л/с</small></div><div class="anl-kpi-sub">' + lpsToM3h(wTotalQ).toFixed(2) + ' м³/ч · за неделю</div></div>' +
       '<div class="anl-kpi"><div class="anl-kpi-lbl">Средняя глубина</div><div class="anl-kpi-val">' + (avgD || '—') + ' <small>' + (avgD ? 'м' : '') + '</small></div><div class="anl-kpi-sub">мин: ' + (Math.min.apply(null, depths.length ? depths : [0]) || '—') + ' · макс: ' + (Math.max.apply(null, depths.length ? depths : [0]) || '—') + '</div></div>' +
       '<div class="anl-kpi"><div class="anl-kpi-lbl">Замеры загружены</div><div class="anl-kpi-val" style="color:var(--ok)">' + loaded + '</div><div class="anl-kpi-sub">из ' + wells.length + ' скважин</div></div>';
   }
@@ -646,23 +732,27 @@ function _anlRenderWells() {
     var sorted = wells.slice().sort(function(a, b) {
       var qa = 0, qb = 0;
       var ma = WellsState.measurements[a.id], mb = WellsState.measurements[b.id];
-      if (ma && ma.length) { var fa = parseFloat(ma[0].flowRate); if (!isNaN(fa)) qa = fa; }
-      if (mb && mb.length) { var fb = parseFloat(mb[0].flowRate); if (!isNaN(fb)) qb = fb; }
+      if (ma) { var wma = _anlGetWellMeasurementsForDate(ma, _anlDate); if (wma.length) { var fa = parseFloat(wma[wma.length - 1].flowRate); if (!isNaN(fa)) qa = fa; } }
+      if (mb) { var wmb = _anlGetWellMeasurementsForDate(mb, _anlDate); if (wmb.length) { var fb = parseFloat(wmb[wmb.length - 1].flowRate); if (!isNaN(fb)) qb = fb; } }
       return qb - qa;
     });
     var sPills = { 'Активная': 'pg', 'Иссякает': 'py', 'Сухая': 'pr' };
 
     listEl.innerHTML = sorted.slice(0, 8).map(function(w) {
       var meas = WellsState.measurements[w.id];
-      var q = 0; if (meas && meas.length) { var fq = parseFloat(meas[0].flowRate); if (!isNaN(fq) && fq > 0) q = fq; }
+      var q = 0;
+      if (meas) {
+        var wm = _anlGetWellMeasurementsForDate(meas, _anlDate);
+        if (wm.length) { var fq = parseFloat(wm[wm.length - 1].flowRate); if (!isNaN(fq) && fq > 0) q = fq; }
+      }
       var pill = sPills[w.status] || 'p_';
       var spark = '';
       if (meas && meas.length >= 2) {
-        var vals = meas.slice(0, 6).reverse().map(function(m) { return parseFloat(m.flowRate) || 0; });
+        var vals = meas.slice(-6).map(function(m) { return parseFloat(m.flowRate) || 0; });
         var maxV = Math.max.apply(null, vals) || 1;
         var spts = vals.map(function(v, i) { return (i / (vals.length - 1) * 70).toFixed(1) + ',' + ((1 - v / maxV) * 20 + 1).toFixed(1); }).join(' ');
         var sclr = vals[vals.length - 1] >= vals[0] ? '#ea4335' : '#3fb950';
-        spark = '<svg viewBox="0 0 70 22" width="70" height="22"><polyline points="' + spts + '" fill="none" stroke="' + sclr + '" stroke-width="1.8"/></svg>';
+        spark = '<svg viewBox="0 0 70 22" width="70" height="22"><path d="' + _anlPtsToSmooth(spts) + '" fill="none" stroke="' + sclr + '" stroke-width="1.8"/></svg>';
       } else {
         spark = '<svg viewBox="0 0 70 22" width="70" height="22"><line x1="0" y1="11" x2="70" y2="11" stroke="rgba(255,255,255,.1)" stroke-width="1.5" stroke-dasharray="3,3"/></svg>';
       }
@@ -683,7 +773,7 @@ function _anlRenderWells() {
     }).slice(0, 3);
 
     if (!withMeas.length) {
-      trendEl.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">Откройте скважины в разделе «Скважины» для загрузки истории</p>';
+      trendEl.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">Замеры по скважинам загружаются…</p>';
       return;
     }
 
@@ -716,7 +806,8 @@ function _anlRenderWells() {
       var clr = clrs[si], mMap = {};
       WellsState.measurements[w.id].forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
       var spts = allD.map(function(d, i) { return mMap[d] != null ? px(i).toFixed(1) + ',' + py(mMap[d]).toFixed(1) : null; }).filter(Boolean).join(' ');
-      return '<polyline points="' + spts + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round"' + (si > 0 ? ' stroke-dasharray="' + (si * 4 + 4) + ',3"' : '') + '/>';
+      var dashAttr = si > 0 ? ' stroke-dasharray="' + (si * 4 + 4) + ',3"' : '';
+      return '<path d="' + _anlPtsToSmooth(spts) + '" fill="none" stroke="' + clr + '" stroke-width="2"' + dashAttr + '/>';
     }).join('');
 
     var step = Math.ceil(n / 5);
