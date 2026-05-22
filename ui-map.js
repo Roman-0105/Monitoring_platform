@@ -1634,25 +1634,18 @@ function openAddFormFromPoi(p) {
   var old = document.getElementById('poi-add-meas-modal');
   if (old) old.remove();
 
-  // Список сотрудников
   var workers = (typeof Workers !== 'undefined') ? Workers.getList() : [];
   var currentWorker = AppState.currentUser ? (AppState.currentUser.displayName || '') : '';
   var workerOpts = workers.map(function(w) {
     return '<option value="' + escAttr(w.name) + '"' + (w.name === currentWorker ? ' selected' : '') + '>' + escHTML(w.name) + '</option>';
-  }).join('');
-  if (!workerOpts) workerOpts = '<option value="">— выберите —</option>';
+  }).join('') || '<option value="">— выберите —</option>';
 
-  // Опции из существующих select-ов (чтобы не дублировать)
   function cloneOpts(id) {
     var el = document.getElementById(id);
     return el ? el.innerHTML : '<option value="">—</option>';
   }
-  var domainOpts   = cloneOpts('f-domain');
-  var statusOpts   = cloneOpts('f-status');
-  var intensityOpts = cloneOpts('f-intensity');
-  var wallOpts     = cloneOpts('f-wall');
-  var measureOpts  = cloneOpts('f-measure');
-  var colorOpts    = cloneOpts('f-color');
+
+  var CS = 'width:100%;box-sizing:border-box';  // common input style shortcut
 
   var modal = document.createElement('div');
   modal.id = 'poi-add-meas-modal';
@@ -1660,93 +1653,116 @@ function openAddFormFromPoi(p) {
     'display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 10px';
 
   modal.innerHTML = [
-    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:20px;width:min(480px,100%);',
-      'border:1px solid rgba(255,255,255,.08);margin:auto">',
+    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:20px;',
+      'width:min(720px,95vw);border:1px solid rgba(255,255,255,.08);margin:auto">',
 
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">',
+    // ── Заголовок
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">',
       '<span style="font-size:15px;font-weight:600">+ Замер · Точка №' + escHTML(String(p.pointNumber || '?')) + '</span>',
       '<button id="pam-close" style="background:none;border:none;color:var(--txt-2);font-size:20px;cursor:pointer;line-height:1">✕</button>',
     '</div>',
 
+    // ── Двухпанельный layout: форма | фото
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">',
+
+    // ── Левая панель: поля формы
+    '<div style="flex:1;min-width:260px">',
+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Дата замера</label>',
-        '<input id="pm-monitoring-date" type="date" class="form-control" value="' + todayISO() + '" style="width:100%;box-sizing:border-box"></div>',
+        '<input id="pm-monitoring-date" type="date" class="form-control" value="' + todayISO() + '" style="' + CS + '"></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Сотрудник</label>',
-        '<select id="pm-worker" class="form-control" style="width:100%;box-sizing:border-box">' + workerOpts + '</select></div>',
+        '<select id="pm-worker" class="form-control" style="' + CS + '">' + workerOpts + '</select></div>',
     '</div>',
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Статус</label>',
-        '<select id="pm-status" class="form-control" style="width:100%;box-sizing:border-box">' + statusOpts + '</select></div>',
+        '<select id="pm-status" class="form-control" style="' + CS + '">' + cloneOpts('f-status') + '</select></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Интенсивность</label>',
-        '<select id="pm-intensity" class="form-control" style="width:100%;box-sizing:border-box">' + intensityOpts + '</select></div>',
+        '<select id="pm-intensity" class="form-control" style="' + CS + '">' + cloneOpts('f-intensity') + '</select></div>',
     '</div>',
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Дебит, л/с</label>',
-        '<input id="pm-flowrate" type="number" step="any" min="0" class="form-control" placeholder="0.00"',
-          ' style="width:100%;box-sizing:border-box"></div>',
+        '<input id="pm-flowrate" type="number" step="any" min="0" class="form-control" placeholder="0.00" style="' + CS + '"></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Метод замера</label>',
-        '<select id="pm-measure" class="form-control" style="width:100%;box-sizing:border-box">' + measureOpts + '</select></div>',
+        '<select id="pm-measure" class="form-control" style="' + CS + '">' + cloneOpts('f-measure') + '</select></div>',
     '</div>',
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Домен</label>',
-        '<select id="pm-domain" class="form-control" style="width:100%;box-sizing:border-box">' + domainOpts + '</select></div>',
+        '<select id="pm-domain" class="form-control" style="' + CS + '">' + cloneOpts('f-domain') + '</select></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Борт</label>',
-        '<select id="pm-wall" class="form-control" style="width:100%;box-sizing:border-box">' + wallOpts + '</select></div>',
+        '<select id="pm-wall" class="form-control" style="' + CS + '">' + cloneOpts('f-wall') + '</select></div>',
     '</div>',
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Горизонт</label>',
         '<input id="pm-horizon" type="text" class="form-control" value="' + escAttr(p.horizon || '') + '"',
-          ' list="horizons-datalist" style="width:100%;box-sizing:border-box"></div>',
+          ' list="horizons-datalist" style="' + CS + '"></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Цвет воды</label>',
-        '<select id="pm-color" class="form-control" style="width:100%;box-sizing:border-box">' + colorOpts + '</select></div>',
+        '<select id="pm-color" class="form-control" style="' + CS + '">' + cloneOpts('f-color') + '</select></div>',
     '</div>',
 
-    '<div class="form-group" style="margin-bottom:10px"><label class="form-label">Комментарий</label>',
-      '<textarea id="pm-comment" class="form-control" rows="2"',
-        ' style="width:100%;box-sizing:border-box;resize:vertical"></textarea></div>',
+    '<div class="form-group" style="margin-bottom:0"><label class="form-label">Комментарий</label>',
+      '<textarea id="pm-comment" class="form-control" rows="2" style="' + CS + ';resize:vertical"></textarea></div>',
 
-    '<div class="form-group" style="margin-bottom:14px"><label class="form-label">Фото</label>',
-      '<div id="pm-photo-preview" style="margin-bottom:6px"></div>',
+    '</div>', // конец левой панели
+
+    // ── Правая панель: фото
+    '<div class="photo-panel" style="flex:0 0 185px">',
+      '<div class="form-label">Фото</div>',
+
+      // Область превью
+      '<div class="photo-panel-preview" id="pm-photo-preview">',
+        '<span style="font-size:11px;color:rgba(180,190,210,.35);text-align:center;padding:8px">Нет фото</span>',
+      '</div>',
+
+      // Кнопка-ярлык: камера
+      '<label for="pm-photo-cam" class="photo-pick-btn btn btn-sm btn-outline"',
+        ' style="justify-content:center;width:100%;box-sizing:border-box">',
+        '📷 Сделать фото',
+      '</label>',
+      '<input type="file" id="pm-photo-cam" accept="image/*" capture="environment" class="photo-file-input">',
+
+      // Кнопка-ярлык: галерея
+      '<label for="pm-photo-gal" class="photo-pick-btn btn btn-sm btn-outline"',
+        ' style="justify-content:center;width:100%;box-sizing:border-box">',
+        '🖼 Из галереи',
+      '</label>',
+      '<input type="file" id="pm-photo-gal" accept="image/*" class="photo-file-input">',
+
       '<div id="pm-photo-progress" style="display:none"></div>',
-      '<input type="file" id="pm-photo" accept="image/*"',
-        ' style="position:fixed;top:-200px;left:-200px;opacity:0;width:1px;height:1px;overflow:hidden">',
-      '<button type="button" id="pm-photo-btn" class="btn btn-sm btn-outline">📷 Загрузить фото</button>',
     '</div>',
 
+    '</div>', // конец flex-wrap
+
+    // Скрытые поля координат / идентификатора
     '<input type="hidden" id="pm-num"    value="' + escAttr(String(p.pointNumber || '')) + '">',
     '<input type="hidden" id="pm-lat"    value="' + (p.lat    != null ? p.lat    : '') + '">',
     '<input type="hidden" id="pm-lon"    value="' + (p.lon    != null ? p.lon    : '') + '">',
     '<input type="hidden" id="pm-xlocal" value="' + (p.xLocal != null ? p.xLocal : '') + '">',
     '<input type="hidden" id="pm-ylocal" value="' + (p.yLocal != null ? p.yLocal : '') + '">',
 
-    '<p id="pam-err" style="color:var(--red,#ea4335);font-size:13px;margin-bottom:8px;display:none"></p>',
-    '<button id="pam-save" class="btn btn-primary btn-full">Сохранить замер</button>',
+    '<p id="pam-err" style="color:var(--red,#ea4335);font-size:13px;margin:12px 0 6px;display:none"></p>',
+    '<button id="pam-save" class="btn btn-primary btn-full" style="margin-top:14px">Сохранить замер</button>',
     '</div>',
   ].join('');
 
   document.body.appendChild(modal);
 
-  // Восстанавливаем выбранные значения из данных точки (select.value после innerHTML)
-  var domSel = document.getElementById('pm-domain');
-  if (domSel && p.domain) domSel.value = p.domain;
-  var wallSel = document.getElementById('pm-wall');
-  if (wallSel && p.wall) wallSel.value = p.wall;
-  var colorSel = document.getElementById('pm-color');
-  if (colorSel && p.waterColor) colorSel.value = p.waterColor;
+  // Восстанавливаем select-значения из точки (после innerHTML)
+  var domSel = document.getElementById('pm-domain');   if (domSel && p.domain)     domSel.value = p.domain;
+  var wallSel = document.getElementById('pm-wall');    if (wallSel && p.wall)      wallSel.value = p.wall;
+  var colorSel = document.getElementById('pm-color');  if (colorSel && p.waterColor) colorSel.value = p.waterColor;
+
+  // Превью при выборе фото (оба input-а обновляют одну область)
+  Photos.initPreview('pm-photo-cam', 'pm-photo-preview');
+  Photos.initPreview('pm-photo-gal', 'pm-photo-preview');
 
   // Закрытие
   document.getElementById('pam-close').addEventListener('click', function() { modal.remove(); });
   modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-
-  // Фото
-  document.getElementById('pm-photo-btn').addEventListener('click', function() {
-    var hasPhoto = !!(document.getElementById('pm-photo-preview').querySelector('img'));
-    showPhotoSourceModal('pm-photo', 'pm-photo-preview', 'pm-photo-progress', hasPhoto);
-  });
 
   // Сохранение
   document.getElementById('pam-save').addEventListener('click', function() {
@@ -1761,14 +1777,13 @@ function openAddFormFromPoi(p) {
 
     saveBtn.disabled = true; saveBtn.textContent = 'Сохранение...';
 
-    var photoFile = Photos.getFile('pm-photo');
-    var tid = Toast.progress('save-poi-meas', 'Сохранение замера...');
+    var photoFile = Photos.getFileAny(['pm-photo-cam', 'pm-photo-gal']);
+    Toast.progress('save-poi-meas', 'Сохранение замера...');
 
     Points.create(data).then(function(savedPoint) {
       if (!photoFile || !savedPoint || !savedPoint.id) return null;
       Toast.progress('save-poi-meas', 'Загрузка фото...', 50);
-      var sizeMb = (photoFile.size / 1024 / 1024).toFixed(2) + ' МБ';
-      showPhotoProgress('pm-photo-progress', 'compressing', sizeMb);
+      showPhotoProgress('pm-photo-progress', 'compressing', (photoFile.size / 1024 / 1024).toFixed(2) + ' МБ');
       var _extra = { pointNumber: data.pointNumber, monitoringDate: data.monitoringDate, flowRate: data.flowRate };
       return Photos.upload(photoFile, savedPoint.id, _extra).then(function(driveUrl) {
         showPhotoProgress('pm-photo-progress', 'done');
@@ -1792,7 +1807,6 @@ function openAddFormFromPoi(p) {
     });
   });
 
-  // Фокус на дебите
   setTimeout(function() {
     var fl = document.getElementById('pm-flowrate');
     if (fl) fl.focus();

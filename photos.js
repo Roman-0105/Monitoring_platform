@@ -138,12 +138,46 @@ var Photos = (function() {
     return (input && input.files && input.files[0]) ? input.files[0] : null;
   }
 
+  function initPreview(inputId, previewId) {
+    var input = document.getElementById(inputId);
+    if (!input) return;
+    input.addEventListener('change', function() {
+      _showPreview(previewId, input.files && input.files[0]);
+    });
+  }
+
+  function _showPreview(previewId, file) {
+    var preview = document.getElementById(previewId);
+    if (!preview || !file) return;
+    var url = URL.createObjectURL(file);
+    var img = document.createElement('img');
+    img.style.cssText = 'max-width:100%;max-height:180px;border-radius:6px;display:block;margin-bottom:4px';
+    img.onload = function() { URL.revokeObjectURL(url); };
+    img.src = url;
+    preview.innerHTML = '';
+    preview.appendChild(img);
+    var hint = document.createElement('p');
+    hint.className = 'form-hint';
+    hint.textContent = (file.size / 1024 / 1024).toFixed(2) + ' МБ · будет сжато';
+    preview.appendChild(hint);
+  }
+
+  function getFileAny(ids) {
+    for (var i = 0; i < ids.length; i++) {
+      var f = getFile(ids[i]);
+      if (f) return f;
+    }
+    return null;
+  }
+
   return {
     compress:       compress,
     upload:         upload,
     loadForDisplay: loadForDisplay,
     setImageSrc:    setImageSrc,
     initPhotoInput: initPhotoInput,
+    initPreview:    initPreview,
+    getFileAny:     getFileAny,
     clearInput:     clearInput,
     getFile:        getFile,
     clearCache:     clearCache,
