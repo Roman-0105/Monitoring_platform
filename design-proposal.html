@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Design Proposal — RG-Gold Monitoring</title>
+<style>
+:root {
+  --bg-0:#06080e; --bg-1:#0c1220; --bg-2:#111827; --bg-3:#1a2338;
+  --accent:#22d3ee; --accent-2:#0891b2; --accent-glow:rgba(34,211,238,.13);
+  --gold:#fbbf24; --gold-glow:rgba(251,187,36,.12);
+  --txt-1:#e2e8f0; --txt-2:#94a3b8; --txt-3:#475569;
+  --ok:#34d399; --ok-glow:rgba(52,211,153,.13);
+  --warn:#fb923c; --bad:#f87171; --bad-glow:rgba(248,113,113,.12);
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.04);
+  --r:8px; --r-sm:5px; --r-lg:12px;
+  --shadow:0 16px 48px rgba(0,0,0,.6), 0 4px 16px rgba(0,0,0,.4);
+  --shadow-card:0 4px 20px rgba(0,0,0,.35);
+  --glow-accent:0 0 20px rgba(34,211,238,.25);
+}
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-family:'Inter', 'Segoe UI', system-ui, sans-serif; font-size:14px; }
+body { background:#04060a; color:var(--txt-1); }
+
+/* ─── НАВИГАЦИЯ МЕЖДУ ЭКРАНАМИ ─────────────────────────────── */
+.nav-bar {
+  position:fixed; top:0; left:0; right:0; z-index:9999;
+  background:rgba(6,8,14,.95); backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:4px; padding:10px 20px;
+}
+.nav-bar .logo { font-size:13px; font-weight:700; color:var(--accent); letter-spacing:.05em; margin-right:16px; }
+.nav-btn {
+  padding:6px 14px; border-radius:var(--r-sm); border:1px solid transparent;
+  background:transparent; color:var(--txt-2); font-size:12px; font-weight:500;
+  cursor:pointer; transition:all .18s; letter-spacing:.02em;
+}
+.nav-btn:hover { color:var(--txt-1); background:rgba(255,255,255,.05); }
+.nav-btn.active { color:var(--accent); background:var(--accent-glow); border-color:rgba(34,211,238,.25); }
+.nav-sep { margin-left:auto; font-size:11px; color:var(--txt-3); }
+
+/* ─── ЭКРАНЫ ────────────────────────────────────────────────── */
+.screen { display:none; min-height:100vh; padding-top:52px; }
+.screen.active { display:block; }
+
+/* ─── SHELL ─────────────────────────────────────────────────── */
+.shell { display:flex; flex-direction:column; height:calc(100vh - 52px); }
+.shell-header {
+  height:46px; flex-shrink:0;
+  display:flex; align-items:center; gap:12px; padding:0 16px;
+  background:var(--bg-1);
+  border-bottom:1px solid var(--line);
+  position:relative;
+}
+.shell-header::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg, var(--accent) 0%, transparent 60%);
+  opacity:.4;
+}
+.brand { display:flex; align-items:center; gap:10px; }
+.brand-icon {
+  width:28px; height:28px; border-radius:6px;
+  background:linear-gradient(135deg, var(--accent-2), var(--accent));
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:800; color:#fff; letter-spacing:-.02em;
+  box-shadow:0 0 12px rgba(34,211,238,.35);
+}
+.brand-name { font-size:13px; font-weight:600; color:var(--txt-1); letter-spacing:.02em; }
+.brand-sub { font-size:10px; color:var(--txt-3); }
+.header-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.net-badge {
+  display:flex; align-items:center; gap:5px;
+  font-size:11px; color:var(--ok); letter-spacing:.03em;
+}
+.net-dot { width:7px; height:7px; border-radius:50%; background:var(--ok); box-shadow:0 0 6px var(--ok); }
+.user-badge {
+  display:flex; align-items:center; gap:7px;
+  padding:3px 8px; border-radius:var(--r-sm);
+  background:rgba(255,255,255,.04); border:1px solid var(--line);
+  font-size:12px; color:var(--txt-2);
+}
+.user-avatar {
+  width:22px; height:22px; border-radius:50%;
+  background:linear-gradient(135deg, var(--accent-2), #7c3aed);
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-weight:700; color:#fff;
+}
+.shell-body { display:flex; flex:1; overflow:hidden; }
+
+/* ─── САЙДБАР ───────────────────────────────────────────────── */
+.sidebar {
+  width:210px; flex-shrink:0;
+  background:var(--bg-0);
+  border-right:1px solid var(--line);
+  display:flex; flex-direction:column;
+  position:relative;
+}
+.sidebar::after {
+  content:''; position:absolute; top:0; right:0; bottom:0; width:1px;
+  background:linear-gradient(180deg, transparent 0%, var(--accent) 40%, var(--accent) 60%, transparent 100%);
+  opacity:0;
+}
+.sidebar:hover::after { opacity:.15; transition:opacity .3s; }
+.sb-section { padding:16px 0 4px; }
+.sb-label {
+  padding:0 14px 6px;
+  font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--txt-3);
+}
+.sb-item {
+  display:flex; align-items:center; gap:10px;
+  padding:0 14px; height:36px;
+  font-size:12px; font-weight:500; color:var(--txt-2);
+  cursor:pointer; transition:all .15s;
+  position:relative; border-left:2px solid transparent;
+  text-decoration:none;
+}
+.sb-item:hover { color:var(--txt-1); background:rgba(255,255,255,.03); }
+.sb-item.active {
+  color:var(--accent); background:var(--accent-glow);
+  border-left-color:var(--accent);
+  font-weight:600;
+}
+.sb-item.active .sb-icon { filter:drop-shadow(0 0 6px rgba(34,211,238,.5)); }
+.sb-icon { font-size:13px; opacity:.7; width:16px; text-align:center; flex-shrink:0; }
+.sb-item.active .sb-icon { opacity:1; }
+.sb-badge {
+  margin-left:auto; font-size:10px; padding:1px 6px; border-radius:10px;
+  background:rgba(248,113,113,.2); color:var(--bad); font-weight:700;
+  border:1px solid rgba(248,113,113,.3);
+}
+.sb-footer { margin-top:auto; padding:8px 0; border-top:1px solid var(--line); }
+
+/* ─── CONTENT AREA ──────────────────────────────────────────── */
+.content { flex:1; overflow-y:auto; background:var(--bg-0); scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.08) transparent; }
+.content::-webkit-scrollbar { width:5px; }
+.content::-webkit-scrollbar-thumb { background:rgba(255,255,255,.08); border-radius:3px; }
+.page-inner { padding:20px; max-width:1200px; }
+
+/* ─── SECTION TITLE ─────────────────────────────────────────── */
+.sec-title {
+  font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--txt-3); margin-bottom:12px;
+  display:flex; align-items:center; gap:8px;
+}
+.sec-title::before {
+  content:''; width:2px; height:12px; border-radius:1px;
+  background:linear-gradient(180deg, var(--accent), var(--accent-2));
+  flex-shrink:0;
+}
+
+/* ─── STATUS BAR ────────────────────────────────────────────── */
+.status-bar {
+  height:22px; flex-shrink:0;
+  background:var(--bg-1); border-top:1px solid var(--line);
+  display:flex; align-items:center; gap:10px; padding:0 14px;
+  font-size:10px; color:var(--txt-3);
+  font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;
+}
+.sb-sep { opacity:.3; }
+
+/* ─── KPI CARDS ─────────────────────────────────────────────── */
+.kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+.kpi {
+  background:var(--bg-2);
+  border:1px solid var(--line);
+  border-radius:var(--r);
+  padding:14px 16px;
+  position:relative; overflow:hidden;
+  transition:border-color .2s, box-shadow .2s;
+}
+.kpi::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, var(--accent), transparent);
+  opacity:0; transition:opacity .2s;
+}
+.kpi:hover { border-color:rgba(34,211,238,.2); box-shadow:0 0 20px rgba(34,211,238,.06); }
+.kpi:hover::before { opacity:1; }
+.kpi-label {
+  font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--txt-3); margin-bottom:8px;
+}
+.kpi-val {
+  font-size:28px; font-weight:700; line-height:1; color:var(--txt-1);
+  font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+}
+.kpi-val .unit { font-size:13px; color:var(--txt-3); font-weight:500; margin-left:3px; }
+.kpi-sub { font-size:11px; color:var(--txt-2); margin-top:6px; display:flex; align-items:center; gap:5px; }
+.kpi-trend { display:flex; align-items:center; gap:3px; font-size:11px; font-weight:600; }
+.kpi-trend.up { color:var(--ok); }
+.kpi-trend.down { color:var(--bad); }
+.kpi-sparkline { margin-top:10px; }
+
+.kpi.accent-blue::before { opacity:1; background:linear-gradient(90deg, var(--accent), transparent); }
+.kpi.accent-gold::before { opacity:1; background:linear-gradient(90deg, var(--gold), transparent); }
+.kpi.accent-ok::before   { opacity:1; background:linear-gradient(90deg, var(--ok), transparent); }
+.kpi.accent-bad::before  { opacity:1; background:linear-gradient(90deg, var(--bad), transparent); }
+.kpi.accent-blue .kpi-val { color:var(--accent); }
+.kpi.accent-gold .kpi-val { color:var(--gold); }
+
+/* ─── CARDS ─────────────────────────────────────────────────── */
+.card {
+  background:var(--bg-2); border:1px solid var(--line);
+  border-radius:var(--r); padding:16px;
+  transition:border-color .2s;
+}
+.card:hover { border-color:rgba(255,255,255,.12); }
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:14px; }
+
+/* ─── POINT CARDS ───────────────────────────────────────────── */
+.pt-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; }
+.pt-card {
+  background:var(--bg-2); border:1px solid var(--line);
+  border-radius:var(--r); overflow:hidden;
+  transition:border-color .2s, transform .2s, box-shadow .2s;
+  cursor:pointer;
+}
+.pt-card:hover { border-color:rgba(34,211,238,.3); transform:translateY(-2px); box-shadow:var(--shadow-card), 0 0 20px rgba(34,211,238,.08); }
+.pt-photo {
+  height:140px; background:linear-gradient(135deg, var(--bg-3) 0%, #0d1a2e 100%);
+  border-bottom:1px solid var(--line);
+  position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--txt-3); font-size:24px;
+}
+.pt-photo-img { width:100%; height:100%; object-fit:cover; display:block; }
+.pt-status-pill {
+  position:absolute; top:8px; right:8px;
+  font-size:9px; font-weight:700; padding:2px 7px; border-radius:10px;
+  letter-spacing:.04em; text-transform:uppercase;
+}
+.pill-active  { background:rgba(52,211,153,.2);  color:var(--ok);  border:1px solid rgba(52,211,153,.35); }
+.pill-fading  { background:rgba(251,146,60,.2);  color:var(--warn);border:1px solid rgba(251,146,60,.35); }
+.pill-dry     { background:rgba(248,113,113,.2); color:var(--bad); border:1px solid rgba(248,113,113,.35); }
+.pill-new     { background:rgba(34,211,238,.15); color:var(--accent);border:1px solid rgba(34,211,238,.3); }
+.pill-flood   { background:rgba(248,113,113,.3); color:#fca5a5; border:1px solid rgba(248,113,113,.5); animation:pulse-border 1.5s infinite; }
+@keyframes pulse-border { 0%,100%{border-color:rgba(248,113,113,.5)} 50%{border-color:rgba(248,113,113,1)} }
+.pt-body { padding:10px 12px; }
+.pt-num { font-size:20px; font-weight:700; color:var(--accent); line-height:1; margin-bottom:4px; font-variant-numeric:tabular-nums; }
+.pt-meta { font-size:11px; color:var(--txt-2); margin-bottom:6px; }
+.pt-q { font-size:15px; font-weight:700; color:var(--gold); display:flex; align-items:baseline; gap:3px; }
+.pt-q-unit { font-size:10px; color:var(--txt-3); font-weight:500; }
+.pt-tags { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+.pt-tag { font-size:10px; padding:1px 6px; border-radius:4px; background:rgba(255,255,255,.04); border:1px solid var(--line); color:var(--txt-3); }
+
+/* ─── BADGE ─────────────────────────────────────────────────── */
+.badge { border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700; letter-spacing:.03em; }
+.badge-ok   { background:var(--ok-glow);  color:var(--ok);  border:1px solid rgba(52,211,153,.3); }
+.badge-warn { background:rgba(251,146,60,.15); color:var(--warn); border:1px solid rgba(251,146,60,.3); }
+.badge-bad  { background:var(--bad-glow); color:var(--bad); border:1px solid rgba(248,113,113,.3); }
+.badge-accent { background:var(--accent-glow); color:var(--accent); border:1px solid rgba(34,211,238,.3); }
+
+/* ─── BUTTONS ───────────────────────────────────────────────── */
+.btn {
+  height:34px; padding:0 14px; border-radius:var(--r-sm);
+  font-size:12px; font-weight:600; letter-spacing:.02em;
+  border:1px solid var(--line); background:var(--bg-3); color:var(--txt-2);
+  cursor:pointer; display:inline-flex; align-items:center; gap:6px;
+  transition:all .15s;
+}
+.btn:hover { border-color:rgba(255,255,255,.18); color:var(--txt-1); background:var(--bg-3); }
+.btn-primary {
+  background:var(--accent); border-color:var(--accent); color:#000;
+  font-weight:700;
+  box-shadow:0 0 16px rgba(34,211,238,.25);
+}
+.btn-primary:hover { background:var(--accent); box-shadow:0 0 24px rgba(34,211,238,.4); transform:translateY(-1px); }
+.btn-ghost { background:transparent; border-color:transparent; }
+.btn-ghost:hover { background:rgba(255,255,255,.04); border-color:var(--line); }
+.btn-danger { border-color:rgba(248,113,113,.3); color:var(--bad); background:var(--bad-glow); }
+.btn-sm { height:28px; padding:0 10px; font-size:11px; }
+
+/* ─── FORMS ─────────────────────────────────────────────────── */
+.form-input, .form-select {
+  width:100%; padding:8px 11px;
+  background:var(--bg-3); border:1px solid rgba(255,255,255,.09);
+  border-radius:var(--r-sm); color:var(--txt-1); font-size:13px;
+  transition:border-color .15s, box-shadow .15s; outline:none;
+}
+.form-input:focus, .form-select:focus {
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(34,211,238,.12);
+}
+.form-label { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--txt-3); margin-bottom:5px; display:block; }
+
+/* ─── CHART PLACEHOLDER ─────────────────────────────────────── */
+.chart-area {
+  background:var(--bg-3); border-radius:var(--r); padding:16px;
+  position:relative; overflow:hidden; min-height:160px;
+  display:flex; align-items:flex-end; gap:0;
+}
+.chart-area::before {
+  content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0px, rgba(255,255,255,.015) 1px, transparent 1px, transparent 40px);
+}
+.chart-bar {
+  flex:1; border-radius:3px 3px 0 0; margin:0 1px;
+  background:linear-gradient(180deg, var(--accent) 0%, rgba(34,211,238,.3) 100%);
+  transition:opacity .2s;
+}
+.chart-bar:hover { opacity:.8; }
+
+/* ─── SVG CHART ─────────────────────────────────────────────── */
+.trend-svg { width:100%; display:block; }
+
+/* ─── ALERT ITEM ────────────────────────────────────────────── */
+.alert-item {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; border-radius:var(--r-sm);
+  margin-bottom:6px;
+  background:var(--bg-3); border:1px solid var(--line);
+  font-size:12px; transition:border-color .15s;
+}
+.alert-item:hover { border-color:rgba(255,255,255,.12); }
+.alert-item.critical { border-left:3px solid var(--bad); background:var(--bad-glow); }
+.alert-item.warn { border-left:3px solid var(--warn); background:rgba(251,146,60,.05); }
+.alert-item.ok { border-left:3px solid var(--ok); background:var(--ok-glow); }
+.alert-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.alert-dot.critical { background:var(--bad); box-shadow:0 0 6px var(--bad); }
+.alert-dot.warn { background:var(--warn); box-shadow:0 0 6px var(--warn); }
+.alert-dot.ok { background:var(--ok); }
+.alert-txt { flex:1; color:var(--txt-1); }
+.alert-time { font-size:10px; color:var(--txt-3); font-family:ui-monospace,monospace; white-space:nowrap; }
+.alert-badge { font-size:9px; font-weight:700; padding:1px 6px; border-radius:3px; background:rgba(248,113,113,.2); color:var(--bad); }
+
+/* ─── TABLE ─────────────────────────────────────────────────── */
+.data-table { width:100%; border-collapse:collapse; font-size:12px; }
+.data-table th {
+  text-align:left; padding:6px 10px;
+  font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--txt-3); border-bottom:1px solid var(--line);
+  background:var(--bg-1);
+}
+.data-table td { padding:8px 10px; border-bottom:1px solid var(--line-2); color:var(--txt-2); }
+.data-table tr:hover td { background:rgba(255,255,255,.02); color:var(--txt-1); }
+.data-table .num { font-variant-numeric:tabular-nums; font-family:ui-monospace,monospace; }
+.data-table .accent { color:var(--accent); font-weight:600; }
+.data-table .gold { color:var(--gold); font-weight:600; }
+
+/* ─── MAP MOCKUP ────────────────────────────────────────────── */
+.map-mock {
+  background:linear-gradient(135deg, #0d1a0d 0%, #091420 50%, #0a1808 100%);
+  border-radius:var(--r); position:relative; overflow:hidden;
+  min-height:400px; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--line);
+}
+.map-grid {
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(34,211,238,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,211,238,.04) 1px, transparent 1px);
+  background-size:40px 40px;
+}
+.map-dot {
+  position:absolute; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:8px; font-weight:700; color:#fff;
+  cursor:pointer;
+}
+.map-dot-inner { border-radius:50%; }
+.map-toolbar {
+  position:absolute; top:12px; left:12px; right:12px;
+  display:flex; align-items:center; gap:8px;
+  background:rgba(6,8,14,.85); backdrop-filter:blur(8px);
+  border:1px solid var(--line); border-radius:var(--r);
+  padding:8px 12px;
+}
+
+/* ─── MODAL ─────────────────────────────────────────────────── */
+.modal-overlay {
+  position:relative; display:flex; align-items:flex-start; justify-content:center;
+  padding:20px; background:rgba(4,6,10,.7); border-radius:var(--r-lg);
+}
+.modal-box {
+  width:100%; max-width:600px;
+  background:var(--bg-1); border:1px solid rgba(34,211,238,.2);
+  border-radius:var(--r-lg); box-shadow:var(--shadow), 0 0 40px rgba(34,211,238,.08);
+  overflow:hidden;
+}
+.modal-hdr {
+  display:flex; align-items:center; padding:14px 16px;
+  border-bottom:1px solid var(--line); background:var(--bg-2);
+  position:relative;
+}
+.modal-hdr::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg, var(--accent), transparent 50%);
+  opacity:.5;
+}
+.modal-num { font-size:22px; font-weight:800; color:var(--accent); margin-right:10px; }
+.modal-close {
+  margin-left:auto; width:26px; height:26px; border-radius:var(--r-sm);
+  border:1px solid var(--line); background:var(--bg-3); color:var(--txt-2);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  font-size:14px;
+}
+
+/* ─── ANL ───────────────────────────────────────────────────── */
+.anl-kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; }
+.anl-kpi {
+  background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r);
+  padding:12px 14px; position:relative; overflow:hidden;
+}
+.anl-kpi::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity:.3;
+}
+.anl-kpi-label { font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--txt-3); margin-bottom:6px; }
+.anl-kpi-val { font-size:24px; font-weight:700; color:var(--txt-1); font-variant-numeric:tabular-nums; }
+.anl-kpi-val.c-accent { color:var(--accent); }
+.anl-kpi-val.c-gold { color:var(--gold); }
+.anl-kpi-val.c-ok { color:var(--ok); }
+.anl-kpi-val.c-bad { color:var(--bad); }
+
+/* ─── STATUS BAR WELLS ──────────────────────────────────────── */
+.well-row {
+  display:flex; align-items:center; gap:12px;
+  padding:10px 14px; border-radius:var(--r-sm);
+  background:var(--bg-3); border:1px solid var(--line); margin-bottom:6px;
+  transition:border-color .15s;
+}
+.well-row:hover { border-color:rgba(34,211,238,.2); }
+.well-name { font-size:12px; font-weight:600; color:var(--txt-1); flex:1; }
+.well-depth { font-size:11px; color:var(--txt-3); font-family:ui-monospace,monospace; }
+.well-q { font-size:14px; font-weight:700; color:var(--gold); font-variant-numeric:tabular-nums; }
+
+/* ─── DESIGN SYSTEM SCREEN ──────────────────────────────────── */
+.ds-section { margin-bottom:48px; }
+.ds-title { font-size:20px; font-weight:700; color:var(--txt-1); margin-bottom:6px; }
+.ds-subtitle { font-size:13px; color:var(--txt-2); margin-bottom:24px; }
+.color-swatch-grid { display:flex; gap:8px; flex-wrap:wrap; }
+.color-swatch {
+  width:80px; border-radius:var(--r); overflow:hidden;
+  border:1px solid var(--line);
+}
+.color-swatch-fill { height:48px; }
+.color-swatch-name { background:var(--bg-2); padding:4px 6px; font-size:9px; color:var(--txt-3); font-family:ui-monospace,monospace; }
+.comp-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+</style>
+</head>
+<body>
+
+<!-- NAVIGATION -->
+<div class="nav-bar">
+  <div class="logo">⬡ RG-GOLD DESIGN</div>
+  <button class="nav-btn active" onclick="showScreen('ds')">Система</button>
+  <button class="nav-btn" onclick="showScreen('dashboard')">Dashboard</button>
+  <button class="nav-btn" onclick="showScreen('points')">Точки</button>
+  <button class="nav-btn" onclick="showScreen('analytics')">Аналитика</button>
+  <button class="nav-btn" onclick="showScreen('map')">Карта</button>
+  <button class="nav-btn" onclick="showScreen('modal')">Модалы</button>
+  <span class="nav-sep">Визуализация предложений по дизайну · 2026</span>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     ЭКРАН 1: ДИЗАЙН-СИСТЕМА
+     ════════════════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-ds" style="padding:72px 40px 40px; background:var(--bg-0)">
+
+  <div class="ds-section">
+    <div class="ds-title">Дизайн-система · RG-Gold Monitoring Platform</div>
+    <div class="ds-subtitle">Концепция: Industrial Intelligence — строгий, технологичный, информативный. Единый язык цвета и форм во всех разделах.</div>
+
+    <!-- Цветовая палитра -->
+    <div class="sec-title">Цветовая палитра</div>
+    <div class="color-swatch-grid" style="margin-bottom:32px">
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#06080e"></div>
+        <div class="color-swatch-name">bg-0 #06080e</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#0c1220"></div>
+        <div class="color-swatch-name">bg-1 #0c1220</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#111827"></div>
+        <div class="color-swatch-name">bg-2 #111827</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#1a2338"></div>
+        <div class="color-swatch-name">bg-3 #1a2338</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#22d3ee;box-shadow:0 0 16px rgba(34,211,238,.5)"></div>
+        <div class="color-swatch-name">accent #22d3ee</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#fbbf24;box-shadow:0 0 12px rgba(251,187,36,.4)"></div>
+        <div class="color-swatch-name">gold #fbbf24</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#34d399"></div>
+        <div class="color-swatch-name">ok #34d399</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#fb923c"></div>
+        <div class="color-swatch-name">warn #fb923c</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#f87171"></div>
+        <div class="color-swatch-name">bad #f87171</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#e2e8f0"></div>
+        <div class="color-swatch-name">txt-1 #e2e8f0</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#94a3b8"></div>
+        <div class="color-swatch-name">txt-2 #94a3b8</div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-fill" style="background:#475569"></div>
+        <div class="color-swatch-name">txt-3 #475569</div>
+      </div>
+    </div>
+
+    <!-- Ключевые изменения vs текущий дизайн -->
+    <div class="sec-title">Что меняется</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:32px">
+      <div class="card" style="border-left:3px solid var(--bad)">
+        <div style="font-size:11px;font-weight:700;color:var(--txt-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Сейчас</div>
+        <div style="font-size:12px;color:var(--txt-2);line-height:1.8">
+          ▸ Фон: #0d1117 — GitHub-тёмный<br>
+          ▸ Акцент: #58a6ff — стандартный синий<br>
+          ▸ Радиус: 3–8px — мелкий<br>
+          ▸ Переходы: 140ms<br>
+          ▸ Нет glow-эффектов<br>
+          ▸ KPI карточки плоские<br>
+          ▸ Сайдбар: тонкая левая граница<br>
+          ▸ Шапка: просто линия
+        </div>
+      </div>
+      <div class="card" style="border-left:3px solid var(--ok)">
+        <div style="font-size:11px;font-weight:700;color:var(--txt-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Предложение</div>
+        <div style="font-size:12px;color:var(--txt-2);line-height:1.8">
+          ▸ Фон: #06080e — глубже, насыщеннее<br>
+          ▸ Акцент: #22d3ee — cyan, уникально и "водный"<br>
+          ▸ Радиус: 5–12px — мягче, современнее<br>
+          ▸ Переходы: 180ms + ease curves<br>
+          ▸ Тонкие glow на активных элементах<br>
+          ▸ KPI с градиентом и числами с подсветкой<br>
+          ▸ Сайдбар: градиентная линия + glow<br>
+          ▸ Шапка: градиентная нижняя линия
+        </div>
+      </div>
+    </div>
+
+    <!-- Компоненты -->
+    <div class="sec-title">Кнопки</div>
+    <div class="comp-row" style="margin-bottom:24px">
+      <button class="btn btn-primary">⊕ Добавить точку</button>
+      <button class="btn">⎙ Экспорт</button>
+      <button class="btn btn-ghost">Отмена</button>
+      <button class="btn btn-danger">✕ Удалить</button>
+      <button class="btn btn-sm btn-primary">Сохранить</button>
+      <button class="btn btn-sm">Фильтр</button>
+    </div>
+
+    <div class="sec-title">Статусные бейджи</div>
+    <div class="comp-row" style="margin-bottom:24px">
+      <span class="badge badge-ok">Активная</span>
+      <span class="badge badge-warn">Паводковая</span>
+      <span class="badge badge-bad">Сухая</span>
+      <span class="badge badge-accent">Новая</span>
+      <span class="pill-active" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px">● Активная</span>
+      <span class="pill-flood" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px">⚠ Паводковая</span>
+      <span class="pill-fading" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px">Затухающая</span>
+      <span class="pill-dry" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px">Сухая</span>
+    </div>
+
+    <div class="sec-title">KPI-карточки</div>
+    <div class="kpi-grid">
+      <div class="kpi accent-blue">
+        <div class="kpi-label">Суммарный Q</div>
+        <div class="kpi-val">24.7<span class="unit">л/с</span></div>
+        <div class="kpi-sub"><span class="kpi-trend up">▲ +3.2</span> vs пред. неделя</div>
+        <svg class="kpi-sparkline" height="28" viewBox="0 0 120 28"><defs><linearGradient id="sg1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#22d3ee" stop-opacity=".3"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/></linearGradient></defs><path d="M0,22 C8,20 16,18 24,15 C32,12 40,16 48,13 C56,10 64,14 72,10 C80,6 88,4 96,5 C104,6 112,4 120,2 L120,28 L0,28 Z" fill="url(#sg1)"/><path d="M0,22 C8,20 16,18 24,15 C32,12 40,16 48,13 C56,10 64,14 72,10 C80,6 88,4 96,5 C104,6 112,4 120,2" fill="none" stroke="#22d3ee" stroke-width="1.8"/></svg>
+      </div>
+      <div class="kpi accent-gold">
+        <div class="kpi-label">Точек активно</div>
+        <div class="kpi-val">31</div>
+        <div class="kpi-sub"><span class="kpi-trend down">▼ -2</span> vs пред. неделя</div>
+        <svg class="kpi-sparkline" height="28" viewBox="0 0 120 28"><defs><linearGradient id="sg2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#fbbf24" stop-opacity=".3"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/></linearGradient></defs><path d="M0,8 C8,8 16,10 24,12 C32,14 40,10 48,12 C56,14 64,12 72,14 C80,16 88,14 96,16 C104,18 112,16 120,20 L120,28 L0,28 Z" fill="url(#sg2)"/><path d="M0,8 C8,8 16,10 24,12 C32,14 40,10 48,12 C56,14 64,12 72,14 C80,16 88,14 96,16 C104,18 112,16 120,20" fill="none" stroke="#fbbf24" stroke-width="1.8"/></svg>
+      </div>
+      <div class="kpi accent-ok">
+        <div class="kpi-label">Паводковых</div>
+        <div class="kpi-val">3</div>
+        <div class="kpi-sub"><span class="kpi-trend up" style="color:var(--bad)">▲ +1</span> новая за неделю</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Покрытие</div>
+        <div class="kpi-val">94<span class="unit">%</span></div>
+        <div class="kpi-sub" style="color:var(--ok)">● Хорошее покрытие</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Формы -->
+  <div class="ds-section">
+    <div class="sec-title">Поля ввода</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;max-width:700px">
+      <div>
+        <div class="form-label">Водоприток Q, л/с</div>
+        <input class="form-input" placeholder="0.00" value="3.42">
+      </div>
+      <div>
+        <div class="form-label">Статус</div>
+        <select class="form-select" style="color-scheme:dark">
+          <option>Активная</option>
+          <option>Паводковая</option>
+        </select>
+      </div>
+      <div>
+        <div class="form-label">Борт</div>
+        <input class="form-input" placeholder="Северный" value="Северный">
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     ЭКРАН 2: DASHBOARD
+     ════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-dashboard">
+<div class="shell">
+  <!-- HEADER -->
+  <div class="shell-header">
+    <div class="brand">
+      <div class="brand-icon">RG</div>
+      <div>
+        <div class="brand-name">RG-Gold Monitoring</div>
+        <div style="font-size:10px;color:var(--txt-3)">Карьер ЮРГ · Гидрогеологический мониторинг</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="net-badge"><div class="net-dot"></div> Online</div>
+      <div style="font-size:11px;color:var(--txt-3);font-family:ui-monospace,monospace">Нед. 18 · 05.05–11.05.2025</div>
+      <div class="user-badge"><div class="user-avatar">АБ</div><span>А. Байжанов</span></div>
+    </div>
+  </div>
+
+  <div class="shell-body">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sb-section">
+        <div class="sb-label">Мониторинг</div>
+        <div class="sb-item active"><span class="sb-icon">⊞</span><span>Dashboard</span></div>
+        <div class="sb-item"><span class="sb-icon">◉</span><span>Точки</span><span class="sb-badge">3</span></div>
+        <div class="sb-item"><span class="sb-icon">⊟</span><span>Канавы</span></div>
+        <div class="sb-item"><span class="sb-icon">○</span><span>Скважины</span></div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">Анализ</div>
+        <div class="sb-item"><span class="sb-icon">◈</span><span>Карта</span></div>
+        <div class="sb-item"><span class="sb-icon">▲</span><span>Аналитика</span></div>
+        <div class="sb-item"><span class="sb-icon">▤</span><span>История</span></div>
+        <div class="sb-item"><span class="sb-icon">◧</span><span>Отчёт</span></div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">Система</div>
+        <div class="sb-item"><span class="sb-icon">⚙</span><span>Настройки</span></div>
+        <div class="sb-item"><span class="sb-icon">⊘</span><span>Диагностика</span></div>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-item"><span class="sb-icon">◑</span><span style="font-size:11px;color:var(--txt-3)">Тёмная тема</span></div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="content">
+      <div class="page-inner">
+        <!-- Header row -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+          <div>
+            <div style="font-size:18px;font-weight:700;color:var(--txt-1);margin-bottom:3px">Обзор системы</div>
+            <div style="font-size:12px;color:var(--txt-3)">Последнее обновление: сегодня 09:14 · Неделя 18, 05.05–11.05.2025</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn">⟳ Синхронизировать</button>
+            <button class="btn btn-primary">⊕ Новый замер</button>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpi-grid">
+          <div class="kpi accent-blue">
+            <div class="kpi-label">Суммарный Q (точки)</div>
+            <div class="kpi-val">24.7<span class="unit">л/с</span></div>
+            <div class="kpi-sub"><span class="kpi-trend up">▲ +3.2</span> к прошлой неделе</div>
+          </div>
+          <div class="kpi accent-gold">
+            <div class="kpi-label">Активных точек</div>
+            <div class="kpi-val">31 <span style="font-size:14px;color:var(--txt-3)">/38</span></div>
+            <div class="kpi-sub"><span class="badge badge-warn" style="font-size:9px">3 паводковых</span></div>
+          </div>
+          <div class="kpi accent-ok">
+            <div class="kpi-label">Скважины Q</div>
+            <div class="kpi-val">8.4<span class="unit">л/с</span></div>
+            <div class="kpi-sub" style="color:var(--txt-3)">4 скважины</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Покрытие недели</div>
+            <div class="kpi-val" style="color:var(--ok)">94<span class="unit">%</span></div>
+            <div class="kpi-sub" style="color:var(--ok)">● 36 из 38 точек</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Тренд -->
+          <div class="card">
+            <div class="sec-title">Динамика суммарного Q</div>
+            <svg class="trend-svg" height="120" viewBox="0 0 400 120">
+              <defs>
+                <linearGradient id="tg" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#22d3ee" stop-opacity=".25"/>
+                  <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,90 C20,88 40,80 60,75 C80,70 100,72 120,65 C140,58 160,60 180,50 C200,40 220,45 240,35 C260,25 280,28 300,20 C320,12 340,10 360,12 C380,14 390,10 400,8 L400,120 L0,120 Z" fill="url(#tg)"/>
+              <path d="M0,90 C20,88 40,80 60,75 C80,70 100,72 120,65 C140,58 160,60 180,50 C200,40 220,45 240,35 C260,25 280,28 300,20 C320,12 340,10 360,12 C380,14 390,10 400,8" fill="none" stroke="#22d3ee" stroke-width="2.5"/>
+              <!-- Week marks -->
+              <text x="0" y="118" fill="#475569" font-size="9" font-family="ui-monospace,monospace">Нед.12</text>
+              <text x="80" y="118" fill="#475569" font-size="9" font-family="ui-monospace,monospace">Нед.14</text>
+              <text x="160" y="118" fill="#475569" font-size="9" font-family="ui-monospace,monospace">Нед.16</text>
+              <text x="240" y="118" fill="#475569" font-size="9" font-family="ui-monospace,monospace">Нед.17</text>
+              <text x="340" y="118" fill="#22d3ee" font-size="9" font-family="ui-monospace,monospace">Нед.18</text>
+              <!-- Current dot -->
+              <circle cx="400" cy="8" r="5" fill="#22d3ee" opacity=".9"/>
+              <circle cx="400" cy="8" r="9" fill="none" stroke="#22d3ee" stroke-width="1" opacity=".3"/>
+            </svg>
+          </div>
+
+          <!-- Алерты -->
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div class="sec-title" style="margin:0">Активные уведомления</div>
+              <span class="badge badge-bad">5 событий</span>
+            </div>
+            <div class="alert-item critical">
+              <div class="alert-dot critical"></div>
+              <div class="alert-txt"><b>Точка #24</b> — Паводковый статус, Q=4.8 л/с</div>
+              <div class="alert-badge">КРИТИЧНО</div>
+            </div>
+            <div class="alert-item critical">
+              <div class="alert-dot critical"></div>
+              <div class="alert-txt"><b>Точка #07</b> — Паводковый статус, Q=3.2 л/с</div>
+              <div class="alert-badge">КРИТИЧНО</div>
+            </div>
+            <div class="alert-item warn">
+              <div class="alert-dot warn"></div>
+              <div class="alert-txt"><b>Точка #15</b> — Q увеличился на 42% за неделю</div>
+              <div class="alert-time">2д назад</div>
+            </div>
+            <div class="alert-item ok">
+              <div class="alert-dot ok"></div>
+              <div class="alert-txt"><b>Точка #31</b> — Статус изменён: Затухающая</div>
+              <div class="alert-time">3д назад</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Статус по бортам -->
+        <div class="card">
+          <div class="sec-title">Распределение по бортам</div>
+          <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px">
+            <div style="text-align:center;padding:10px 6px;background:var(--bg-3);border-radius:var(--r-sm);border:1px solid var(--line)">
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">8</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">Северный</div>
+              <div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:4px">6.2 л/с</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--bg-3);border-radius:var(--r-sm);border:1px solid rgba(251,187,36,.2)">
+              <div style="font-size:18px;font-weight:700;color:var(--gold)">5</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">С-Восточный</div>
+              <div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:4px">4.1 л/с</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:rgba(248,113,113,.07);border-radius:var(--r-sm);border:1px solid rgba(248,113,113,.2)">
+              <div style="font-size:18px;font-weight:700;color:var(--bad)">6</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">Восточный</div>
+              <div style="font-size:11px;color:var(--bad);font-weight:600;margin-top:4px">8.4 л/с</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--bg-3);border-radius:var(--r-sm);border:1px solid var(--line)">
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">4</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">Ю-Восточный</div>
+              <div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:4px">2.0 л/с</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--bg-3);border-radius:var(--r-sm);border:1px solid var(--line)">
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">3</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">Южный</div>
+              <div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:4px">1.5 л/с</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--bg-3);border-radius:var(--r-sm);border:1px solid var(--line)">
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">2</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">Ю-Западный</div>
+              <div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:4px">0.8 л/с</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--bg-3);border-radius:var(--r-sm);border:1px solid var(--line)">
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">5</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">Западный</div>
+              <div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:4px">1.7 л/с</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--bg-3);border-radius:var(--r-sm);border:1px solid var(--line)">
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">3</div>
+              <div style="font-size:9px;color:var(--txt-3);margin-top:3px">С-Западный</div>
+              <div style="font-size:11px;color:var(--gold);font-weight:600;margin-top:4px">0.5 л/с</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <span>● ONLINE</span><span class="sb-sep">|</span>
+    <span>Точек: 38</span><span class="sb-sep">|</span>
+    <span>Очередь: 0</span><span class="sb-sep">|</span>
+    <span>Схема: Нед.18</span><span class="sb-sep">|</span>
+    <span style="margin-left:auto;color:var(--accent)">RG-Gold Monitoring v2.1</span>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     ЭКРАН 3: ТОЧКИ
+     ════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-points">
+<div class="shell">
+  <div class="shell-header">
+    <div class="brand">
+      <div class="brand-icon">RG</div>
+      <div><div class="brand-name">RG-Gold Monitoring</div><div style="font-size:10px;color:var(--txt-3)">Точки мониторинга</div></div>
+    </div>
+    <div class="header-right">
+      <div class="net-badge"><div class="net-dot"></div> Online</div>
+      <div class="user-badge"><div class="user-avatar">АБ</div><span>А. Байжанов</span></div>
+    </div>
+  </div>
+  <div class="shell-body">
+    <div class="sidebar">
+      <div class="sb-section">
+        <div class="sb-label">Мониторинг</div>
+        <div class="sb-item"><span class="sb-icon">⊞</span><span>Dashboard</span></div>
+        <div class="sb-item active"><span class="sb-icon">◉</span><span>Точки</span><span class="sb-badge">3</span></div>
+        <div class="sb-item"><span class="sb-icon">⊟</span><span>Канавы</span></div>
+        <div class="sb-item"><span class="sb-icon">○</span><span>Скважины</span></div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">Анализ</div>
+        <div class="sb-item"><span class="sb-icon">◈</span><span>Карта</span></div>
+        <div class="sb-item"><span class="sb-icon">▲</span><span>Аналитика</span></div>
+        <div class="sb-item"><span class="sb-icon">▤</span><span>История</span></div>
+        <div class="sb-item"><span class="sb-icon">◧</span><span>Отчёт</span></div>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-item"><span class="sb-icon">⚙</span><span>Настройки</span></div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="page-inner">
+        <!-- Toolbar -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="position:relative;flex:1;min-width:200px">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt-3);font-size:13px">⌕</span>
+            <input class="form-input" style="padding-left:30px" placeholder="Поиск по номеру, борту, домену…">
+          </div>
+          <select class="form-select" style="width:auto;min-width:130px;color-scheme:dark"><option>Все статусы</option></select>
+          <select class="form-select" style="width:auto;min-width:120px;color-scheme:dark"><option>Все борта</option></select>
+          <select class="form-select" style="width:auto;min-width:120px;color-scheme:dark"><option>Все домены</option></select>
+          <button class="btn btn-primary">⊕ Добавить</button>
+          <span style="font-size:12px;color:var(--txt-3);white-space:nowrap">38 точек</span>
+        </div>
+
+        <!-- Grid -->
+        <div class="pt-grid">
+          <div class="pt-card">
+            <div class="pt-photo" style="background:linear-gradient(135deg,#0d2010,#091820)">
+              <span style="color:var(--txt-3);font-size:28px">📷</span>
+              <div class="pt-status-pill pill-flood">⚠ Паводковая</div>
+            </div>
+            <div class="pt-body">
+              <div class="pt-num">#24</div>
+              <div class="pt-meta">Восточный борт · гор. -180</div>
+              <div class="pt-q">4.80 <span class="pt-q-unit">л/с · 17.3 м³/ч</span></div>
+              <div class="pt-tags"><span class="pt-tag">Трещинный</span><span class="pt-tag">Интенсивный</span></div>
+            </div>
+          </div>
+          <div class="pt-card">
+            <div class="pt-photo" style="background:linear-gradient(135deg,#0a1a12,#061420)">
+              <span style="color:var(--txt-3);font-size:28px">📷</span>
+              <div class="pt-status-pill pill-active">● Активная</div>
+            </div>
+            <div class="pt-body">
+              <div class="pt-num">#07</div>
+              <div class="pt-meta">Северный борт · гор. -150</div>
+              <div class="pt-q">2.15 <span class="pt-q-unit">л/с · 7.7 м³/ч</span></div>
+              <div class="pt-tags"><span class="pt-tag">Пластовый</span><span class="pt-tag">Умеренный</span></div>
+            </div>
+          </div>
+          <div class="pt-card">
+            <div class="pt-photo" style="background:linear-gradient(135deg,#1a1008,#0d1020)">
+              <span style="color:var(--txt-3);font-size:28px">📷</span>
+              <div class="pt-status-pill pill-fading">Затухающая</div>
+            </div>
+            <div class="pt-body">
+              <div class="pt-num">#15</div>
+              <div class="pt-meta">Западный борт · гор. -120</div>
+              <div class="pt-q">0.84 <span class="pt-q-unit">л/с · 3.0 м³/ч</span></div>
+              <div class="pt-tags"><span class="pt-tag">Смешанный</span></div>
+            </div>
+          </div>
+          <div class="pt-card">
+            <div class="pt-photo" style="background:linear-gradient(135deg,#060a14,#0a0812)">
+              <span style="color:var(--txt-3);font-size:28px">📷</span>
+              <div class="pt-status-pill pill-dry">Сухая</div>
+            </div>
+            <div class="pt-body">
+              <div class="pt-num">#31</div>
+              <div class="pt-meta">Южный борт · гор. -200</div>
+              <div class="pt-q" style="color:var(--txt-3)">0.00 <span class="pt-q-unit">л/с</span></div>
+              <div class="pt-tags"><span class="pt-tag">—</span></div>
+            </div>
+          </div>
+          <div class="pt-card">
+            <div class="pt-photo">
+              <span style="color:var(--txt-3);font-size:28px">📷</span>
+              <div class="pt-status-pill pill-new">Новая</div>
+            </div>
+            <div class="pt-body">
+              <div class="pt-num">#38</div>
+              <div class="pt-meta">С-Восточный борт · гор. -160</div>
+              <div class="pt-q">1.20 <span class="pt-q-unit">л/с</span></div>
+            </div>
+          </div>
+          <div class="pt-card">
+            <div class="pt-photo">
+              <span style="color:var(--txt-3);font-size:28px">📷</span>
+              <div class="pt-status-pill pill-active">● Активная</div>
+            </div>
+            <div class="pt-body">
+              <div class="pt-num">#12</div>
+              <div class="pt-meta">Северный борт · гор. -130</div>
+              <div class="pt-q">3.40 <span class="pt-q-unit">л/с</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <span>● ONLINE</span><span class="sb-sep">|</span><span>38 точек · 31 активных · 3 паводковых</span><span class="sb-sep">|</span><span>Нед. 18</span>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     ЭКРАН 4: АНАЛИТИКА
+     ════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-analytics">
+<div class="shell">
+  <div class="shell-header">
+    <div class="brand"><div class="brand-icon">RG</div><div><div class="brand-name">RG-Gold Monitoring</div><div style="font-size:10px;color:var(--txt-3)">Аналитика</div></div></div>
+    <div class="header-right"><div class="net-badge"><div class="net-dot"></div> Online</div><div class="user-badge"><div class="user-avatar">АБ</div><span>А. Байжанов</span></div></div>
+  </div>
+  <div class="shell-body">
+    <div class="sidebar">
+      <div class="sb-section"><div class="sb-label">Мониторинг</div>
+        <div class="sb-item"><span class="sb-icon">⊞</span><span>Dashboard</span></div>
+        <div class="sb-item"><span class="sb-icon">◉</span><span>Точки</span></div>
+      </div>
+      <div class="sb-section"><div class="sb-label">Анализ</div>
+        <div class="sb-item"><span class="sb-icon">◈</span><span>Карта</span></div>
+        <div class="sb-item active"><span class="sb-icon">▲</span><span>Аналитика</span></div>
+        <div class="sb-item"><span class="sb-icon">▤</span><span>История</span></div>
+        <div class="sb-item"><span class="sb-icon">◧</span><span>Отчёт</span></div>
+      </div>
+      <div class="sb-footer"><div class="sb-item"><span class="sb-icon">⚙</span><span>Настройки</span></div></div>
+    </div>
+    <div class="content">
+      <div class="page-inner">
+        <!-- Subtabs -->
+        <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:0">
+          <div style="padding:8px 14px;font-size:12px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);cursor:pointer;margin-bottom:-1px">Сводка</div>
+          <div style="padding:8px 14px;font-size:12px;font-weight:500;color:var(--txt-2);cursor:pointer">Тренды</div>
+          <div style="padding:8px 14px;font-size:12px;font-weight:500;color:var(--txt-2);cursor:pointer">Борта</div>
+          <div style="padding:8px 14px;font-size:12px;font-weight:500;color:var(--txt-2);cursor:pointer">Горизонты</div>
+          <div style="padding:8px 14px;font-size:12px;font-weight:500;color:var(--txt-2);cursor:pointer">Скважины</div>
+          <div style="padding:8px 14px;font-size:12px;font-weight:500;color:var(--txt-2);cursor:pointer">Канавы</div>
+        </div>
+
+        <!-- KPI row -->
+        <div class="anl-kpi-grid">
+          <div class="anl-kpi">
+            <div class="anl-kpi-label">Суммарный Q</div>
+            <div class="anl-kpi-val c-accent">33.1 <span style="font-size:13px;color:var(--txt-3);font-weight:500">л/с</span></div>
+            <div style="font-size:10px;color:var(--txt-3);margin-top:4px">точки + скважины</div>
+          </div>
+          <div class="anl-kpi">
+            <div class="anl-kpi-label">Активных точек</div>
+            <div class="anl-kpi-val c-gold">31</div>
+            <div style="font-size:10px;color:var(--txt-3);margin-top:4px">из 38 задействовано</div>
+          </div>
+          <div class="anl-kpi">
+            <div class="anl-kpi-label">Паводковых</div>
+            <div class="anl-kpi-val c-bad">3</div>
+            <div style="font-size:10px;color:var(--bad);margin-top:4px">▲ +1 к предыдущей</div>
+          </div>
+          <div class="anl-kpi">
+            <div class="anl-kpi-label">Покрытие</div>
+            <div class="anl-kpi-val c-ok">94%</div>
+            <div style="font-size:10px;color:var(--ok);margin-top:4px">● Хорошее</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Trend chart -->
+          <div class="card">
+            <div class="sec-title">Динамика водопритока Q, л/с</div>
+            <svg class="trend-svg" height="140" viewBox="0 0 380 140">
+              <defs>
+                <linearGradient id="tg2" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#22d3ee" stop-opacity=".2"/>
+                  <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <!-- Grid -->
+              <line x1="0" y1="35" x2="380" y2="35" stroke="rgba(255,255,255,.04)" stroke-width="1"/>
+              <line x1="0" y1="70" x2="380" y2="70" stroke="rgba(255,255,255,.04)" stroke-width="1"/>
+              <line x1="0" y1="105" x2="380" y2="105" stroke="rgba(255,255,255,.04)" stroke-width="1"/>
+              <!-- Labels -->
+              <text x="2" y="33" fill="#475569" font-size="8" font-family="ui-monospace,monospace">40</text>
+              <text x="2" y="68" fill="#475569" font-size="8" font-family="ui-monospace,monospace">25</text>
+              <text x="2" y="103" fill="#475569" font-size="8" font-family="ui-monospace,monospace">10</text>
+              <!-- Area -->
+              <path d="M18,100 C40,95 60,88 80,78 C100,68 120,72 140,62 C160,52 180,55 200,45 C220,35 240,40 260,30 C280,20 300,18 320,15 C340,12 360,8 380,6 L380,130 L18,130 Z" fill="url(#tg2)"/>
+              <!-- Line -->
+              <path d="M18,100 C40,95 60,88 80,78 C100,68 120,72 140,62 C160,52 180,55 200,45 C220,35 240,40 260,30 C280,20 300,18 320,15 C340,12 360,8 380,6" fill="none" stroke="#22d3ee" stroke-width="2.2"/>
+              <!-- Pulse dot -->
+              <circle cx="380" cy="6" r="4" fill="#22d3ee"/>
+              <circle cx="380" cy="6" r="8" fill="none" stroke="#22d3ee" stroke-width="1" opacity=".4"/>
+            </svg>
+          </div>
+
+          <!-- Status distribution -->
+          <div class="card">
+            <div class="sec-title">Распределение по статусам</div>
+            <svg height="140" viewBox="0 0 260 140" style="display:block">
+              <circle cx="80" cy="70" r="55" fill="none" stroke="#1a2338" stroke-width="22"/>
+              <circle cx="80" cy="70" r="55" fill="none" stroke="#34d399" stroke-width="22" stroke-dasharray="173 173" stroke-dashoffset="0" transform="rotate(-90 80 70)"/>
+              <circle cx="80" cy="70" r="55" fill="none" stroke="#f87171" stroke-width="22" stroke-dasharray="25 346" stroke-dashoffset="-173" transform="rotate(-90 80 70)"/>
+              <circle cx="80" cy="70" r="55" fill="none" stroke="#fb923c" stroke-width="22" stroke-dasharray="30 346" stroke-dashoffset="-198" transform="rotate(-90 80 70)"/>
+              <circle cx="80" cy="70" r="55" fill="none" stroke="#22d3ee" stroke-width="22" stroke-dasharray="118 346" stroke-dashoffset="-228" transform="rotate(-90 80 70)"/>
+              <text x="80" y="66" text-anchor="middle" fill="#e2e8f0" font-size="18" font-weight="700">38</text>
+              <text x="80" y="80" text-anchor="middle" fill="#475569" font-size="9">точек</text>
+              <!-- Legend -->
+              <circle cx="160" cy="35" r="5" fill="#34d399"/>
+              <text x="172" y="39" fill="#94a3b8" font-size="10">Активные 25</text>
+              <circle cx="160" cy="58" r="5" fill="#f87171"/>
+              <text x="172" y="62" fill="#94a3b8" font-size="10">Сухие 5</text>
+              <circle cx="160" cy="81" r="5" fill="#fb923c"/>
+              <text x="172" y="85" fill="#94a3b8" font-size="10">Паводковые 3</text>
+              <circle cx="160" cy="104" r="5" fill="#22d3ee"/>
+              <text x="172" y="108" fill="#94a3b8" font-size="10">Новые / прочие 5</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Walls bars -->
+        <div class="card">
+          <div class="sec-title">Водоприток по бортам</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:110px;font-size:11px;color:var(--txt-2);text-align:right;flex-shrink:0">Восточный</div>
+              <div style="flex:1;height:18px;background:var(--bg-3);border-radius:3px;overflow:hidden;position:relative">
+                <div style="width:84%;height:100%;background:linear-gradient(90deg,#ef4444,#f87171);border-radius:3px;position:relative">
+                  <div style="position:absolute;right:6px;top:1px;font-size:10px;color:#fff;font-weight:600">8.4 л/с</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:110px;font-size:11px;color:var(--txt-2);text-align:right;flex-shrink:0">Северный</div>
+              <div style="flex:1;height:18px;background:var(--bg-3);border-radius:3px;overflow:hidden">
+                <div style="width:62%;height:100%;background:linear-gradient(90deg,#0ea5e9,#22d3ee);border-radius:3px">
+                  <div style="padding:1px 6px;font-size:10px;color:#000;font-weight:600">6.2 л/с</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:110px;font-size:11px;color:var(--txt-2);text-align:right;flex-shrink:0">С-Восточный</div>
+              <div style="flex:1;height:18px;background:var(--bg-3);border-radius:3px;overflow:hidden">
+                <div style="width:41%;height:100%;background:linear-gradient(90deg,#d97706,#fbbf24);border-radius:3px">
+                  <div style="padding:1px 6px;font-size:10px;color:#000;font-weight:600">4.1 л/с</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:110px;font-size:11px;color:var(--txt-2);text-align:right;flex-shrink:0">Западный</div>
+              <div style="flex:1;height:18px;background:var(--bg-3);border-radius:3px;overflow:hidden">
+                <div style="width:17%;height:100%;background:linear-gradient(90deg,#059669,#34d399);border-radius:3px">
+                  <div style="padding:1px 6px;font-size:10px;color:#000;font-weight:600">1.7 л/с</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status-bar"><span>● ONLINE</span><span class="sb-sep">|</span><span>Нед. 18</span><span class="sb-sep">|</span><span>38 точек</span></div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     ЭКРАН 5: КАРТА
+     ════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-map">
+<div class="shell">
+  <div class="shell-header">
+    <div class="brand"><div class="brand-icon">RG</div><div><div class="brand-name">RG-Gold Monitoring</div><div style="font-size:10px;color:var(--txt-3)">Карта карьера ЮРГ</div></div></div>
+    <div class="header-right"><div class="net-badge"><div class="net-dot"></div> Online</div><div class="user-badge"><div class="user-avatar">АБ</div><span>А. Байжанов</span></div></div>
+  </div>
+  <div class="shell-body">
+    <div class="sidebar">
+      <div class="sb-section"><div class="sb-label">Мониторинг</div>
+        <div class="sb-item"><span class="sb-icon">⊞</span><span>Dashboard</span></div>
+        <div class="sb-item"><span class="sb-icon">◉</span><span>Точки</span></div>
+      </div>
+      <div class="sb-section"><div class="sb-label">Анализ</div>
+        <div class="sb-item active"><span class="sb-icon">◈</span><span>Карта</span></div>
+        <div class="sb-item"><span class="sb-icon">▲</span><span>Аналитика</span></div>
+      </div>
+      <div class="sb-footer"><div class="sb-item"><span class="sb-icon">⚙</span><span>Настройки</span></div></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <!-- Map toolbar -->
+      <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);background:var(--bg-1)">
+        <button class="btn btn-sm">◉ Точки</button>
+        <button class="btn btn-sm" style="background:var(--accent-glow);border-color:rgba(34,211,238,.3);color:var(--accent)">⊟ Канавы</button>
+        <button class="btn btn-sm">○ Скважины</button>
+        <div style="width:1px;height:20px;background:var(--line)"></div>
+        <button class="btn btn-sm">⊕ Добавить точку</button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--txt-3)">Схема:</span>
+          <select class="form-select" style="width:auto;min-width:130px;height:30px;font-size:11px;color-scheme:dark"><option>Неделя 18 · 11.05</option></select>
+        </div>
+      </div>
+
+      <!-- Map area -->
+      <div style="flex:1;display:flex;overflow:hidden;position:relative">
+        <div class="map-mock" style="flex:1;border-radius:0;border:none;min-height:0">
+          <div class="map-grid"></div>
+          <!-- Simulated quarry outline -->
+          <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 700 500" preserveAspectRatio="xMidYMid meet">
+            <ellipse cx="350" cy="250" rx="240" ry="180" fill="none" stroke="rgba(34,211,238,.15)" stroke-width="2" stroke-dasharray="8 4"/>
+            <ellipse cx="350" cy="250" rx="170" ry="120" fill="none" stroke="rgba(34,211,238,.08)" stroke-width="1" stroke-dasharray="4 4"/>
+            <ellipse cx="350" cy="250" rx="100" ry="70" fill="none" stroke="rgba(34,211,238,.05)" stroke-width="1"/>
+            <!-- Points -->
+            <circle cx="280" cy="120" r="7" fill="#f87171" opacity=".9"/>
+            <circle cx="280" cy="120" r="13" fill="none" stroke="#f87171" stroke-width="1.5" opacity=".4"/>
+            <text x="295" y="124" fill="#f87171" font-size="10" font-weight="700">#24</text>
+            <circle cx="420" cy="140" r="7" fill="#f87171" opacity=".9"/>
+            <circle cx="420" cy="140" r="13" fill="none" stroke="#f87171" stroke-width="1.5" opacity=".4"/>
+            <text x="435" y="144" fill="#f87171" font-size="10" font-weight="700">#07</text>
+            <circle cx="180" cy="200" r="6" fill="#34d399" opacity=".9"/>
+            <text x="190" y="204" fill="#34d399" font-size="10">#12</text>
+            <circle cx="500" cy="220" r="6" fill="#34d399" opacity=".9"/>
+            <text x="510" y="224" fill="#34d399" font-size="10">#31</text>
+            <circle cx="350" cy="180" r="6" fill="#fbbf24" opacity=".9"/>
+            <text x="360" y="184" fill="#fbbf24" font-size="10">#15</text>
+            <circle cx="250" cy="310" r="6" fill="#34d399" opacity=".9"/>
+            <circle cx="440" cy="330" r="6" fill="#34d399" opacity=".9"/>
+            <circle cx="380" cy="380" r="6" fill="#94a3b8" opacity=".8"/>
+            <!-- Ditch line -->
+            <path d="M160,240 L200,260 L250,260 L300,270 L340,275" stroke="#22d3ee" stroke-width="3" fill="none" stroke-linecap="round" opacity=".7"/>
+            <path d="M160,240 L200,260 L250,260 L300,270 L340,275" stroke="#22d3ee" stroke-width="8" fill="none" stroke-linecap="round" opacity=".1"/>
+            <!-- Compass -->
+            <text x="650" y="50" fill="rgba(34,211,238,.4)" font-size="11" font-weight="700" font-family="ui-monospace,monospace">N</text>
+            <line x1="655" y1="52" x2="655" y2="70" stroke="rgba(34,211,238,.3)" stroke-width="1"/>
+          </svg>
+          <!-- Zoom controls -->
+          <div style="position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:4px">
+            <button class="btn btn-sm" style="width:32px;height:32px;padding:0;font-size:16px;background:rgba(6,8,14,.85);backdrop-filter:blur(8px)">+</button>
+            <button class="btn btn-sm" style="width:32px;height:32px;padding:0;font-size:16px;background:rgba(6,8,14,.85);backdrop-filter:blur(8px)">−</button>
+            <button class="btn btn-sm" style="width:32px;height:32px;padding:0;font-size:13px;background:rgba(6,8,14,.85);backdrop-filter:blur(8px)">⊡</button>
+          </div>
+          <!-- Point popup card -->
+          <div style="position:absolute;left:12px;top:12px;width:220px;background:rgba(11,18,32,.92);backdrop-filter:blur(12px);border:1px solid rgba(34,211,238,.25);border-radius:var(--r);box-shadow:var(--shadow),0 0 20px rgba(34,211,238,.08);overflow:hidden">
+            <div style="display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.07);position:relative">
+              <div style="font-size:20px;font-weight:800;color:var(--bad);margin-right:8px">#24</div>
+              <div class="badge badge-bad" style="font-size:9px">Паводковая</div>
+              <button style="margin-left:auto;width:20px;height:20px;border-radius:3px;border:1px solid var(--line);background:transparent;color:var(--txt-3);font-size:12px;cursor:pointer">✕</button>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--bad),transparent);opacity:.5"></div>
+            </div>
+            <div style="height:90px;background:linear-gradient(135deg,#1a0808,#0d1220);display:flex;align-items:center;justify-content:center;color:var(--txt-3);font-size:20px">📷</div>
+            <div style="padding:10px 12px;font-size:11px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--txt-3)">Q водоприток</span><span style="color:var(--gold);font-weight:700;font-family:ui-monospace,monospace">4.80 л/с</span></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--txt-3)">Интенсивность</span><span style="color:var(--txt-2)">Интенсивный</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--txt-3)">Борт</span><span style="color:var(--txt-2)">Восточный · -180</span></div>
+            </div>
+            <div style="display:flex;gap:4px;padding:8px 10px;border-top:1px solid rgba(255,255,255,.06)">
+              <button class="btn btn-sm" style="flex:1;justify-content:center">✎ Ред.</button>
+              <button class="btn btn-sm btn-primary" style="flex:1;justify-content:center">📊 График</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend panel -->
+        <div style="width:190px;border-left:1px solid var(--line);background:var(--bg-1);display:flex;flex-direction:column">
+          <div style="padding:10px 12px;border-bottom:1px solid var(--line)">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--txt-3);text-transform:uppercase">Легенда</div>
+          </div>
+          <div style="padding:10px 12px;flex:1;overflow-y:auto">
+            <div style="font-size:9px;color:var(--txt-3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Статус точки</div>
+            <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 5px var(--bad)"></div>Паводковая</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></div>Активная</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--warn)"></div>Затухающая</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--txt-3)"></div>Сухая</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></div>Новая</div>
+            </div>
+            <div style="font-size:9px;color:var(--txt-3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Объекты</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)"><div style="width:20px;height:3px;border-radius:2px;background:var(--accent);opacity:.7"></div>Канава</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)"><div style="width:9px;height:9px;border-radius:2px;background:rgba(124,58,237,.7)"></div>Скважина</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="status-bar"><span>Карьер ЮРГ</span><span class="sb-sep">|</span><span id="sb-coords" style="font-family:ui-monospace,monospace">X: 245.3400 Y: 312.7800 | 49.12345°N 76.54321°E</span><span class="sb-sep">|</span><span>Нед. 18 · 38 точек</span></div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     ЭКРАН 6: МОДАЛЫ
+     ════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-modal" style="padding:72px 20px 40px;background:var(--bg-0)">
+  <div style="max-width:1100px;margin:0 auto">
+    <div class="sec-title" style="margin-bottom:16px">Модальные окна</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+      <!-- Edit modal -->
+      <div>
+        <div style="font-size:11px;color:var(--txt-3);margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase">Окно редактирования точки</div>
+        <div class="modal-box">
+          <div class="modal-hdr">
+            <div class="modal-num">#24</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--txt-1)">Редактирование точки</div>
+              <div style="font-size:10px;color:var(--txt-3)">Восточный борт · гор. -180</div>
+            </div>
+            <div class="modal-close" style="margin-left:auto">✕</div>
+          </div>
+          <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><div class="form-label">Дата замера</div><input class="form-input" value="2025-05-11"></div>
+            <div><div class="form-label">Номер точки</div><input class="form-input" value="24"></div>
+            <div><div class="form-label">Q водоприток, л/с</div><input class="form-input" value="4.80" style="color:var(--gold)"></div>
+            <div><div class="form-label">Статус</div><select class="form-select" style="color-scheme:dark"><option>Паводковая</option></select></div>
+            <div><div class="form-label">Интенсивность</div><input class="form-input" value="Интенсивный"></div>
+            <div><div class="form-label">Борт</div><input class="form-input" value="Восточный"></div>
+            <div style="grid-column:1/-1"><div class="form-label">Комментарий</div><textarea class="form-input" style="min-height:64px;resize:vertical">Выход воды по трещинам, напорный характер</textarea></div>
+          </div>
+          <div style="padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;background:var(--bg-2)">
+            <button class="btn btn-ghost">Отмена</button>
+            <button class="btn btn-primary">Сохранить изменения</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail modal -->
+      <div>
+        <div style="font-size:11px;color:var(--txt-3);margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase">Детальная карточка точки</div>
+        <div class="modal-box">
+          <div class="modal-hdr">
+            <div class="modal-num">#07</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--txt-1)">Точка мониторинга</div>
+              <div style="font-size:10px;color:var(--txt-3)">Северный борт · гор. -150 · 11.05.2025</div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn btn-sm">✎ Изм.</button>
+              <button class="btn btn-sm btn-danger">✕ Уд.</button>
+              <div class="modal-close">✕</div>
+            </div>
+          </div>
+          <!-- Photo -->
+          <div style="height:130px;background:linear-gradient(135deg,#091820,#0d1a10);display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line);color:var(--txt-3);font-size:28px">📷</div>
+          <!-- Data grid -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);margin-bottom:0">
+            <div style="padding:10px 14px;background:var(--bg-2)">
+              <div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Водоприток Q</div>
+              <div style="font-size:16px;font-weight:700;color:var(--gold)">2.15 <span style="font-size:10px;color:var(--txt-3)">л/с</span></div>
+            </div>
+            <div style="padding:10px 14px;background:var(--bg-2)">
+              <div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Статус</div>
+              <span class="badge badge-ok">Активная</span>
+            </div>
+            <div style="padding:10px 14px;background:var(--bg-2)">
+              <div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Интенсивность</div>
+              <div style="font-size:12px;color:var(--txt-1)">Умеренный</div>
+            </div>
+            <div style="padding:10px 14px;background:var(--bg-2)">
+              <div style="font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Цвет воды</div>
+              <div style="font-size:12px;color:var(--txt-1)">Прозрачная</div>
+            </div>
+          </div>
+          <!-- Mini chart -->
+          <div style="padding:10px 14px;border-top:1px solid var(--line)">
+            <div style="font-size:10px;color:var(--txt-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Динамика Q за 6 недель</div>
+            <svg height="36" viewBox="0 0 280 36" style="display:block">
+              <path d="M0,30 C20,28 40,22 60,18 C80,14 100,16 120,12 C140,8 160,10 180,7 C200,4 220,6 240,4 C260,2 270,3 280,2 L280,36 L0,36 Z" fill="rgba(34,211,238,.1)"/>
+              <path d="M0,30 C20,28 40,22 60,18 C80,14 100,16 120,12 C140,8 160,10 180,7 C200,4 220,6 240,4 C260,2 270,3 280,2" fill="none" stroke="#22d3ee" stroke-width="2"/>
+              <circle cx="280" cy="2" r="3" fill="#22d3ee"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
