@@ -545,7 +545,7 @@ function initMapInteraction(canvas) {
     }
 
     // Tooltip при наведении на точку или канаву
-    if (!_mapAddMode && _mapSchemeImg && typeof MapModule !== 'undefined') {
+    if (!_mapAddMode && !_mapDragging && _mapSchemeImg && typeof MapModule !== 'undefined') {
       var imgX = (cx - _mapOffX) / _mapScale;
       var imgY = (cy - _mapOffY) / _mapScale;
       // Сначала проверяем канавы (они поверх)
@@ -1628,6 +1628,18 @@ function closePoiCard() {
   var card = document.getElementById('poi-card');
   if (card) card.remove();
 }
+
+(function() {
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    // poi-card (точки интереса)
+    var poiCard = document.getElementById('poi-card');
+    if (poiCard) { poiCard.remove(); return; }
+    // map-card (карточка точки на карте)
+    var mapCard = document.getElementById('map-point-card');
+    if (mapCard) { mapCard.remove(); return; }
+  });
+})();
 
 // Открываем модальное окно добавления замера для точки интереса
 function openAddFormFromPoi(p) {

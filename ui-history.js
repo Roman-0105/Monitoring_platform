@@ -135,6 +135,11 @@ function initHistoryTab() {
   if (sel2 && !sel2._bound) {
     sel2._bound = true;
     sel2.addEventListener('change', function() {
+      if (sel2.value && sel2.value === _histState.selectedPoint) {
+        Toast.show('Выберите другую точку для сравнения', 'warning');
+        sel2.value = _histState.selectedPoint2 || '';
+        return;
+      }
       _histState.selectedPoint2 = sel2.value || null;
       _histState.clickedDay     = null;
       loadAndRenderHistory();

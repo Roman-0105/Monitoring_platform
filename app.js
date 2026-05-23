@@ -163,6 +163,7 @@ window.initApp = function() {
     }
   }).catch(function(err) {
     Diagnostics.setError('sync', 'Начальная загрузка: ' + err.message);
+    Toast.fail('init-load', 'Ошибка загрузки данных: ' + (err.message || 'проверьте соединение'));
     renderWorkers();
     renderPointsList();
     initMapFilters();
