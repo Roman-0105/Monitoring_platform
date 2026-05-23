@@ -773,7 +773,9 @@ function _anlRenderWells() {
     }).slice(0, 3);
 
     if (!withMeas.length) {
-      trendEl.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">Замеры по скважинам загружаются…</p>';
+      var anyLoaded = wells.some(function(w) { return WellsState.measurements[w.id] !== undefined; });
+      trendEl.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">' +
+        (anyLoaded ? 'Недостаточно данных для тренда (нужно ≥2 замера на скважину)' : 'Замеры загружаются…') + '</p>';
       return;
     }
 
