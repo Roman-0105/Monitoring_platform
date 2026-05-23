@@ -31,7 +31,7 @@ var ReportState = {
 // Рендер текста от AI: экранирует HTML + рендерит **bold** и переносы строк
 function renderAIText(text) {
   if (!text) return '';
-  return escAttr(text)
+  return escHTML(text)
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     .replace(/\n/g, '<br>');
 }
@@ -831,7 +831,9 @@ function generateAIBlocks(s) {
   return callClaudeAPI(s.apiKey, prompt).then(function(text) {
     var clean = text.replace(/```/g,'').trim();
     return { summary: clean, compare: '', recommendations: '' };
-  }).catch(function() { return {}; });
+  }).catch(function(err) {
+    return { error: err && err.message ? err.message : 'Ошибка API' };
+  });
 }
 
 // ── Захват карты ──────────────────────────────────────────
@@ -1414,11 +1416,11 @@ function buildPointCard(pb, pa, s) {
   var numHist = ((ReportState.ptHistory || {})[String(pb.pointNumber)] || []).length;
   var metricsRow = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e0e6f0">' +
     (qa != null
-      ? '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">" + (isSingle && pa && pa.monitoringDate ? normDateISO(pa.monitoringDate).slice(5).split("-").reverse().join(".") : "Q нед. А") + "</div>' +
+      ? '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">' + (isSingle && pa && pa.monitoringDate ? normDateISO(pa.monitoringDate).slice(5).split('-').reverse().join('.') : 'Q нед. А') + '</div>' +
           '<div style="font-size:14px;font-weight:700;color:#1a1a2e">' + qa.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>'
       : '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Метод</div>' +
           '<div style="font-size:11px;color:#555">' + escAttr(pb.measureMethod || '—') + '</div></div>') +
-    '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">" + (isSingle && pb.monitoringDate ? normDateISO(pb.monitoringDate).slice(5).split("-").reverse().join(".") : "Q нед. Б") + "</div>' +
+    '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">' + (isSingle && pb.monitoringDate ? normDateISO(pb.monitoringDate).slice(5).split('-').reverse().join('.') : 'Q нед. Б') + '</div>' +
       '<div style="font-size:14px;font-weight:700;color:#1a73e8">' + qb.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>' +
     '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Изменение</div>' +
       '<div style="font-size:14px;font-weight:700;color:' + trendColor + '">' +
@@ -1619,7 +1621,9 @@ function buildReportHTML(s) {
     '</div></div>';
 
   // ── Сводка
-  var summaryAI = ai.summary ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.summary) + '</div>' : '';
+  var summaryAI = ai.error
+    ? '<div class="rp-ai-text" style="color:#d93025"><span class="rp-ai-badge" style="background:#d93025">AI</span>⚠ ' + escHTML(ai.error) + '</div>'
+    : ai.summary ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.summary) + '</div>' : '';
 
   var summaryContent = '';
   if (isSingle) {
