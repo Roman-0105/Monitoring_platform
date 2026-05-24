@@ -322,39 +322,83 @@ function _anlRenderTrend() {
   var grid = ySteps.map(function(q) {
     var y = py(q).toFixed(1);
     return '<line x1="' + PL + '" y1="' + y + '" x2="' + (W - PR) + '" y2="' + y + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
-           '<text x="' + (PL - 4) + '" y="' + (parseFloat(y) + 3) + '" fill="#6e7681" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
+           '<text x="' + (PL - 4) + '" y="' + (parseFloat(y) + 3) + '" fill="var(--txt-3)" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
   }).join('');
 
   var linePts = periods.map(function(p, i) { return px(i).toFixed(1) + ',' + py(p.totalQ).toFixed(1); }).join(' ');
   var smoothLine = _anlPtsToSmooth(linePts);
   var areaPts = smoothLine + ' L' + px(n - 1).toFixed(1) + ',' + (PT + cH) + ' L' + PL + ',' + (PT + cH) + ' Z';
 
+  // Dots with pulse ring on current date point
   var dots = periods.map(function(p, i) {
     var isCur = p.date === _anlDate, isCmp = p.date === _anlCompare;
-    var r = isCur ? 4.5 : 2.5, fill = isCmp ? '#f9ab00' : '#58a6ff';
-    return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(p.totalQ).toFixed(1) + '" r="' + r + '" fill="' + fill + '"' + (isCur ? ' stroke="var(--bg-0,#0d1117)" stroke-width="1.5"' : '') + '/>';
+    var cx = px(i).toFixed(1), cy = py(p.totalQ).toFixed(1);
+    var fill = isCmp ? 'var(--data-gold)' : 'var(--gold)';
+    var out = '';
+    if (isCur) {
+      out += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="none" stroke="var(--gold)" stroke-width="1.5" opacity=".5">' +
+             '<animate attributeName="r" values="5;10;5" dur="2.2s" repeatCount="indefinite"/>' +
+             '<animate attributeName="opacity" values=".5;.08;.5" dur="2.2s" repeatCount="indefinite"/>' +
+             '</circle>';
+    }
+    out += '<circle class="anl-tr-dot" data-i="' + i + '" cx="' + cx + '" cy="' + cy + '" r="' + (isCur ? 4.5 : 2.5) + '" fill="' + fill + '"' + (isCur ? ' stroke="var(--bg-0)" stroke-width="1.5"' : '') + '/>';
+    return out;
+  }).join('');
+
+  // Invisible hover rects for tooltip
+  var halfGap = cW / Math.max(n - 1, 1) / 2;
+  var hoverRects = periods.map(function(p, i) {
+    var x = px(i);
+    return '<rect class="anl-tr-hit" data-i="' + i + '" x="' + (x - halfGap).toFixed(1) + '" y="' + PT + '" width="' + (halfGap * 2).toFixed(1) + '" height="' + cH + '" fill="transparent" style="cursor:crosshair"/>';
   }).join('');
 
   var step = Math.ceil(n / 7);
   var xLbls = periods.map(function(p, i) {
     if (i % step !== 0 && i !== n - 1) return '';
-    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (p.date === _anlDate ? '#58a6ff' : '#6e7681') + '" font-size="8" text-anchor="middle">' + formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</text>';
+    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (p.date === _anlDate ? 'var(--gold)' : 'var(--txt-3)') + '" font-size="8" text-anchor="middle">' + formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</text>';
   }).join('');
 
-  var legend = '<text x="' + PL + '" y="' + (H - 14) + '" fill="#8b949e" font-size="8">● текущий</text>' +
-    (_anlCompare ? '<text x="' + (PL + 70) + '" y="' + (H - 14) + '" fill="#f9ab00" font-size="8">● сравниваемый</text>' : '');
+  var legend = '<text x="' + PL + '" y="' + (H - 14) + '" fill="var(--txt-2)" font-size="8">● текущий</text>' +
+    (_anlCompare ? '<text x="' + (PL + 70) + '" y="' + (H - 14) + '" fill="var(--data-gold)" font-size="8">● сравниваемый</text>' : '');
 
-  el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+  el.innerHTML = '<div style="position:relative">' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
     '<defs><linearGradient id="anlTG" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0%" stop-color="#58a6ff" stop-opacity=".18"/><stop offset="100%" stop-color="#58a6ff" stop-opacity="0"/>' +
+    '<stop offset="0%" stop-color="var(--gold)" stop-opacity=".22"/><stop offset="100%" stop-color="var(--gold)" stop-opacity="0"/>' +
     '</linearGradient></defs>' +
     grid +
     '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
     '<path d="' + areaPts + '" fill="url(#anlTG)"/>' +
-    '<path d="' + smoothLine + '" fill="none" stroke="#58a6ff" stroke-width="2.5"/>' +
+    '<path d="' + smoothLine + '" fill="none" stroke="var(--gold)" stroke-width="2"/>' +
     dots + xLbls + legend +
-    '<text x="14" y="' + (PT + cH / 2) + '" fill="#6e7681" font-size="9" text-anchor="middle" transform="rotate(-90 14 ' + (PT + cH / 2) + ')">л/с</text>' +
-  '</svg>';
+    '<text x="14" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="9" text-anchor="middle" transform="rotate(-90 14 ' + (PT + cH / 2) + ')">л/с</text>' +
+    hoverRects +
+    '</svg>' +
+    '<div class="chart-tooltip" id="anl-trend-tip"></div>' +
+    '</div>';
+
+  // Wire up tooltip
+  var tip = el.querySelector('#anl-trend-tip');
+  var svgEl = el.querySelector('svg');
+  el.querySelectorAll('.anl-tr-hit').forEach(function(rect) {
+    rect.addEventListener('mouseenter', function() {
+      var i = parseInt(this.getAttribute('data-i'));
+      var p = periods[i];
+      if (!p || !tip) return;
+      var scale = svgEl.offsetWidth / W;
+      var domX  = px(i) * scale;
+      var domY  = py(p.totalQ) * scale;
+      tip.innerHTML =
+        '<div class="chart-tooltip-date">' + formatMonitoringDate(p.date) + '</div>' +
+        '<div class="chart-tooltip-val" style="color:var(--gold)">' + p.totalQ.toFixed(2) + ' л/с</div>' +
+        '<div style="font-size:10px;color:var(--txt-3)">' + lpsToM3h(p.totalQ).toFixed(2) + ' м³/ч · ' + p.count + ' т.</div>';
+      var tipW = 138;
+      tip.style.left = (domX + tipW > svgEl.offsetWidth ? domX - tipW - 4 : domX + 8) + 'px';
+      tip.style.top  = Math.max(0, domY - 36) + 'px';
+      tip.classList.add('visible');
+    });
+    rect.addEventListener('mouseleave', function() { if (tip) tip.classList.remove('visible'); });
+  });
 }
 
 // ── Алерты ───────────────────────────────────────────────────
@@ -446,17 +490,23 @@ function _anlRenderStatusBars() {
   periods.forEach(function(p, i) {
     var x = PL + i * gap + (gap - barW) / 2;
     var isCur = p.date === _anlDate, yOff = PT + cH;
+    var topY = yOff;
     statuses.forEach(function(s) {
       var cnt = p.byStatus[s] || 0;
       if (!cnt) return;
       var bH = (cnt / maxTotal) * cH;
       yOff -= bH;
-      bars += '<rect x="' + x.toFixed(1) + '" y="' + yOff.toFixed(1) + '" width="' + barW + '" height="' + bH.toFixed(1) + '" fill="' + clrs[s] + '" opacity="' + (isCur ? '1' : '.7') + '" rx="1"/>';
+      topY = yOff;
+      bars += '<rect x="' + x.toFixed(1) + '" y="' + yOff.toFixed(1) + '" width="' + barW + '" height="' + bH.toFixed(1) + '" fill="' + clrs[s] + '" opacity="' + (isCur ? '1' : '.72') + '" rx="1">' +
+              '<title>' + formatMonitoringDate(p.date) + ' · ' + escHTML(s) + ': ' + cnt + '</title></rect>';
     });
-    bars += '<text x="' + (x + barW / 2).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (isCur ? '#58a6ff' : '#6e7681') + '" font-size="8" text-anchor="middle">' +
+    // Total count above bar
+    if (p.count > 0)
+      bars += '<text x="' + (x + barW / 2).toFixed(1) + '" y="' + (topY - 2).toFixed(1) + '" fill="' + (isCur ? 'var(--gold)' : 'var(--txt-3)') + '" font-size="8" text-anchor="middle" font-weight="' + (isCur ? '700' : '400') + '">' + p.count + '</text>';
+    bars += '<text x="' + (x + barW / 2).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (isCur ? 'var(--gold)' : 'var(--txt-3)') + '" font-size="8" text-anchor="middle">' +
       formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</text>';
     if (isCur)
-      bars += '<rect x="' + (x - 1).toFixed(1) + '" y="' + (PT + (1 - p.count / maxTotal) * cH - 2).toFixed(1) + '" width="' + (barW + 2) + '" height="' + (p.count / maxTotal * cH + 2).toFixed(1) + '" fill="none" stroke="rgba(88,166,255,.4)" stroke-width="1.5" rx="2"/>';
+      bars += '<rect x="' + (x - 1).toFixed(1) + '" y="' + (PT + (1 - p.count / maxTotal) * cH - 2).toFixed(1) + '" width="' + (barW + 2) + '" height="' + (p.count / maxTotal * cH + 2).toFixed(1) + '" fill="none" stroke="rgba(34,211,238,.35)" stroke-width="1.5" rx="2"/>';
   });
 
   var legHtml = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">' + statuses.map(function(s) {
@@ -464,9 +514,9 @@ function _anlRenderStatusBars() {
       '<span style="width:9px;height:9px;border-radius:2px;background:' + clrs[s] + ';display:inline-block"></span>' + escHTML(s) + '</span>';
   }).join('') + '</div>';
 
-  el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+  el.innerHTML = '<div style="position:relative"><svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
     '<line x1="' + PL + '" y1="' + (PT + cH) + '" x2="' + (W - PR) + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.06)" stroke-width="1"/>' +
-    bars + '</svg>' + legHtml;
+    bars + '</svg></div>' + legHtml;
 }
 
 // ── Тепловой календарь покрытия ──────────────────────────────
@@ -597,53 +647,112 @@ function _anlRenderMatrix() {
   el.innerHTML = '<div style="overflow-x:auto"><table class="anl-mx"><thead>' + hdr + '</thead><tbody>' + rows + foot + '</tbody></table></div>';
 }
 
-// ── Распределение по бортам ──────────────────────────────────
+// ── Распределение по бортам (полярный график) ────────────────
 function _anlRenderWalls() {
   var el = document.getElementById('anl-walls');
   if (!el) return;
   var pts = _anlCurrentPts();
   var wallDefs = [
-    { key: 'Северный',         lbl: 'Северный',         clr: '#58a6ff' },
-    { key: 'Северо-восточный', lbl: 'Северо-восточный', clr: '#7ecfff' },
-    { key: 'Восточный',        lbl: 'Восточный',        clr: '#ea4335' },
-    { key: 'Юго-восточный',    lbl: 'Юго-восточный',   clr: '#ff7961' },
-    { key: 'Южный',            lbl: 'Южный',            clr: '#f9ab00' },
-    { key: 'Юго-западный',     lbl: 'Юго-западный',    clr: '#ffcc57' },
-    { key: 'Западный',         lbl: 'Западный',         clr: '#3fb950' },
-    { key: 'Северо-западный',  lbl: 'Северо-западный', clr: '#85e89d' },
+    { key: 'Северный',         lbl: 'С',   lblFull: 'Северный',         angle: -Math.PI / 2,      clr: '#22d3ee' },
+    { key: 'Северо-восточный', lbl: 'СВ',  lblFull: 'Северо-вост.',     angle: -Math.PI / 4,      clr: '#7ecfff' },
+    { key: 'Восточный',        lbl: 'В',   lblFull: 'Восточный',        angle: 0,                  clr: '#ea4335' },
+    { key: 'Юго-восточный',    lbl: 'ЮВ',  lblFull: 'Юго-вост.',        angle: Math.PI / 4,        clr: '#ff7961' },
+    { key: 'Южный',            lbl: 'Ю',   lblFull: 'Южный',            angle: Math.PI / 2,        clr: '#f9ab00' },
+    { key: 'Юго-западный',     lbl: 'ЮЗ',  lblFull: 'Юго-зап.',         angle: 3 * Math.PI / 4,   clr: '#ffcc57' },
+    { key: 'Западный',         lbl: 'З',   lblFull: 'Западный',         angle: Math.PI,            clr: '#3fb950' },
+    { key: 'Северо-западный',  lbl: 'СЗ',  lblFull: 'Северо-зап.',      angle: -3 * Math.PI / 4,  clr: '#85e89d' },
   ];
+
   var wStats = {}; wallDefs.forEach(function(w) { wStats[w.key] = { count: 0, q: 0 }; });
-  var other  = { count: 0, q: 0 };
+  var other = { count: 0, q: 0 };
   pts.forEach(function(p) {
     var w = wallDefs.find(function(wd) { return wd.key === p.wall; });
     var q = parseFloat(p.flowRate) || 0;
     if (w) { wStats[p.wall].count++; wStats[p.wall].q += q; }
     else   { other.count++; other.q += q; }
   });
+
   var maxQ = Math.max.apply(null, wallDefs.map(function(w) { return wStats[w.key].q; })) || 1;
 
-  var html = wallDefs.map(function(w) {
+  // ── Полярный SVG ──
+  var CX = 110, CY = 110, R = 90;
+  var W = 340, H = 220;
+
+  // Grid rings (25%, 50%, 75%, 100%)
+  var rings = [.25, .5, .75, 1].map(function(f) {
+    return '<circle cx="' + CX + '" cy="' + CY + '" r="' + (R * f).toFixed(1) + '" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>';
+  }).join('');
+
+  // Grid ring labels (right side)
+  var ringLabels = [.25, .5, .75].map(function(f) {
+    return '<text x="' + (CX + R * f + 3).toFixed(1) + '" y="' + (CY - 2) + '" fill="var(--txt-3)" font-size="7">' + (maxQ * f).toFixed(1) + '</text>';
+  }).join('');
+
+  // Spokes
+  var spokes = wallDefs.map(function(w) {
+    var ex = CX + R * Math.cos(w.angle), ey = CY + R * Math.sin(w.angle);
+    return '<line x1="' + CX + '" y1="' + CY + '" x2="' + ex.toFixed(1) + '" y2="' + ey.toFixed(1) + '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
+  }).join('');
+
+  // Polygon (data)
+  var polyPts = wallDefs.map(function(w) {
     var s = wStats[w.key];
+    var r = s.q > 0 ? (s.q / maxQ) * R : 0;
+    return (CX + r * Math.cos(w.angle)).toFixed(2) + ',' + (CY + r * Math.sin(w.angle)).toFixed(2);
+  }).join(' ');
+  var polygon =
+    '<polygon points="' + polyPts + '" fill="rgba(34,211,238,.12)" stroke="var(--gold)" stroke-width="1.5" stroke-linejoin="round"/>';
+
+  // Dots + labels
+  var dotLabels = wallDefs.map(function(w) {
+    var s = wStats[w.key];
+    var r = s.q > 0 ? (s.q / maxQ) * R : 0;
+    var dx = CX + r * Math.cos(w.angle), dy = CY + r * Math.sin(w.angle);
+    var lx = CX + (R + 14) * Math.cos(w.angle), ly = CY + (R + 14) * Math.sin(w.angle);
+    var ta = Math.abs(Math.cos(w.angle)) < 0.2 ? 'middle' : Math.cos(w.angle) > 0 ? 'start' : 'end';
+    var dot = s.q > 0 ? '<circle cx="' + dx.toFixed(1) + '" cy="' + dy.toFixed(1) + '" r="3" fill="' + w.clr + '"/>' : '';
+    var lbl = '<text x="' + lx.toFixed(1) + '" y="' + (ly + 3).toFixed(1) + '" fill="' + (s.q > 0 ? w.clr : 'var(--txt-3)') + '" font-size="9" text-anchor="' + ta + '" font-weight="600">' + w.lbl + '</text>';
+    return dot + lbl;
+  }).join('');
+
+  var svgHtml = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block;max-height:220px">' +
+    rings + ringLabels + spokes + polygon + dotLabels +
+    '<text x="' + CX + '" y="' + (CY + 3) + '" fill="var(--txt-3)" font-size="8" text-anchor="middle">л/с</text>' +
+    '</svg>';
+
+  // ── Список бортов (справа) ──
+  var listHtml = wallDefs.map(function(w) {
+    var s = wStats[w.key];
+    if (!s.q && !s.count) return '';
     var pct = Math.round(s.q / maxQ * 100);
     var isMax = s.q > 0 && s.q === maxQ;
-    return '<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">' +
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
-        '<span style="font-size:12px;font-weight:600;color:' + w.clr + '">' + escHTML(w.lbl) + ' борт</span>' +
-        '<span style="font-size:12px;font-weight:700">' + s.q.toFixed(2) + ' л/с' +
-          (isMax ? ' <span style="color:#ea4335;font-size:10px">↑↑</span>' : '') + '</span>' +
+    return '<div style="padding:4px 0;border-bottom:1px solid var(--line-2)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">' +
+        '<span style="font-size:11px;font-weight:600;color:' + w.clr + '">' + escHTML(w.lblFull) + '</span>' +
+        '<span style="font-size:11px;font-weight:700;color:var(--txt-1)">' + s.q.toFixed(2) +
+          (isMax ? ' <span style="color:var(--bad);font-size:9px">↑↑</span>' : '') + '</span>' +
       '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-        '<div style="flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">' +
-          '<div style="width:' + pct + '%;height:100%;border-radius:3px;background:' + w.clr + '"></div>' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<div style="flex:1;height:4px;background:var(--line-2);border-radius:2px;overflow:hidden">' +
+          '<div style="width:' + pct + '%;height:100%;background:' + w.clr + ';border-radius:2px"></div>' +
         '</div>' +
-        '<span style="font-size:11px;color:var(--txt-2);width:40px;text-align:right">' + s.count + ' т.</span>' +
+        '<span style="font-size:10px;color:var(--txt-3);width:32px;text-align:right">' + s.count + ' т.</span>' +
       '</div></div>';
   }).join('');
 
   if (other.count)
-    html += '<div style="padding:7px 0;font-size:11px;color:var(--txt-3)">Прочие / не указан: ' + other.count + ' т. · ' + other.q.toFixed(2) + ' л/с</div>';
+    listHtml += '<div style="padding:5px 0;font-size:10px;color:var(--txt-3)">Прочие/не указан: ' + other.count + ' т. · ' + other.q.toFixed(2) + ' л/с</div>';
 
-  el.innerHTML = html || '<p style="color:var(--txt-3);font-size:12px">Нет данных о бортах</p>';
+  if (!listHtml && !pts.length) {
+    el.innerHTML = '<p style="color:var(--txt-3);font-size:12px">Нет данных о бортах</p>';
+    return;
+  }
+
+  el.innerHTML =
+    '<div style="display:flex;gap:12px;align-items:flex-start">' +
+      '<div style="flex-shrink:0;width:200px">' + svgHtml + '</div>' +
+      '<div style="flex:1;min-width:0">' + (listHtml || '<p style="color:var(--txt-3);font-size:12px">Нет данных</p>') + '</div>' +
+    '</div>';
 }
 
 // ── Горизонты ────────────────────────────────────────────────
@@ -804,26 +913,48 @@ function _anlRenderWells() {
              '<text x="' + (PL - 4) + '" y="' + (py(q) + 3).toFixed(1) + '" fill="#6e7681" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
     }).join('');
 
+    var gradDefs = withMeas.map(function(w, si) {
+      var clr = clrs[si];
+      return '<linearGradient id="wTG' + si + '" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="' + clr + '" stop-opacity=".18"/>' +
+        '<stop offset="100%" stop-color="' + clr + '" stop-opacity="0"/>' +
+        '</linearGradient>';
+    }).join('');
+
     var series = withMeas.map(function(w, si) {
       var clr = clrs[si], mMap = {};
       WellsState.measurements[w.id].forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
-      var spts = allD.map(function(d, i) { return mMap[d] != null ? px(i).toFixed(1) + ',' + py(mMap[d]).toFixed(1) : null; }).filter(Boolean).join(' ');
+      var validPts = allD.map(function(d, i) { return mMap[d] != null ? { x: px(i), y: py(mMap[d]), q: mMap[d] } : null; }).filter(Boolean);
+      var spts = validPts.map(function(pt) { return pt.x.toFixed(1) + ',' + pt.y.toFixed(1); }).join(' ');
+      var smoothPath = _anlPtsToSmooth(spts);
       var dashAttr = si > 0 ? ' stroke-dasharray="' + (si * 4 + 4) + ',3"' : '';
-      return '<path d="' + _anlPtsToSmooth(spts) + '" fill="none" stroke="' + clr + '" stroke-width="2"' + dashAttr + '/>';
+      // Area fill
+      var lastX = validPts.length ? validPts[validPts.length - 1].x : px(n - 1);
+      var firstX = validPts.length ? validPts[0].x : px(0);
+      var areaPath = smoothPath + ' L' + lastX.toFixed(1) + ',' + (PT + cH) + ' L' + firstX.toFixed(1) + ',' + (PT + cH) + ' Z';
+      // Value label at last valid point
+      var lastPt = validPts.length ? validPts[validPts.length - 1] : null;
+      var valLabel = lastPt && lastPt.q > 0 ?
+        '<text x="' + (lastPt.x + 3).toFixed(1) + '" y="' + (lastPt.y - 3).toFixed(1) + '" fill="' + clr + '" font-size="8" font-weight="700">' + lastPt.q.toFixed(1) + '</text>' : '';
+      return '<path d="' + areaPath + '" fill="url(#wTG' + si + ')"/>' +
+             '<path d="' + smoothPath + '" fill="none" stroke="' + clr + '" stroke-width="2"' + dashAttr + '/>' +
+             valLabel;
     }).join('');
 
     var step = Math.ceil(n / 5);
     var xL = allD.filter(function(_, i) { return i % step === 0 || i === n - 1; }).map(function(d) {
-      return '<text x="' + px(allD.indexOf(d)).toFixed(1) + '" y="' + (H - PB + 14) + '" fill="#6e7681" font-size="8" text-anchor="middle">' + formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
+      return '<text x="' + px(allD.indexOf(d)).toFixed(1) + '" y="' + (H - PB + 14) + '" fill="var(--txt-3)" font-size="8" text-anchor="middle">' + formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
     }).join('');
 
     var leg = withMeas.map(function(w, i) {
       var lx = PL + i * 130;
-      return '<line x1="' + lx + '" y1="' + (H - 13) + '" x2="' + (lx + 18) + '" y2="' + (H - 13) + '" stroke="' + clrs[i] + '" stroke-width="2"/>' +
-             '<text x="' + (lx + 22) + '" y="' + (H - 10) + '" fill="#8b949e" font-size="8.5">' + escHTML(w.name) + '</text>';
+      var dashAttr = i > 0 ? ' stroke-dasharray="' + (i * 4 + 4) + ',3"' : '';
+      return '<line x1="' + lx + '" y1="' + (H - 13) + '" x2="' + (lx + 18) + '" y2="' + (H - 13) + '" stroke="' + clrs[i] + '" stroke-width="2"' + dashAttr + '/>' +
+             '<text x="' + (lx + 22) + '" y="' + (H - 10) + '" fill="var(--txt-2)" font-size="8.5">' + escHTML(w.name) + '</text>';
     }).join('');
 
     trendEl.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+      '<defs>' + gradDefs + '</defs>' +
       '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
       grid + series + xL + leg + '</svg>';
   }

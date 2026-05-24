@@ -169,112 +169,119 @@ function renderPointsList() {
     return;
   }
 
-  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+  var html = '<div class="pt-hero-grid">';
   var _s   = _pointsFilters.search || '';
 
   for (var i = 0; i < points.length; i++) {
     var p          = points[i];
     var syncStatus = p.syncStatus || 'pending';
-    var hasPhoto   = p.photoUrls && p.photoUrls[0];
+    var hasPhoto   = !!(p.photoUrls && p.photoUrls[0]);
     var m3h        = _flowM3h(p.flowRate);
-    var stClass    = _statusClass(p.status);
 
-    var syncColor  = syncStatus === 'synced' ? 'var(--ok)' :
-                     syncStatus === 'error'  ? 'var(--bad)' : 'var(--warn)';
-    var syncTitle  = syncStatus === 'synced' ? 'Синхронизировано' :
-                     syncStatus === 'error'  ? 'Ошибка синхронизации' : 'Ожидает отправки';
-    var qColor     = p.status === 'Пересохла' ? 'var(--bad)'  :
-                     p.status === 'Иссякает'  ? 'var(--warn)' :
-                     p.status === 'Активная'  ? 'var(--ok)'   : 'var(--txt-1)';
-    var leftBorder = syncStatus !== 'synced'  ? 'border-left:3px solid var(--warn);' : '';
+    var syncColor = syncStatus === 'synced' ? 'var(--ok)' :
+                    syncStatus === 'error'  ? 'var(--bad)' : 'var(--warn)';
+    var syncTitle = syncStatus === 'synced' ? 'Синхронизировано' :
+                    syncStatus === 'error'  ? 'Ошибка синхронизации' : 'Ожидает отправки';
 
-    // ── Карточка ──
-    html += '<div class="point-card" style="display:flex;height:170px;position:relative;' + leftBorder + '">';
+    var unsyncClass = syncStatus !== 'synced' ? ' pt-hero-unsync' : '';
 
-    // Точка синхронизации
-    html += '<span title="' + syncTitle + '" style="position:absolute;top:7px;left:7px;z-index:3;' +
-            'width:7px;height:7px;border-radius:50%;background:' + syncColor + ';' +
-            'border:1px solid rgba(0,0,0,.4)"></span>';
+    // Status badge class/color (adapts to with/without photo)
+    var stBadgeCls = p.status === 'Активная'   ? (hasPhoto ? 'pt-hero-badge-ok'   : 'pt-hero-badge-ok--dark')   :
+                     p.status === 'Иссякает'   ? (hasPhoto ? 'pt-hero-badge-warn' : 'pt-hero-badge-warn--dark') :
+                     p.status === 'Пересохла'  ? (hasPhoto ? 'pt-hero-badge-bad'  : 'pt-hero-badge-bad--dark')  :
+                     p.status === 'Паводковая' ? (hasPhoto ? 'pt-hero-badge-neu'  : 'pt-hero-badge-neu--dark')  :
+                                                  (hasPhoto ? 'pt-hero-badge-neu'  : 'pt-hero-badge-neu--dark');
+    var qColor = p.status === 'Пересохла' ? 'var(--bad)'  :
+                 p.status === 'Иссякает'  ? 'var(--warn)' :
+                 p.status === 'Активная'  ? 'var(--ok)'   : 'var(--txt-1)';
 
-    // ── Левая панель (1/3) ──
-    // Делим на: верх (данные, overflow:hidden) + низ (бейджи + кнопка, фиксированный)
-    html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0;' +
-            'border-right:1px solid var(--line-2)">';
-
-    // Верхняя часть — данные
-    html += '<div style="flex:1;overflow:hidden;padding:8px 8px 4px 16px;display:flex;flex-direction:column;gap:2px">';
-    html += '<div style="font-size:19px;font-weight:700;color:var(--gold);line-height:1;margin-bottom:1px">' +
-            highlightSearch(p.pointNumber || '—', _s) + '</div>';
-    if (p.wall || p.domain) {
-      html += '<div style="font-size:11px;color:var(--txt-1);font-weight:500;' +
-              'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' +
-              highlightSearch(p.wall || p.domain, _s) + '</div>';
-    }
-    if (p.horizon)       html += _row('Горизонт', highlightSearch(p.horizon, _s));
-    if (m3h)             html += _row('Дебит', '<span style="color:var(--ok)">' + m3h + '</span>');
-    else                 html += _row('Дебит', '—');
-                         html += _row('Дата', formatMonitoringDate(p.monitoringDate));
-    if (p.measureMethod) html += _row('Способ', escAttr(p.measureMethod));
-    if (p.intensity)     html += _row('Интенс.', escAttr(p.intensity));
-    html += '</div>';
-
-    // Нижняя часть — бейджи + кнопка (всегда видна)
-    html += '<div style="flex-shrink:0;padding:4px 6px 6px 8px;' +
-            'border-top:1px solid var(--line-2);display:flex;align-items:center;' +
-            'flex-wrap:nowrap;gap:3px;min-height:30px">';
-    if (p.status) html += '<span class="badge ' + stClass + '" style="white-space:nowrap;font-size:9px">' +
-                           escAttr(p.status) + '</span>';
-    if (p.domain) html += '<span class="badge badge-new" style="white-space:nowrap;font-size:9px">' +
-                           escAttr(p.domain) + '</span>';
-    html += '<button class="btn-open-detail" data-pid="' + p.id + '" ' +
-            'style="margin-left:auto;flex-shrink:0;height:20px;padding:0 7px;border-radius:3px;' +
-            'border:1px solid rgba(88,166,255,.45);background:rgba(88,166,255,.12);' +
-            'color:var(--gold);font-size:9px;font-weight:600;cursor:pointer;' +
-            'white-space:nowrap;font-family:inherit;line-height:1">▶ Подробнее</button>';
-    html += '</div>';
-
-    html += '</div>'; // /левая панель
-
-    // ── Правая панель (2/3) — фото ──
-    html += '<div style="flex:2;position:relative;background:var(--bg-0);overflow:hidden">';
+    html += '<div class="point-card pt-hero-card' + unsyncClass + '">';
 
     if (hasPhoto) {
-      html += '<img class="card-photo-grid" data-url="' + escAttr(p.photoUrls[0]) + '" src="" alt="фото" ' +
-              'style="width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in">';
+      // ── С фото: photo-hero layout ──
+      html += '<img class="card-photo-grid pt-hero-img" data-url="' + escAttr(p.photoUrls[0]) + '" src="" alt="фото">';
+      html += '<div class="pt-hero-overlay"></div>';
+
+      // Top row: number + sync + button
+      html += '<div class="pt-hero-top">' +
+        '<div class="pt-hero-num">' + highlightSearch(p.pointNumber || '—', _s) + '</div>' +
+        '<div class="pt-hero-top-right">' +
+          '<span class="pt-hero-sync" title="' + syncTitle + '" style="background:' + syncColor + '"></span>' +
+          '<button class="btn-open-detail pt-hero-detail-btn" data-pid="' + p.id + '">▶ Открыть</button>' +
+        '</div>' +
+        '</div>';
+
+      // Bottom: wall, Q, date, status
+      html += '<div class="pt-hero-bottom">';
+      if (p.wall || p.domain) {
+        html += '<div class="pt-hero-wall-lbl">' + escHTML((p.wall ? p.wall + ' борт' : '') + (p.wall && p.domain ? ' · ' : '') + (p.domain || '')) + '</div>';
+      }
+      html += '<div class="pt-hero-kpi-row">' +
+        '<div class="pt-hero-q">' +
+          '<span class="pt-hero-q-val">' + (m3h || '—') + '</span>' +
+          (m3h ? '<span class="pt-hero-q-unit">м³/ч</span>' : '') +
+        '</div>' +
+        '<div class="pt-hero-meta">' +
+          (p.horizon ? escHTML(p.horizon) + '<br>' : '') +
+          formatMonitoringDate(p.monitoringDate) +
+        '</div>' +
+        '</div>';
+      html += '<div class="pt-hero-badges">';
+      if (p.status) html += '<span class="pt-hero-badge ' + stBadgeCls + '">' + escHTML(p.status) + '</span>';
+      if (p.intensity) html += '<span class="pt-hero-badge pt-hero-badge-neu">' + escHTML(p.intensity) + '</span>';
+      html += '</div>';
+      html += '</div>'; // /pt-hero-bottom
+
     } else {
-      html += '<div style="width:100%;height:100%;display:flex;flex-direction:column;' +
-              'align-items:center;justify-content:center;gap:5px;color:var(--txt-3);font-size:10px">' +
-              '<div style="width:28px;height:22px;border:1px dashed var(--txt-3);border-radius:3px;' +
-              'display:flex;align-items:center;justify-content:center;font-size:13px">—</div>' +
-              'нет фото</div>';
+      // ── Без фото: data-first layout, theme-aware ──
+      html += '<div class="pt-hero-no-photo"></div>';
+
+      // Top row: number + sync + button (dark variants)
+      html += '<div class="pt-hero-top">' +
+        '<div class="pt-hero-num pt-hero-num--dark">' + highlightSearch(p.pointNumber || '—', _s) + '</div>' +
+        '<div class="pt-hero-top-right">' +
+          '<span class="pt-hero-sync" title="' + syncTitle + '" style="background:' + syncColor + '"></span>' +
+          '<button class="btn-open-detail pt-hero-detail-btn pt-hero-detail-btn--dark" data-pid="' + p.id + '">▶ Открыть</button>' +
+        '</div>' +
+        '</div>';
+
+      // Bottom: same structure, dark variants
+      html += '<div class="pt-hero-bottom">';
+      if (p.wall || p.domain) {
+        html += '<div class="pt-hero-wall-lbl pt-hero-wall-lbl--dark">' + escHTML((p.wall ? p.wall + ' борт' : '') + (p.wall && p.domain ? ' · ' : '') + (p.domain || '')) + '</div>';
+      }
+      html += '<div class="pt-hero-kpi-row">' +
+        '<div class="pt-hero-q">' +
+          '<span class="pt-hero-q-val pt-hero-q-val--dark" style="color:' + qColor + '">' + (m3h || '—') + '</span>' +
+          (m3h ? '<span class="pt-hero-q-unit pt-hero-q-unit--dark">м³/ч</span>' : '') +
+        '</div>' +
+        '<div class="pt-hero-meta pt-hero-meta--dark">' +
+          (p.horizon ? escHTML(p.horizon) + '<br>' : '') +
+          formatMonitoringDate(p.monitoringDate) +
+        '</div>' +
+        '</div>';
+      html += '<div class="pt-hero-badges">';
+      if (p.status) html += '<span class="pt-hero-badge ' + stBadgeCls + '">' + escHTML(p.status) + '</span>';
+      if (p.measureMethod) html += '<span class="pt-hero-badge pt-hero-badge-neu--dark">' + escHTML(p.measureMethod) + '</span>';
+      if (p.intensity)     html += '<span class="pt-hero-badge pt-hero-badge-neu--dark">' + escHTML(p.intensity) + '</span>';
+      html += '</div>';
+      html += '</div>'; // /pt-hero-bottom
     }
 
-    // Горизонт поверх фото (левый верх)
-    if (p.horizon) {
-      html += '<div style="position:absolute;top:6px;left:6px;' +
-              'background:rgba(13,17,23,.82);border:1px solid var(--line);' +
-              'border-radius:3px;padding:2px 5px;font-size:9px;color:var(--txt-3)">' +
-              escAttr(p.horizon) + '</div>';
-    }
-
-    // Дебит поверх фото (правый низ)
-    if (m3h) {
-      html += '<div style="position:absolute;bottom:6px;right:6px;' +
-              'background:rgba(13,17,23,.82);border:1px solid var(--line);' +
-              'border-radius:3px;padding:2px 6px;font-size:10px;font-weight:600;color:' + qColor + '">' +
-              m3h + '</div>';
-    }
-
-    html += '</div>'; // /правая панель
-    html += '</div>'; // /карточка
+    html += '</div>'; // /pt-hero-card
   }
 
-  html += '</div>'; // /grid
+  html += '</div>'; // /pt-hero-grid
   container.innerHTML = html;
 
   // Загружаем фото
   container.querySelectorAll('.card-photo-grid').forEach(function(img) {
     Photos.setImageSrc(img, img.dataset.url);
+    img.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _openPhotoLightbox([{ photoUrl: this.dataset.url }], 0);
+    });
+    img.style.cursor = 'zoom-in';
   });
 
   // Кнопки «Подробнее»
