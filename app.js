@@ -163,6 +163,7 @@ window.initApp = function() {
     }
   }).catch(function(err) {
     Diagnostics.setError('sync', 'Начальная загрузка: ' + err.message);
+    Toast.fail('init-load', 'Ошибка загрузки данных: ' + (err.message || 'проверьте соединение'));
     renderWorkers();
     renderPointsList();
     initMapFilters();
@@ -246,8 +247,10 @@ function _updateThemeToggleUI(theme) {
   var icon  = document.getElementById('theme-icon');
   var label = document.getElementById('theme-label');
   var isDark = !theme || theme === 'default';
-  if (icon)  icon.textContent  = isDark ? '☀' : '🌑';
+  if (icon)  icon.textContent  = isDark ? '○' : '●';
   if (label) label.textContent = isDark ? ' Светлая тема' : ' Тёмная тема';
+  var btn = document.getElementById('theme-toggle-btn');
+  if (btn) btn.setAttribute('data-active-theme', isDark ? 'dark' : 'light');
 }
 
 // ── Сворачивание сайдбара ─────────────────────────────────

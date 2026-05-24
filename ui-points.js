@@ -1167,12 +1167,40 @@ function saveNewPoint() {
 
 // ── Модал редактирования ──────────────────────────────────
 
+var _editSnap = {};
+
+function _editGetSnap() {
+  var ids = ['e-monitoring-date','e-num','e-lat','e-lon','e-intensity',
+             'e-flowrate','e-color','e-wall','e-domain','e-status',
+             'e-measure','e-horizon','e-comment'];
+  var s = {};
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    s[id] = el ? el.value : '';
+  });
+  return s;
+}
+
+function _editIsDirty() {
+  var keys = Object.keys(_editSnap);
+  for (var i = 0; i < keys.length; i++) {
+    var el = document.getElementById(keys[i]);
+    if (el && el.value !== _editSnap[keys[i]]) return true;
+  }
+  return false;
+}
+
 function initEditModal() {
   var closeBtn = document.getElementById('edit-modal-close');
-  if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
+  if (closeBtn) closeBtn.addEventListener('click', function() {
+    if (_editIsDirty() && !confirm('Есть несохранённые изменения. Закрыть без сохранения?')) return;
+    closeEditModal();
+  });
   var overlay  = document.getElementById('edit-modal');
   if (overlay) overlay.addEventListener('click', function(e) {
-    if (e.target === overlay) closeEditModal();
+    if (e.target !== overlay) return;
+    if (_editIsDirty() && !confirm('Есть несохранённые изменения. Закрыть без сохранения?')) return;
+    closeEditModal();
   });
   var form = document.getElementById('edit-form');
   if (form) form.addEventListener('submit', function(e) { e.preventDefault(); saveEditedPoint(); });
@@ -1267,9 +1295,11 @@ function openEditModal(id) {
   if (eNewPrev) eNewPrev.innerHTML = '';
   document.getElementById('edit-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  _editSnap = _editGetSnap();
 }
 
 function closeEditModal() {
+  _editSnap = {};
   document.getElementById('edit-modal').style.display = 'none';
   document.body.style.overflow = '';
   AppState.editingPointId = null;
@@ -1359,27 +1389,26 @@ function deletePointPhoto() {
   if (!AppState.editingPointId) return;
   if (!confirm('Удалить фото этой точки?')) return;
   var id = AppState.editingPointId;
-  AppState.syncing = true;
   showLoader('Удаление фото...');
-
-  var pt = Points.getById(id);
-  if (pt && pt.photoUrls && pt.photoUrls[0] && typeof Photos !== 'undefined') {
-    Photos.clearCache(pt.photoUrls[0]);
-  }
-  if (pt) { pt.photoUrls = []; Storage.cachePoints(Points.getList()); }
-
-  var preview = document.getElementById('e-photo-preview');
-  if (preview) preview.innerHTML = '';
-  var delBtn = document.getElementById('e-delete-photo-btn');
-  if (delBtn) delBtn.style.display = 'none';
-  renderPointsList();
-  hideLoader();
-  AppState.syncing = false;
 
   Api.deletePhoto(id).then(function() {
     return Points.update(id, { photoUrls: [] });
+  }).then(function() {
+    var pt = Points.getById(id);
+    if (pt && pt.photoUrls && pt.photoUrls[0] && typeof Photos !== 'undefined') {
+      Photos.clearCache(pt.photoUrls[0]);
+    }
+    if (pt) { pt.photoUrls = []; Storage.cachePoints(Points.getList()); }
+    var preview = document.getElementById('e-photo-preview');
+    if (preview) preview.innerHTML = '';
+    var delBtn = document.getElementById('e-delete-photo-btn');
+    if (delBtn) delBtn.style.display = 'none';
+    renderPointsList();
+    hideLoader();
   }).catch(function(err) {
     Diagnostics.setError('photo', 'Удаление фото: ' + err.message);
+    Toast.show('Ошибка удаления фото: ' + (err.message || 'неизвестная ошибка'), 'error');
+    hideLoader();
   });
 }
 

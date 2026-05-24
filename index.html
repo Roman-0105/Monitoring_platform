@@ -49,9 +49,10 @@
           <span class="tab-icon">⏻</span>
           <span class="tab-label"> Выйти</span>
         </button>
-        <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Сменить тему">
-          <span class="tab-icon" id="theme-icon">☀</span>
+        <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Сменить тему" data-active-theme="dark">
+          <span class="tab-icon theme-toggle-icon" id="theme-icon">○</span>
           <span class="tab-label" id="theme-label"> Светлая тема</span>
+          <span class="theme-switch-pill" aria-hidden="true"><span class="theme-switch-knob"></span></span>
         </button>
       </div>
     </nav>
