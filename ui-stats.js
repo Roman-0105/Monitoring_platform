@@ -649,23 +649,24 @@ function _anlRenderMatrix() {
   el.innerHTML = '<div style="overflow-x:auto"><table class="anl-mx"><thead>' + hdr + '</thead><tbody>' + rows + foot + '</tbody></table></div>';
 }
 
-// ── Распределение по бортам (полярный график) ────────────────
+// ── Распределение по бортам (роза ветров — секторные клинья) ─
 function _anlRenderWalls() {
   var el = document.getElementById('anl-walls');
   if (!el) return;
   var pts = _anlCurrentPts();
   var wallDefs = [
-    { key: 'Северный',         lbl: 'С',   lblFull: 'Северный',         angle: -Math.PI / 2,      clr: '#22d3ee' },
-    { key: 'Северо-восточный', lbl: 'СВ',  lblFull: 'Северо-вост.',     angle: -Math.PI / 4,      clr: '#7ecfff' },
-    { key: 'Восточный',        lbl: 'В',   lblFull: 'Восточный',        angle: 0,                  clr: '#ea4335' },
-    { key: 'Юго-восточный',    lbl: 'ЮВ',  lblFull: 'Юго-вост.',        angle: Math.PI / 4,        clr: '#ff7961' },
-    { key: 'Южный',            lbl: 'Ю',   lblFull: 'Южный',            angle: Math.PI / 2,        clr: '#f9ab00' },
-    { key: 'Юго-западный',     lbl: 'ЮЗ',  lblFull: 'Юго-зап.',         angle: 3 * Math.PI / 4,   clr: '#ffcc57' },
-    { key: 'Западный',         lbl: 'З',   lblFull: 'Западный',         angle: Math.PI,            clr: '#3fb950' },
-    { key: 'Северо-западный',  lbl: 'СЗ',  lblFull: 'Северо-зап.',      angle: -3 * Math.PI / 4,  clr: '#85e89d' },
+    { key: 'Северный',         lbl: 'С',  lblFull: 'Северный',       angle: -Math.PI / 2,     clr: '#22d3ee' },
+    { key: 'Северо-восточный', lbl: 'СВ', lblFull: 'Северо-вост.',   angle: -Math.PI / 4,     clr: '#7ecfff' },
+    { key: 'Восточный',        lbl: 'В',  lblFull: 'Восточный',      angle: 0,                 clr: '#ea4335' },
+    { key: 'Юго-восточный',    lbl: 'ЮВ', lblFull: 'Юго-вост.',      angle: Math.PI / 4,       clr: '#ff7961' },
+    { key: 'Южный',            lbl: 'Ю',  lblFull: 'Южный',          angle: Math.PI / 2,       clr: '#f9ab00' },
+    { key: 'Юго-западный',     lbl: 'ЮЗ', lblFull: 'Юго-зап.',       angle: 3 * Math.PI / 4,  clr: '#ffcc57' },
+    { key: 'Западный',         lbl: 'З',  lblFull: 'Западный',       angle: Math.PI,           clr: '#3fb950' },
+    { key: 'Северо-западный',  lbl: 'СЗ', lblFull: 'Северо-зап.',    angle: -3 * Math.PI / 4, clr: '#85e89d' },
   ];
 
-  var wStats = {}; wallDefs.forEach(function(w) { wStats[w.key] = { count: 0, q: 0 }; });
+  var wStats = {};
+  wallDefs.forEach(function(w) { wStats[w.key] = { count: 0, q: 0 }; });
   var other = { count: 0, q: 0 };
   pts.forEach(function(p) {
     var w = wallDefs.find(function(wd) { return wd.key === p.wall; });
@@ -676,84 +677,92 @@ function _anlRenderWalls() {
 
   var maxQ = Math.max.apply(null, wallDefs.map(function(w) { return wStats[w.key].q; })) || 1;
 
-  // ── Полярный SVG ──
-  var CX = 110, CY = 110, R = 90;
-  var W = 340, H = 220;
+  // ── Роза ветров: каждый борт — клиновидный сектор 45° ──
+  var CX = 120, CY = 120, R = 95;
+  var W = 260, H = 260;
+  var halfSector = Math.PI / 8; // 22.5° — половина 45° сектора
 
-  // Grid rings (25%, 50%, 75%, 100%)
+  // Концентрические кольца (25, 50, 75, 100 %)
   var rings = [.25, .5, .75, 1].map(function(f) {
-    return '<circle cx="' + CX + '" cy="' + CY + '" r="' + (R * f).toFixed(1) + '" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>';
+    return '<circle cx="' + CX + '" cy="' + CY + '" r="' + (R * f).toFixed(1) +
+           '" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
   }).join('');
 
-  // Grid ring labels (right side)
-  var ringLabels = [.25, .5, .75].map(function(f) {
-    return '<text x="' + (CX + R * f + 3).toFixed(1) + '" y="' + (CY - 2) + '" fill="var(--txt-3)" font-size="7">' + (maxQ * f).toFixed(1) + '</text>';
-  }).join('');
-
-  // Spokes
+  // Линии направлений (спицы)
   var spokes = wallDefs.map(function(w) {
     var ex = CX + R * Math.cos(w.angle), ey = CY + R * Math.sin(w.angle);
-    return '<line x1="' + CX + '" y1="' + CY + '" x2="' + ex.toFixed(1) + '" y2="' + ey.toFixed(1) + '" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
+    return '<line x1="' + CX + '" y1="' + CY + '" x2="' + ex.toFixed(1) + '" y2="' + ey.toFixed(1) +
+           '" stroke="rgba(255,255,255,.06)" stroke-width="1" stroke-dasharray="3,3"/>';
   }).join('');
 
-  // Polygon (data)
-  var polyPts = wallDefs.map(function(w) {
+  // Секторы-клинья
+  var sectors = wallDefs.map(function(w) {
     var s = wStats[w.key];
-    var r = s.q > 0 ? (s.q / maxQ) * R : 0;
-    return (CX + r * Math.cos(w.angle)).toFixed(2) + ',' + (CY + r * Math.sin(w.angle)).toFixed(2);
-  }).join(' ');
-  var polygon =
-    '<polygon points="' + polyPts + '" fill="rgba(34,211,238,.12)" stroke="var(--gold)" stroke-width="1.5" stroke-linejoin="round"/>';
-
-  // Dots + labels
-  var dotLabels = wallDefs.map(function(w) {
-    var s = wStats[w.key];
-    var r = s.q > 0 ? (s.q / maxQ) * R : 0;
-    var dx = CX + r * Math.cos(w.angle), dy = CY + r * Math.sin(w.angle);
-    var lx = CX + (R + 14) * Math.cos(w.angle), ly = CY + (R + 14) * Math.sin(w.angle);
-    var ta = Math.abs(Math.cos(w.angle)) < 0.2 ? 'middle' : Math.cos(w.angle) > 0 ? 'start' : 'end';
-    var dot = s.q > 0 ? '<circle cx="' + dx.toFixed(1) + '" cy="' + dy.toFixed(1) + '" r="3" fill="' + w.clr + '"/>' : '';
-    var lbl = '<text x="' + lx.toFixed(1) + '" y="' + (ly + 3).toFixed(1) + '" fill="' + (s.q > 0 ? w.clr : 'var(--txt-3)') + '" font-size="9" text-anchor="' + ta + '" font-weight="600">' + w.lbl + '</text>';
-    return dot + lbl;
+    if (!s.q) return '';
+    var r = Math.max(4, (s.q / maxQ) * R);
+    var a0 = w.angle - halfSector, a1 = w.angle + halfSector;
+    var x0 = (CX + r * Math.cos(a0)).toFixed(2), y0 = (CY + r * Math.sin(a0)).toFixed(2);
+    var x1 = (CX + r * Math.cos(a1)).toFixed(2), y1 = (CY + r * Math.sin(a1)).toFixed(2);
+    // M center → L start-arc-point → A radius radius 0 small-arc clockwise end-arc-point → Z
+    return '<path d="M ' + CX + ' ' + CY +
+           ' L ' + x0 + ' ' + y0 +
+           ' A ' + r.toFixed(2) + ' ' + r.toFixed(2) + ' 0 0 1 ' + x1 + ' ' + y1 +
+           ' Z" fill="' + w.clr + '" opacity="0.88"/>';
   }).join('');
 
-  var svgHtml = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block;max-height:220px">' +
-    rings + ringLabels + spokes + polygon + dotLabels +
-    '<text x="' + CX + '" y="' + (CY + 3) + '" fill="var(--txt-3)" font-size="8" text-anchor="middle">л/с</text>' +
+  // Подписи направлений у внешнего края
+  var dirLabels = wallDefs.map(function(w) {
+    var d = R + 15;
+    var lx = (CX + d * Math.cos(w.angle)).toFixed(1);
+    var ly = (CY + d * Math.sin(w.angle) + 3.5).toFixed(1);
+    var ta = Math.abs(Math.cos(w.angle)) < 0.2 ? 'middle'
+           : Math.cos(w.angle) > 0 ? 'start' : 'end';
+    return '<text x="' + lx + '" y="' + ly +
+           '" fill="var(--txt-2)" font-size="9.5" text-anchor="' + ta +
+           '" font-weight="500">' + w.lbl + '</text>';
+  }).join('');
+
+  // Центральная точка
+  var centerDot = '<circle cx="' + CX + '" cy="' + CY + '" r="2.5" fill="var(--txt-3)"/>';
+
+  var svgHtml =
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:240px;max-width:100%;display:block">' +
+    rings + spokes + sectors + centerDot + dirLabels +
     '</svg>';
 
-  // ── Список бортов (справа) ──
-  var listHtml = wallDefs.map(function(w) {
+  // Легенда: только борты с Q > 0, по убыванию
+  var withQ = wallDefs.filter(function(w) { return wStats[w.key].q > 0; });
+  withQ.sort(function(a, b) { return wStats[b.key].q - wStats[a.key].q; });
+
+  var legendHtml = withQ.map(function(w) {
     var s = wStats[w.key];
-    if (!s.q && !s.count) return '';
-    var pct = Math.round(s.q / maxQ * 100);
-    var isMax = s.q > 0 && s.q === maxQ;
-    return '<div style="padding:4px 0;border-bottom:1px solid var(--line-2)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">' +
-        '<span style="font-size:11px;font-weight:600;color:' + w.clr + '">' + escHTML(w.lblFull) + '</span>' +
-        '<span style="font-size:11px;font-weight:700;color:var(--txt-1)">' + s.q.toFixed(2) +
-          (isMax ? ' <span style="color:var(--bad);font-size:9px">↑↑</span>' : '') + '</span>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px">' +
-        '<div style="flex:1;height:4px;background:var(--line-2);border-radius:2px;overflow:hidden">' +
-          '<div style="width:' + pct + '%;height:100%;background:' + w.clr + ';border-radius:2px"></div>' +
-        '</div>' +
-        '<span style="font-size:10px;color:var(--txt-3);width:32px;text-align:right">' + s.count + ' т.</span>' +
-      '</div></div>';
+    var isMax = s.q === maxQ;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;' +
+           'border-bottom:1px solid var(--line-2)">' +
+      '<span style="width:11px;height:11px;border-radius:2px;flex-shrink:0;background:' + w.clr + '"></span>' +
+      '<span style="font-size:12px;font-weight:500;color:var(--txt-1);flex:1">' + escHTML(w.lblFull) + '</span>' +
+      '<span style="font-size:12px;font-weight:700;color:var(--txt-1);white-space:nowrap">' +
+        s.q.toFixed(1) + ' <span style="font-size:10px;color:var(--txt-3);font-weight:400">л/с</span>' +
+        (isMax ? ' <span style="color:var(--bad);font-size:10px">↑↑</span>' : '') +
+      '</span>' +
+    '</div>';
   }).join('');
 
   if (other.count)
-    listHtml += '<div style="padding:5px 0;font-size:10px;color:var(--txt-3)">Прочие/не указан: ' + other.count + ' т. · ' + other.q.toFixed(2) + ' л/с</div>';
+    legendHtml += '<div style="padding:5px 0;font-size:10px;color:var(--txt-3)">' +
+      'Прочие/не указан: ' + other.count + ' т. · ' + other.q.toFixed(2) + ' л/с</div>';
 
-  if (!listHtml && !pts.length) {
+  if (!withQ.length && !pts.length) {
     el.innerHTML = '<p style="color:var(--txt-3);font-size:12px">Нет данных о бортах</p>';
     return;
   }
 
   el.innerHTML =
-    '<div style="display:flex;gap:12px;align-items:flex-start">' +
-      '<div style="flex-shrink:0;width:200px">' + svgHtml + '</div>' +
-      '<div style="flex:1;min-width:0">' + (listHtml || '<p style="color:var(--txt-3);font-size:12px">Нет данных</p>') + '</div>' +
+    '<div style="display:flex;gap:20px;align-items:flex-start">' +
+      '<div style="flex-shrink:0">' + svgHtml + '</div>' +
+      '<div style="flex:1;min-width:0;padding-top:6px">' +
+        (legendHtml || '<p style="color:var(--txt-3);font-size:12px">Нет данных</p>') +
+      '</div>' +
     '</div>';
 }
 
