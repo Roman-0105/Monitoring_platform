@@ -357,46 +357,87 @@ function _anlRenderTrend() {
   var step = Math.ceil(n / 7);
   var xLbls = periods.map(function(p, i) {
     if (i % step !== 0 && i !== n - 1) return '';
-    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (p.date === _anlDate ? 'var(--gold)' : 'var(--txt-3)') + '" font-size="8" text-anchor="middle">' + formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</text>';
+    var isCurDate = p.date === _anlDate;
+    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - 5) + '" fill="' + (isCurDate ? 'var(--gold)' : 'var(--txt-3)') +
+           '" font-size="8" text-anchor="middle" font-weight="' + (isCurDate ? '700' : '400') + '">' +
+           formatMonitoringDate(p.date).replace(/\s\d{4}/, '') + '</text>';
   }).join('');
 
-  var legend = '<text x="' + PL + '" y="' + (H - 14) + '" fill="var(--txt-2)" font-size="8">● текущий</text>' +
-    (_anlCompare ? '<text x="' + (PL + 70) + '" y="' + (H - 14) + '" fill="var(--data-gold)" font-size="8">● сравниваемый</text>' : '');
+  // Legend above chart (HTML) — built as part of outer container
+  var legendHtml =
+    '<div style="display:flex;align-items:center;justify-content:space-between;' +
+    'margin-bottom:4px;font-size:10px;color:var(--txt-2)">' +
+      '<div style="display:flex;gap:14px;align-items:center">' +
+        '<span style="display:flex;align-items:center;gap:5px">' +
+          '<span style="display:inline-block;width:18px;height:2px;background:var(--gold);vertical-align:middle"></span>' +
+          'текущий обход' +
+        '</span>' +
+        (_anlCompare ?
+          '<span style="display:flex;align-items:center;gap:5px;color:var(--data-gold)">' +
+            '<span style="display:inline-block;width:18px;height:2px;background:var(--data-gold);vertical-align:middle"></span>' +
+            'сравниваемый' +
+          '</span>' : '') +
+      '</div>' +
+      '<span style="color:var(--txt-3)">Последние ' + n + ' обходов</span>' +
+    '</div>';
 
-  el.innerHTML = '<div style="position:relative">' +
+  el.innerHTML = legendHtml + '<div style="position:relative">' +
     '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
     '<defs><linearGradient id="anlTG" x1="0" y1="0" x2="0" y2="1">' +
     '<stop offset="0%" stop-color="var(--gold)" stop-opacity=".22"/><stop offset="100%" stop-color="var(--gold)" stop-opacity="0"/>' +
     '</linearGradient></defs>' +
     grid +
     '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
+    '<line id="anl-trend-xhair" x1="0" y1="' + PT + '" x2="0" y2="' + (PT + cH) +
+    '" stroke="rgba(34,211,238,.25)" stroke-width="1" stroke-dasharray="3,3" opacity="0" style="pointer-events:none"/>' +
     '<path d="' + areaPts + '" fill="url(#anlTG)"/>' +
     '<path d="' + smoothLine + '" fill="none" stroke="var(--gold)" stroke-width="2"/>' +
-    dots + xLbls + legend +
+    dots + xLbls +
     '<text x="14" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="9" text-anchor="middle" transform="rotate(-90 14 ' + (PT + cH / 2) + ')">л/с</text>' +
     hoverRects +
     '</svg>' +
-    '<div class="chart-tooltip" id="anl-trend-tip"></div>' +
+    '<div class="chart-tooltip chart-tooltip-card" id="anl-trend-tip"></div>' +
     '</div>';
 
-  // Wire up tooltip
-  var tip = el.querySelector('#anl-trend-tip');
-  var svgEl = el.querySelector('svg');
+  // Wire up tooltip + crosshair
+  var tip    = el.querySelector('#anl-trend-tip');
+  var svgEl  = el.querySelector('svg');
+  var xhair  = svgEl.querySelector('#anl-trend-xhair');
   el.querySelectorAll('.anl-tr-hit').forEach(function(rect) {
     rect.addEventListener('mouseenter', function() {
       var i = parseInt(this.getAttribute('data-i'));
       var p = periods[i];
       if (!p || !tip) return;
+
+      // Crosshair
+      if (xhair) { xhair.setAttribute('x1', px(i).toFixed(1)); xhair.setAttribute('x2', px(i).toFixed(1)); xhair.setAttribute('opacity', '1'); }
+
+      // Delta vs previous period in series
+      var prevP = i > 0 ? periods[i - 1] : null;
+      var delta = prevP ? (p.totalQ - prevP.totalQ) : null;
+      var deltaHtml = '';
+      if (delta !== null && Math.abs(delta) > 0.001) {
+        var up = delta >= 0;
+        var dClr = up ? 'var(--bad)' : 'var(--ok)';
+        deltaHtml = '<div style="margin-top:6px;padding-top:5px;border-top:1px solid var(--line-2);' +
+          'font-size:10px;color:' + dClr + '">' +
+          (up ? '▲ +' : '▼ ') + Math.abs(delta).toFixed(2) + ' л/с к пред. обходу</div>';
+      }
+
       var scale = svgEl.offsetWidth / W;
       var domX  = px(i) * scale;
       var domY  = py(p.totalQ) * scale;
+
       tip.innerHTML =
-        '<div class="chart-tooltip-date">' + formatMonitoringDate(p.date) + '</div>' +
-        '<div class="chart-tooltip-val" style="color:var(--gold)">' + p.totalQ.toFixed(2) + ' л/с</div>' +
-        '<div style="font-size:10px;color:var(--txt-3)">' + lpsToM3h(p.totalQ).toFixed(2) + ' м³/ч · ' + p.count + ' т.</div>';
-      var tipW = 138;
+        '<div class="chart-tooltip-head">' + formatMonitoringDate(p.date) + '</div>' +
+        '<div class="chart-tooltip-big">' + p.totalQ.toFixed(2) +
+          ' <span style="font-size:11px;font-weight:400;color:var(--txt-2)">л/с</span></div>' +
+        '<div class="chart-tooltip-sub">' + lpsToM3h(p.totalQ).toFixed(2) + ' м³/ч · ' + p.count + ' т.</div>' +
+        deltaHtml;
+
+      var tipW = 155;
       tip.style.left = (domX + tipW > svgEl.offsetWidth ? domX - tipW - 4 : domX + 8) + 'px';
-      tip.style.top  = Math.max(0, domY - 36) + 'px';
+      tip.style.top  = Math.max(0, domY - 44) + 'px';
       tip.classList.add('visible');
     });
     rect.addEventListener('mouseleave', function() { if (tip) tip.classList.remove('visible'); });
@@ -973,17 +1014,37 @@ function _anlRenderWells() {
       return '<text x="' + px(allD.indexOf(d)).toFixed(1) + '" y="' + (H - PB + 14) + '" fill="var(--txt-3)" font-size="8" text-anchor="middle">' + formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
     }).join('');
 
-    var leg = withMeas.map(function(w, i) {
-      var lx = PL + i * 130;
-      var dashAttr = i > 0 ? ' stroke-dasharray="' + (i * 4 + 4) + ',3"' : '';
-      return '<line x1="' + lx + '" y1="' + (H - 13) + '" x2="' + (lx + 18) + '" y2="' + (H - 13) + '" stroke="' + clrs[i] + '" stroke-width="2"' + dashAttr + '/>' +
-             '<text x="' + (lx + 22) + '" y="' + (H - 10) + '" fill="var(--txt-2)" font-size="8.5">' + escHTML(w.name) + '</text>';
+    // Highlight rings at last data point per series
+    var rings = withMeas.map(function(w, si) {
+      var clr = clrs[si], mMap = {};
+      WellsState.measurements[w.id].forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
+      var validPts = allD.map(function(d, i) { return mMap[d] != null ? { x: px(i), y: py(mMap[d]) } : null; }).filter(Boolean);
+      if (!validPts.length) return '';
+      var lp = validPts[validPts.length - 1];
+      return '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="6" fill="none" stroke="' + clr + '" stroke-width="1.5" opacity=".45"/>' +
+             '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="3" fill="' + clr + '"/>';
     }).join('');
 
-    trendEl.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+    // HTML legend above SVG
+    var legHtml =
+      '<div style="display:flex;align-items:center;justify-content:space-between;' +
+      'margin-bottom:4px;font-size:10px;color:var(--txt-2)">' +
+        '<div style="display:flex;gap:12px;align-items:center">' +
+          withMeas.map(function(w, i) {
+            var dashStyle = i > 0 ? 'border-bottom:2px dashed ' + clrs[i] : 'border-bottom:2px solid ' + clrs[i];
+            return '<span style="display:flex;align-items:center;gap:5px">' +
+              '<span style="display:inline-block;width:18px;height:2px;' + dashStyle + ';vertical-align:middle"></span>' +
+              escHTML(w.name) +
+            '</span>';
+          }).join('') +
+        '</div>' +
+        '<span style="color:var(--txt-3)">Последние ' + n + ' замеров</span>' +
+      '</div>';
+
+    trendEl.innerHTML = legHtml + '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
       '<defs>' + gradDefs + '</defs>' +
       '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
-      grid + series + xL + leg + '</svg>';
+      grid + series + rings + xL + '</svg>';
   }
 }
 
