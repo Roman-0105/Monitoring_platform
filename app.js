@@ -319,6 +319,9 @@ function switchTab(name) {
   if (name === 'wells' && typeof initWellsTab === 'function') {
     initWellsTab();
   }
+  if (name === 'dewatering' && typeof initDewateringTab === 'function') {
+    initDewateringTab();
+  }
   var tooltipEl = document.getElementById('map-tooltip');
   if (tooltipEl) tooltipEl.style.display = 'none';
   document.querySelectorAll('.map-point-card').forEach(function(el){ el.remove(); });
