@@ -231,8 +231,10 @@ function _anlRenderKpis() {
       }
     }
   });
-  var combinedQ = totalQ + wellsQ;
-  var prevCombinedQ = prevQ + prevWellsQ;
+  // wellsQ is in м³/ч (well measurements are stored in м³/ч, not л/с)
+  // Convert to л/с before combining with points totalQ (which is in л/с)
+  var combinedQ     = totalQ + wellsQ / 3.6;
+  var prevCombinedQ = prevQ  + prevWellsQ / 3.6;
   var qDiff  = prevCombinedQ > 0 ? ((combinedQ - prevCombinedQ) / prevCombinedQ * 100) : null;
 
   var active = pts.filter(function(p) { return p.status === 'Активная' || p.status === 'Паводковая' || p.status === 'Перелив'; }).length;
@@ -280,8 +282,8 @@ function _anlRenderKpis() {
     '</div>';
   }
 
-  var qSubParts = ['т: ' + totalQ.toFixed(2)];
-  if (wellsQ > 0) qSubParts.push('скв: ' + wellsQ.toFixed(2));
+  var qSubParts = ['точки: ' + totalQ.toFixed(2) + ' л/с'];
+  if (wellsQ > 0) qSubParts.push('скважины: ' + wellsQ.toFixed(2) + ' м³/ч');
 
   el.innerHTML =
     kpi('Всего точек', pts.length,
@@ -830,7 +832,7 @@ function _anlRenderWells() {
 
     kpiEl.innerHTML =
       '<div class="anl-kpi"><div class="anl-kpi-lbl">Скважин всего</div><div class="anl-kpi-val" style="color:var(--gold)">' + wells.length + '</div><div class="anl-kpi-sub">' + active + ' акт. · ' + dry + ' сухих</div></div>' +
-      '<div class="anl-kpi"><div class="anl-kpi-lbl">Q скважин сумм.</div><div class="anl-kpi-val" style="color:var(--warn)">' + wTotalQ.toFixed(2) + ' <small>л/с</small></div><div class="anl-kpi-sub">' + lpsToM3h(wTotalQ).toFixed(2) + ' м³/ч · за неделю</div></div>' +
+      '<div class="anl-kpi"><div class="anl-kpi-lbl">Q скважин сумм.</div><div class="anl-kpi-val" style="color:var(--warn)">' + wTotalQ.toFixed(2) + ' <small>м³/ч</small></div><div class="anl-kpi-sub">' + (wTotalQ / 3.6).toFixed(2) + ' л/с · за неделю</div></div>' +
       '<div class="anl-kpi"><div class="anl-kpi-lbl">Средняя глубина</div><div class="anl-kpi-val">' + (avgD || '—') + ' <small>' + (avgD ? 'м' : '') + '</small></div><div class="anl-kpi-sub">мин: ' + (Math.min.apply(null, depths.length ? depths : [0]) || '—') + ' · макс: ' + (Math.max.apply(null, depths.length ? depths : [0]) || '—') + '</div></div>' +
       '<div class="anl-kpi"><div class="anl-kpi-lbl">Замеры загружены</div><div class="anl-kpi-val" style="color:var(--ok)">' + loaded + '</div><div class="anl-kpi-sub">из ' + wells.length + ' скважин</div></div>';
   }
@@ -869,7 +871,7 @@ function _anlRenderWells() {
         '<div class="anl-wr-name">' + escHTML(w.name) + ' <span class="anl-pill anl-pill-' + pill + '">' + escHTML(w.status || '—') + '</span></div>' +
         '<div class="anl-wr-info">' + (w.depth || '—') + ' м' + (w.azimuth != null ? ' · аз. ' + w.azimuth + '°' : '') + (w.inclination != null ? ' · нак. ' + w.inclination + '°' : '') + '</div>' +
         '</div>' + spark +
-        '<div style="text-align:right"><div class="anl-wr-q">' + q.toFixed(2) + '</div><div class="anl-wr-qu">л/с</div></div>' +
+        '<div style="text-align:right"><div class="anl-wr-q">' + q.toFixed(2) + '</div><div class="anl-wr-qu">м³/ч</div></div>' +
       '</div>';
     }).join('') || '<p style="color:var(--txt-3);font-size:12px;padding:10px">Нет данных о скважинах</p>';
   }
@@ -910,8 +912,9 @@ function _anlRenderWells() {
 
     var grid = [0, maxQ / 2, maxQ].map(function(q) {
       return '<line x1="' + PL + '" y1="' + py(q).toFixed(1) + '" x2="' + (W - PR) + '" y2="' + py(q).toFixed(1) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
-             '<text x="' + (PL - 4) + '" y="' + (py(q) + 3).toFixed(1) + '" fill="#6e7681" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
-    }).join('');
+             '<text x="' + (PL - 4) + '" y="' + (py(q) + 3).toFixed(1) + '" fill="var(--txt-3)" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
+    }).join('') +
+    '<text x="14" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="9" text-anchor="middle" transform="rotate(-90 14 ' + (PT + cH / 2) + ')">м³/ч</text>';
 
     var gradDefs = withMeas.map(function(w, si) {
       var clr = clrs[si];
