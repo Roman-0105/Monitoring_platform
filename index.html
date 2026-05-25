@@ -32,6 +32,7 @@
           <button class="tab-btn" data-tab="stats"><span class="tab-icon">◍</span><span class="tab-label"> Аналитика</span></button>
           <button class="tab-btn" data-tab="report"><span class="tab-icon">◈</span><span class="tab-label"> Отчёт</span></button>
           <button class="tab-btn" data-tab="wells"><span class="tab-icon">⊛</span><span class="tab-label"> Гор. скважины</span></button>
+          <button class="tab-btn" data-tab="dewatering"><span class="tab-icon">⛽</span><span class="tab-label"> Водоотлив</span></button>
         </div>
         <div class="sidebar-section">
           <span class="sidebar-section-label">Данные</span>
@@ -539,6 +540,20 @@
 
   </div>
 
+  <!-- Водоотлив -->
+  <div class="page" id="page-dewatering">
+    <div class="settings-subtabs" style="margin-bottom:12px">
+      <button class="btn btn-sm btn-outline active" data-dew-tab="overview">📊 Обзор</button>
+      <button class="btn btn-sm btn-outline" data-dew-tab="sumps">⛽ Зумпфы</button>
+      <button class="btn btn-sm btn-outline" data-dew-tab="journal">📝 Журнал</button>
+      <button class="btn btn-sm btn-outline" data-dew-tab="analytics">📈 Аналитика</button>
+    </div>
+    <div id="dew-panel-overview" class="dew-panel active"></div>
+    <div id="dew-panel-sumps"    class="dew-panel"></div>
+    <div id="dew-panel-journal"  class="dew-panel"></div>
+    <div id="dew-panel-analytics" class="dew-panel"></div>
+  </div>
+
   <!-- Диагностика -->
   <div class="page" id="page-diag">
     <div class="card">
@@ -970,6 +985,7 @@
 <script src="ui-report.js"></script>
 <script src="ditch-3d-fix.js"></script>
 <script src="ui-wells.js"></script>
+<script src="ui-dewatering.js"></script>
 <script src="app.js"></script>
 
 

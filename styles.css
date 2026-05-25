@@ -688,6 +688,8 @@ body {
 .settings-subtabs { display: flex; gap: 4px; margin-bottom: 12px; }
 .settings-panel { display: none; }
 .settings-panel.active { display: block; }
+.dew-panel { display: none; }
+.dew-panel.active { display: block; }
 .settings-schemes-list { display: grid; gap: 6px; }
 .color-grid { display: grid; gap: 8px; margin-bottom: 10px; }
 .color-grid--status { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
