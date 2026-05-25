@@ -879,9 +879,18 @@ function _anlRenderWells() {
   // Тренд скважин
   var trendEl = document.getElementById('anl-well-trend');
   if (trendEl) {
+    // Фильтруем скважины с ≥2 замерами, сортируем по последнему дебиту (как в рейтинге)
     var withMeas = wells.filter(function(w) {
       return WellsState.measurements[w.id] && WellsState.measurements[w.id].length >= 2;
-    }).slice(0, 3);
+    });
+    withMeas.sort(function(a, b) {
+      var ma = WellsState.measurements[a.id], mb = WellsState.measurements[b.id];
+      var qa = 0, qb = 0;
+      if (ma && ma.length) { var fa = parseFloat(ma[ma.length - 1].flowRate); if (!isNaN(fa)) qa = fa; }
+      if (mb && mb.length) { var fb = parseFloat(mb[mb.length - 1].flowRate); if (!isNaN(fb)) qb = fb; }
+      return qb - qa;
+    });
+    withMeas = withMeas.slice(0, 3);
 
     if (!withMeas.length) {
       var anyLoaded = wells.some(function(w) { return WellsState.measurements[w.id] !== undefined; });
@@ -935,10 +944,16 @@ function _anlRenderWells() {
       var lastX = validPts.length ? validPts[validPts.length - 1].x : px(n - 1);
       var firstX = validPts.length ? validPts[0].x : px(0);
       var areaPath = smoothPath + ' L' + lastX.toFixed(1) + ',' + (PT + cH) + ' L' + firstX.toFixed(1) + ',' + (PT + cH) + ' Z';
-      // Value label at last valid point
+      // Value label: left-anchored when near right edge to avoid SVG clipping
       var lastPt = validPts.length ? validPts[validPts.length - 1] : null;
-      var valLabel = lastPt && lastPt.q > 0 ?
-        '<text x="' + (lastPt.x + 3).toFixed(1) + '" y="' + (lastPt.y - 3).toFixed(1) + '" fill="' + clr + '" font-size="8" font-weight="700">' + lastPt.q.toFixed(1) + '</text>' : '';
+      var valLabel = '';
+      if (lastPt && lastPt.q > 0) {
+        var nearRight = lastPt.x > W - PR - 28;
+        var lx = nearRight ? (lastPt.x - 3).toFixed(1) : (lastPt.x + 3).toFixed(1);
+        var anchor = nearRight ? 'end' : 'start';
+        var ly = Math.max(PT + 8, lastPt.y - 4).toFixed(1);
+        valLabel = '<text x="' + lx + '" y="' + ly + '" fill="' + clr + '" font-size="8" font-weight="700" text-anchor="' + anchor + '">' + lastPt.q.toFixed(1) + '</text>';
+      }
       return '<path d="' + areaPath + '" fill="url(#wTG' + si + ')"/>' +
              '<path d="' + smoothPath + '" fill="none" stroke="' + clr + '" stroke-width="2"' + dashAttr + '/>' +
              valLabel;
