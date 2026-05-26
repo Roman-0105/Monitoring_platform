@@ -188,6 +188,10 @@ var _dewLFilter         = { sumpId: '' };
 var _dewShowPumpRegistry = false;
 var _dewEditReadingId    = null;
 var _dewEditLevelId      = null;
+var _dewDiagramPos       = {};
+var _dewDiagramDrag      = null;
+var _dewDiagramFlows     = {};
+var DEW_DN               = { sumpW: 220, sumpH: 152, destW: 190, destH: 96 };
 
 // ── Init ─────────────────────────────────────────────────────
 
@@ -342,13 +346,262 @@ function _dewRenderOverview() {
     sumpsHtml += '</div>';
   });
 
-  el.innerHTML = kpiHtml + sumpsHtml;
+  el.innerHTML = kpiHtml + sumpsHtml +
+    '<div class="card" style="padding:14px;margin-top:16px" id="dew-diagram-wrap"></div>';
+  _dewRenderDiagram(document.getElementById('dew-diagram-wrap'));
 }
 
 function _dewKpi(label, val, sub, clr) {
   return '<div class="anl-kpi"><div class="anl-kpi-lbl">' + label + '</div>' +
     '<div class="anl-kpi-val" style="color:' + clr + '">' + val + '</div>' +
     (sub ? '<div class="anl-kpi-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+// ── Блок-схема водоотлива ────────────────────────────────────
+
+function _dewDiagramLoadPos() {
+  try { _dewDiagramPos = JSON.parse(localStorage.getItem('dew_diagram_pos') || '{}'); }
+  catch(e) { _dewDiagramPos = {}; }
+}
+
+function _dewDiagramSavePos() {
+  localStorage.setItem('dew_diagram_pos', JSON.stringify(_dewDiagramPos));
+}
+
+function _dewDiagramAutoLayout() {
+  var sumps  = DewateringState.sumps;
+  var dests  = DewateringState.destinations;
+  var sGapY  = DEW_DN.sumpH + 16;
+  var dGapY  = DEW_DN.destH + 16;
+  var sx     = 20;
+  var dx     = sx + DEW_DN.sumpW + 160;
+  _dewDiagramPos = {};
+  sumps.forEach(function(s, i) { _dewDiagramPos['smp_' + s.id] = { x: sx, y: 20 + i * sGapY }; });
+  dests.forEach(function(d, i) { _dewDiagramPos['dst_' + d.id] = { x: dx, y: 20 + i * dGapY }; });
+}
+
+function _dewDiagramComputeFlows(today) {
+  var byPair = {};
+  DewateringState.meterReadings.forEach(function(r) {
+    var vol  = DewateringState.computedVolume(r) || 0;
+    if (!vol) return;
+    var pump = DewateringState.pumpById(r.pumpId);
+    if (!pump) return;
+    DewateringState.getDistributions(r).forEach(function(d) {
+      if (!d.destinationId) return;
+      var key = pump.sumpId + '|' + d.destinationId;
+      if (!byPair[key]) byPair[key] = { sumpId: pump.sumpId, destId: d.destinationId, volTotal: 0, volToday: 0 };
+      var share = vol * d.pct / 100;
+      byPair[key].volTotal += share;
+      if (r.date === today) byPair[key].volToday += share;
+    });
+  });
+  return byPair;
+}
+
+function _dewRenderDiagram(wrap) {
+  if (!wrap) return;
+  _dewDiagramLoadPos();
+
+  var today = new Date().toISOString().slice(0, 10);
+  var sumps = DewateringState.sumps;
+  var dests = DewateringState.destinations;
+  _dewDiagramFlows = _dewDiagramComputeFlows(today);
+
+  var allKeys = sumps.map(function(s) { return 'smp_' + s.id; })
+               .concat(dests.map(function(d) { return 'dst_' + d.id; }));
+  if (!allKeys.every(function(k) { return _dewDiagramPos[k]; })) _dewDiagramAutoLayout();
+
+  // Compute canvas bounds from node positions
+  var canvasW = DEW_DN.sumpW + DEW_DN.destW + 200;
+  var canvasH = Math.max(sumps.length, dests.length) * (DEW_DN.sumpH + 16) + 60;
+  allKeys.forEach(function(k) {
+    var p = _dewDiagramPos[k]; if (!p) return;
+    var isSump = k.indexOf('smp_') === 0;
+    canvasW = Math.max(canvasW, p.x + (isSump ? DEW_DN.sumpW : DEW_DN.destW) + 20);
+    canvasH = Math.max(canvasH, p.y + (isSump ? DEW_DN.sumpH : DEW_DN.destH) + 20);
+  });
+  canvasW = Math.max(canvasW, 600);
+  canvasH = Math.max(canvasH, 200);
+
+  var nodesHtml = '';
+
+  sumps.forEach(function(sump) {
+    var pos     = _dewDiagramPos['smp_' + sump.id] || { x: 20, y: 20 };
+    var pumps   = DewateringState.pumpsOfSump(sump.id);
+    var wk      = pumps.filter(function(p) { return p.status === 'working'; }).length;
+    var st      = pumps.filter(function(p) { return p.status === 'standby'; }).length;
+    var rp      = pumps.filter(function(p) { return p.status === 'repair';  }).length;
+    var pumpIds = pumps.map(function(p) { return p.id; });
+    var volToday = DewateringState.meterReadings
+      .filter(function(r) { return r.date === today && pumpIds.indexOf(r.pumpId) >= 0; })
+      .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+    var volTotal = pumpIds.reduce(function(a, pid) { return a + DewateringState.totalVolumePump(pid); }, 0);
+    var latestWL = DewateringState.waterLevels
+      .filter(function(w) { return w.sumpId === sump.id; })
+      .sort(function(a, b) { return (b.date + b.time).localeCompare(a.date + a.time); });
+    var wl    = latestWL.length ? parseFloat(latestWL[0].elevation) : null;
+    var elev  = DewateringState.sumpCurrentElevation(sump.id);
+    var depth = (wl != null && elev != null) ? (wl - elev) : null;
+    var barPct = depth != null ? Math.min(100, Math.max(0, depth / 5 * 100)) : 0;
+    var barClr = depth == null ? 'var(--txt-3)' : depth > 2 ? 'var(--bad)' : depth > 1 ? 'var(--warn)' : '#58a6ff';
+    var pills  = '';
+    if (wk) pills += '<span style="background:rgba(74,222,128,.15);color:var(--ok);border:1px solid rgba(74,222,128,.25);border-radius:3px;font-size:9px;padding:0 5px">▶ ' + wk + '</span> ';
+    if (st) pills += '<span style="background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.25);border-radius:3px;font-size:9px;padding:0 5px">◼ ' + st + '</span> ';
+    if (rp) pills += '<span style="background:rgba(248,113,113,.12);color:var(--bad);border:1px solid rgba(248,113,113,.2);border-radius:3px;font-size:9px;padding:0 5px">⚠ ' + rp + '</span>';
+
+    nodesHtml +=
+      '<div id="dew-dn-smp_' + sump.id + '" class="dew-dn"' +
+      ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.sumpW + 'px;min-height:' + DEW_DN.sumpH + 'px;' +
+      'background:var(--bg-2);border:1px solid rgba(88,166,255,.35);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'smp_' + sump.id + '\')">' +
+      '<div style="height:3px;background:rgba(88,166,255,.5)"></div>' +
+      '<div style="padding:8px 10px 8px">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px">' + escHTML(sump.name) + '</div>' +
+        '<div style="font-size:9px;color:var(--txt-3);margin-bottom:7px">' + (sump.quarry ? escHTML(sump.quarry) : 'зумпф') + '</div>' +
+        '<div style="margin-bottom:7px">' +
+          '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt-3);margin-bottom:2px">' +
+            '<span>Зеркало воды</span>' +
+            '<span style="color:' + barClr + '">' + (wl != null ? wl.toFixed(1) + ' м' + (depth != null ? ' · ' + depth.toFixed(1) + ' м' : '') : '—') + '</span>' +
+          '</div>' +
+          '<div style="height:5px;background:var(--bg-0);border-radius:3px;overflow:hidden">' +
+            '<div style="height:100%;width:' + barPct + '%;background:' + barClr + ';border-radius:3px"></div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;margin-bottom:7px">' +
+          '<div><div style="font-size:9px;color:var(--txt-3)">Сегодня</div><div style="font-size:14px;font-weight:700;color:var(--gold)">' + volToday.toFixed(0) + ' <span style="font-size:9px;font-weight:400">м³</span></div></div>' +
+          '<div><div style="font-size:9px;color:var(--txt-3)">Всего</div><div style="font-size:12px;font-weight:600;color:var(--txt-2)">' + volTotal.toFixed(0) + ' <span style="font-size:9px;font-weight:400">м³</span></div></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:4px;flex-wrap:wrap">' + (pills || '<span style="font-size:9px;color:var(--txt-3)">нет насосов</span>') + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  dests.forEach(function(dest) {
+    var pos    = _dewDiagramPos['dst_' + dest.id] || { x: 400, y: 20 };
+    var dtInfo = DEW_DEST_TYPE[dest.type] || { label: dest.type || 'назначение', icon: '📍' };
+    var volTodayDest = 0, volTotalDest = 0;
+    Object.keys(_dewDiagramFlows).forEach(function(key) {
+      var f = _dewDiagramFlows[key];
+      if (f.destId === dest.id) { volTodayDest += f.volToday; volTotalDest += f.volTotal; }
+    });
+
+    nodesHtml +=
+      '<div id="dew-dn-dst_' + dest.id + '" class="dew-dn"' +
+      ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.destW + 'px;min-height:' + DEW_DN.destH + 'px;' +
+      'background:var(--bg-2);border:1px solid rgba(74,222,128,.3);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'dst_' + dest.id + '\')">' +
+      '<div style="height:3px;background:rgba(74,222,128,.45)"></div>' +
+      '<div style="padding:8px 10px">' +
+        '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">' +
+          '<span style="font-size:13px;line-height:1">' + dtInfo.icon + '</span>' +
+          '<div style="font-size:11px;font-weight:700;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHTML(dest.name) + '</div>' +
+        '</div>' +
+        '<div style="font-size:9px;color:var(--txt-3);margin-bottom:7px">' + escHTML(dtInfo.label) + '</div>' +
+        '<div style="display:flex;gap:10px">' +
+          '<div><div style="font-size:9px;color:var(--txt-3)">Сегодня</div>' +
+            '<div style="font-size:13px;font-weight:700;color:' + (volTodayDest > 0 ? 'var(--ok)' : 'var(--txt-3)') + '">' + volTodayDest.toFixed(0) + ' <span style="font-size:9px;font-weight:400">м³</span></div></div>' +
+          '<div><div style="font-size:9px;color:var(--txt-3)">Всего</div>' +
+            '<div style="font-size:12px;font-weight:600;color:' + (volTotalDest > 0 ? 'var(--txt-2)' : 'var(--txt-3)') + '">' + volTotalDest.toFixed(0) + ' <span style="font-size:9px;font-weight:400">м³</span></div></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  wrap.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+      '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)">Схема водоотлива</div>' +
+      '<button class="btn btn-sm btn-outline" style="font-size:10px" onclick="_dewDiagramReset()">↺ Сбросить позиции</button>' +
+    '</div>' +
+    '<div style="overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--bg-0)">' +
+      '<div id="dew-diagram-canvas" style="position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px;min-width:600px">' +
+        '<svg id="dew-diagram-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible" xmlns="http://www.w3.org/2000/svg"></svg>' +
+        nodesHtml +
+      '</div>' +
+    '</div>';
+
+  _dewDiagramDrawArrows();
+}
+
+function _dewDiagramDrawArrows() {
+  var svg = document.getElementById('dew-diagram-svg');
+  if (!svg) return;
+  var maxVol = 0;
+  Object.keys(_dewDiagramFlows).forEach(function(k) { var v = _dewDiagramFlows[k].volTotal; if (v > maxVol) maxVol = v; });
+  maxVol = maxVol || 1;
+
+  var arrows = '';
+  Object.keys(_dewDiagramFlows).forEach(function(key) {
+    var f  = _dewDiagramFlows[key];
+    var sp = _dewDiagramPos['smp_' + f.sumpId];
+    var dp = _dewDiagramPos['dst_' + f.destId];
+    if (!sp || !dp) return;
+
+    var x1  = sp.x + DEW_DN.sumpW;
+    var y1  = sp.y + DEW_DN.sumpH / 2;
+    var x2  = dp.x;
+    var y2  = dp.y + DEW_DN.destH / 2;
+    var cpd = Math.max(60, Math.abs(x2 - x1) * 0.4);
+    var cx1 = x1 + cpd, cy1 = y1;
+    var cx2 = x2 - cpd, cy2 = y2;
+    var sw  = (1.5 + f.volTotal / maxVol * 4.5).toFixed(1);
+    var midX = (x1 + x2) / 2;
+    var midY = (y1 + y2) / 2 - 10;
+
+    // Arrow head direction from last control point to endpoint
+    var ang = Math.atan2(y2 - cy2, x2 - cx2);
+    var aw  = 7;
+    var ax1 = x2 - aw * Math.cos(ang - Math.PI / 6);
+    var ay1 = y2 - aw * Math.sin(ang - Math.PI / 6);
+    var ax2 = x2 - aw * Math.cos(ang + Math.PI / 6);
+    var ay2 = y2 - aw * Math.sin(ang + Math.PI / 6);
+
+    arrows +=
+      '<path d="M' + x1 + ',' + y1 + ' C' + cx1 + ',' + cy1 + ' ' + cx2 + ',' + cy2 + ' ' + x2 + ',' + y2 + '"' +
+      ' fill="none" stroke="rgba(251,191,36,.45)" stroke-width="' + sw + '" stroke-linecap="round"/>' +
+      '<polygon points="' + x2 + ',' + y2 + ' ' + ax1 + ',' + ay1 + ' ' + ax2 + ',' + ay2 + '" fill="rgba(251,191,36,.7)"/>';
+    if (f.volToday > 0) {
+      arrows += '<text x="' + midX + '" y="' + midY + '" text-anchor="middle" font-size="9"' +
+        ' fill="rgba(251,191,36,.9)" font-family="monospace" font-weight="600">' + f.volToday.toFixed(0) + ' м³</text>';
+    }
+  });
+
+  svg.innerHTML = arrows;
+}
+
+function _dewDiagramStartDrag(e, nid) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  var el = document.getElementById('dew-dn-' + nid);
+  if (!el) return;
+  var p0  = _dewDiagramPos[nid] || { x: 0, y: 0 };
+  var mx0 = e.clientX, my0 = e.clientY;
+  var nx0 = p0.x,      ny0 = p0.y;
+  _dewDiagramDrag = nid;
+
+  function onMove(ev) {
+    var nx = Math.max(0, nx0 + ev.clientX - mx0);
+    var ny = Math.max(0, ny0 + ev.clientY - my0);
+    _dewDiagramPos[nid] = { x: nx, y: ny };
+    el.style.left = nx + 'px';
+    el.style.top  = ny + 'px';
+    _dewDiagramDrawArrows();
+  }
+  function onUp() {
+    _dewDiagramDrag = null;
+    _dewDiagramSavePos();
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+}
+
+function _dewDiagramReset() {
+  localStorage.removeItem('dew_diagram_pos');
+  _dewDiagramPos = {};
+  var wrap = document.getElementById('dew-diagram-wrap');
+  if (wrap) _dewRenderDiagram(wrap);
 }
 
 // ── Helpers: распределение откачки ──────────────────────────
