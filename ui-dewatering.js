@@ -50,6 +50,27 @@ var DewateringState = {
     }));
   },
 
+  loadFromSupabase: async function() {
+    if (!window.Api) return false;
+    try {
+      var results = await Promise.all([
+        Api.getDewSumps(), Api.getDewElevations(), Api.getDewPumps(),
+        Api.getDewPumpEvents(), Api.getDewDestinations(),
+        Api.getDewReadings(), Api.getDewWaterLevels()
+      ]);
+      if (results.some(function(r) { return r.error; })) return false;
+      this.sumps                = results[0].data.map(rowToDewSump);
+      this.sumpElevationHistory = results[1].data.map(rowToDewElev);
+      this.pumps                = results[2].data.map(rowToDewPump);
+      this.pumpEvents           = results[3].data.map(rowToDewEvt);
+      this.destinations         = results[4].data.length ? results[4].data.map(rowToDewDest) : _dewDefaultDest();
+      this.meterReadings        = results[5].data.map(rowToDewReading);
+      this.waterLevels          = results[6].data.map(rowToDewLevel);
+      this.save();
+      return true;
+    } catch(e) { return false; }
+  },
+
   sumpById:    function(id) { return this.sumps.find(function(x) { return x.id === id; }); },
   pumpById:    function(id) { return this.pumps.find(function(x) { return x.id === id; }); },
   destById:    function(id) { return this.destinations.find(function(x) { return x.id === id; }); },
@@ -122,8 +143,16 @@ var DewateringState = {
   },
 
   // CRUD helpers
-  addSump: function(d) { d.id = this._id('smp'); this.sumps.push(d); this.save(); return d; },
-  updateSump: function(id, d) { var i = this.sumps.findIndex(function(s){return s.id===id;}); if(i>=0){this.sumps[i]=Object.assign({},this.sumps[i],d);this.save();} },
+  addSump: function(d) {
+    d.id = this._id('smp'); this.sumps.push(d); this.save();
+    if (window.Api) Api.upsertDewSump(dewSumpToRow(d)).catch(function() {});
+    return d;
+  },
+  updateSump: function(id, d) {
+    var i = this.sumps.findIndex(function(s){return s.id===id;});
+    if(i>=0){ this.sumps[i]=Object.assign({},this.sumps[i],d); this.save();
+      if (window.Api) Api.upsertDewSump(dewSumpToRow(this.sumps[i])).catch(function() {}); }
+  },
   deleteSump: function(id) {
     var pIds = this.pumps.filter(function(p){return p.sumpId===id;}).map(function(p){return p.id;});
     this.sumps=[...this.sumps.filter(function(s){return s.id!==id;})];
@@ -133,27 +162,83 @@ var DewateringState = {
     this.meterReadings=this.meterReadings.filter(function(r){return pIds.indexOf(r.pumpId)<0;});
     this.waterLevels=this.waterLevels.filter(function(w){return w.sumpId!==id;});
     this.save();
+    if (window.Api) Api.deleteDewSump(id).catch(function() {});
   },
-  addElevation: function(d) { d.id=this._id('elv'); this.sumpElevationHistory.push(d); this.save(); return d; },
-  deleteElevation: function(id) { this.sumpElevationHistory=this.sumpElevationHistory.filter(function(h){return h.id!==id;}); this.save(); },
 
-  addPump: function(d) { d.id=this._id('pmp'); this.pumps.push(d); this.save(); return d; },
-  updatePump: function(id, d) { var i=this.pumps.findIndex(function(p){return p.id===id;}); if(i>=0){this.pumps[i]=Object.assign({},this.pumps[i],d);this.save();} },
-  deletePump: function(id) { this.pumps=this.pumps.filter(function(p){return p.id!==id;}); this.meterReadings=this.meterReadings.filter(function(r){return r.pumpId!==id;}); this.save(); },
+  addElevation: function(d) {
+    d.id=this._id('elv'); this.sumpElevationHistory.push(d); this.save();
+    if (window.Api) Api.upsertDewElev(dewElevToRow(d)).catch(function() {});
+    return d;
+  },
+  deleteElevation: function(id) {
+    this.sumpElevationHistory=this.sumpElevationHistory.filter(function(h){return h.id!==id;}); this.save();
+    if (window.Api) Api.deleteDewElev(id).catch(function() {});
+  },
 
-  addPumpEvent: function(d) { d.id=this._id('evt'); this.pumpEvents.push(d); this.save(); return d; },
-  deletePumpEvent: function(id) { this.pumpEvents=this.pumpEvents.filter(function(e){return e.id!==id;}); this.save(); },
+  addPump: function(d) {
+    d.id=this._id('pmp'); this.pumps.push(d); this.save();
+    if (window.Api) Api.upsertDewPump(dewPumpToRow(d)).catch(function() {});
+    return d;
+  },
+  updatePump: function(id, d) {
+    var i=this.pumps.findIndex(function(p){return p.id===id;});
+    if(i>=0){ this.pumps[i]=Object.assign({},this.pumps[i],d); this.save();
+      if (window.Api) Api.upsertDewPump(dewPumpToRow(this.pumps[i])).catch(function() {}); }
+  },
+  deletePump: function(id) {
+    this.pumps=this.pumps.filter(function(p){return p.id!==id;}); this.meterReadings=this.meterReadings.filter(function(r){return r.pumpId!==id;}); this.save();
+    if (window.Api) Api.deleteDewPump(id).catch(function() {});
+  },
 
-  addDest: function(d) { d.id=this._id('dst'); this.destinations.push(d); this.save(); return d; },
-  deleteDest: function(id) { this.destinations=this.destinations.filter(function(d){return d.id!==id;}); this.save(); },
+  addPumpEvent: function(d) {
+    d.id=this._id('evt'); this.pumpEvents.push(d); this.save();
+    if (window.Api) Api.upsertDewPumpEvent(dewEvtToRow(d)).catch(function() {});
+    return d;
+  },
+  deletePumpEvent: function(id) {
+    this.pumpEvents=this.pumpEvents.filter(function(e){return e.id!==id;}); this.save();
+    if (window.Api) Api.deleteDewPumpEvent(id).catch(function() {});
+  },
 
-  addReading: function(d) { d.id=this._id('mrd'); this.meterReadings.push(d); this.save(); return d; },
-  updateReading: function(id, d) { var i=this.meterReadings.findIndex(function(r){return r.id===id;}); if(i>=0){this.meterReadings[i]=Object.assign({},this.meterReadings[i],d);this.save();} },
-  deleteReading: function(id) { this.meterReadings=this.meterReadings.filter(function(r){return r.id!==id;}); this.save(); },
+  addDest: function(d) {
+    d.id=this._id('dst'); this.destinations.push(d); this.save();
+    if (window.Api) Api.upsertDewDest(dewDestToRow(d)).catch(function() {});
+    return d;
+  },
+  deleteDest: function(id) {
+    this.destinations=this.destinations.filter(function(d){return d.id!==id;}); this.save();
+    if (window.Api) Api.deleteDewDest(id).catch(function() {});
+  },
 
-  addWaterLevel: function(d) { d.id=this._id('wlv'); this.waterLevels.push(d); this.save(); return d; },
-  updateWaterLevel: function(id, d) { var i=this.waterLevels.findIndex(function(w){return w.id===id;}); if(i>=0){this.waterLevels[i]=Object.assign({},this.waterLevels[i],d);this.save();} },
-  deleteWaterLevel: function(id) { this.waterLevels=this.waterLevels.filter(function(w){return w.id!==id;}); this.save(); },
+  addReading: function(d) {
+    d.id=this._id('mrd'); this.meterReadings.push(d); this.save();
+    if (window.Api) Api.upsertDewReading(dewReadingToRow(d)).catch(function() {});
+    return d;
+  },
+  updateReading: function(id, d) {
+    var i=this.meterReadings.findIndex(function(r){return r.id===id;});
+    if(i>=0){ this.meterReadings[i]=Object.assign({},this.meterReadings[i],d); this.save();
+      if (window.Api) Api.upsertDewReading(dewReadingToRow(this.meterReadings[i])).catch(function() {}); }
+  },
+  deleteReading: function(id) {
+    this.meterReadings=this.meterReadings.filter(function(r){return r.id!==id;}); this.save();
+    if (window.Api) Api.deleteDewReading(id).catch(function() {});
+  },
+
+  addWaterLevel: function(d) {
+    d.id=this._id('wlv'); this.waterLevels.push(d); this.save();
+    if (window.Api) Api.upsertDewLevel(dewLevelToRow(d)).catch(function() {});
+    return d;
+  },
+  updateWaterLevel: function(id, d) {
+    var i=this.waterLevels.findIndex(function(w){return w.id===id;});
+    if(i>=0){ this.waterLevels[i]=Object.assign({},this.waterLevels[i],d); this.save();
+      if (window.Api) Api.upsertDewLevel(dewLevelToRow(this.waterLevels[i])).catch(function() {}); }
+  },
+  deleteWaterLevel: function(id) {
+    this.waterLevels=this.waterLevels.filter(function(w){return w.id!==id;}); this.save();
+    if (window.Api) Api.deleteDewLevel(id).catch(function() {});
+  },
 };
 
 function _dewDefaultDest() {
@@ -213,11 +298,15 @@ var _dewDiagramDateTo     = '';
 // ── Init ─────────────────────────────────────────────────────
 
 function initDewateringTab() {
-  DewateringState.load();
+  DewateringState.load(); // immediate localStorage
   if (!_dewInited) {
     _dewInited = true;
     document.querySelectorAll('[data-dew-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() { _dewSwitch(this.dataset.dewTab); });
+    });
+    // Async Supabase load — re-render when done
+    DewateringState.loadFromSupabase().then(function(ok) {
+      if (ok) _dewSwitch(_dewSubTab);
     });
   }
   _dewSwitch(_dewSubTab);
