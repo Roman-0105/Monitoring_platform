@@ -422,6 +422,18 @@ function _dewDiagramAutoLayout() {
     _dewDiagramPos['dst_' + d.id] = { x: cDest, y: dy };
     dy += DEW_DN.destH + vGap;
   });
+
+  // Place nozzle (гусак) nodes from DustState below destination nodes
+  if (typeof DustState !== 'undefined' && DustState.nozzles) {
+    var sumpIds = {};
+    sumps.forEach(function(s) { sumpIds[s.id] = true; });
+    var nzlW = 180, nzlH = 70, nzlVGap = 10;
+    DustState.nozzles.forEach(function(nzl) {
+      if (nzl.sourceType !== 'sump' || !nzl.sourceId || !sumpIds[nzl.sourceId]) return;
+      _dewDiagramPos['nzl_' + nzl.id] = { x: cDest, y: dy };
+      dy += nzlH + nzlVGap;
+    });
+  }
 }
 
 function _dewDiagramComputeFlows(dateFrom, dateTo) {
@@ -512,9 +524,41 @@ function _dewRenderDiagram(wrap) {
 
   var termDests = dests.filter(function(d) { return !(d.type === 'intermediate_sump' && d.targetSumpId); });
 
+  // Compute nozzle volumes for the selected date range
+  var nozzleVolumes = {}; // nozzleId → { volDate, volTotal }
+  var diagNozzles   = [];
+  if (typeof DustState !== 'undefined' && DustState.nozzles) {
+    var _diagSumpIds = {};
+    sumps.forEach(function(s) { _diagSumpIds[s.id] = true; });
+    DustState.nozzles.forEach(function(nzl) {
+      if (nzl.sourceType !== 'sump' || !nzl.sourceId || !_diagSumpIds[nzl.sourceId]) return;
+      diagNozzles.push(nzl);
+      var logs    = DustState.logs.filter(function(l) { return l.nozzleId === nzl.id; });
+      var volDate = logs.filter(function(l) { return l.date >= dateFrom && l.date <= dateTo; })
+        .reduce(function(a, l) {
+          var v = l.isManualVolume ? (parseFloat(l.manualVolume) || 0)
+            : (parseFloat(l.trips) || 0) * (function() {
+                var veh = DustState.vehicleById(l.vehicleId);
+                return veh ? (parseFloat(veh.capacity) || 0) : 0;
+              }());
+          return a + v;
+        }, 0);
+      var volTotal = logs.reduce(function(a, l) {
+        var v = l.isManualVolume ? (parseFloat(l.manualVolume) || 0)
+          : (parseFloat(l.trips) || 0) * (function() {
+              var veh = DustState.vehicleById(l.vehicleId);
+              return veh ? (parseFloat(veh.capacity) || 0) : 0;
+            }());
+        return a + v;
+      }, 0);
+      nozzleVolumes[nzl.id] = { volDate: volDate, volTotal: volTotal };
+    });
+  }
+
   var allKeys = sumps.map(function(s) { return 'smp_' + s.id; })
     .concat(pumps.map(function(p) { return 'pmp_' + p.id; }))
-    .concat(termDests.map(function(d) { return 'dst_' + d.id; }));
+    .concat(termDests.map(function(d) { return 'dst_' + d.id; }))
+    .concat(diagNozzles.map(function(n) { return 'nzl_' + n.id; }));
 
   if (!allKeys.every(function(k) { return _dewDiagramPos[k]; })) _dewDiagramAutoLayout();
 
@@ -524,6 +568,7 @@ function _dewRenderDiagram(wrap) {
     var w, h;
     if      (k.indexOf('smp_') === 0) { w = DEW_DN.sumpW; h = DEW_DN.sumpH; }
     else if (k.indexOf('pmp_') === 0) { w = DEW_DN.pumpW; h = DEW_DN.pumpH; }
+    else if (k.indexOf('nzl_') === 0) { w = 180;           h = 70; }
     else                              { w = DEW_DN.destW; h = DEW_DN.destH; }
     canvasW = Math.max(canvasW, p.x + w + 20);
     canvasH = Math.max(canvasH, p.y + h + 20);
@@ -627,6 +672,37 @@ function _dewRenderDiagram(wrap) {
     '</div>';
   });
 
+  // ── Nozzle (гусак) nodes ──
+  diagNozzles.forEach(function(nzl) {
+    var pos = _dewDiagramPos['nzl_' + nzl.id]; if (!pos) return;
+    var nzlW = 180, nzlH = 70;
+    var vols   = nozzleVolumes[nzl.id] || { volDate: 0, volTotal: 0 };
+    var sumpName = '';
+    if (nzl.sourceId && typeof DewateringState !== 'undefined') {
+      var srcSump = DewateringState.sumpById(nzl.sourceId);
+      if (srcSump) sumpName = srcSump.name;
+    }
+    nodesHtml +=
+      '<div id="dew-dn-nzl_' + nzl.id + '" class="dew-dn"' +
+      ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + nzlW + 'px;min-height:' + nzlH + 'px;' +
+      'background:var(--bg-2);border:1px solid rgba(34,211,238,.45);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'nzl_' + nzl.id + '\')">' +
+      '<div style="height:3px;background:rgba(34,211,238,.5)"></div>' +
+      '<div style="padding:7px 9px">' +
+        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">' +
+          '<span style="font-size:10px;line-height:1;flex-shrink:0">💦</span>' +
+          '<div style="font-size:10px;font-weight:700;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">гусак</div>' +
+        '</div>' +
+        '<div style="font-size:9px;color:var(--txt-2);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHTML(nzl.name) + '</div>' +
+        (sumpName ? '<div style="font-size:8px;color:var(--txt-3);margin-bottom:4px">⛽ ' + escHTML(sumpName) + '</div>' : '') +
+        '<div style="display:flex;gap:8px">' +
+          '<div><div style="font-size:8px;color:var(--txt-3)">' + _dewDiagramPeriodLabel() + '</div><div style="font-size:11px;font-weight:700;color:' + (vols.volDate > 0 ? 'rgba(34,211,238,.9)' : 'var(--txt-3)') + '">' + vols.volDate.toFixed(0) + ' <span style="font-size:8px;font-weight:400">м³</span></div></div>' +
+          '<div><div style="font-size:8px;color:var(--txt-3)">Всего</div><div style="font-size:10px;color:' + (vols.volTotal > 0 ? 'var(--txt-2)' : 'var(--txt-3)') + '">' + vols.volTotal.toFixed(0) + ' <span style="font-size:8px">м³</span></div></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
   var presets = [
     { key: 'yesterday', label: 'Вчера' },
     { key: '7d',  label: '7 дней' },
@@ -680,6 +756,15 @@ function _dewGetAllNodeBoxes() {
       if (pos) boxes.push({ id: 'dst_' + d.id, x: pos.x, y: pos.y, w: DEW_DN.destW, h: DEW_DN.destH });
     }
   });
+  if (typeof DustState !== 'undefined' && DustState.nozzles) {
+    var _smpIds = {};
+    DewateringState.sumps.forEach(function(s) { _smpIds[s.id] = true; });
+    DustState.nozzles.forEach(function(nzl) {
+      if (nzl.sourceType !== 'sump' || !nzl.sourceId || !_smpIds[nzl.sourceId]) return;
+      var pos = _dewDiagramPos['nzl_' + nzl.id];
+      if (pos) boxes.push({ id: 'nzl_' + nzl.id, x: pos.x, y: pos.y, w: 180, h: 70 });
+    });
+  }
   return boxes;
 }
 
@@ -750,11 +835,12 @@ function _dewRouteEdge(x1, y1, x2, y2, obstacles) {
   return _dewSimplifyPath([{x:x1,y:y1},{x:midX,y:y1},{x:midX,y:y2},{x:x2,y:y2}]);
 }
 
-function _dewPathToSvg(path, stroke, sw, label) {
+function _dewPathToSvg(path, stroke, sw, label, dashArray) {
   if (!path || path.length < 2) return '';
   var d = 'M' + path[0].x + ',' + path[0].y;
   for (var i = 1; i < path.length; i++) d += ' L' + path[i].x + ',' + path[i].y;
-  var out = '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="square" stroke-linejoin="miter"/>';
+  var dashAttr = dashArray ? ' stroke-dasharray="' + dashArray + '"' : '';
+  var out = '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="square" stroke-linejoin="miter"' + dashAttr + '/>';
 
   var last = path[path.length - 1], prev = path[path.length - 2];
   var ang = Math.atan2(last.y - prev.y, last.x - prev.x);
@@ -808,6 +894,37 @@ function _dewDiagramDrawArrows() {
     var lbl = f.volDate > 0 ? f.volDate.toFixed(0) + ' м³' : '';
     arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), 'rgba(251,191,36,.6)', parseFloat(sw), lbl);
   });
+
+  // Sump → Nozzle dashed teal arrows (dust suppression flows)
+  if (typeof DustState !== 'undefined' && DustState.nozzles) {
+    var _smpIdsArrow = {};
+    DewateringState.sumps.forEach(function(s) { _smpIdsArrow[s.id] = true; });
+    DustState.nozzles.forEach(function(nzl) {
+      if (nzl.sourceType !== 'sump' || !nzl.sourceId || !_smpIdsArrow[nzl.sourceId]) return;
+      var sp  = _dewDiagramPos['smp_' + nzl.sourceId];
+      var np  = _dewDiagramPos['nzl_' + nzl.id];
+      if (!sp || !np) return;
+      var x1  = sp.x + DEW_DN.sumpW / 2;
+      var y1  = sp.y + DEW_DN.sumpH;
+      var x2  = np.x + 90;
+      var y2  = np.y;
+      var obs = allBoxes.filter(function(b) { return b.id !== 'smp_' + nzl.sourceId && b.id !== 'nzl_' + nzl.id; });
+      // Compute label: volume in selected date range
+      var nzlLogs = DustState.logs.filter(function(l) { return l.nozzleId === nzl.id; });
+      var volDate  = nzlLogs.filter(function(l) {
+        return l.date >= (typeof _dewDiagramGetRange === 'function' ? _dewDiagramGetRange().from : '')
+          && l.date <= (typeof _dewDiagramGetRange === 'function' ? _dewDiagramGetRange().to : '');
+      }).reduce(function(a, l) {
+        var veh = DustState.vehicleById(l.vehicleId);
+        var v = l.isManualVolume ? (parseFloat(l.manualVolume) || 0) : (parseFloat(l.trips) || 0) * (veh ? (parseFloat(veh.capacity) || 0) : 0);
+        return a + v;
+      }, 0);
+      var lbl = volDate > 0 ? volDate.toFixed(0) + ' м³' : '';
+      // Build a simple straight-ish path (vertical down from sump bottom to nozzle top)
+      var path = _dewRouteEdge(x1, y1, x2, y2, obs);
+      arrows += _dewPathToSvg(path, 'rgba(34,211,238,.55)', 1.5, lbl, '6,3');
+    });
+  }
 
   svg.innerHTML = arrows;
 }
