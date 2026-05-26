@@ -85,120 +85,16 @@ function switchSettingsTab(name) {
   });
 
   // Панели — сначала скрываем все, потом показываем нужную
-  ['settings-panel-main', 'settings-panel-legend', 'settings-panel-aliases', 'settings-panel-horizons', 'settings-panel-sync', 'settings-panel-users'].forEach(function(id) {
+  ['settings-panel-main', 'settings-panel-legend', 'settings-panel-sync', 'settings-panel-users'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
   var activePanel = document.getElementById('settings-panel-' + tabName);
   if (activePanel) activePanel.classList.add('active');
 
-  if (tabName === 'aliases')   renderSettingsAliases();
-  if (tabName === 'horizons')  renderSettingsHorizons();
   if (tabName === 'sync')      renderSettingsSync();
   if (tabName === 'theme')     renderSettingsTheme();
   if (tabName === 'users')     renderUsersPanel();
-}
-
-// ── Менеджер псевдонимов (вкладка "Связать точки") ────────
-
-var ALIAS_KEY = 'gm_point_aliases';
-
-function getAliases() {
-  try { return JSON.parse(localStorage.getItem(ALIAS_KEY) || '{}'); }
-  catch(e) { return {}; }
-}
-function saveAliases(obj) {
-  localStorage.setItem(ALIAS_KEY, JSON.stringify(obj));
-}
-
-function renderSettingsAliases() {
-  var wrap = document.getElementById('settings-alias-manager');
-  if (!wrap) return;
-
-  var aliases = getAliases();
-  var allNums = [];
-  if (typeof Points !== 'undefined') {
-    Points.getList().forEach(function(p) {
-      if (p.pointNumber && allNums.indexOf(String(p.pointNumber)) < 0)
-        allNums.push(String(p.pointNumber));
-    });
-  }
-  allNums.sort(function(a,b) {
-    var na=parseFloat(a), nb=parseFloat(b);
-    return (isNaN(na)||isNaN(nb)) ? a.localeCompare(b) : na-nb;
-  });
-
-  var aliasKeys = Object.keys(aliases);
-  var html = '<p class="form-hint" style="margin-bottom:14px">Если одно место водопроявления фиксировалось под разными номерами — объедини их в группу. Группа появится в выборе точки на вкладке "История".</p>';
-
-  // Существующие группы
-  if (aliasKeys.length) {
-    aliasKeys.forEach(function(name) {
-      var nums = aliases[name];
-      html += '<div class="alias-group-card">' +
-        '<div class="alias-group-header">' +
-          '<span class="alias-group-icon">🔗</span>' +
-          '<span class="alias-group-name">' + escAttr(name) + '</span>' +
-          '<button class="btn btn-sm btn-danger alias-del-btn" data-name="' + escAttr(name) + '">Удалить</button>' +
-        '</div>' +
-        '<div class="alias-group-nums">' +
-          nums.map(function(n) {
-            return '<span class="alias-num-tag">№' + escAttr(n) + '</span>';
-          }).join('') +
-        '</div>' +
-      '</div>';
-    });
-  } else {
-    html += '<p class="form-hint" style="margin-bottom:16px;color:var(--txt-3)">Групп пока нет</p>';
-  }
-
-  // Форма создания
-  html += '<div class="alias-new-form">' +
-    '<div class="form-group">' +
-      '<label class="form-label">Название группы</label>' +
-      '<input id="alias-name-inp" type="text" class="form-input" placeholder="Например: Борт СВ-3 или Точка А">' +
-    '</div>' +
-    '<div class="form-group">' +
-      '<label class="form-label">Выберите точки для объединения</label>' +
-      '<div class="alias-checkboxes">' +
-        allNums.map(function(n) {
-          return '<label class="alias-cb-label">' +
-            '<input type="checkbox" class="alias-num-cb" value="' + escAttr(n) + '"> №' + escAttr(n) +
-          '</label>';
-        }).join('') +
-      '</div>' +
-    '</div>' +
-    '<button id="alias-save-btn" class="btn btn-primary">🔗 Сохранить группу</button>' +
-  '</div>';
-
-  wrap.innerHTML = html;
-
-  // Удаление
-  wrap.querySelectorAll('.alias-del-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var name = this.dataset.name;
-      if (!confirm('Удалить группу "' + name + '"?')) return;
-      var a = getAliases(); delete a[name]; saveAliases(a);
-      renderSettingsAliases();
-    });
-  });
-
-  // Сохранение
-  var saveBtn = document.getElementById('alias-save-btn');
-  if (saveBtn) saveBtn.addEventListener('click', function() {
-    var name = (document.getElementById('alias-name-inp').value || '').trim();
-    if (!name) { alert('Введите название группы'); return; }
-    var checked = [];
-    wrap.querySelectorAll('.alias-num-cb:checked').forEach(function(cb) { checked.push(cb.value); });
-    if (checked.length < 2) { alert('Выберите минимум 2 точки'); return; }
-    var a = getAliases(); a[name] = checked; saveAliases(a);
-    renderSettingsAliases();
-    var msg = document.createElement('p');
-    msg.className = 'form-hint'; msg.style.color = '#34a853';
-    msg.textContent = '✅ Группа "' + name + '" сохранена';
-    saveBtn.parentNode.appendChild(msg);
-    setTimeout(function() { if(msg.parentNode) msg.parentNode.removeChild(msg); }, 3000);
-  });
 }
 
 // ── Схемы ─────────────────────────────────────────────────
@@ -451,72 +347,6 @@ function deepMerge(target, patch) {
     }
   });
   return out;
-}
-
-// ── Управление горизонтами ────────────────────────────────
-
-function renderSettingsHorizons() {
-  var wrap = document.getElementById('settings-horizons-manager');
-  if (!wrap) return;
-
-  var horizons = Storage.getHorizons();
-
-  var html = '<p class="form-hint" style="margin-bottom:14px">Задай список горизонтов (уступов) карьера. Они появятся в выпадающем списке при добавлении и редактировании точки.</p>';
-
-  // Существующие горизонты — редактируемый список
-  if (horizons.length) {
-    html += '<div id="horizons-list" style="margin-bottom:14px">';
-    horizons.forEach(function(h, i) {
-      html +=
-        '<div class="alias-group-card" style="padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px">' +
-          '<span style="font-size:13px;flex:1;color:var(--txt-1)">⛰️ ' + escAttr(h) + '</span>' +
-          '<button class="btn btn-sm btn-danger horizon-del-btn" data-idx="' + i + '" style="padding:3px 10px">Удалить</button>' +
-        '</div>';
-    });
-    html += '</div>';
-  } else {
-    html += '<p class="form-hint" style="color:var(--txt-3);margin-bottom:14px">Горизонты не заданы</p>';
-  }
-
-  // Форма добавления
-  html +=
-    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
-      '<input id="horizon-new-inp" type="text" class="form-input" placeholder="Напр.: +240 или Гор. 220" style="flex:1;min-width:160px">' +
-      '<button id="horizon-add-btn" class="btn btn-primary" style="white-space:nowrap">+ Добавить</button>' +
-    '</div>' +
-    '<p class="form-hint" style="margin-top:8px">Примеры: +240, +220, Гор. 200, Уступ 5</p>';
-
-  wrap.innerHTML = html;
-
-  // Удаление
-  wrap.querySelectorAll('.horizon-del-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var idx = parseInt(this.dataset.idx);
-      var list = Storage.getHorizons();
-      list.splice(idx, 1);
-      Storage.saveHorizons(list);
-      renderSettingsHorizons();
-    });
-  });
-
-  // Добавление
-  var addBtn = document.getElementById('horizon-add-btn');
-  var inp    = document.getElementById('horizon-new-inp');
-  function addHorizon() {
-    var val = (inp ? inp.value.trim() : '');
-    if (!val) { alert('Введите название горизонта'); return; }
-    var list = Storage.getHorizons();
-    if (list.indexOf(val) >= 0) { alert('Такой горизонт уже есть'); return; }
-    list.push(val);
-    Storage.saveHorizons(list);
-    if (inp) inp.value = '';
-    renderSettingsHorizons();
-    Toast.show('Горизонт «' + val + '» добавлен', 'success');
-  }
-  if (addBtn) addBtn.addEventListener('click', addHorizon);
-  if (inp) inp.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); addHorizon(); }
-  });
 }
 
 // ── Настройки синхронизации ───────────────────────────────

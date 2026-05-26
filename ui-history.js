@@ -68,38 +68,24 @@ function aggregateByDay(history) {
   });
 }
 
-// ── Псевдонимы ────────────────────────────────────────────
-function _getAliases() {
-  try { return JSON.parse(localStorage.getItem('gm_point_aliases')||'{}'); }
-  catch(e) { return {}; }
-}
-
 function getHistoryPointOptions() {
   var nums = {};
   Points.getList().forEach(function(p) {
     if (p.pointNumber) nums[String(p.pointNumber)] = true;
   });
-  var options = Object.keys(nums).sort(function(a,b) {
+  return Object.keys(nums).sort(function(a,b) {
     var na=parseFloat(a), nb=parseFloat(b);
     return (isNaN(na)||isNaN(nb)) ? a.localeCompare(b) : na-nb;
   }).map(function(n) { return { value: n, label: 'Точка №'+n }; });
-  var aliases = _getAliases();
-  Object.keys(aliases).forEach(function(name) {
-    options.push({ value: '__alias__'+name, label: '🔗 '+name });
-  });
-  return options;
 }
 
 function resolvePointNumbers(selected) {
   if (!selected) return [];
-  if (selected.indexOf('__alias__') === 0)
-    return (_getAliases()[selected.slice(9)] || []);
   return [selected];
 }
 
 function getPointLabel(selected) {
   if (!selected) return '';
-  if (selected.indexOf('__alias__') === 0) return '🔗 '+selected.slice(9);
   return 'Точка №'+selected;
 }
 

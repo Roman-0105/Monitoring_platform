@@ -100,7 +100,6 @@ window.initApp = function() {
     });
   });
   initPhotoLightbox();
-  initAddForm();
   initEditModal();
   initDiagButtons();
   Photos.initPreview('f-photo-cam', 'f-photo-preview');
@@ -331,7 +330,6 @@ function switchTab(name) {
   // Скрываем карточку канавы (класс ditch-map-card)
   document.querySelectorAll('.ditch-map-card').forEach(function(el){ el.remove(); });
 
-  if (name === 'add')      resetAddForm();
   if (name === 'diag')     Diagnostics.render();
   if (name === 'map')      { _mapSchemeImg = null; initMapFilters(); renderMap(); initMapLegend(); updateMapLegendPoints(); }
   if (name === 'settings') { refreshSchemesData(); renderSettingsColors(); switchSettingsTab('main'); if (typeof renderUsersPanel === 'function' && AppState.currentUser && AppState.currentUser.role === 'admin') renderUsersPanel(); }
