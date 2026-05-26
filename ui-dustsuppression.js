@@ -30,6 +30,23 @@ var DustState = {
     }));
   },
 
+  loadFromSupabase: async function() {
+    if (!window.Api) return false;
+    try {
+      var results = await Promise.all([
+        Api.getDustOrgs(), Api.getDustVehicles(),
+        Api.getDustNozzles(), Api.getDustLogs()
+      ]);
+      if (results.some(function(r) { return r.error; })) return false;
+      this.orgs     = results[0].data.map(rowToDustOrg);
+      this.vehicles = results[1].data.map(rowToDustVeh);
+      this.nozzles  = results[2].data.map(rowToDustNozzle);
+      this.logs     = results[3].data.map(rowToDustLog);
+      this.save();
+      return true;
+    } catch(e) { return false; }
+  },
+
   orgById:      function(id) { return this.orgs.find(function(x)     { return x.id === id; }); },
   vehicleById:  function(id) { return this.vehicles.find(function(x) { return x.id === id; }); },
   nozzleById:   function(id) { return this.nozzles.find(function(x)  { return x.id === id; }); },
@@ -37,10 +54,15 @@ var DustState = {
     return this.vehicles.filter(function(v) { return v.orgId === orgId; });
   },
 
-  addOrg: function(d) { d.id = this._id('org'); this.orgs.push(d); this.save(); return d; },
+  addOrg: function(d) {
+    d.id = this._id('org'); this.orgs.push(d); this.save();
+    if (window.Api) Api.upsertDustOrg(dustOrgToRow(d)).catch(function() {});
+    return d;
+  },
   updateOrg: function(id, d) {
     var i = this.orgs.findIndex(function(x) { return x.id === id; });
-    if (i >= 0) { this.orgs[i] = Object.assign({}, this.orgs[i], d); this.save(); }
+    if (i >= 0) { this.orgs[i] = Object.assign({}, this.orgs[i], d); this.save();
+      if (window.Api) Api.upsertDustOrg(dustOrgToRow(this.orgs[i])).catch(function() {}); }
   },
   deleteOrg: function(id) {
     var vIds = this.vehicles.filter(function(v) { return v.orgId === id; }).map(function(v) { return v.id; });
@@ -48,38 +70,57 @@ var DustState = {
     this.vehicles = this.vehicles.filter(function(v) { return v.orgId !== id; });
     this.logs     = this.logs.filter(function(l)     { return l.orgId !== id && vIds.indexOf(l.vehicleId) < 0; });
     this.save();
+    if (window.Api) Api.deleteDustOrg(id).catch(function() {});
   },
 
-  addVehicle: function(d) { d.id = this._id('veh'); this.vehicles.push(d); this.save(); return d; },
+  addVehicle: function(d) {
+    d.id = this._id('veh'); this.vehicles.push(d); this.save();
+    if (window.Api) Api.upsertDustVehicle(dustVehToRow(d)).catch(function() {});
+    return d;
+  },
   updateVehicle: function(id, d) {
     var i = this.vehicles.findIndex(function(x) { return x.id === id; });
-    if (i >= 0) { this.vehicles[i] = Object.assign({}, this.vehicles[i], d); this.save(); }
+    if (i >= 0) { this.vehicles[i] = Object.assign({}, this.vehicles[i], d); this.save();
+      if (window.Api) Api.upsertDustVehicle(dustVehToRow(this.vehicles[i])).catch(function() {}); }
   },
   deleteVehicle: function(id) {
     this.vehicles = this.vehicles.filter(function(v) { return v.id !== id; });
     this.logs     = this.logs.filter(function(l)     { return l.vehicleId !== id; });
     this.save();
+    if (window.Api) Api.deleteDustVehicle(id).catch(function() {});
   },
 
-  addNozzle: function(d) { d.id = this._id('nzl'); this.nozzles.push(d); this.save(); return d; },
+  addNozzle: function(d) {
+    d.id = this._id('nzl'); this.nozzles.push(d); this.save();
+    if (window.Api) Api.upsertDustNozzle(dustNozzleToRow(d)).catch(function() {});
+    return d;
+  },
   updateNozzle: function(id, d) {
     var i = this.nozzles.findIndex(function(x) { return x.id === id; });
-    if (i >= 0) { this.nozzles[i] = Object.assign({}, this.nozzles[i], d); this.save(); }
+    if (i >= 0) { this.nozzles[i] = Object.assign({}, this.nozzles[i], d); this.save();
+      if (window.Api) Api.upsertDustNozzle(dustNozzleToRow(this.nozzles[i])).catch(function() {}); }
   },
   deleteNozzle: function(id) {
     this.nozzles = this.nozzles.filter(function(x) { return x.id !== id; });
     this.logs    = this.logs.filter(function(l)    { return l.nozzleId !== id; });
     this.save();
+    if (window.Api) Api.deleteDustNozzle(id).catch(function() {});
   },
 
-  addLog: function(d) { d.id = this._id('log'); this.logs.push(d); this.save(); return d; },
+  addLog: function(d) {
+    d.id = this._id('log'); this.logs.push(d); this.save();
+    if (window.Api) Api.upsertDustLog(dustLogToRow(d)).catch(function() {});
+    return d;
+  },
   updateLog: function(id, d) {
     var i = this.logs.findIndex(function(x) { return x.id === id; });
-    if (i >= 0) { this.logs[i] = Object.assign({}, this.logs[i], d); this.save(); }
+    if (i >= 0) { this.logs[i] = Object.assign({}, this.logs[i], d); this.save();
+      if (window.Api) Api.upsertDustLog(dustLogToRow(this.logs[i])).catch(function() {}); }
   },
   deleteLog: function(id) {
     this.logs = this.logs.filter(function(x) { return x.id !== id; });
     this.save();
+    if (window.Api) Api.deleteDustLog(id).catch(function() {});
   },
 };
 
@@ -94,11 +135,15 @@ var _dustVehicleFilter = '';
 // ── Init ─────────────────────────────────────────────────────
 
 function initDustTab() {
-  DustState.load();
+  DustState.load(); // immediate localStorage
   if (!_dustInited) {
     _dustInited = true;
     document.querySelectorAll('[data-dust-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() { _dustSwitch(this.dataset.dustTab); });
+    });
+    // Async Supabase load — re-render when done
+    DustState.loadFromSupabase().then(function(ok) {
+      if (ok) _dustSwitch(_dustSubTab);
     });
   }
   _dustSwitch(_dustSubTab);
