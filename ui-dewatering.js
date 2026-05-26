@@ -168,6 +168,8 @@ var _dewSubTab          = 'overview';
 var _dewJFilter         = { sumpId: '', date: '' };
 var _dewLFilter         = { sumpId: '' };
 var _dewShowPumpRegistry = false;
+var _dewEditReadingId    = null;
+var _dewEditLevelId      = null;
 
 // ── Init ─────────────────────────────────────────────────────
 
@@ -1017,6 +1019,13 @@ function _dewSaveQuickEntry() {
   }
 }
 
+function _dewReadingDestOpts(selectedId) {
+  return '<option value="">— не указано —</option>' +
+    DewateringState.destinations.map(function(d) {
+      return '<option value="' + d.id + '"' + (d.id === selectedId ? ' selected' : '') + '>' + escHTML(d.name) + '</option>';
+    }).join('');
+}
+
 function _dewRenderReadingsTable() {
   var el    = document.getElementById('dew-jr-table');
   var sumEl = document.getElementById('dew-jr-summary');
@@ -1049,17 +1058,20 @@ function _dewRenderReadingsTable() {
       '<th style="padding:6px 8px;text-align:right;font-weight:500">Объём м³</th>' +
       '<th style="padding:6px 8px;text-align:right;font-weight:500">Часов</th>' +
       '<th style="padding:6px 8px;font-weight:500">Направление</th>' +
-      '<th style="padding:6px 8px;font-weight:500"></th>' +
+      '<th style="padding:6px 8px"></th>' +
     '</tr></thead><tbody>' +
     records.map(function(r) {
-      var pump = DewateringState.pumpById(r.pumpId);
-      var sump = pump ? DewateringState.sumpById(pump.sumpId) : null;
-      var dest = r.destinationId ? DewateringState.destById(r.destinationId) : null;
-      var vol  = DewateringState.computedVolume(r);
-      var volStr = r.isStopped ? '<span style="color:var(--txt-3)">простой</span>'
-                : vol == null  ? '<span style="color:var(--txt-3)">нет пред.</span>'
-                : '<span style="color:var(--ok);font-weight:600">' + vol.toFixed(0) + '</span>';
-      return '<tr style="border-bottom:1px solid var(--line-2)">' +
+      var pump      = DewateringState.pumpById(r.pumpId);
+      var sump      = pump ? DewateringState.sumpById(pump.sumpId) : null;
+      var dest      = r.destinationId ? DewateringState.destById(r.destinationId) : null;
+      var vol       = DewateringState.computedVolume(r);
+      var isEditing = r.id === _dewEditReadingId;
+      var volStr    = r.isStopped ? '<span style="color:var(--txt-3)">простой</span>'
+                   : vol == null  ? '<span style="color:var(--txt-3)">нет пред.</span>'
+                   : '<span style="color:var(--ok);font-weight:600">' + vol.toFixed(0) + '</span>';
+
+      var dataRow =
+        '<tr style="border-bottom:' + (isEditing ? 'none' : '1px solid var(--line-2)') + (isEditing ? ';background:rgba(255,255,255,.03)' : '') + '">' +
         '<td style="padding:5px 8px;color:var(--txt-1);white-space:nowrap">' + r.date + '</td>' +
         '<td style="padding:5px 8px">' +
           '<div style="color:var(--txt-1)">' + (pump ? escHTML(pump.name) : '—') + '</div>' +
@@ -1069,17 +1081,116 @@ function _dewRenderReadingsTable() {
         '<td style="padding:5px 8px;text-align:right">' + volStr + '</td>' +
         '<td style="padding:5px 8px;text-align:right;color:var(--txt-3)">' + (r.hoursWorked != null ? parseFloat(r.hoursWorked).toFixed(1) : '—') + '</td>' +
         '<td style="padding:5px 8px;color:var(--txt-3)">' + (dest ? escHTML(dest.name) : '—') + '</td>' +
-        '<td style="padding:5px 8px;text-align:right">' +
-          '<button class="btn btn-sm" style="font-size:10px;padding:2px 5px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2)" onclick="_dewDeleteReading(\'' + r.id + '\')">✕</button>' +
+        '<td style="padding:5px 8px;text-align:right;white-space:nowrap">' +
+          '<button class="btn btn-sm btn-outline" title="Редактировать" style="font-size:10px;padding:2px 5px;margin-right:3px" onclick="_dewEditReading(\'' + r.id + '\')">' + (isEditing ? '✕' : '✎') + '</button>' +
+          (!isEditing ? '<button class="btn btn-sm" style="font-size:10px;padding:2px 5px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2)" onclick="_dewDeleteReading(\'' + r.id + '\')">✕</button>' : '') +
         '</td>' +
-      '</tr>';
+        '</tr>';
+
+      if (!isEditing) return dataRow;
+
+      var stopped = !!r.isStopped;
+      var editRow =
+        '<tr style="background:var(--bg-3);border-bottom:1px solid var(--line)">' +
+        '<td colspan="7" style="padding:10px 12px">' +
+          '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Дата</label>' +
+              '<input type="date" id="dew-er-date-' + r.id + '" class="form-control" value="' + escAttr(r.date) + '" style="width:132px;font-size:11px">' +
+            '</div>' +
+            '<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt-3);cursor:pointer;padding-bottom:6px">' +
+              '<input type="checkbox" id="dew-er-stopped-' + r.id + '"' + (stopped ? ' checked' : '') + ' onchange="_dewToggleEditReadingStopped(\'' + r.id + '\')">' +
+              ' Простой' +
+            '</label>' +
+          '</div>' +
+          '<div id="dew-er-fields-' + r.id + '"' + (stopped ? ' style="display:none"' : '') + '>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">' +
+              '<div class="form-group" style="margin:0">' +
+                '<label class="form-label" style="font-size:9px">Показание, м³</label>' +
+                '<input type="number" id="dew-er-val-' + r.id + '" class="form-control" value="' + escAttr(String(r.reading != null ? r.reading : '')) + '" style="width:110px;font-size:12px">' +
+              '</div>' +
+              '<div class="form-group" style="margin:0">' +
+                '<label class="form-label" style="font-size:9px">Часов</label>' +
+                '<input type="number" id="dew-er-hrs-' + r.id + '" class="form-control" value="' + escAttr(String(r.hoursWorked != null ? r.hoursWorked : '')) + '" min="0" max="24" style="width:70px;font-size:12px">' +
+              '</div>' +
+              '<div class="form-group" style="margin:0">' +
+                '<label class="form-label" style="font-size:9px">Направление</label>' +
+                '<select id="dew-er-dest-' + r.id + '" class="form-control" style="font-size:11px">' + _dewReadingDestOpts(r.destinationId || '') + '</select>' +
+              '</div>' +
+              '<div class="form-group" style="margin:0;flex:1;min-width:100px">' +
+                '<label class="form-label" style="font-size:9px">Примечание</label>' +
+                '<input type="text" id="dew-er-notes-' + r.id + '" class="form-control" value="' + escAttr(r.notes || '') + '" style="font-size:11px">' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div id="dew-er-stop-reason-' + r.id + '"' + (!stopped ? ' style="display:none"' : '') + '>' +
+            '<div class="form-group" style="margin:6px 0 0">' +
+              '<label class="form-label" style="font-size:9px">Причина простоя</label>' +
+              '<input type="text" id="dew-er-dreason-' + r.id + '" class="form-control" value="' + escAttr(r.downtimeReason || '') + '" placeholder="нет воды, авария..." style="font-size:11px">' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;margin-top:10px">' +
+            '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px" onclick="_dewSaveEditReading(\'' + r.id + '\')">Сохранить</button>' +
+            '<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="_dewCancelEditReading()">Отмена</button>' +
+          '</div>' +
+        '</td>' +
+        '</tr>';
+
+      return dataRow + editRow;
     }).join('') +
     '</tbody></table></div>';
+}
+
+function _dewEditReading(id) {
+  _dewEditReadingId = (_dewEditReadingId === id) ? null : id;
+  _dewRenderReadingsTable();
+}
+
+function _dewCancelEditReading() {
+  _dewEditReadingId = null;
+  _dewRenderReadingsTable();
+}
+
+function _dewToggleEditReadingStopped(id) {
+  var chk     = document.getElementById('dew-er-stopped-' + id);
+  var fields  = document.getElementById('dew-er-fields-' + id);
+  var reason  = document.getElementById('dew-er-stop-reason-' + id);
+  if (fields) fields.style.display = chk.checked ? 'none' : '';
+  if (reason) reason.style.display = chk.checked ? ''     : 'none';
+}
+
+function _dewSaveEditReading(id) {
+  var r = DewateringState.meterReadings.find(function(x) { return x.id === id; });
+  if (!r) return;
+  var stopped = !!(document.getElementById('dew-er-stopped-' + id) || {}).checked;
+  var data = {
+    date:           (document.getElementById('dew-er-date-' + id) || {}).value || r.date,
+    isStopped:      stopped,
+    isReset:        r.isReset || false,
+    isManualVolume: r.isManualVolume || false,
+    downtimeReason: stopped ? (((document.getElementById('dew-er-dreason-' + id) || {}).value) || '').trim() : '',
+  };
+  if (!stopped) {
+    var valEl   = document.getElementById('dew-er-val-'    + id);
+    var hrsEl   = document.getElementById('dew-er-hrs-'    + id);
+    var destEl  = document.getElementById('dew-er-dest-'   + id);
+    var notesEl = document.getElementById('dew-er-notes-'  + id);
+    if (valEl)   data.reading       = parseFloat(valEl.value);
+    if (hrsEl)   data.hoursWorked   = parseFloat(hrsEl.value) || null;
+    if (destEl)  data.destinationId = destEl.value || null;
+    if (notesEl) data.notes         = notesEl.value.trim();
+  }
+  DewateringState.updateReading(id, data);
+  _dewEditReadingId = null;
+  _dewRenderReadingsTable();
+  _dewRenderQuickEntry(_dewJFilter.date);
+  Toast.show('Запись обновлена', 'success');
 }
 
 function _dewDeleteReading(id) {
   if (!confirm('Удалить запись показания?')) return;
   DewateringState.deleteReading(id);
+  _dewEditReadingId = null;
   _dewRenderReadingsTable();
   _dewRenderQuickEntry(_dewJFilter.date);
 }
@@ -1176,6 +1287,10 @@ function _dewRenderLevelsTable(sumpId) {
     return;
   }
 
+  var sumpOpts = DewateringState.sumps.map(function(s) {
+    return '<option value="' + s.id + '">' + escHTML(s.name) + '</option>';
+  }).join('');
+
   el.innerHTML = '<div style="overflow-x:auto;max-height:320px;overflow-y:auto">' +
     '<table style="width:100%;border-collapse:collapse;font-size:11px">' +
     '<thead style="position:sticky;top:0;background:var(--bg-2)"><tr style="color:var(--txt-3);font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--line)">' +
@@ -1194,19 +1309,98 @@ function _dewRenderLevelsTable(sumpId) {
       var depthStr  = depth != null
         ? '<span style="color:' + (depth > 1.5 ? 'var(--warn)' : 'var(--ok)') + ';font-weight:600">' + depth.toFixed(2) + '</span>'
         : '<span style="color:var(--txt-3)">—</span>';
-      return '<tr style="border-bottom:1px solid var(--line-2)">' +
+      var isEditing = w.id === _dewEditLevelId;
+
+      var dataRow =
+        '<tr style="border-bottom:' + (isEditing ? 'none' : '1px solid var(--line-2)') + (isEditing ? ';background:rgba(255,255,255,.03)' : '') + '">' +
         '<td style="padding:5px 8px;color:var(--txt-1)">' + w.date + '</td>' +
         '<td style="padding:5px 8px;color:var(--txt-3)">' + (w.time || '—') + '</td>' +
         '<td style="padding:5px 8px;color:var(--txt-2)">' + (sump ? escHTML(sump.name) : '—') + '</td>' +
         '<td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--txt-1)">' + parseFloat(w.elevation).toFixed(2) + '</td>' +
         '<td style="padding:5px 8px;text-align:right">' + depthStr + '</td>' +
         '<td style="padding:5px 8px;color:var(--txt-3)">' + escHTML(w.measuredBy || '') + '</td>' +
-        '<td style="padding:5px 8px"><button class="btn btn-sm" style="font-size:10px;padding:2px 5px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2)" onclick="_dewDeleteWaterLevel(\'' + w.id + '\')">✕</button></td>' +
-      '</tr>';
+        '<td style="padding:5px 8px;text-align:right;white-space:nowrap">' +
+          '<button class="btn btn-sm btn-outline" title="Редактировать" style="font-size:10px;padding:2px 5px;margin-right:3px" onclick="_dewEditLevel(\'' + w.id + '\')">' + (isEditing ? '✕' : '✎') + '</button>' +
+          (!isEditing ? '<button class="btn btn-sm" style="font-size:10px;padding:2px 5px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2)" onclick="_dewDeleteWaterLevel(\'' + w.id + '\')">✕</button>' : '') +
+        '</td>' +
+        '</tr>';
+
+      if (!isEditing) return dataRow;
+
+      var editRow =
+        '<tr style="background:var(--bg-3);border-bottom:1px solid var(--line)">' +
+        '<td colspan="7" style="padding:10px 12px">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Дата</label>' +
+              '<input type="date" id="dew-el-date-' + w.id + '" class="form-control" value="' + escAttr(w.date) + '" style="width:132px;font-size:11px">' +
+            '</div>' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Время</label>' +
+              '<input type="time" id="dew-el-time-' + w.id + '" class="form-control" value="' + escAttr(w.time || '06:00') + '" style="width:90px;font-size:11px">' +
+            '</div>' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Зумпф</label>' +
+              '<select id="dew-el-sump-' + w.id + '" class="form-control" style="font-size:11px">' +
+                DewateringState.sumps.map(function(s) {
+                  return '<option value="' + s.id + '"' + (s.id === w.sumpId ? ' selected' : '') + '>' + escHTML(s.name) + '</option>';
+                }).join('') +
+              '</select>' +
+            '</div>' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Отм. зеркала, м абс.</label>' +
+              '<input type="number" id="dew-el-elev-' + w.id + '" class="form-control" value="' + escAttr(String(w.elevation)) + '" style="width:110px;font-size:12px">' +
+            '</div>' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Кто замерил</label>' +
+              '<input type="text" id="dew-el-by-' + w.id + '" class="form-control" value="' + escAttr(w.measuredBy || '') + '" style="font-size:11px;width:120px">' +
+            '</div>' +
+            '<div class="form-group" style="margin:0;flex:1;min-width:100px">' +
+              '<label class="form-label" style="font-size:9px">Примечание</label>' +
+              '<input type="text" id="dew-el-notes-' + w.id + '" class="form-control" value="' + escAttr(w.notes || '') + '" style="font-size:11px">' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;margin-top:10px">' +
+            '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px" onclick="_dewSaveEditLevel(\'' + w.id + '\')">Сохранить</button>' +
+            '<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="_dewCancelEditLevel()">Отмена</button>' +
+          '</div>' +
+        '</td>' +
+        '</tr>';
+
+      return dataRow + editRow;
     }).join('') +
     '</tbody></table></div>';
 
   _dewRenderLevelsChart(records, sumpId);
+}
+
+function _dewEditLevel(id) {
+  _dewEditLevelId = (_dewEditLevelId === id) ? null : id;
+  _dewRenderLevelsTable(_dewLFilter.sumpId);
+}
+
+function _dewCancelEditLevel() {
+  _dewEditLevelId = null;
+  _dewRenderLevelsTable(_dewLFilter.sumpId);
+}
+
+function _dewSaveEditLevel(id) {
+  var w = DewateringState.waterLevels.find(function(x) { return x.id === id; });
+  if (!w) return;
+  var elevVal = parseFloat((document.getElementById('dew-el-elev-' + id) || {}).value);
+  if (isNaN(elevVal)) { Toast.show('Введите отметку зеркала', 'warning'); return; }
+  var data = {
+    date:       (document.getElementById('dew-el-date-'  + id) || {}).value || w.date,
+    time:       (document.getElementById('dew-el-time-'  + id) || {}).value || w.time,
+    sumpId:     (document.getElementById('dew-el-sump-'  + id) || {}).value || w.sumpId,
+    elevation:  elevVal,
+    measuredBy: (((document.getElementById('dew-el-by-'    + id) || {}).value) || '').trim(),
+    notes:      (((document.getElementById('dew-el-notes-' + id) || {}).value) || '').trim(),
+  };
+  DewateringState.updateWaterLevel(id, data);
+  _dewEditLevelId = null;
+  _dewRenderLevelsTable(_dewLFilter.sumpId);
+  Toast.show('Замер обновлён', 'success');
 }
 
 function _dewRenderLevelsChart(records, sumpId) {
@@ -1253,6 +1447,7 @@ function _dewRenderLevelsChart(records, sumpId) {
 function _dewDeleteWaterLevel(id) {
   if (!confirm('Удалить замер уровня воды?')) return;
   DewateringState.deleteWaterLevel(id);
+  _dewEditLevelId = null;
   _dewRenderLevelsTable(_dewLFilter.sumpId);
 }
 
