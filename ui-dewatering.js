@@ -73,6 +73,17 @@ var DewateringState = {
     return candidates.length ? candidates[0] : null;
   },
 
+  // Last record before `date` that has an actual meter reading (not stopped, not reset).
+  // Used so that days when the pump was stopped don't break the diff calculation.
+  lastActualReading: function(pumpId, date) {
+    var candidates = this.meterReadings
+      .filter(function(r) {
+        return r.pumpId === pumpId && r.date < date && !r.isStopped && !r.isReset && r.reading != null;
+      })
+      .sort(function(a, b) { return b.date.localeCompare(a.date); });
+    return candidates.length ? candidates[0] : null;
+  },
+
   getDistributions: function(rec) {
     if (rec.distributions && rec.distributions.length) return rec.distributions;
     if (rec.destinationId) return [{ destinationId: rec.destinationId, pct: 100 }];
@@ -84,8 +95,8 @@ var DewateringState = {
     if (rec.isStopped) return 0;
     if (rec.isManualVolume) return parseFloat(rec.manualVolume) || 0;
     if (rec.isReset) return 0;
-    var prev = this.prevReading(rec.pumpId, rec.date);
-    if (!prev || prev.isStopped || prev.isReset) return null;
+    var prev = this.lastActualReading(rec.pumpId, rec.date);
+    if (!prev) return null;
     var diff = parseFloat(rec.reading) - parseFloat(prev.reading);
     return diff >= 0 ? diff : null;
   },
@@ -1054,8 +1065,8 @@ function _dewOpenFillModal(sumpId, date) {
   // Build pump sections HTML
   var pumpSectionsHtml = activePumps.map(function(p) {
     var existing = DewateringState.readingForDate(p.id, modalDate);
-    var prevRec  = DewateringState.prevReading(p.id, modalDate);
-    var prevVal  = prevRec && !prevRec.isStopped && !prevRec.isReset ? parseFloat(prevRec.reading) : null;
+    var prevRec  = DewateringState.lastActualReading(p.id, modalDate);
+    var prevVal  = prevRec ? parseFloat(prevRec.reading) : null;
     var prevDate = prevRec ? prevRec.date : null;
     var isStopped = existing ? !!existing.isStopped : false;
     var st = DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off;
@@ -1945,8 +1956,8 @@ function _dewRenderQuickEntry(date) {
 
     pumps.forEach(function(p) {
       var existing = DewateringState.readingForDate(p.id, date);
-      var prevRec  = DewateringState.prevReading(p.id, date);
-      var prevVal  = prevRec && !prevRec.isStopped && !prevRec.isReset ? prevRec.reading : null;
+      var prevRec  = DewateringState.lastActualReading(p.id, date);
+      var prevVal  = prevRec ? prevRec.reading : null;
       var prevDate = prevRec ? prevRec.date : null;
       var isStopped = existing ? existing.isStopped : false;
 
