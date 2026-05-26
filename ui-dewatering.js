@@ -6,7 +6,7 @@ var DewateringState = {
   pumps:                [],  // {id, sumpId, name, model, serialNumber, inventoryNumber, quarry, capacity, head, type, status, installDate, notes}
   pumpEvents:           [],  // {id, sumpId, date, type, removedPumpId, installedPumpId, reason, performedBy, notes}
   destinations:         [],  // {id, name, type, targetSumpId}
-  meterReadings:        [],  // {id, pumpId, date, reading, isReset, isStopped, downtimeReason, hoursWorked, destinationId, isManualVolume, manualVolume, notes}
+  meterReadings:        [],  // {id, pumpId, date, reading, isReset, isStopped, downtimeReason, hoursWorked, distributions:[{destinationId,pct}], isManualVolume, manualVolume, notes}
   waterLevels:          [],  // {id, sumpId, date, time, elevation, measuredBy, notes}
 
   _id: function(p) { return p + Date.now() + '_' + Math.random().toString(36).slice(2, 6); },
@@ -22,6 +22,18 @@ var DewateringState = {
       this.destinations         = Array.isArray(d.destinations)         ? d.destinations         : _dewDefaultDest();
       this.meterReadings        = Array.isArray(d.meterReadings)        ? d.meterReadings        : [];
       this.waterLevels          = Array.isArray(d.waterLevels)          ? d.waterLevels          : [];
+      // Migrate old destinationId → distributions:[{destinationId, pct:100}]
+      var needSave = false;
+      this.meterReadings = this.meterReadings.map(function(r) {
+        if (r.destinationId && !r.distributions) {
+          var m = Object.assign({}, r, { distributions: [{destinationId: r.destinationId, pct: 100}] });
+          delete m.destinationId;
+          needSave = true;
+          return m;
+        }
+        return r;
+      });
+      if (needSave) this.save();
     } catch(e) {
       this.sumps = []; this.sumpElevationHistory = []; this.pumps = [];
       this.pumpEvents = []; this.destinations = _dewDefaultDest();
@@ -59,6 +71,12 @@ var DewateringState = {
       .filter(function(r) { return r.pumpId === pumpId && r.date < date; })
       .sort(function(a, b) { return b.date.localeCompare(a.date); });
     return candidates.length ? candidates[0] : null;
+  },
+
+  getDistributions: function(rec) {
+    if (rec.distributions && rec.distributions.length) return rec.distributions;
+    if (rec.destinationId) return [{ destinationId: rec.destinationId, pct: 100 }];
+    return [];
   },
 
   computedVolume: function(rec) {
@@ -333,6 +351,71 @@ function _dewKpi(label, val, sub, clr) {
     (sub ? '<div class="anl-kpi-sub">' + sub + '</div>' : '') + '</div>';
 }
 
+// ── Helpers: распределение откачки ──────────────────────────
+
+function _dewAddDistRowWithValue(listId, destId, pct) {
+  var list = document.getElementById('dew-dist-' + listId);
+  if (!list) return;
+  var opts = DewateringState.destinations.map(function(d) {
+    return '<option value="' + d.id + '"' + (d.id === destId ? ' selected' : '') + '>' + escHTML(d.name) + '</option>';
+  }).join('');
+  var row = document.createElement('div');
+  row.className = 'dew-dist-row';
+  row.style.cssText = 'display:flex;gap:5px;align-items:center;margin-top:4px';
+  row.innerHTML =
+    '<select class="dew-dist-dest form-control" style="flex:1;font-size:11px" onchange="_dewUpdateDistTotal(\'' + listId + '\')">' +
+      '<option value="">— направление —</option>' + opts +
+    '</select>' +
+    '<input class="dew-dist-pct form-control" type="number" min="0" max="100" value="' + (pct != null ? pct : 100) + '" style="width:62px;font-size:12px;text-align:right" oninput="_dewUpdateDistTotal(\'' + listId + '\')">' +
+    '<span style="color:var(--txt-3);font-size:11px;min-width:10px">%</span>' +
+    '<button class="btn btn-sm" style="padding:2px 5px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2);font-size:10px" onclick="this.closest(\'.dew-dist-row\').remove();_dewUpdateDistTotal(\'' + listId + '\')">✕</button>';
+  list.appendChild(row);
+  _dewUpdateDistTotal(listId);
+}
+
+function _dewAddDistRow(listId) { _dewAddDistRowWithValue(listId, '', 100); }
+
+function _dewUpdateDistTotal(listId) {
+  var list    = document.getElementById('dew-dist-' + listId);
+  var totalEl = document.getElementById('dew-dist-total-' + listId);
+  if (!list || !totalEl) return;
+  var sum = 0;
+  list.querySelectorAll('.dew-dist-pct').forEach(function(i) { sum += parseFloat(i.value) || 0; });
+  totalEl.textContent = sum + '%';
+  totalEl.style.color = Math.round(sum) === 100 ? 'var(--ok)' : sum > 100 ? 'var(--bad)' : sum === 0 ? 'var(--txt-3)' : 'var(--warn)';
+}
+
+function _dewGetDistributions(listId) {
+  var list = document.getElementById('dew-dist-' + listId);
+  if (!list) return [];
+  var result = [];
+  list.querySelectorAll('.dew-dist-row').forEach(function(row) {
+    var dest = row.querySelector('.dew-dist-dest');
+    var pct  = row.querySelector('.dew-dist-pct');
+    if (dest && pct && dest.value) result.push({ destinationId: dest.value, pct: parseFloat(pct.value) || 0 });
+  });
+  return result;
+}
+
+function _dewInitDistRows(listId, distributions) {
+  var list = document.getElementById('dew-dist-' + listId);
+  if (!list) return;
+  list.innerHTML = '';
+  (distributions || []).forEach(function(d) { _dewAddDistRowWithValue(listId, d.destinationId, d.pct); });
+  _dewUpdateDistTotal(listId);
+}
+
+function _dewDistBlock(listId) {
+  return '<div style="min-width:160px">' +
+    '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Распределение откачки</div>' +
+    '<div id="dew-dist-' + listId + '"></div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">' +
+      '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:1px 7px;white-space:nowrap" onclick="_dewAddDistRow(\'' + listId + '\')">+ Направление</button>' +
+      '<span style="font-size:10px;color:var(--txt-3);white-space:nowrap">Итого: <span id="dew-dist-total-' + listId + '">—</span></span>' +
+    '</div>' +
+  '</div>';
+}
+
 // ── Модальное окно: ежедневное заполнение ────────────────────
 
 function _dewOpenFillModal(sumpId, date) {
@@ -372,11 +455,7 @@ function _dewOpenFillModal(sumpId, date) {
                     : '<span style="color:var(--txt-3)">—</span>';
 
     // Selected dest
-    var selDest = existing ? (existing.destinationId || '') : '';
-    var destOptsWithSel = '<option value="">— не указано —</option>' +
-      DewateringState.destinations.map(function(d) {
-        return '<option value="' + d.id + '"' + (d.id === selDest ? ' selected' : '') + '>' + escHTML(d.name) + '</option>';
-      }).join('');
+    var existingDists = existing ? DewateringState.getDistributions(existing) : [];
 
     return '<div style="padding:16px 20px;border-bottom:1px solid var(--line)">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
@@ -407,10 +486,7 @@ function _dewOpenFillModal(sumpId, date) {
             '<label class="form-label" style="font-size:9px">Часов работы</label>' +
             '<input type="number" id="dew-modal-hrs-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.hoursWorked != null ? existing.hoursWorked : '')) + '" min="0" max="24" placeholder="ч" style="width:72px;font-size:12px">' +
           '</div>' +
-          '<div class="form-group" style="margin:0">' +
-            '<label class="form-label" style="font-size:9px">Направление откачки</label>' +
-            '<select id="dew-modal-dest-' + p.id + '" class="form-control" style="font-size:11px">' + destOptsWithSel + '</select>' +
-          '</div>' +
+          _dewDistBlock(p.id) +
         '</div>' +
         '<div class="form-group" style="margin:0">' +
           '<label class="form-label" style="font-size:9px">Примечание</label>' +
@@ -484,6 +560,12 @@ function _dewOpenFillModal(sumpId, date) {
   var wrap = document.createElement('div');
   wrap.innerHTML = html;
   document.body.appendChild(wrap.firstChild);
+
+  // Init distribution rows for each pump
+  activePumps.forEach(function(p) {
+    var ex = DewateringState.readingForDate(p.id, modalDate);
+    _dewInitDistRows(p.id, ex ? DewateringState.getDistributions(ex) : []);
+  });
 
   // Close on overlay click
   document.getElementById('dew-fill-modal').addEventListener('click', function(e) {
@@ -578,9 +660,9 @@ function _dewSaveFillModal(sumpId) {
       var valEl = document.getElementById('dew-modal-val-' + p.id);
       if (!valEl || valEl.value.trim() === '') return;
       data.reading       = parseFloat(valEl.value);
-      data.hoursWorked   = parseFloat((document.getElementById('dew-modal-hrs-'   + p.id) || {}).value) || null;
-      data.destinationId = ((document.getElementById('dew-modal-dest-'  + p.id) || {}).value) || null;
-      data.notes         = (((document.getElementById('dew-modal-notes-' + p.id) || {}).value) || '').trim();
+      data.hoursWorked    = parseFloat((document.getElementById('dew-modal-hrs-'   + p.id) || {}).value) || null;
+      data.distributions  = _dewGetDistributions(p.id);
+      data.notes          = (((document.getElementById('dew-modal-notes-' + p.id) || {}).value) || '').trim();
     }
 
     if (existing) DewateringState.updateReading(existing.id, data);
@@ -1181,10 +1263,6 @@ function _dewRenderQuickEntry(date) {
       var prevVal  = prevRec && !prevRec.isStopped && !prevRec.isReset ? prevRec.reading : null;
       var prevDate = prevRec ? prevRec.date : null;
       var isStopped = existing ? existing.isStopped : false;
-      var destOpts = '<option value="">— направление —</option>' +
-        DewateringState.destinations.map(function(d) {
-          return '<option value="' + d.id + '"' + (existing && existing.destinationId === d.id ? ' selected' : '') + '>' + escHTML(d.name) + '</option>';
-        }).join('');
 
       html +=
         '<div style="padding:8px 0;border-top:1px solid var(--line-2)" data-pump-id="' + p.id + '">' +
@@ -1213,10 +1291,7 @@ function _dewRenderQuickEntry(date) {
                 _dewCalcVolDisplay(existing, prevVal) +
               '</div>' +
             '</div>' +
-            '<div class="form-group" style="margin:0">' +
-              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Направление</div>' +
-              '<select id="dew-qe-dest-' + p.id + '" class="form-control" style="font-size:11px">' + destOpts + '</select>' +
-            '</div>' +
+            _dewDistBlock(p.id) +
             '<div>' +
               '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Часов работы</div>' +
               '<input type="number" id="dew-qe-hrs-' + p.id + '" class="form-control" value="' + (existing ? existing.hoursWorked || '' : '') + '" placeholder="ч" style="width:60px;font-size:12px" min="0" max="24">' +
@@ -1236,6 +1311,16 @@ function _dewRenderQuickEntry(date) {
   });
 
   el.innerHTML = html || '<div class="card" style="padding:16px;text-align:center;color:var(--txt-3);font-size:12px">Нет активных насосов</div>';
+
+  // Init distribution rows for each pump after DOM is ready
+  DewateringState.sumps.forEach(function(sump) {
+    DewateringState.pumpsOfSump(sump.id)
+      .filter(function(p) { return p.status === 'working' || p.status === 'standby'; })
+      .forEach(function(p) {
+        var ex = DewateringState.readingForDate(p.id, date);
+        _dewInitDistRows(p.id, ex ? DewateringState.getDistributions(ex) : []);
+      });
+  });
 }
 
 function _dewCalcVolDisplay(existing, prevVal) {
@@ -1292,9 +1377,9 @@ function _dewSaveQuickEntry() {
       var valEl = document.getElementById('dew-qe-val-' + p.id);
       if (!valEl || valEl.value.trim() === '') return;
       data.reading      = parseFloat(valEl.value);
-      data.hoursWorked  = parseFloat((document.getElementById('dew-qe-hrs-' + p.id) || {}).value) || null;
-      data.destinationId = (document.getElementById('dew-qe-dest-' + p.id) || {}).value || null;
-      data.notes        = ((document.getElementById('dew-qe-notes-' + p.id) || {}).value || '').trim();
+      data.hoursWorked   = parseFloat((document.getElementById('dew-qe-hrs-'   + p.id) || {}).value) || null;
+      data.distributions = _dewGetDistributions(p.id);
+      data.notes         = ((document.getElementById('dew-qe-notes-' + p.id) || {}).value || '').trim();
     }
 
     if (existing) DewateringState.updateReading(existing.id, data);
@@ -1355,9 +1440,15 @@ function _dewRenderReadingsTable() {
     records.map(function(r) {
       var pump      = DewateringState.pumpById(r.pumpId);
       var sump      = pump ? DewateringState.sumpById(pump.sumpId) : null;
-      var dest      = r.destinationId ? DewateringState.destById(r.destinationId) : null;
       var vol       = DewateringState.computedVolume(r);
       var isEditing = r.id === _dewEditReadingId;
+      var rDists    = DewateringState.getDistributions(r);
+      var distDisp  = rDists.length
+        ? rDists.map(function(d) {
+            var dst = DewateringState.destById(d.destinationId);
+            return (dst ? escHTML(dst.name) : '?') + (rDists.length > 1 ? ' ' + d.pct + '%' : '');
+          }).join(', ')
+        : '—';
       var volStr    = r.isStopped ? '<span style="color:var(--txt-3)">простой</span>'
                    : vol == null  ? '<span style="color:var(--txt-3)">нет пред.</span>'
                    : '<span style="color:var(--ok);font-weight:600">' + vol.toFixed(0) + '</span>';
@@ -1372,7 +1463,7 @@ function _dewRenderReadingsTable() {
         '<td style="padding:5px 8px;text-align:right;color:var(--txt-2)">' + (r.isStopped ? '—' : (r.reading != null ? parseFloat(r.reading).toFixed(0) : '—')) + '</td>' +
         '<td style="padding:5px 8px;text-align:right">' + volStr + '</td>' +
         '<td style="padding:5px 8px;text-align:right;color:var(--txt-3)">' + (r.hoursWorked != null ? parseFloat(r.hoursWorked).toFixed(1) : '—') + '</td>' +
-        '<td style="padding:5px 8px;color:var(--txt-3)">' + (dest ? escHTML(dest.name) : '—') + '</td>' +
+        '<td style="padding:5px 8px;color:var(--txt-3);font-size:10px">' + distDisp + '</td>' +
         '<td style="padding:5px 8px;text-align:right;white-space:nowrap">' +
           '<button class="btn btn-sm btn-outline" title="Редактировать" style="font-size:10px;padding:2px 5px;margin-right:3px" onclick="_dewEditReading(\'' + r.id + '\')">' + (isEditing ? '✕' : '✎') + '</button>' +
           (!isEditing ? '<button class="btn btn-sm" style="font-size:10px;padding:2px 5px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2)" onclick="_dewDeleteReading(\'' + r.id + '\')">✕</button>' : '') +
@@ -1405,10 +1496,7 @@ function _dewRenderReadingsTable() {
                 '<label class="form-label" style="font-size:9px">Часов</label>' +
                 '<input type="number" id="dew-er-hrs-' + r.id + '" class="form-control" value="' + escAttr(String(r.hoursWorked != null ? r.hoursWorked : '')) + '" min="0" max="24" style="width:70px;font-size:12px">' +
               '</div>' +
-              '<div class="form-group" style="margin:0">' +
-                '<label class="form-label" style="font-size:9px">Направление</label>' +
-                '<select id="dew-er-dest-' + r.id + '" class="form-control" style="font-size:11px">' + _dewReadingDestOpts(r.destinationId || '') + '</select>' +
-              '</div>' +
+              _dewDistBlock('er-' + r.id) +
               '<div class="form-group" style="margin:0;flex:1;min-width:100px">' +
                 '<label class="form-label" style="font-size:9px">Примечание</label>' +
                 '<input type="text" id="dew-er-notes-' + r.id + '" class="form-control" value="' + escAttr(r.notes || '') + '" style="font-size:11px">' +
@@ -1431,6 +1519,14 @@ function _dewRenderReadingsTable() {
       return dataRow + editRow;
     }).join('') +
     '</tbody></table></div>';
+
+  // Init dist rows for currently open edit row
+  if (_dewEditReadingId) {
+    var editRec = DewateringState.meterReadings.find(function(r) { return r.id === _dewEditReadingId; });
+    if (editRec && !editRec.isStopped) {
+      _dewInitDistRows('er-' + _dewEditReadingId, DewateringState.getDistributions(editRec));
+    }
+  }
 }
 
 function _dewEditReading(id) {
@@ -1463,14 +1559,13 @@ function _dewSaveEditReading(id) {
     downtimeReason: stopped ? (((document.getElementById('dew-er-dreason-' + id) || {}).value) || '').trim() : '',
   };
   if (!stopped) {
-    var valEl   = document.getElementById('dew-er-val-'    + id);
-    var hrsEl   = document.getElementById('dew-er-hrs-'    + id);
-    var destEl  = document.getElementById('dew-er-dest-'   + id);
-    var notesEl = document.getElementById('dew-er-notes-'  + id);
-    if (valEl)   data.reading       = parseFloat(valEl.value);
-    if (hrsEl)   data.hoursWorked   = parseFloat(hrsEl.value) || null;
-    if (destEl)  data.destinationId = destEl.value || null;
-    if (notesEl) data.notes         = notesEl.value.trim();
+    var valEl   = document.getElementById('dew-er-val-'   + id);
+    var hrsEl   = document.getElementById('dew-er-hrs-'   + id);
+    var notesEl = document.getElementById('dew-er-notes-' + id);
+    if (valEl)   data.reading      = parseFloat(valEl.value);
+    if (hrsEl)   data.hoursWorked  = parseFloat(hrsEl.value) || null;
+    data.distributions = _dewGetDistributions('er-' + id);
+    if (notesEl) data.notes        = notesEl.value.trim();
   }
   DewateringState.updateReading(id, data);
   _dewEditReadingId = null;
@@ -1801,9 +1896,12 @@ function _dewChartDest() {
   if (!el) return;
   var byDest = {};
   DewateringState.meterReadings.forEach(function(r) {
-    if (!r.destinationId) return;
-    var v = DewateringState.computedVolume(r) || 0;
-    byDest[r.destinationId] = (byDest[r.destinationId] || 0) + v;
+    var vol   = DewateringState.computedVolume(r) || 0;
+    if (!vol) return;
+    DewateringState.getDistributions(r).forEach(function(d) {
+      if (!d.destinationId) return;
+      byDest[d.destinationId] = (byDest[d.destinationId] || 0) + vol * d.pct / 100;
+    });
   });
   var total = Object.keys(byDest).reduce(function(a,k){return a+byDest[k];},0);
   if (!total) { el.innerHTML='<p style="color:var(--txt-3);font-size:11px;text-align:center;padding:20px">Нет данных</p>'; return; }
