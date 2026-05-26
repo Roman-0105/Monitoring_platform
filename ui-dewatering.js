@@ -201,74 +201,101 @@ function _dewSwitch(tab) {
 
 // ── Обзор ────────────────────────────────────────────────────
 
+var DEW_FILL_STATUS = {
+  complete: { icon: '✓', clr: 'var(--ok)',   label: 'Журнал заполнен' },
+  partial:  { icon: '◑', clr: 'var(--warn)', label: 'Частично заполнен' },
+  empty:    { icon: '✗', clr: 'var(--bad)',  label: 'Не заполнен' },
+  noactive: { icon: '—', clr: 'var(--txt-3)',label: 'Нет активных насосов' },
+};
+
 function _dewRenderOverview() {
   var el = document.getElementById('dew-panel-overview');
   if (!el) return;
 
   var today      = new Date().toISOString().slice(0, 10);
   var monthStart = today.slice(0, 7) + '-01';
+  var allPumps   = DewateringState.pumps;
+  var working    = allPumps.filter(function(p) { return p.status === 'working'; }).length;
+  var standby    = allPumps.filter(function(p) { return p.status === 'standby'; }).length;
+  var repair     = allPumps.filter(function(p) { return p.status === 'repair';  }).length;
 
-  var allPumps = DewateringState.pumps;
-  var working  = allPumps.filter(function(p) { return p.status === 'working'; }).length;
-  var standby  = allPumps.filter(function(p) { return p.status === 'standby'; }).length;
-  var repair   = allPumps.filter(function(p) { return p.status === 'repair';  }).length;
-
-  // Monthly volume from meter readings
-  var monthReadings = DewateringState.meterReadings.filter(function(r) { return r.date >= monthStart && r.date <= today; });
-  var volMonth = monthReadings.reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+  var volMonth = DewateringState.meterReadings
+    .filter(function(r) { return r.date >= monthStart && r.date <= today; })
+    .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
   var volToday = DewateringState.meterReadings
     .filter(function(r) { return r.date === today; })
     .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
-
   var nowRu = new Date().toLocaleString('ru', { month: 'long' });
 
   var kpiHtml =
     '<div class="anl-kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">' +
     _dewKpi('Зумпфов в карьере',  DewateringState.sumps.length, allPumps.length + ' насосов', 'var(--gold)') +
-    _dewKpi('Работают сейчас',    working,  standby + ' рез. · ' + repair + ' рем.', 'var(--ok)') +
+    _dewKpi('Работают сейчас',    working, standby + ' рез. · ' + repair + ' рем.', 'var(--ok)') +
     _dewKpi('Объём за сутки',     volToday.toFixed(0) + ' <small>м³</small>', 'показания расходомеров', 'var(--blue)') +
     _dewKpi('Объём за месяц',     volMonth.toFixed(0) + ' <small>м³</small>', nowRu, 'var(--warn)') +
     _dewKpi('Записей журнала',    DewateringState.meterReadings.length, 'всего показаний', 'var(--txt-2)') +
     _dewKpi('Замеров уровня',     DewateringState.waterLevels.length,   'зеркало воды', 'var(--txt-2)') +
     '</div>';
 
-  // Daily fill status
-  var FILL_STATUS = {
-    complete: { icon: '✓', clr: 'var(--ok)',   label: 'Журнал заполнен' },
-    partial:  { icon: '◑', clr: 'var(--warn)', label: 'Частично заполнен' },
-    empty:    { icon: '✗', clr: 'var(--bad)',  label: 'Не заполнен' },
-    noactive: { icon: '—', clr: 'var(--txt-3)',label: 'Нет активных насосов' },
-  };
+  if (!DewateringState.sumps.length) {
+    el.innerHTML = kpiHtml + '<div class="card" style="padding:24px;text-align:center;color:var(--txt-3);font-size:13px">Зумпфы не добавлены — перейдите на вкладку <b>Зумпфы</b></div>';
+    return;
+  }
 
-  var sumpsHtml = !DewateringState.sumps.length
-    ? '<div class="card" style="padding:24px;text-align:center;color:var(--txt-3);font-size:13px">Зумпфы не добавлены — перейдите на вкладку <b>Зумпфы</b></div>'
-    : '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">Состояние зумпфов · ' + today + '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">' +
-      DewateringState.sumps.map(function(sump) {
-        var pumps  = DewateringState.pumpsOfSump(sump.id);
-        var wk     = pumps.filter(function(p) { return p.status === 'working'; }).length;
-        var st     = pumps.filter(function(p) { return p.status === 'standby'; }).length;
-        var rp     = pumps.filter(function(p) { return p.status === 'repair';  }).length;
-        var fillSt = DewateringState.sumpFillStatus(sump.id, today);
-        var fs     = FILL_STATUS[fillSt];
-        var elev   = DewateringState.sumpCurrentElevation(sump.id);
-        var latestWL = DewateringState.waterLevels
-          .filter(function(w) { return w.sumpId === sump.id; })
-          .sort(function(a, b) { return (b.date + b.time).localeCompare(a.date + a.time); });
-        var wl = latestWL.length ? parseFloat(latestWL[0].elevation) : null;
-        var depth = (wl != null && elev != null) ? (wl - elev) : null;
+  // Group sumps by quarry
+  var quarryGroups = {};
+  var quarryOrder  = [];
+  DewateringState.sumps.forEach(function(s) {
+    var q = s.quarry || 'Без карьера';
+    if (!quarryGroups[q]) { quarryGroups[q] = []; quarryOrder.push(q); }
+    quarryGroups[q].push(s);
+  });
 
-        // Sump daily volume
-        var sumpPumpIds = pumps.map(function(p) { return p.id; });
-        var sumpVolToday = DewateringState.meterReadings
-          .filter(function(r) { return r.date === today && sumpPumpIds.indexOf(r.pumpId) >= 0; })
-          .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+  var sumpsHtml = '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">Состояние зумпфов · ' + today + '</div>';
 
-        return '<div class="card" style="padding:14px">' +
-          '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">' +
+  quarryOrder.forEach(function(quarry) {
+    if (quarryOrder.length > 1) {
+      sumpsHtml += '<div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--txt-3);text-transform:uppercase;margin-bottom:6px;margin-top:12px;padding-bottom:4px;border-bottom:1px solid var(--line)">' + escHTML(quarry) + '</div>';
+    }
+    sumpsHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;margin-bottom:8px">';
+
+    quarryGroups[quarry].forEach(function(sump) {
+      var pumps       = DewateringState.pumpsOfSump(sump.id);
+      var wk          = pumps.filter(function(p) { return p.status === 'working'; }).length;
+      var st          = pumps.filter(function(p) { return p.status === 'standby'; }).length;
+      var rp          = pumps.filter(function(p) { return p.status === 'repair';  }).length;
+      var fillSt      = DewateringState.sumpFillStatus(sump.id, today);
+      var fs          = DEW_FILL_STATUS[fillSt];
+      var elev        = DewateringState.sumpCurrentElevation(sump.id);
+      var latestWL    = DewateringState.waterLevels
+        .filter(function(w) { return w.sumpId === sump.id; })
+        .sort(function(a, b) { return (b.date + b.time).localeCompare(a.date + a.time); });
+      var wl    = latestWL.length ? parseFloat(latestWL[0].elevation) : null;
+      var depth = (wl != null && elev != null) ? (wl - elev) : null;
+      var sumpPumpIds = pumps.map(function(p) { return p.id; });
+      var sumpVolToday = DewateringState.meterReadings
+        .filter(function(r) { return r.date === today && sumpPumpIds.indexOf(r.pumpId) >= 0; })
+        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+
+      // Fill button style depends on status
+      var btnStyle = fillSt === 'complete'
+        ? 'background:rgba(74,222,128,.12);color:var(--ok);border:1px solid rgba(74,222,128,.3)'
+        : fillSt === 'partial'
+        ? 'background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.3)'
+        : fillSt === 'noactive'
+        ? 'background:var(--bg-1);color:var(--txt-3);border:1px solid var(--line)'
+        : 'background:var(--gold);color:#000;border:none';
+      var btnLabel = fillSt === 'complete' ? '✓ Редактировать'
+                   : fillSt === 'partial'  ? '◑ Дозаполнить'
+                   : fillSt === 'noactive' ? '— Нет насосов'
+                   : 'Заполнить данные';
+
+      sumpsHtml +=
+        '<div class="card" style="padding:14px">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">' +
             '<div>' +
               '<div style="font-weight:600;color:var(--txt-1);font-size:13px">' + escHTML(sump.name) + '</div>' +
-              (sump.quarry ? '<div style="font-size:10px;color:var(--txt-3)">' + escHTML(sump.quarry) + '</div>' : '') +
+              (sump.quarry && quarryOrder.length === 1 ? '<div style="font-size:10px;color:var(--txt-3)">' + escHTML(sump.quarry) + '</div>' : '') +
             '</div>' +
             '<div style="text-align:right">' +
               '<div style="font-size:13px;color:' + fs.clr + ';font-weight:700">' + fs.icon + '</div>' +
@@ -281,16 +308,21 @@ function _dewRenderOverview() {
               (depth != null ? '<div><div style="color:var(--txt-3);font-size:9px">Глубина воды</div><div style="color:' + (depth > 1.5 ? 'var(--warn)' : 'var(--ok)') + ';font-weight:600">' + depth.toFixed(1) + ' м</div></div>' : '') +
               (latestWL.length ? '<div><div style="color:var(--txt-3);font-size:9px">Замер</div><div style="color:var(--txt-2)">' + latestWL[0].date + '</div></div>' : '') +
             '</div>' : '') +
-          '<div style="display:flex;gap:10px;font-size:11px;color:var(--txt-3);margin-bottom:6px">' +
+          '<div style="display:flex;gap:10px;font-size:11px;color:var(--txt-3);margin-bottom:10px">' +
             '<span>Насосов: <b style="color:var(--txt-1)">' + pumps.length + '</b></span>' +
-            '<span style="color:var(--ok)">▶ ' + wk + '</span>' +
-            '<span style="color:var(--gold)">◼ ' + st + ' рез.</span>' +
+            (wk ? '<span style="color:var(--ok)">▶ ' + wk + ' раб.</span>' : '') +
+            (st ? '<span style="color:var(--gold)">◼ ' + st + ' рез.</span>' : '') +
             (rp ? '<span style="color:var(--warn)">⚠ ' + rp + ' рем.</span>' : '') +
+            '<span style="margin-left:auto">∑ <b style="color:var(--txt-1)">' + sumpVolToday.toFixed(0) + ' м³</b></span>' +
           '</div>' +
-          '<div style="font-size:11px;color:var(--txt-3)">За сутки: <span style="color:var(--txt-1);font-weight:600">' + sumpVolToday.toFixed(0) + ' м³</span></div>' +
+          (fillSt !== 'noactive' ?
+            '<button class="btn btn-sm" style="width:100%;font-size:11px;' + btnStyle + '" onclick="_dewOpenFillModal(\'' + sump.id + '\',\'' + today + '\')">' + btnLabel + '</button>'
+            : '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px 0">Нет активных насосов</div>') +
         '</div>';
-      }).join('') +
-      '</div>';
+    });
+
+    sumpsHtml += '</div>';
+  });
 
   el.innerHTML = kpiHtml + sumpsHtml;
 }
@@ -299,6 +331,266 @@ function _dewKpi(label, val, sub, clr) {
   return '<div class="anl-kpi"><div class="anl-kpi-lbl">' + label + '</div>' +
     '<div class="anl-kpi-val" style="color:' + clr + '">' + val + '</div>' +
     (sub ? '<div class="anl-kpi-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+// ── Модальное окно: ежедневное заполнение ────────────────────
+
+function _dewOpenFillModal(sumpId, date) {
+  var sump = DewateringState.sumpById(sumpId);
+  if (!sump) return;
+  var modalDate = date || new Date().toISOString().slice(0, 10);
+
+  var activePumps = DewateringState.pumpsOfSump(sumpId).filter(function(p) {
+    return p.status === 'working' || p.status === 'standby';
+  });
+
+  var destOpts = '<option value="">— не указано —</option>' +
+    DewateringState.destinations.map(function(d) {
+      return '<option value="' + d.id + '">' + escHTML(d.name) + '</option>';
+    }).join('');
+
+  // Water level: check if today's level is already recorded
+  var existingWL = DewateringState.waterLevels.find(function(w) {
+    return w.sumpId === sumpId && w.date === modalDate;
+  });
+  var bottomElev = DewateringState.sumpCurrentElevation(sumpId);
+
+  // Build pump sections HTML
+  var pumpSectionsHtml = activePumps.map(function(p) {
+    var existing = DewateringState.readingForDate(p.id, modalDate);
+    var prevRec  = DewateringState.prevReading(p.id, modalDate);
+    var prevVal  = prevRec && !prevRec.isStopped && !prevRec.isReset ? parseFloat(prevRec.reading) : null;
+    var prevDate = prevRec ? prevRec.date : null;
+    var isStopped = existing ? !!existing.isStopped : false;
+    var st = DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off;
+
+    // Volume to show if existing reading already saved
+    var curReadingVal = existing && !existing.isStopped && existing.reading != null ? parseFloat(existing.reading) : null;
+    var initVol = (curReadingVal != null && prevVal != null) ? (curReadingVal - prevVal) : null;
+    var initVolHtml = isStopped ? '<span style="color:var(--txt-3)">простой</span>'
+                    : initVol != null ? (initVol >= 0 ? '<span style="color:var(--ok)">' + initVol.toFixed(0) + ' м³</span>' : '<span style="color:var(--bad)">⚠ ' + initVol.toFixed(0) + '</span>')
+                    : '<span style="color:var(--txt-3)">—</span>';
+
+    // Selected dest
+    var selDest = existing ? (existing.destinationId || '') : '';
+    var destOptsWithSel = '<option value="">— не указано —</option>' +
+      DewateringState.destinations.map(function(d) {
+        return '<option value="' + d.id + '"' + (d.id === selDest ? ' selected' : '') + '>' + escHTML(d.name) + '</option>';
+      }).join('');
+
+    return '<div style="padding:16px 20px;border-bottom:1px solid var(--line)">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--txt-1)">' + escHTML(p.name) + '</div>' +
+        '<span class="anl-pill anl-pill-' + st.cls + '" style="font-size:9px">' + st.label + '</span>' +
+        (p.inventoryNumber ? '<span style="font-size:10px;color:var(--txt-3)">Инв. ' + escHTML(p.inventoryNumber) + '</span>' : '') +
+        (p.model ? '<span style="font-size:10px;color:var(--txt-3)">' + escHTML(p.model) + '</span>' : '') +
+        '<label style="margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt-3);cursor:pointer">' +
+          '<input type="checkbox" id="dew-modal-stopped-' + p.id + '"' + (isStopped ? ' checked' : '') + ' onchange="_dewModalToggleStopped(\'' + p.id + '\')">' +
+          ' Насос не работал' +
+        '</label>' +
+      '</div>' +
+      '<div id="dew-modal-fields-' + p.id + '"' + (isStopped ? ' style="display:none"' : '') + '>' +
+        '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">' +
+          '<div>' +
+            '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Предыдущее показание' + (prevDate ? ' · ' + prevDate : '') + '</div>' +
+            '<div style="font-size:18px;font-weight:700;color:var(--txt-2);min-width:80px">' + (prevVal != null ? prevVal.toFixed(0) + ' <span style="font-size:11px;font-weight:400">м³</span>' : '<span style="color:var(--txt-3);font-size:14px">нет данных</span>') + '</div>' +
+          '</div>' +
+          '<div class="form-group" style="margin:0">' +
+            '<label class="form-label" style="font-size:9px">Показание на 06:00</label>' +
+            '<input type="number" id="dew-modal-val-' + p.id + '" class="form-control" value="' + (curReadingVal != null ? curReadingVal.toFixed(0) : '') + '" placeholder="м³ накоп." style="width:130px;font-size:15px;font-weight:600" oninput="_dewModalCalcVol(\'' + p.id + '\',' + (prevVal != null ? prevVal : 'null') + ')">' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Объём за сутки</div>' +
+            '<div id="dew-modal-vol-' + p.id + '" style="font-size:18px;font-weight:700;min-width:80px">' + initVolHtml + '</div>' +
+          '</div>' +
+          '<div class="form-group" style="margin:0">' +
+            '<label class="form-label" style="font-size:9px">Часов работы</label>' +
+            '<input type="number" id="dew-modal-hrs-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.hoursWorked != null ? existing.hoursWorked : '')) + '" min="0" max="24" placeholder="ч" style="width:72px;font-size:12px">' +
+          '</div>' +
+          '<div class="form-group" style="margin:0">' +
+            '<label class="form-label" style="font-size:9px">Направление откачки</label>' +
+            '<select id="dew-modal-dest-' + p.id + '" class="form-control" style="font-size:11px">' + destOptsWithSel + '</select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="form-group" style="margin:0">' +
+          '<label class="form-label" style="font-size:9px">Примечание</label>' +
+          '<input type="text" id="dew-modal-notes-' + p.id + '" class="form-control" value="' + escAttr(existing && existing.notes || '') + '" placeholder="необязательно" style="font-size:11px">' +
+        '</div>' +
+      '</div>' +
+      '<div id="dew-modal-stop-reason-' + p.id + '"' + (!isStopped ? ' style="display:none"' : '') + '>' +
+        '<div class="form-group" style="margin:0">' +
+          '<label class="form-label" style="font-size:9px">Причина простоя</label>' +
+          '<input type="text" id="dew-modal-dreason-' + p.id + '" class="form-control" value="' + escAttr(existing && existing.downtimeReason || '') + '" placeholder="нет воды, авария, ремонт..." style="font-size:11px">' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var noActivePumpsHtml = !activePumps.length
+    ? '<div style="padding:24px 20px;text-align:center;color:var(--txt-3);font-size:12px">Нет активных насосов для этого зумпфа</div>'
+    : '';
+
+  var html =
+    '<div id="dew-fill-modal" style="position:fixed;inset:0;z-index:2000;display:flex;align-items:flex-start;justify-content:center;background:rgba(0,0,0,.7);padding:24px 12px;overflow-y:auto">' +
+    '<div style="background:var(--bg-2);border-radius:var(--r);width:min(700px,98vw);box-shadow:0 12px 48px rgba(0,0,0,.6);margin-bottom:24px">' +
+
+      // Header
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px">' +
+        '<div style="flex:1">' +
+          '<div style="font-size:14px;font-weight:700;color:var(--txt-1)">' + escHTML(sump.name) + '</div>' +
+          '<div style="font-size:11px;color:var(--txt-3)">' + (sump.quarry ? escHTML(sump.quarry) + ' · ' : '') + 'Ежедневное заполнение журнала</div>' +
+        '</div>' +
+        '<div class="form-group" style="margin:0">' +
+          '<label class="form-label" style="font-size:9px">Дата</label>' +
+          '<input type="date" id="dew-modal-date" class="form-control" value="' + escAttr(modalDate) + '" style="width:140px;font-size:12px">' +
+        '</div>' +
+        '<button class="btn btn-sm btn-outline" onclick="_dewCloseFillModal()" style="font-size:11px;align-self:flex-end">✕ Закрыть</button>' +
+      '</div>' +
+
+      // Water level section
+      '<div style="padding:14px 20px;border-bottom:1px solid var(--line);background:rgba(34,211,238,.04)">' +
+        '<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">💧 Уровень воды в зумпфе</div>' +
+        '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">' +
+          '<div class="form-group" style="margin:0">' +
+            '<label class="form-label" style="font-size:9px">Отм. зеркала воды, м абс.</label>' +
+            '<input type="number" id="dew-modal-wl-elev" class="form-control" value="' + escAttr(String(existingWL ? existingWL.elevation : '')) + '" placeholder="-118.50" style="width:140px;font-size:14px;font-weight:600" oninput="_dewModalWlHint(\'' + sumpId + '\')">' +
+          '</div>' +
+          '<div class="form-group" style="margin:0">' +
+            '<label class="form-label" style="font-size:9px">Время замера</label>' +
+            '<input type="time" id="dew-modal-wl-time" class="form-control" value="' + escAttr(existingWL ? existingWL.time : '06:00') + '" style="width:92px;font-size:12px">' +
+          '</div>' +
+          '<div class="form-group" style="margin:0">' +
+            '<label class="form-label" style="font-size:9px">Кто замерил</label>' +
+            '<input type="text" id="dew-modal-wl-by" class="form-control" value="' + escAttr(existingWL ? existingWL.measuredBy || '' : '') + '" style="width:130px;font-size:11px">' +
+          '</div>' +
+          '<div id="dew-modal-wl-hint" style="font-size:11px;color:var(--txt-3);align-self:center;padding-bottom:6px">' +
+            (existingWL && bottomElev != null ? '↕ Глубина: <b style="color:' + (existingWL.elevation - bottomElev > 1.5 ? 'var(--warn)' : 'var(--ok)') + '">' + (existingWL.elevation - bottomElev).toFixed(2) + ' м</b>' : (bottomElev == null ? '<span style="color:var(--warn)">Отметка дна не задана</span>' : '')) +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Pump sections
+      (noActivePumpsHtml || pumpSectionsHtml) +
+
+      // Footer
+      '<div style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;align-items:center">' +
+        '<span style="font-size:11px;color:var(--txt-3);margin-right:auto">' + activePumps.length + ' насос(ов) для заполнения</span>' +
+        '<button class="btn btn-sm btn-outline" onclick="_dewCloseFillModal()" style="font-size:11px">Отмена</button>' +
+        '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:12px;font-weight:600" onclick="_dewSaveFillModal(\'' + sumpId + '\')">💾 Сохранить всё</button>' +
+      '</div>' +
+
+    '</div></div>';
+
+  var wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap.firstChild);
+
+  // Close on overlay click
+  document.getElementById('dew-fill-modal').addEventListener('click', function(e) {
+    if (e.target === this) _dewCloseFillModal();
+  });
+}
+
+function _dewCloseFillModal() {
+  var m = document.getElementById('dew-fill-modal');
+  if (m) m.remove();
+}
+
+function _dewModalCalcVol(pumpId, prevVal) {
+  var inp   = document.getElementById('dew-modal-val-' + pumpId);
+  var volEl = document.getElementById('dew-modal-vol-' + pumpId);
+  if (!inp || !volEl) return;
+  var cur = parseFloat(inp.value);
+  if (isNaN(cur) || prevVal == null) {
+    volEl.innerHTML = '<span style="color:var(--txt-3)">—</span>';
+    return;
+  }
+  var diff = cur - parseFloat(prevVal);
+  volEl.innerHTML = diff >= 0
+    ? '<span style="color:var(--ok)">' + diff.toFixed(0) + ' м³</span>'
+    : '<span style="color:var(--bad)">⚠ ' + diff.toFixed(0) + '</span>';
+}
+
+function _dewModalToggleStopped(pumpId) {
+  var chk    = document.getElementById('dew-modal-stopped-'     + pumpId);
+  var fields = document.getElementById('dew-modal-fields-'      + pumpId);
+  var reason = document.getElementById('dew-modal-stop-reason-' + pumpId);
+  if (fields) fields.style.display = chk.checked ? 'none' : '';
+  if (reason) reason.style.display = chk.checked ? ''     : 'none';
+}
+
+function _dewModalWlHint(sumpId) {
+  var hint    = document.getElementById('dew-modal-wl-hint');
+  var elevInp = document.getElementById('dew-modal-wl-elev');
+  if (!hint || !elevInp || elevInp.value === '') { if (hint) hint.innerHTML = ''; return; }
+  var bot   = DewateringState.sumpCurrentElevation(sumpId);
+  if (bot == null) { hint.innerHTML = '<span style="color:var(--warn)">Отметка дна не задана</span>'; return; }
+  var depth = parseFloat(elevInp.value) - bot;
+  hint.innerHTML = '↕ Глубина: <b style="color:' + (depth > 1.5 ? 'var(--warn)' : 'var(--ok)') + '">' + depth.toFixed(2) + ' м</b> (дно ' + bot.toFixed(1) + ' м абс.)';
+}
+
+function _dewSaveFillModal(sumpId) {
+  var dateEl = document.getElementById('dew-modal-date');
+  var date   = dateEl ? dateEl.value : null;
+  if (!date) { Toast.show('Укажите дату', 'warning'); return; }
+
+  // Save water level if entered
+  var elevEl = document.getElementById('dew-modal-wl-elev');
+  var elev   = elevEl ? parseFloat(elevEl.value) : NaN;
+  if (!isNaN(elev)) {
+    var timeEl = document.getElementById('dew-modal-wl-time');
+    var byEl   = document.getElementById('dew-modal-wl-by');
+    var wlData = {
+      sumpId:     sumpId,
+      date:       date,
+      time:       timeEl ? timeEl.value : '06:00',
+      elevation:  elev,
+      measuredBy: byEl ? byEl.value.trim() : '',
+      notes:      '',
+    };
+    var existingWL = DewateringState.waterLevels.find(function(w) { return w.sumpId === sumpId && w.date === date; });
+    if (existingWL) DewateringState.updateWaterLevel(existingWL.id, wlData);
+    else            DewateringState.addWaterLevel(wlData);
+  }
+
+  // Save pump readings
+  var pumps = DewateringState.pumpsOfSump(sumpId).filter(function(p) {
+    return p.status === 'working' || p.status === 'standby';
+  });
+  var saved = 0;
+
+  pumps.forEach(function(p) {
+    var stoppedEl = document.getElementById('dew-modal-stopped-' + p.id);
+    if (!stoppedEl) return;
+    var isStopped = stoppedEl.checked;
+    var existing  = DewateringState.readingForDate(p.id, date);
+
+    var data = {
+      pumpId:         p.id,
+      date:           date,
+      isStopped:      isStopped,
+      isReset:        false,
+      isManualVolume: false,
+      downtimeReason: isStopped ? (((document.getElementById('dew-modal-dreason-' + p.id) || {}).value) || '').trim() : '',
+    };
+
+    if (!isStopped) {
+      var valEl = document.getElementById('dew-modal-val-' + p.id);
+      if (!valEl || valEl.value.trim() === '') return;
+      data.reading       = parseFloat(valEl.value);
+      data.hoursWorked   = parseFloat((document.getElementById('dew-modal-hrs-'   + p.id) || {}).value) || null;
+      data.destinationId = ((document.getElementById('dew-modal-dest-'  + p.id) || {}).value) || null;
+      data.notes         = (((document.getElementById('dew-modal-notes-' + p.id) || {}).value) || '').trim();
+    }
+
+    if (existing) DewateringState.updateReading(existing.id, data);
+    else          DewateringState.addReading(data);
+    saved++;
+  });
+
+  _dewCloseFillModal();
+  _dewRenderOverview();
+  Toast.show('Сохранено: ' + saved + (saved === 1 ? ' насос' : ' насосов') + (isNaN(elev) ? '' : ' + уровень воды'), 'success');
 }
 
 // ── Зумпфы ───────────────────────────────────────────────────
