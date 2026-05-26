@@ -11,6 +11,147 @@
  * История канавы = SELECT * FROM ditches WHERE ditch_name  = X
  */
 
+// ── Маппинг dewatering (sumps, elevations, pumps, events, destinations, readings, water levels) ──
+
+function dewSumpToRow(s) {
+  return { id: s.id, name: s.name || '', quarry: s.quarry || '', notes: s.notes || '' };
+}
+function rowToDewSump(r) {
+  return { id: r.id, name: r.name || '', quarry: r.quarry || '', notes: r.notes || '' };
+}
+
+function dewElevToRow(h) {
+  return { id: h.id, sump_id: h.sumpId, date: h.date, elevation: h.elevation != null ? Number(h.elevation) : null, notes: h.notes || '' };
+}
+function rowToDewElev(r) {
+  return { id: r.id, sumpId: r.sump_id, date: r.date, elevation: r.elevation != null ? Number(r.elevation) : null, notes: r.notes || '' };
+}
+
+function dewPumpToRow(p) {
+  return {
+    id: p.id, sump_id: p.sumpId, name: p.name || '', model: p.model || '',
+    serial_number: p.serialNumber || '', inventory_number: p.inventoryNumber || '',
+    quarry: p.quarry || '', capacity: p.capacity != null ? Number(p.capacity) : null,
+    head: p.head != null ? Number(p.head) : null, type: p.type || '',
+    status: p.status || 'off', install_date: p.installDate || null,
+    notes: p.notes || '', count_in_volume: p.countInVolume !== false
+  };
+}
+function rowToDewPump(r) {
+  return {
+    id: r.id, sumpId: r.sump_id, name: r.name || '', model: r.model || '',
+    serialNumber: r.serial_number || '', inventoryNumber: r.inventory_number || '',
+    quarry: r.quarry || '', capacity: r.capacity != null ? Number(r.capacity) : null,
+    head: r.head != null ? Number(r.head) : null, type: r.type || '',
+    status: r.status || 'off', installDate: r.install_date || null,
+    notes: r.notes || '', countInVolume: r.count_in_volume !== false
+  };
+}
+
+function dewEvtToRow(e) {
+  return {
+    id: e.id, sump_id: e.sumpId, date: e.date, type: e.type || '',
+    removed_pump_id: e.removedPumpId || null, installed_pump_id: e.installedPumpId || null,
+    reason: e.reason || '', performed_by: e.performedBy || '', notes: e.notes || ''
+  };
+}
+function rowToDewEvt(r) {
+  return {
+    id: r.id, sumpId: r.sump_id, date: r.date, type: r.type || '',
+    removedPumpId: r.removed_pump_id || null, installedPumpId: r.installed_pump_id || null,
+    reason: r.reason || '', performedBy: r.performed_by || '', notes: r.notes || ''
+  };
+}
+
+function dewDestToRow(d) {
+  return { id: d.id, name: d.name || '', type: d.type || '', target_sump_id: d.targetSumpId || null };
+}
+function rowToDewDest(r) {
+  return { id: r.id, name: r.name || '', type: r.type || '', targetSumpId: r.target_sump_id || null };
+}
+
+function dewReadingToRow(r) {
+  return {
+    id: r.id, pump_id: r.pumpId, date: r.date,
+    reading: r.reading != null ? Number(r.reading) : null,
+    is_reset: !!r.isReset, is_stopped: !!r.isStopped,
+    downtime_reason: r.downtimeReason || '',
+    hours_worked: r.hoursWorked != null ? Number(r.hoursWorked) : null,
+    distributions: r.distributions || [],
+    is_manual_volume: !!r.isManualVolume,
+    manual_volume: r.manualVolume != null ? Number(r.manualVolume) : null,
+    notes: r.notes || ''
+  };
+}
+function rowToDewReading(r) {
+  return {
+    id: r.id, pumpId: r.pump_id, date: r.date,
+    reading: r.reading != null ? Number(r.reading) : null,
+    isReset: !!r.is_reset, isStopped: !!r.is_stopped,
+    downtimeReason: r.downtime_reason || '',
+    hoursWorked: r.hours_worked != null ? Number(r.hours_worked) : null,
+    distributions: Array.isArray(r.distributions) ? r.distributions : [],
+    isManualVolume: !!r.is_manual_volume,
+    manualVolume: r.manual_volume != null ? Number(r.manual_volume) : null,
+    notes: r.notes || ''
+  };
+}
+
+function dewLevelToRow(w) {
+  return {
+    id: w.id, sump_id: w.sumpId, date: w.date, time: w.time || '',
+    elevation: w.elevation != null ? Number(w.elevation) : null,
+    measured_by: w.measuredBy || '', notes: w.notes || ''
+  };
+}
+function rowToDewLevel(r) {
+  return {
+    id: r.id, sumpId: r.sump_id, date: r.date, time: r.time || '',
+    elevation: r.elevation != null ? Number(r.elevation) : null,
+    measuredBy: r.measured_by || '', notes: r.notes || ''
+  };
+}
+
+// ── Маппинг dust suppression (orgs, vehicles, nozzles, logs) ──
+
+function dustOrgToRow(o) { return { id: o.id, name: o.name || '', notes: o.notes || '' }; }
+function rowToDustOrg(r) { return { id: r.id, name: r.name || '', notes: r.notes || '' }; }
+
+function dustVehToRow(v) {
+  return { id: v.id, org_id: v.orgId, name: v.name || '', plate_number: v.plateNumber || '', capacity: v.capacity != null ? Number(v.capacity) : null, notes: v.notes || '' };
+}
+function rowToDustVeh(r) {
+  return { id: r.id, orgId: r.org_id, name: r.name || '', plateNumber: r.plate_number || '', capacity: r.capacity != null ? Number(r.capacity) : null, notes: r.notes || '' };
+}
+
+function dustNozzleToRow(n) {
+  return { id: n.id, name: n.name || '', source_type: n.sourceType || 'sump', source_id: n.sourceId || null, location: n.location || '', notes: n.notes || '' };
+}
+function rowToDustNozzle(r) {
+  return { id: r.id, name: r.name || '', sourceType: r.source_type || 'sump', sourceId: r.source_id || null, location: r.location || '', notes: r.notes || '' };
+}
+
+function dustLogToRow(l) {
+  return {
+    id: l.id, date: l.date, org_id: l.orgId, vehicle_id: l.vehicleId,
+    nozzle_id: l.nozzleId, trips: l.trips != null ? Number(l.trips) : null,
+    total_volume: l.totalVolume != null ? Number(l.totalVolume) : null,
+    is_manual_volume: !!l.isManualVolume,
+    manual_volume: l.manualVolume != null ? Number(l.manualVolume) : null,
+    notes: l.notes || ''
+  };
+}
+function rowToDustLog(r) {
+  return {
+    id: r.id, date: r.date, orgId: r.org_id, vehicleId: r.vehicle_id,
+    nozzleId: r.nozzle_id, trips: r.trips != null ? Number(r.trips) : null,
+    totalVolume: r.total_volume != null ? Number(r.total_volume) : null,
+    isManualVolume: !!r.is_manual_volume,
+    manualVolume: r.manual_volume != null ? Number(r.manual_volume) : null,
+    notes: r.notes || ''
+  };
+}
+
 var Api = (function() {
 
   var _client = null;
@@ -573,5 +714,51 @@ var Api = (function() {
     createMeasurement:   createMeasurement,
     updateMeasurement:   updateMeasurement,
     deleteMeasurement:   deleteMeasurement,
+
+    // ── Dewatering ────────────────────────────────────────────
+    getDewSumps:        async function() { return client().from('dew_sumps').select('*').order('name'); },
+    upsertDewSump:      async function(row) { return client().from('dew_sumps').upsert(row); },
+    deleteDewSump:      async function(id) { return client().from('dew_sumps').delete().eq('id', id); },
+
+    getDewElevations:   async function() { return client().from('dew_elevation_history').select('*').order('date', { ascending: false }); },
+    upsertDewElev:      async function(row) { return client().from('dew_elevation_history').upsert(row); },
+    deleteDewElev:      async function(id) { return client().from('dew_elevation_history').delete().eq('id', id); },
+
+    getDewPumps:        async function() { return client().from('dew_pumps').select('*').order('name'); },
+    upsertDewPump:      async function(row) { return client().from('dew_pumps').upsert(row); },
+    deleteDewPump:      async function(id) { return client().from('dew_pumps').delete().eq('id', id); },
+
+    getDewPumpEvents:   async function() { return client().from('dew_pump_events').select('*').order('date', { ascending: false }); },
+    upsertDewPumpEvent: async function(row) { return client().from('dew_pump_events').upsert(row); },
+    deleteDewPumpEvent: async function(id) { return client().from('dew_pump_events').delete().eq('id', id); },
+
+    getDewDestinations: async function() { return client().from('dew_destinations').select('*').order('name'); },
+    upsertDewDest:      async function(row) { return client().from('dew_destinations').upsert(row); },
+    deleteDewDest:      async function(id) { return client().from('dew_destinations').delete().eq('id', id); },
+
+    getDewReadings:     async function() { return client().from('dew_meter_readings').select('*').order('date', { ascending: false }); },
+    upsertDewReading:   async function(row) { return client().from('dew_meter_readings').upsert(row); },
+    deleteDewReading:   async function(id) { return client().from('dew_meter_readings').delete().eq('id', id); },
+
+    getDewWaterLevels:  async function() { return client().from('dew_water_levels').select('*').order('date', { ascending: false }); },
+    upsertDewLevel:     async function(row) { return client().from('dew_water_levels').upsert(row); },
+    deleteDewLevel:     async function(id) { return client().from('dew_water_levels').delete().eq('id', id); },
+
+    // ── Dust suppression ──────────────────────────────────────
+    getDustOrgs:        async function() { return client().from('dust_orgs').select('*').order('name'); },
+    upsertDustOrg:      async function(row) { return client().from('dust_orgs').upsert(row); },
+    deleteDustOrg:      async function(id) { return client().from('dust_orgs').delete().eq('id', id); },
+
+    getDustVehicles:    async function() { return client().from('dust_vehicles').select('*').order('name'); },
+    upsertDustVehicle:  async function(row) { return client().from('dust_vehicles').upsert(row); },
+    deleteDustVehicle:  async function(id) { return client().from('dust_vehicles').delete().eq('id', id); },
+
+    getDustNozzles:     async function() { return client().from('dust_nozzles').select('*').order('name'); },
+    upsertDustNozzle:   async function(row) { return client().from('dust_nozzles').upsert(row); },
+    deleteDustNozzle:   async function(id) { return client().from('dust_nozzles').delete().eq('id', id); },
+
+    getDustLogs:        async function() { return client().from('dust_logs').select('*').order('date', { ascending: false }); },
+    upsertDustLog:      async function(row) { return client().from('dust_logs').upsert(row); },
+    deleteDustLog:      async function(id) { return client().from('dust_logs').delete().eq('id', id); },
   };
 })();
