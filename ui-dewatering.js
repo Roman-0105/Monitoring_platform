@@ -458,7 +458,7 @@ function _dewRenderDiagram(wrap) {
 
   if (!allKeys.every(function(k) { return _dewDiagramPos[k]; })) _dewDiagramAutoLayout();
 
-  var canvasW = 600, canvasH = 200;
+  var canvasW = 900, canvasH = 500;
   allKeys.forEach(function(k) {
     var p = _dewDiagramPos[k]; if (!p) return;
     var w, h;
@@ -572,8 +572,8 @@ function _dewRenderDiagram(wrap) {
       '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)">Схема водоотлива · ' + date + '</div>' +
       '<button class="btn btn-sm btn-outline" style="font-size:10px" onclick="_dewDiagramReset()">↺ Сбросить позиции</button>' +
     '</div>' +
-    '<div style="overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--bg-0)">' +
-      '<div id="dew-diagram-canvas" style="position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px;min-width:600px">' +
+    '<div style="overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--bg-0);min-height:520px">' +
+      '<div id="dew-diagram-canvas" style="position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px;min-width:900px;min-height:520px">' +
         '<svg id="dew-diagram-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible" xmlns="http://www.w3.org/2000/svg"></svg>' +
         nodesHtml +
       '</div>' +
