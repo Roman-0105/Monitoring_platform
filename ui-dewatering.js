@@ -163,10 +163,11 @@ var DEW_EVENT_TYPE = {
   repair_in:  'Возврат из ремонта',
 };
 
-var _dewInited  = false;
-var _dewSubTab  = 'overview';
-var _dewJFilter = { sumpId: '', date: '' };
-var _dewLFilter = { sumpId: '' };
+var _dewInited          = false;
+var _dewSubTab          = 'overview';
+var _dewJFilter         = { sumpId: '', date: '' };
+var _dewLFilter         = { sumpId: '' };
+var _dewShowPumpRegistry = false;
 
 // ── Init ─────────────────────────────────────────────────────
 
@@ -303,7 +304,22 @@ function _dewKpi(label, val, sub, clr) {
 function _dewRenderSumps() {
   var el = document.getElementById('dew-panel-sumps');
   if (!el) return;
-  el.innerHTML =
+
+  var toggleLabel = _dewShowPumpRegistry ? '← К зумпфам' : '📋 Реестр насосов';
+  var topBar = '<div style="display:flex;justify-content:flex-end;margin-bottom:12px">' +
+    '<button class="btn btn-sm btn-outline" onclick="_dewTogglePumpRegistry()" style="font-size:11px">' + toggleLabel + '</button>' +
+    '</div>';
+
+  if (_dewShowPumpRegistry) {
+    el.innerHTML = topBar +
+      '<div id="dew-pump-form"></div>' +
+      '<div id="dew-pump-events-panel"></div>' +
+      '<div id="dew-registry-content"></div>';
+    _dewRenderPumpRegistry();
+    return;
+  }
+
+  el.innerHTML = topBar +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">' +
       '<div>' +
         _dewSectionHeader('Зумпфы', 'dew-btn-add-sump', '+ Зумпф', true) +
@@ -328,6 +344,103 @@ function _dewRenderSumps() {
     _dewOpenPumpForm(null);
   });
   document.getElementById('dew-btn-add-dest').addEventListener('click', _dewOpenDestForm);
+}
+
+function _dewTogglePumpRegistry() {
+  _dewShowPumpRegistry = !_dewShowPumpRegistry;
+  _dewRenderSumps();
+}
+
+function _dewRenderPumpRegistry() {
+  var el = document.getElementById('dew-registry-content');
+  if (!el) return;
+
+  var pumps   = DewateringState.pumps;
+  var working = pumps.filter(function(p) { return p.status === 'working'; }).length;
+  var repair  = pumps.filter(function(p) { return p.status === 'repair';  }).length;
+
+  var header =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+      '<div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--txt-1)">Все насосы</div>' +
+        '<div style="font-size:11px;color:var(--txt-3);margin-top:2px">' +
+          'Всего: <b style="color:var(--txt-2)">' + pumps.length + '</b> · ' +
+          'Работают: <b style="color:var(--ok)">' + working + '</b>' +
+          (repair ? ' · Ремонт: <b style="color:var(--warn)">' + repair + '</b>' : '') +
+        '</div>' +
+      '</div>' +
+      '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px" id="dew-btn-add-pump-reg">+ Насос</button>' +
+    '</div>';
+
+  if (!pumps.length) {
+    el.innerHTML = header + '<div class="card" style="padding:24px;text-align:center;color:var(--txt-3);font-size:12px">Насосы не добавлены</div>';
+    document.getElementById('dew-btn-add-pump-reg').addEventListener('click', function() {
+      if (!DewateringState.sumps.length) { Toast.show('Сначала добавьте зумпф', 'warning'); return; }
+      _dewOpenPumpForm(null);
+    });
+    return;
+  }
+
+  var sorted = pumps.slice().sort(function(a, b) {
+    var qa = a.quarry || '', qb = b.quarry || '';
+    if (qa !== qb) return qa.localeCompare(qb);
+    var sa = DewateringState.sumpById(a.sumpId), sb = DewateringState.sumpById(b.sumpId);
+    var sna = sa ? sa.name : '', snb = sb ? sb.name : '';
+    if (sna !== snb) return sna.localeCompare(snb);
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  el.innerHTML = header +
+    '<div style="overflow-x:auto">' +
+    '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px">' +
+    '<thead><tr style="color:var(--txt-3);font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--line)">' +
+      '<th style="padding:6px 8px;text-align:left;font-weight:500">Насос</th>' +
+      '<th style="padding:6px 8px;text-align:left;font-weight:500">Инв. №</th>' +
+      '<th style="padding:6px 8px;text-align:left;font-weight:500">Марка / Модель</th>' +
+      '<th style="padding:6px 8px;text-align:left;font-weight:500">Зумпф</th>' +
+      '<th style="padding:6px 8px;text-align:left;font-weight:500">Карьер</th>' +
+      '<th style="padding:6px 8px;text-align:center;font-weight:500">Статус</th>' +
+      '<th style="padding:6px 8px;text-align:right;font-weight:500">Q, м³/ч</th>' +
+      '<th style="padding:6px 8px;text-align:right;font-weight:500">Напор, м</th>' +
+      '<th style="padding:6px 8px;text-align:right;font-weight:500">∑ м³</th>' +
+      '<th style="padding:6px 8px"></th>' +
+    '</tr></thead><tbody>' +
+    sorted.map(function(p) {
+      var sump = DewateringState.sumpById(p.sumpId);
+      var st   = DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off;
+      var vol  = DewateringState.totalVolumePump(p.id);
+      var evts = DewateringState.pumpEvents.filter(function(e) { return e.installedPumpId === p.id || e.removedPumpId === p.id; }).length;
+      return '<tr style="border-bottom:1px solid var(--line-2)">' +
+        '<td style="padding:6px 8px">' +
+          '<div style="color:var(--txt-1);font-weight:500">' + escHTML(p.name) + '</div>' +
+          (p.type ? '<div style="font-size:9px;color:var(--txt-3)">' + (DEW_PUMP_TYPE[p.type] || '') + '</div>' : '') +
+        '</td>' +
+        '<td style="padding:6px 8px;color:var(--txt-3)">' + escHTML(p.inventoryNumber || '—') + '</td>' +
+        '<td style="padding:6px 8px;color:var(--txt-2)">' +
+          escHTML(p.model || '—') +
+          (p.serialNumber ? '<div style="font-size:9px;color:var(--txt-3)">с/н ' + escHTML(p.serialNumber) + '</div>' : '') +
+        '</td>' +
+        '<td style="padding:6px 8px;color:var(--txt-2)">' + (sump ? escHTML(sump.name) : '<span style="color:var(--txt-3)">—</span>') + '</td>' +
+        '<td style="padding:6px 8px;color:var(--txt-3)">' + escHTML(p.quarry || '—') + '</td>' +
+        '<td style="padding:6px 8px;text-align:center">' +
+          '<span class="anl-pill anl-pill-' + st.cls + '" style="font-size:9px">' + st.label + '</span>' +
+        '</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:var(--txt-1)">' + (p.capacity != null ? p.capacity : '—') + '</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:var(--txt-2)">' + (p.head != null ? p.head : '—') + '</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:var(--ok);font-weight:500">' + vol.toFixed(0) + '</td>' +
+        '<td style="padding:6px 8px;text-align:right;white-space:nowrap">' +
+          '<button class="btn btn-sm btn-outline" title="Событие" style="font-size:10px;padding:2px 6px;margin-right:2px" onclick="_dewOpenPumpEvents(\'' + p.id + '\')">🔧' + (evts ? '<sup>' + evts + '</sup>' : '') + '</button>' +
+          '<button class="btn btn-sm btn-outline" title="Редактировать" style="font-size:10px;padding:2px 7px;margin-right:2px" onclick="_dewOpenPumpForm(\'' + p.id + '\')">✎</button>' +
+          '<button class="btn btn-sm" title="Удалить" style="font-size:10px;padding:2px 7px;background:rgba(248,113,113,.12);color:var(--bad);border:1px solid rgba(248,113,113,.25)" onclick="_dewDeletePump(\'' + p.id + '\')">✕</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table></div>';
+
+  document.getElementById('dew-btn-add-pump-reg').addEventListener('click', function() {
+    if (!DewateringState.sumps.length) { Toast.show('Сначала добавьте зумпф', 'warning'); return; }
+    _dewOpenPumpForm(null);
+  });
 }
 
 function _dewSectionHeader(title, btnId, btnLabel, gold) {
@@ -557,7 +670,8 @@ function _dewOpenPumpForm(id) {
     if (id) DewateringState.updatePump(id, data);
     else    DewateringState.addPump(data);
     formEl.innerHTML = '';
-    _dewRenderPumpsList();
+    if (_dewShowPumpRegistry) _dewRenderPumpRegistry();
+    else                      _dewRenderPumpsList();
     Toast.show(id ? 'Насос обновлён' : 'Насос добавлен', 'success');
   };
 }
@@ -636,7 +750,8 @@ function _dewDeletePump(id) {
   var p = DewateringState.pumpById(id);
   if (!p || !confirm('Удалить насос "' + p.name + '" и все его показания?')) return;
   DewateringState.deletePump(id);
-  _dewRenderPumpsList();
+  if (_dewShowPumpRegistry) _dewRenderPumpRegistry();
+  else                      _dewRenderPumpsList();
   var ep = document.getElementById('dew-pump-events-panel'); if(ep) ep.innerHTML = '';
   Toast.show('Насос удалён', 'info');
 }
