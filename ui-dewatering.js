@@ -374,8 +374,8 @@ var _dewQuarryBounds = {};
 // Feature 4: Animation toggle
 var _dewDiagramAnimPaused = false;
 
-// Feature 5: Theme
-var _dewDiagramTheme = (typeof localStorage !== 'undefined' && localStorage.getItem('dew_diagram_theme')) || 'dark';
+// Single fixed theme (dark)
+var _dewDiagramTheme = 'dark';
 
 // ── Init ─────────────────────────────────────────────────────
 
@@ -564,7 +564,7 @@ function _dewGetThemeColors() {
   var themes = {
     dark: {
       bg:           'var(--bg-1, #0d1117)',
-      canvasBg:     'transparent',
+      canvasBg:     'repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 1px,transparent 1px,transparent 40px),repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 1px,transparent 1px,transparent 40px)',
       nodeSump:     { bg:'rgba(12,20,35,0.95)', border:'rgba(88,166,255,0.45)', header:'rgba(88,166,255,0.6)' },
       nodePump:     { bg:'rgba(12,20,35,0.9)',  border:'rgba(88,166,255,0.2)',  header:null },
       nodeDest:     { bg:'rgba(10,28,20,0.95)', border:'rgba(74,222,128,0.4)',  header:'rgba(74,222,128,0.55)' },
@@ -579,88 +579,12 @@ function _dewGetThemeColors() {
       quarryBg:     ['rgba(88,166,255,0.04)','rgba(74,222,128,0.04)','rgba(251,191,36,0.03)','rgba(188,140,255,0.03)'],
       quarryBorder: ['rgba(88,166,255,0.15)','rgba(74,222,128,0.12)','rgba(251,191,36,0.1)','rgba(188,140,255,0.1)'],
       quarryLabel:  ['rgba(88,166,255,0.8)','rgba(74,222,128,0.75)','rgba(251,191,36,0.8)','rgba(188,140,255,0.75)'],
-    },
-    blueprint: {
-      bg:           '#051a3a',
-      canvasBg:     'repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0,rgba(255,255,255,.03) 1px,transparent 1px,transparent 40px),repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0,rgba(255,255,255,.03) 1px,transparent 1px,transparent 40px)',
-      nodeSump:     { bg:'rgba(3,25,68,0.97)',  border:'rgba(120,180,255,0.8)',  header:'rgba(120,180,255,0.9)' },
-      nodePump:     { bg:'rgba(3,20,55,0.97)',  border:'rgba(160,210,255,0.6)',  header:null },
-      nodeDest:     { bg:'rgba(3,40,55,0.97)',  border:'rgba(0,230,200,0.7)',    header:'rgba(0,230,200,0.8)' },
-      nodeNozzle:   { bg:'rgba(3,30,68,0.97)',  border:'rgba(100,200,255,0.7)',  header:'rgba(100,200,255,0.8)' },
-      edgeFlow:     'rgba(255,240,120,0.9)',
-      edgeStruct:   'rgba(140,190,255,0.6)',
-      edgeNozzle:   'rgba(0,230,200,0.75)',
-      arrowFlow:    'rgba(255,240,120,1)',
-      arrowStruct:  'rgba(140,190,255,0.8)',
-      arrowNozzle:  'rgba(0,230,200,0.9)',
-      labelText:    'rgba(200,230,255,0.9)',
-      quarryBg:     ['rgba(100,160,255,0.06)','rgba(0,200,180,0.05)','rgba(255,220,0,0.04)','rgba(180,120,255,0.04)'],
-      quarryBorder: ['rgba(100,160,255,0.35)','rgba(0,200,180,0.3)','rgba(255,220,0,0.25)','rgba(180,120,255,0.25)'],
-      quarryLabel:  ['rgba(140,190,255,1)','rgba(0,220,200,1)','rgba(255,230,80,1)','rgba(200,160,255,1)'],
-    },
-    neon: {
-      bg:           '#06060f',
-      canvasBg:     'transparent',
-      nodeSump:     { bg:'rgba(0,5,20,0.98)',   border:'rgba(0,240,255,0.7)',   header:'rgba(0,240,255,0.8)' },
-      nodePump:     { bg:'rgba(0,5,20,0.95)',   border:'rgba(180,0,255,0.5)',   header:null },
-      nodeDest:     { bg:'rgba(0,15,5,0.98)',   border:'rgba(0,255,130,0.65)',  header:'rgba(0,255,130,0.75)' },
-      nodeNozzle:   { bg:'rgba(0,5,20,0.98)',   border:'rgba(0,200,255,0.65)',  header:'rgba(0,200,255,0.75)' },
-      edgeFlow:     'rgba(255,210,0,0.9)',
-      edgeStruct:   'rgba(180,0,255,0.5)',
-      edgeNozzle:   'rgba(0,240,255,0.7)',
-      arrowFlow:    'rgba(255,210,0,1)',
-      arrowStruct:  'rgba(200,50,255,0.8)',
-      arrowNozzle:  'rgba(0,240,255,0.9)',
-      labelText:    'rgba(200,230,255,0.95)',
-      quarryBg:     ['rgba(0,240,255,0.04)','rgba(0,255,130,0.04)','rgba(255,210,0,0.03)','rgba(200,0,255,0.04)'],
-      quarryBorder: ['rgba(0,240,255,0.3)','rgba(0,255,130,0.25)','rgba(255,210,0,0.2)','rgba(200,0,255,0.25)'],
-      quarryLabel:  ['rgba(0,240,255,1)','rgba(0,255,130,1)','rgba(255,210,0,1)','rgba(200,100,255,1)'],
-    },
-    minimal: {
-      bg:           '#161b22',
-      canvasBg:     'transparent',
-      nodeSump:     { bg:'rgba(22,27,34,1)',    border:'rgba(180,190,210,0.3)', header:'rgba(140,160,200,0.5)' },
-      nodePump:     { bg:'rgba(22,27,34,1)',    border:'rgba(160,170,190,0.2)', header:null },
-      nodeDest:     { bg:'rgba(22,27,34,1)',    border:'rgba(120,200,150,0.3)', header:'rgba(100,180,130,0.4)' },
-      nodeNozzle:   { bg:'rgba(22,27,34,1)',    border:'rgba(100,180,220,0.3)', header:'rgba(80,160,200,0.4)' },
-      edgeFlow:     'rgba(200,170,80,0.7)',
-      edgeStruct:   'rgba(140,160,200,0.3)',
-      edgeNozzle:   'rgba(80,180,220,0.5)',
-      arrowFlow:    'rgba(200,170,80,0.9)',
-      arrowStruct:  'rgba(140,160,200,0.5)',
-      arrowNozzle:  'rgba(80,180,220,0.7)',
-      labelText:    'rgba(180,190,210,0.75)',
-      quarryBg:     ['rgba(140,160,210,0.04)','rgba(100,180,130,0.04)','rgba(200,170,80,0.03)','rgba(160,120,200,0.03)'],
-      quarryBorder: ['rgba(140,160,210,0.2)','rgba(100,180,130,0.18)','rgba(200,170,80,0.15)','rgba(160,120,200,0.15)'],
-      quarryLabel:  ['rgba(160,180,220,0.85)','rgba(120,195,150,0.85)','rgba(210,185,100,0.85)','rgba(175,140,210,0.85)'],
     }
   };
-  return themes[_dewDiagramTheme] || themes.dark;
+  return themes.dark;
 }
 
-function _dewNodeShadow(tc_node) {
-  if (_dewDiagramTheme === 'neon') {
-    return 'box-shadow:0 0 12px ' + tc_node.border + ',0 0 24px ' + tc_node.border.replace('0.7','0.25') + ';';
-  }
-  return '';
-}
-
-function _dewSetTheme(t) {
-  _dewDiagramTheme = t;
-  if (typeof localStorage !== 'undefined') localStorage.setItem('dew_diagram_theme', t);
-  var wrap = document.getElementById('dew-diagram-overlay') || document.getElementById('dew-diagram-wrap');
-  if (wrap) _dewRenderDiagram(wrap);
-}
-
-function _dewUpdateThemeBtns() {
-  ['dark','blueprint','neon','minimal'].forEach(function(t) {
-    var btn = document.getElementById('dew-tb-' + t);
-    if (btn) {
-      if (t === _dewDiagramTheme) btn.classList.add('active');
-      else btn.classList.remove('active');
-    }
-  });
-}
+function _dewNodeShadow() { return ''; }
 
 // ── Fullscreen ───────────────────────────────────────────────
 
@@ -727,6 +651,9 @@ function _dewDiagramInitInteraction() {
     _dewDiagramPanning = true;
     _dewDiagramPanStart = { x: e.clientX - _dewDiagramPanX, y: e.clientY - _dewDiagramPanY };
     vp.style.cursor = 'grabbing';
+    // Disable transition during pan for zero-lag tracking
+    var c = document.getElementById('dew-diagram-canvas');
+    if (c) c.style.transition = 'none';
   });
   document.addEventListener('mousemove', function(e) {
     if (!_dewDiagramPanning || !_dewDiagramPanStart) return;
@@ -740,6 +667,9 @@ function _dewDiagramInitInteraction() {
       _dewDiagramPanStart = null;
       var vp2 = document.getElementById('dew-diagram-viewport');
       if (vp2) vp2.style.cursor = 'grab';
+      // Re-enable transition after pan ends
+      var c2 = document.getElementById('dew-diagram-canvas');
+      if (c2) c2.style.transition = '';
     }
   });
 }
@@ -844,6 +774,49 @@ function _dewDiagramAutoLayout() {
       dy += nzlH + nzlVGap;
     });
   }
+}
+
+// Recompute quarry bounding boxes from current _dewDiagramPos (called after any position change)
+function _dewComputeQuarryBounds() {
+  _dewQuarryBounds = {};
+  var sumps = DewateringState.sumps;
+  var dests = DewateringState.destinations;
+  var relayIds = {};
+  dests.forEach(function(d) {
+    if (d.type === 'intermediate_sump' && d.targetSumpId) relayIds[d.targetSumpId] = true;
+  });
+  var srcSumps = sumps.filter(function(s) { return !relayIds[s.id]; });
+
+  var quarryGroups = {};
+  srcSumps.forEach(function(s) {
+    var q = s.quarry || '—';
+    if (!quarryGroups[q]) quarryGroups[q] = [];
+    quarryGroups[q].push(s);
+  });
+
+  Object.keys(quarryGroups).forEach(function(quarry) {
+    var PAD = 14;
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    quarryGroups[quarry].forEach(function(s) {
+      var sp = _dewDiagramPos['smp_' + s.id];
+      if (sp) {
+        x1 = Math.min(x1, sp.x - PAD);
+        y1 = Math.min(y1, sp.y - PAD);
+        x2 = Math.max(x2, sp.x + DEW_DN.sumpW + PAD);
+        y2 = Math.max(y2, sp.y + DEW_DN.sumpH + PAD);
+      }
+      DewateringState.pumpsOfSump(s.id).forEach(function(p) {
+        var pp = _dewDiagramPos['pmp_' + p.id];
+        if (pp) {
+          x1 = Math.min(x1, pp.x - PAD);
+          y1 = Math.min(y1, pp.y - PAD);
+          x2 = Math.max(x2, pp.x + DEW_DN.pumpW + PAD);
+          y2 = Math.max(y2, pp.y + DEW_DN.pumpH + PAD);
+        }
+      });
+    });
+    if (x1 < Infinity) _dewQuarryBounds[quarry] = { x1: x1, y1: y1, x2: x2, y2: y2 };
+  });
 }
 
 function _dewDiagramComputeFlows(dateFrom, dateTo) {
@@ -973,6 +946,7 @@ function _dewRenderDiagram(wrap) {
     .concat(diagNozzles.map(function(n) { return 'nzl_' + n.id; }));
 
   if (!allKeys.every(function(k) { return _dewDiagramPos[k]; })) _dewDiagramAutoLayout();
+  _dewComputeQuarryBounds(); // always recompute from current positions (even if loaded from localStorage)
 
   var canvasW = 900, canvasH = 500;
   allKeys.forEach(function(k) {
@@ -1146,7 +1120,7 @@ function _dewRenderDiagram(wrap) {
       '</div>' +
       '<button class="btn btn-sm btn-outline" style="font-size:10px" onclick="_dewDiagramReset()">↺ Сбросить позиции</button>' +
     '</div>' +
-    // Row 2: zoom + theme + fullscreen + animation
+    // Row 2: zoom + fullscreen + animation
     '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">' +
       // Zoom controls
       '<div style="display:flex;gap:4px;align-items:center">' +
@@ -1157,16 +1131,6 @@ function _dewRenderDiagram(wrap) {
       '</div>' +
       // Separator
       '<div style="width:1px;height:20px;background:var(--line)"></div>' +
-      // Theme buttons
-      '<div style="display:flex;gap:4px;align-items:center">' +
-        '<span style="font-size:11px;color:var(--txt-3)">Стиль:</span>' +
-        '<button onclick="_dewSetTheme(\'dark\')"      class="dew-theme-btn" id="dew-tb-dark">🌑 Тёмный</button>' +
-        '<button onclick="_dewSetTheme(\'blueprint\')" class="dew-theme-btn" id="dew-tb-blueprint">📐 Синька</button>' +
-        '<button onclick="_dewSetTheme(\'neon\')"      class="dew-theme-btn" id="dew-tb-neon">⚡ Неон</button>' +
-        '<button onclick="_dewSetTheme(\'minimal\')"   class="dew-theme-btn" id="dew-tb-minimal">◽ Минимал</button>' +
-      '</div>' +
-      // Separator
-      '<div style="width:1px;height:20px;background:var(--line)"></div>' +
       // Animation toggle
       '<button class="dew-zoom-btn" id="dew-btn-anim" onclick="_dewToggleAnimation()" style="font-size:11px">⏸ Анимация</button>' +
       // Fullscreen button
@@ -1174,7 +1138,7 @@ function _dewRenderDiagram(wrap) {
     '</div>' +
     // Viewport
     '<div id="dew-diagram-viewport" style="overflow:hidden;position:relative;cursor:grab;user-select:none;border:1px solid var(--line,rgba(255,255,255,0.1));border-radius:6px;' + (isOverlay ? 'flex:1;height:0' : 'height:' + vpHeight) + '">' +
-      '<div id="dew-diagram-canvas" style="position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px;background:' + TC.canvasBg + ';transform-origin:0 0;will-change:transform">' +
+      '<div id="dew-diagram-canvas" style="position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px;background:' + TC.canvasBg + ';transform-origin:0 0;will-change:transform;transition:transform 0.14s cubic-bezier(0.25,0.46,0.45,0.94)">' +
         '<svg id="dew-diagram-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible" xmlns="http://www.w3.org/2000/svg"></svg>' +
         nodesHtml +
       '</div>' +
@@ -1411,6 +1375,7 @@ function _dewDiagramStartDrag(e, nid) {
     _dewDiagramPos[nid] = { x: nx, y: ny };
     el.style.left = nx + 'px';
     el.style.top  = ny + 'px';
+    _dewComputeQuarryBounds();
     _dewDiagramDrawArrows();
   }
   function onUp() {
