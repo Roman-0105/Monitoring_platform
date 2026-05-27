@@ -90,7 +90,36 @@ var DewateringState = {
       this.pumpEvents           = results[3].data.map(rowToDewEvt);
       this.destinations         = results[4].data.length ? results[4].data.map(rowToDewDest) : _dewDefaultDest();
       this.meterReadings        = results[5].data.map(rowToDewReading);
-      this.waterLevels          = results[6].data.map(rowToDewLevel);
+
+      // ── Bidirectional sync for water levels ──────────────────────────────
+      // If Supabase returned records – use them as source of truth.
+      // If Supabase returned empty but we have local records – push locals to
+      // Supabase so they are not silently discarded on the next load.
+      var remoteWL = results[6].data.map(rowToDewLevel);
+      if (remoteWL.length > 0) {
+        // Supabase has data: merge (local-only items are orphans – push them up)
+        var remoteIds = remoteWL.map(function(w) { return w.id; });
+        var orphans   = this.waterLevels.filter(function(w) { return remoteIds.indexOf(w.id) === -1; });
+        if (orphans.length) {
+          orphans.forEach(function(w) {
+            Api.upsertDewLevel(dewLevelToRow(w)).catch(function(e) {
+              console.warn('[dewatering] failed to sync orphan water level', w.id, e);
+            });
+          });
+        }
+        this.waterLevels = remoteWL;
+      } else if (this.waterLevels.length > 0) {
+        // Supabase is empty but we have local data – push all locals up
+        var self = this;
+        this.waterLevels.forEach(function(w) {
+          Api.upsertDewLevel(dewLevelToRow(w)).catch(function(e) {
+            console.warn('[dewatering] failed to push local water level to Supabase', w.id, e);
+          });
+        });
+        // keep this.waterLevels as-is (do NOT overwrite with empty)
+      }
+      // else: both empty – nothing to do
+
       this.save();
       return true;
     } catch(e) { return false; }
@@ -252,17 +281,25 @@ var DewateringState = {
 
   addWaterLevel: function(d) {
     d.id=this._id('wlv'); this.waterLevels.push(d); this.save();
-    if (window.Api) Api.upsertDewLevel(dewLevelToRow(d)).catch(function() {});
+    if (window.Api) Api.upsertDewLevel(dewLevelToRow(d)).catch(function(e) {
+      console.error('[dewatering] Supabase: не удалось сохранить замер уровня', d.id, e);
+      if (window.Toast) Toast.show('⚠️ Замер сохранён локально, но не синхронизирован с сервером', 'warn');
+    });
     return d;
   },
   updateWaterLevel: function(id, d) {
     var i=this.waterLevels.findIndex(function(w){return w.id===id;});
     if(i>=0){ this.waterLevels[i]=Object.assign({},this.waterLevels[i],d); this.save();
-      if (window.Api) Api.upsertDewLevel(dewLevelToRow(this.waterLevels[i])).catch(function() {}); }
+      if (window.Api) Api.upsertDewLevel(dewLevelToRow(this.waterLevels[i])).catch(function(e) {
+        console.error('[dewatering] Supabase: не удалось обновить замер уровня', id, e);
+        if (window.Toast) Toast.show('⚠️ Изменение сохранено локально, но не синхронизировано с сервером', 'warn');
+      }); }
   },
   deleteWaterLevel: function(id) {
     this.waterLevels=this.waterLevels.filter(function(w){return w.id!==id;}); this.save();
-    if (window.Api) Api.deleteDewLevel(id).catch(function() {});
+    if (window.Api) Api.deleteDewLevel(id).catch(function(e) {
+      console.error('[dewatering] Supabase: не удалось удалить замер уровня', id, e);
+    });
   },
 };
 
