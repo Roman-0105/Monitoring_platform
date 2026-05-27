@@ -357,6 +357,26 @@ var _dewDiagramDatePreset = 'yesterday'; // 'yesterday' | '7d' | '2w' | '1m' | '
 var _dewDiagramDateFrom   = '';
 var _dewDiagramDateTo     = '';
 
+// Feature 1: Fullscreen
+var _dewDiagramFullscreen = false;
+var _dewDiagramEscHandler = null;
+
+// Feature 2: Zoom + Pan
+var _dewDiagramZoom     = 1.0;
+var _dewDiagramPanX     = 0;
+var _dewDiagramPanY     = 0;
+var _dewDiagramPanning  = false;
+var _dewDiagramPanStart = null;
+
+// Feature 3: Quarry grouping bounds
+var _dewQuarryBounds = {};
+
+// Feature 4: Animation toggle
+var _dewDiagramAnimPaused = false;
+
+// Feature 5: Theme
+var _dewDiagramTheme = (typeof localStorage !== 'undefined' && localStorage.getItem('dew_diagram_theme')) || 'dark';
+
 // ── Init ─────────────────────────────────────────────────────
 
 function initDewateringTab() {
@@ -538,10 +558,213 @@ function _dewDiagramSavePos() {
   localStorage.setItem('dew_diagram_pos', JSON.stringify(_dewDiagramPos));
 }
 
+// ── Theme system ─────────────────────────────────────────────
+
+function _dewGetThemeColors() {
+  var themes = {
+    dark: {
+      bg:           'var(--bg-1, #0d1117)',
+      canvasBg:     'transparent',
+      nodeSump:     { bg:'rgba(12,20,35,0.95)', border:'rgba(88,166,255,0.45)', header:'rgba(88,166,255,0.6)' },
+      nodePump:     { bg:'rgba(12,20,35,0.9)',  border:'rgba(88,166,255,0.2)',  header:null },
+      nodeDest:     { bg:'rgba(10,28,20,0.95)', border:'rgba(74,222,128,0.4)',  header:'rgba(74,222,128,0.55)' },
+      nodeNozzle:   { bg:'rgba(8,25,35,0.95)',  border:'rgba(34,211,238,0.45)', header:'rgba(34,211,238,0.55)' },
+      edgeFlow:     'rgba(251,191,36,0.75)',
+      edgeStruct:   'rgba(88,166,255,0.35)',
+      edgeNozzle:   'rgba(34,211,238,0.6)',
+      arrowFlow:    'rgba(251,191,36,0.9)',
+      arrowStruct:  'rgba(88,166,255,0.5)',
+      arrowNozzle:  'rgba(34,211,238,0.7)',
+      labelText:    'rgba(255,255,255,0.7)',
+      quarryBg:     ['rgba(88,166,255,0.04)','rgba(74,222,128,0.04)','rgba(251,191,36,0.03)','rgba(188,140,255,0.03)'],
+      quarryBorder: ['rgba(88,166,255,0.15)','rgba(74,222,128,0.12)','rgba(251,191,36,0.1)','rgba(188,140,255,0.1)'],
+      quarryLabel:  ['rgba(88,166,255,0.8)','rgba(74,222,128,0.75)','rgba(251,191,36,0.8)','rgba(188,140,255,0.75)'],
+    },
+    blueprint: {
+      bg:           '#051a3a',
+      canvasBg:     'repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0,rgba(255,255,255,.03) 1px,transparent 1px,transparent 40px),repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0,rgba(255,255,255,.03) 1px,transparent 1px,transparent 40px)',
+      nodeSump:     { bg:'rgba(3,25,68,0.97)',  border:'rgba(120,180,255,0.8)',  header:'rgba(120,180,255,0.9)' },
+      nodePump:     { bg:'rgba(3,20,55,0.97)',  border:'rgba(160,210,255,0.6)',  header:null },
+      nodeDest:     { bg:'rgba(3,40,55,0.97)',  border:'rgba(0,230,200,0.7)',    header:'rgba(0,230,200,0.8)' },
+      nodeNozzle:   { bg:'rgba(3,30,68,0.97)',  border:'rgba(100,200,255,0.7)',  header:'rgba(100,200,255,0.8)' },
+      edgeFlow:     'rgba(255,240,120,0.9)',
+      edgeStruct:   'rgba(140,190,255,0.6)',
+      edgeNozzle:   'rgba(0,230,200,0.75)',
+      arrowFlow:    'rgba(255,240,120,1)',
+      arrowStruct:  'rgba(140,190,255,0.8)',
+      arrowNozzle:  'rgba(0,230,200,0.9)',
+      labelText:    'rgba(200,230,255,0.9)',
+      quarryBg:     ['rgba(100,160,255,0.06)','rgba(0,200,180,0.05)','rgba(255,220,0,0.04)','rgba(180,120,255,0.04)'],
+      quarryBorder: ['rgba(100,160,255,0.35)','rgba(0,200,180,0.3)','rgba(255,220,0,0.25)','rgba(180,120,255,0.25)'],
+      quarryLabel:  ['rgba(140,190,255,1)','rgba(0,220,200,1)','rgba(255,230,80,1)','rgba(200,160,255,1)'],
+    },
+    neon: {
+      bg:           '#06060f',
+      canvasBg:     'transparent',
+      nodeSump:     { bg:'rgba(0,5,20,0.98)',   border:'rgba(0,240,255,0.7)',   header:'rgba(0,240,255,0.8)' },
+      nodePump:     { bg:'rgba(0,5,20,0.95)',   border:'rgba(180,0,255,0.5)',   header:null },
+      nodeDest:     { bg:'rgba(0,15,5,0.98)',   border:'rgba(0,255,130,0.65)',  header:'rgba(0,255,130,0.75)' },
+      nodeNozzle:   { bg:'rgba(0,5,20,0.98)',   border:'rgba(0,200,255,0.65)',  header:'rgba(0,200,255,0.75)' },
+      edgeFlow:     'rgba(255,210,0,0.9)',
+      edgeStruct:   'rgba(180,0,255,0.5)',
+      edgeNozzle:   'rgba(0,240,255,0.7)',
+      arrowFlow:    'rgba(255,210,0,1)',
+      arrowStruct:  'rgba(200,50,255,0.8)',
+      arrowNozzle:  'rgba(0,240,255,0.9)',
+      labelText:    'rgba(200,230,255,0.95)',
+      quarryBg:     ['rgba(0,240,255,0.04)','rgba(0,255,130,0.04)','rgba(255,210,0,0.03)','rgba(200,0,255,0.04)'],
+      quarryBorder: ['rgba(0,240,255,0.3)','rgba(0,255,130,0.25)','rgba(255,210,0,0.2)','rgba(200,0,255,0.25)'],
+      quarryLabel:  ['rgba(0,240,255,1)','rgba(0,255,130,1)','rgba(255,210,0,1)','rgba(200,100,255,1)'],
+    },
+    minimal: {
+      bg:           '#161b22',
+      canvasBg:     'transparent',
+      nodeSump:     { bg:'rgba(22,27,34,1)',    border:'rgba(180,190,210,0.3)', header:'rgba(140,160,200,0.5)' },
+      nodePump:     { bg:'rgba(22,27,34,1)',    border:'rgba(160,170,190,0.2)', header:null },
+      nodeDest:     { bg:'rgba(22,27,34,1)',    border:'rgba(120,200,150,0.3)', header:'rgba(100,180,130,0.4)' },
+      nodeNozzle:   { bg:'rgba(22,27,34,1)',    border:'rgba(100,180,220,0.3)', header:'rgba(80,160,200,0.4)' },
+      edgeFlow:     'rgba(200,170,80,0.7)',
+      edgeStruct:   'rgba(140,160,200,0.3)',
+      edgeNozzle:   'rgba(80,180,220,0.5)',
+      arrowFlow:    'rgba(200,170,80,0.9)',
+      arrowStruct:  'rgba(140,160,200,0.5)',
+      arrowNozzle:  'rgba(80,180,220,0.7)',
+      labelText:    'rgba(180,190,210,0.75)',
+      quarryBg:     ['rgba(140,160,210,0.04)','rgba(100,180,130,0.04)','rgba(200,170,80,0.03)','rgba(160,120,200,0.03)'],
+      quarryBorder: ['rgba(140,160,210,0.2)','rgba(100,180,130,0.18)','rgba(200,170,80,0.15)','rgba(160,120,200,0.15)'],
+      quarryLabel:  ['rgba(160,180,220,0.85)','rgba(120,195,150,0.85)','rgba(210,185,100,0.85)','rgba(175,140,210,0.85)'],
+    }
+  };
+  return themes[_dewDiagramTheme] || themes.dark;
+}
+
+function _dewNodeShadow(tc_node) {
+  if (_dewDiagramTheme === 'neon') {
+    return 'box-shadow:0 0 12px ' + tc_node.border + ',0 0 24px ' + tc_node.border.replace('0.7','0.25') + ';';
+  }
+  return '';
+}
+
+function _dewSetTheme(t) {
+  _dewDiagramTheme = t;
+  if (typeof localStorage !== 'undefined') localStorage.setItem('dew_diagram_theme', t);
+  var wrap = document.getElementById('dew-diagram-overlay') || document.getElementById('dew-diagram-wrap');
+  if (wrap) _dewRenderDiagram(wrap);
+}
+
+function _dewUpdateThemeBtns() {
+  ['dark','blueprint','neon','minimal'].forEach(function(t) {
+    var btn = document.getElementById('dew-tb-' + t);
+    if (btn) {
+      if (t === _dewDiagramTheme) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+  });
+}
+
+// ── Fullscreen ───────────────────────────────────────────────
+
+function _dewDiagramToggleFullscreen() {
+  var overlay = document.getElementById('dew-diagram-overlay');
+  if (overlay) {
+    document.body.removeChild(overlay);
+    _dewDiagramFullscreen = false;
+    document.removeEventListener('keydown', _dewDiagramEscHandler);
+    return;
+  }
+  _dewDiagramFullscreen = true;
+  var ov = document.createElement('div');
+  ov.id = 'dew-diagram-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:var(--bg-1,#0d1117);display:flex;flex-direction:column;padding:0';
+  document.body.appendChild(ov);
+  _dewRenderDiagram(ov);
+  _dewDiagramEscHandler = function(e) {
+    if (e.key === 'Escape') _dewDiagramToggleFullscreen();
+  };
+  document.addEventListener('keydown', _dewDiagramEscHandler);
+}
+
+// ── Zoom + Pan ───────────────────────────────────────────────
+
+function _dewDiagramApplyTransform() {
+  var canvas = document.getElementById('dew-diagram-canvas');
+  if (!canvas) return;
+  canvas.style.transform = 'translate(' + _dewDiagramPanX + 'px,' + _dewDiagramPanY + 'px) scale(' + _dewDiagramZoom + ')';
+  canvas.style.transformOrigin = '0 0';
+}
+
+function _dewUpdateZoomLabel() {
+  var el = document.getElementById('dew-zoom-label');
+  if (el) el.textContent = Math.round(_dewDiagramZoom * 100) + '%';
+}
+
+function _dewZoomIn()  { _dewDiagramZoom = Math.min(3.0, _dewDiagramZoom * 1.2); _dewDiagramApplyTransform(); _dewUpdateZoomLabel(); }
+function _dewZoomOut() { _dewDiagramZoom = Math.max(0.25, _dewDiagramZoom / 1.2); _dewDiagramApplyTransform(); _dewUpdateZoomLabel(); }
+function _dewZoomFit() { _dewDiagramZoom = 1.0; _dewDiagramPanX = 0; _dewDiagramPanY = 0; _dewDiagramApplyTransform(); _dewUpdateZoomLabel(); }
+
+function _dewDiagramInitInteraction() {
+  var vp = document.getElementById('dew-diagram-viewport');
+  var canvas = document.getElementById('dew-diagram-canvas');
+  if (!vp || !canvas) return;
+
+  vp.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? 0.9 : 1.1;
+    var newZoom = Math.min(3.0, Math.max(0.25, _dewDiagramZoom * delta));
+    var rect = vp.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    _dewDiagramPanX = mx - (mx - _dewDiagramPanX) * (newZoom / _dewDiagramZoom);
+    _dewDiagramPanY = my - (my - _dewDiagramPanY) * (newZoom / _dewDiagramZoom);
+    _dewDiagramZoom = newZoom;
+    _dewDiagramApplyTransform();
+    _dewUpdateZoomLabel();
+  }, { passive: false });
+
+  vp.addEventListener('mousedown', function(e) {
+    if (e.target && e.target.closest && e.target.closest('.dew-dn')) return;
+    e.preventDefault();
+    _dewDiagramPanning = true;
+    _dewDiagramPanStart = { x: e.clientX - _dewDiagramPanX, y: e.clientY - _dewDiagramPanY };
+    vp.style.cursor = 'grabbing';
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!_dewDiagramPanning || !_dewDiagramPanStart) return;
+    _dewDiagramPanX = e.clientX - _dewDiagramPanStart.x;
+    _dewDiagramPanY = e.clientY - _dewDiagramPanStart.y;
+    _dewDiagramApplyTransform();
+  });
+  document.addEventListener('mouseup', function() {
+    if (_dewDiagramPanning) {
+      _dewDiagramPanning = false;
+      _dewDiagramPanStart = null;
+      var vp2 = document.getElementById('dew-diagram-viewport');
+      if (vp2) vp2.style.cursor = 'grab';
+    }
+  });
+}
+
+// ── Animation toggle ─────────────────────────────────────────
+
+function _dewToggleAnimation() {
+  _dewDiagramAnimPaused = !_dewDiagramAnimPaused;
+  var canvas = document.getElementById('dew-diagram-canvas');
+  if (canvas) {
+    canvas.style.animationPlayState = _dewDiagramAnimPaused ? 'paused' : 'running';
+    var paths = canvas.querySelectorAll('path[style*="animation"]');
+    Array.prototype.forEach.call(paths, function(p) {
+      p.style.animationPlayState = _dewDiagramAnimPaused ? 'paused' : 'running';
+    });
+  }
+  var btn = document.getElementById('dew-btn-anim');
+  if (btn) btn.textContent = _dewDiagramAnimPaused ? '▶ Анимация' : '⏸ Анимация';
+}
+
 function _dewDiagramAutoLayout() {
   var sumps = DewateringState.sumps;
   var dests = DewateringState.destinations;
   var G = 80, vGap = 12, grpGap = 20;
+  var QUARRY_GAP = 80;
 
   var relayIds = {};
   dests.forEach(function(d) {
@@ -560,6 +783,7 @@ function _dewDiagramAutoLayout() {
   var cDest    = hasRelay ? cRelPump + DEW_DN.pumpW + G : cSrcPump + DEW_DN.pumpW + G;
 
   _dewDiagramPos = {};
+  _dewQuarryBounds = {};
 
   function placeSumpGroup(sump, sumpX, pumpX, startY) {
     var sp    = DewateringState.pumpsOfSump(sump.id);
@@ -573,9 +797,33 @@ function _dewDiagramAutoLayout() {
     return startY + grpH + grpGap;
   }
 
-  var y = 20;
-  srcSumps.forEach(function(s) { y = placeSumpGroup(s, cSrcSump, cSrcPump, y); });
+  // Group source sumps by quarry
+  var quarryOrder = [];
+  var quarryGroups = {};
+  srcSumps.forEach(function(s) {
+    var q = s.quarry || '—';
+    if (!quarryGroups[q]) { quarryGroups[q] = []; quarryOrder.push(q); }
+    quarryGroups[q].push(s);
+  });
 
+  var currentY = 20;
+  quarryOrder.forEach(function(quarry) {
+    var groupSumps = quarryGroups[quarry];
+    var qStartY = currentY;
+    groupSumps.forEach(function(s) {
+      currentY = placeSumpGroup(s, cSrcSump, cSrcPump, currentY);
+    });
+    // Compute bounding box of all nodes in this quarry
+    var x1 = cSrcSump, y1 = qStartY;
+    var x2 = cSrcPump + DEW_DN.pumpW;
+    var y2 = currentY - grpGap;
+    // Extend to include term dest column if no relay
+    if (!hasRelay) x2 = cDest + DEW_DN.destW;
+    _dewQuarryBounds[quarry] = { x1: x1, y1: y1, x2: x2, y2: y2 };
+    currentY += QUARRY_GAP;
+  });
+
+  // Relay sumps at relay columns (not quarry-grouped for now)
   var ry = 20;
   if (hasRelay) relaySumps.forEach(function(s) { ry = placeSumpGroup(s, cRelSump, cRelPump, ry); });
 
@@ -589,7 +837,7 @@ function _dewDiagramAutoLayout() {
   if (typeof DustState !== 'undefined' && DustState.nozzles) {
     var sumpIds = {};
     sumps.forEach(function(s) { sumpIds[s.id] = true; });
-    var nzlW = 180, nzlH = 70, nzlVGap = 10;
+    var nzlH = 70, nzlVGap = 10;
     DustState.nozzles.forEach(function(nzl) {
       if (nzl.sourceType !== 'sump' || !nzl.sourceId || !sumpIds[nzl.sourceId]) return;
       _dewDiagramPos['nzl_' + nzl.id] = { x: cDest, y: dy };
@@ -717,6 +965,8 @@ function _dewRenderDiagram(wrap) {
     });
   }
 
+  var TC = _dewGetThemeColors();
+
   var allKeys = sumps.map(function(s) { return 'smp_' + s.id; })
     .concat(pumps.map(function(p) { return 'pmp_' + p.id; }))
     .concat(termDests.map(function(d) { return 'dst_' + d.id; }))
@@ -758,9 +1008,9 @@ function _dewRenderDiagram(wrap) {
     nodesHtml +=
       '<div id="dew-dn-smp_' + sump.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.sumpW + 'px;min-height:' + DEW_DN.sumpH + 'px;' +
-      'background:var(--bg-2);border:1px solid rgba(88,166,255,.4);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      'background:' + TC.nodeSump.bg + ';border:1px solid ' + TC.nodeSump.border + ';border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);' + _dewNodeShadow(TC.nodeSump) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'smp_' + sump.id + '\')">' +
-      '<div style="height:3px;background:rgba(88,166,255,.55)"></div>' +
+      '<div style="height:3px;background:' + TC.nodeSump.header + '"></div>' +
       '<div style="padding:7px 9px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px">' + escHTML(sump.name) + '</div>' +
         '<div style="font-size:8px;color:var(--txt-3);margin-bottom:5px">' + (sump.quarry ? escHTML(sump.quarry) : 'зумпф') + '</div>' +
@@ -788,7 +1038,7 @@ function _dewRenderDiagram(wrap) {
     nodesHtml +=
       '<div id="dew-dn-pmp_' + pump.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.pumpW + 'px;min-height:' + DEW_DN.pumpH + 'px;' +
-      'background:var(--bg-2);border:1px solid rgba(88,166,255,.2);border-radius:var(--r);box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      'background:' + TC.nodePump.bg + ';border:1px solid ' + TC.nodePump.border + ';border-radius:var(--r);box-shadow:0 2px 6px rgba(0,0,0,.25);' + _dewNodeShadow(TC.nodePump) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'pmp_' + pump.id + '\')">' +
       '<div style="height:2px;background:' + stClr + ';opacity:.75"></div>' +
       '<div style="padding:6px 8px">' +
@@ -817,9 +1067,9 @@ function _dewRenderDiagram(wrap) {
     nodesHtml +=
       '<div id="dew-dn-dst_' + dest.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.destW + 'px;min-height:' + DEW_DN.destH + 'px;' +
-      'background:var(--bg-2);border:1px solid rgba(74,222,128,.35);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      'background:' + TC.nodeDest.bg + ';border:1px solid ' + TC.nodeDest.border + ';border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);' + _dewNodeShadow(TC.nodeDest) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'dst_' + dest.id + '\')">' +
-      '<div style="height:3px;background:rgba(74,222,128,.5)"></div>' +
+      '<div style="height:3px;background:' + TC.nodeDest.header + '"></div>' +
       '<div style="padding:7px 9px">' +
         '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">' +
           '<span style="font-size:12px;line-height:1;flex-shrink:0">' + dtInfo.icon + '</span>' +
@@ -847,9 +1097,9 @@ function _dewRenderDiagram(wrap) {
     nodesHtml +=
       '<div id="dew-dn-nzl_' + nzl.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + nzlW + 'px;min-height:' + nzlH + 'px;' +
-      'background:var(--bg-2);border:1px solid rgba(34,211,238,.45);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      'background:' + TC.nodeNozzle.bg + ';border:1px solid ' + TC.nodeNozzle.border + ';border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);' + _dewNodeShadow(TC.nodeNozzle) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'nzl_' + nzl.id + '\')">' +
-      '<div style="height:3px;background:rgba(34,211,238,.5)"></div>' +
+      '<div style="height:3px;background:' + TC.nodeNozzle.header + '"></div>' +
       '<div style="padding:7px 9px">' +
         '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">' +
           '<span style="font-size:10px;line-height:1;flex-shrink:0">💦</span>' +
@@ -884,22 +1134,59 @@ function _dewRenderDiagram(wrap) {
       '</div>'
     : '';
 
+  var isOverlay = !!document.getElementById('dew-diagram-overlay') || (wrap && wrap.id === 'dew-diagram-overlay');
+  var vpHeight  = isOverlay ? 'calc(100vh - 120px)' : '560px';
+
   wrap.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">' +
+    // Row 1: date presets + reset
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">' +
       '<div>' +
         '<div style="display:flex;gap:4px;flex-wrap:wrap">' + presetBtns + '</div>' +
         customRange +
       '</div>' +
       '<button class="btn btn-sm btn-outline" style="font-size:10px" onclick="_dewDiagramReset()">↺ Сбросить позиции</button>' +
     '</div>' +
-    '<div style="overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--bg-0);min-height:520px">' +
-      '<div id="dew-diagram-canvas" style="position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px;min-width:900px;min-height:520px">' +
+    // Row 2: zoom + theme + fullscreen + animation
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">' +
+      // Zoom controls
+      '<div style="display:flex;gap:4px;align-items:center">' +
+        '<button class="dew-zoom-btn" onclick="_dewZoomOut()">−</button>' +
+        '<span id="dew-zoom-label" style="font-size:11px;color:var(--txt-3);min-width:36px;text-align:center">100%</span>' +
+        '<button class="dew-zoom-btn" onclick="_dewZoomIn()">+</button>' +
+        '<button class="dew-zoom-btn" onclick="_dewZoomFit()" style="font-size:11px;padding:3px 8px">⊞ Центр</button>' +
+      '</div>' +
+      // Separator
+      '<div style="width:1px;height:20px;background:var(--line)"></div>' +
+      // Theme buttons
+      '<div style="display:flex;gap:4px;align-items:center">' +
+        '<span style="font-size:11px;color:var(--txt-3)">Стиль:</span>' +
+        '<button onclick="_dewSetTheme(\'dark\')"      class="dew-theme-btn" id="dew-tb-dark">🌑 Тёмный</button>' +
+        '<button onclick="_dewSetTheme(\'blueprint\')" class="dew-theme-btn" id="dew-tb-blueprint">📐 Синька</button>' +
+        '<button onclick="_dewSetTheme(\'neon\')"      class="dew-theme-btn" id="dew-tb-neon">⚡ Неон</button>' +
+        '<button onclick="_dewSetTheme(\'minimal\')"   class="dew-theme-btn" id="dew-tb-minimal">◽ Минимал</button>' +
+      '</div>' +
+      // Separator
+      '<div style="width:1px;height:20px;background:var(--line)"></div>' +
+      // Animation toggle
+      '<button class="dew-zoom-btn" id="dew-btn-anim" onclick="_dewToggleAnimation()" style="font-size:11px">⏸ Анимация</button>' +
+      // Fullscreen button
+      '<button class="dew-zoom-btn" id="dew-btn-fullscreen" onclick="_dewDiagramToggleFullscreen()" style="font-size:11px">' + (isOverlay ? '✕ Закрыть' : '⛶ На весь экран') + '</button>' +
+    '</div>' +
+    // Viewport
+    '<div id="dew-diagram-viewport" style="overflow:hidden;position:relative;cursor:grab;user-select:none;border:1px solid var(--line,rgba(255,255,255,0.1));border-radius:6px;' + (isOverlay ? 'flex:1;height:0' : 'height:' + vpHeight) + '">' +
+      '<div id="dew-diagram-canvas" style="position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px;background:' + TC.canvasBg + ';transform-origin:0 0;will-change:transform">' +
         '<svg id="dew-diagram-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible" xmlns="http://www.w3.org/2000/svg"></svg>' +
         nodesHtml +
       '</div>' +
     '</div>';
 
   _dewDiagramDrawArrows();
+  setTimeout(function() {
+    _dewDiagramInitInteraction();
+    _dewDiagramApplyTransform();
+    _dewUpdateZoomLabel();
+    _dewUpdateThemeBtns();
+  }, 0);
 }
 
 function _dewGetAllNodeBoxes() {
@@ -997,12 +1284,13 @@ function _dewRouteEdge(x1, y1, x2, y2, obstacles) {
   return _dewSimplifyPath([{x:x1,y:y1},{x:midX,y:y1},{x:midX,y:y2},{x:x2,y:y2}]);
 }
 
-function _dewPathToSvg(path, stroke, sw, label, dashArray) {
+function _dewPathToSvg(path, stroke, sw, label, dashArray, animClass, animDuration) {
   if (!path || path.length < 2) return '';
   var d = 'M' + path[0].x + ',' + path[0].y;
   for (var i = 1; i < path.length; i++) d += ' L' + path[i].x + ',' + path[i].y;
   var dashAttr = dashArray ? ' stroke-dasharray="' + dashArray + '"' : '';
-  var out = '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="square" stroke-linejoin="miter"' + dashAttr + '/>';
+  var animStyle = animClass ? ' style="animation:' + animClass + ' ' + (animDuration || 1.5) + 's linear infinite"' : '';
+  var out = '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round"' + dashAttr + animStyle + '/>';
 
   var last = path[path.length - 1], prev = path[path.length - 2];
   var ang = Math.atan2(last.y - prev.y, last.x - prev.x);
@@ -1024,6 +1312,7 @@ function _dewPathToSvg(path, stroke, sw, label, dashArray) {
 function _dewDiagramDrawArrows() {
   var svg = document.getElementById('dew-diagram-svg');
   if (!svg) return;
+  var TC = _dewGetThemeColors();
   var allBoxes = _dewGetAllNodeBoxes();
   var arrows   = '';
 
@@ -1035,10 +1324,10 @@ function _dewDiagramDrawArrows() {
     var x1 = sp.x + DEW_DN.sumpW, y1 = sp.y + DEW_DN.sumpH / 2;
     var x2 = pp.x,                y2 = pp.y + DEW_DN.pumpH / 2;
     var obs = allBoxes.filter(function(b) { return b.id !== 'smp_' + pump.sumpId && b.id !== 'pmp_' + pump.id; });
-    arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), 'rgba(88,166,255,.3)', 1);
+    arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), TC.edgeStruct, 1);
   });
 
-  // Pump → Destination/Sump flow edges (golden, width by volume)
+  // Pump → Destination/Sump flow edges (golden, width by volume, animated)
   var maxVol = 0;
   Object.keys(_dewDiagramFlows).forEach(function(k) { var v = _dewDiagramFlows[k].volTotal; if (v > maxVol) maxVol = v; });
   maxVol = maxVol || 1;
@@ -1054,10 +1343,12 @@ function _dewDiagramDrawArrows() {
     var obs = allBoxes.filter(function(b) { return b.id !== 'pmp_' + f.pumpId && b.id !== f.targetNodeId; });
     var sw  = (1.5 + f.volTotal / maxVol * 3.5).toFixed(1);
     var lbl = f.volDate > 0 ? f.volDate.toFixed(0) + ' м³' : '';
-    arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), 'rgba(251,191,36,.6)', parseFloat(sw), lbl);
+    var volPct = f.volTotal / maxVol;
+    var animDur = Math.max(0.4, 2.0 - (volPct * 1.5)).toFixed(2);
+    arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), TC.edgeFlow, parseFloat(sw), lbl, '8,4', 'dew-flow-fwd', animDur);
   });
 
-  // Sump → Nozzle dashed teal arrows (dust suppression flows)
+  // Sump → Nozzle dashed teal arrows (dust suppression flows, animated)
   if (typeof DustState !== 'undefined' && DustState.nozzles) {
     var _smpIdsArrow = {};
     DewateringState.sumps.forEach(function(s) { _smpIdsArrow[s.id] = true; });
@@ -1071,24 +1362,37 @@ function _dewDiagramDrawArrows() {
       var x2  = np.x + 90;
       var y2  = np.y;
       var obs = allBoxes.filter(function(b) { return b.id !== 'smp_' + nzl.sourceId && b.id !== 'nzl_' + nzl.id; });
-      // Compute label: volume in selected date range
       var nzlLogs = DustState.logs.filter(function(l) { return l.nozzleId === nzl.id; });
-      var volDate  = nzlLogs.filter(function(l) {
-        return l.date >= (typeof _dewDiagramGetRange === 'function' ? _dewDiagramGetRange().from : '')
-          && l.date <= (typeof _dewDiagramGetRange === 'function' ? _dewDiagramGetRange().to : '');
-      }).reduce(function(a, l) {
-        var veh = DustState.vehicleById(l.vehicleId);
-        var v = l.isManualVolume ? (parseFloat(l.manualVolume) || 0) : (parseFloat(l.trips) || 0) * (veh ? (parseFloat(veh.capacity) || 0) : 0);
-        return a + v;
-      }, 0);
+      var rng = _dewDiagramGetRange();
+      var volDate = nzlLogs.filter(function(l) { return l.date >= rng.from && l.date <= rng.to; })
+        .reduce(function(a, l) {
+          var veh = DustState.vehicleById(l.vehicleId);
+          var v = l.isManualVolume ? (parseFloat(l.manualVolume) || 0) : (parseFloat(l.trips) || 0) * (veh ? (parseFloat(veh.capacity) || 0) : 0);
+          return a + v;
+        }, 0);
       var lbl = volDate > 0 ? volDate.toFixed(0) + ' м³' : '';
-      // Build a simple straight-ish path (vertical down from sump bottom to nozzle top)
       var path = _dewRouteEdge(x1, y1, x2, y2, obs);
-      arrows += _dewPathToSvg(path, 'rgba(34,211,238,.55)', 1.5, lbl, '6,3');
+      arrows += _dewPathToSvg(path, TC.edgeNozzle, 1.5, lbl, '5,3', 'dew-flow-nozzle', 1.8);
     });
   }
 
-  svg.innerHTML = arrows;
+  // Draw quarry band backgrounds BEFORE edges
+  var bgSvg = '';
+  var quarryKeys = Object.keys(_dewQuarryBounds);
+  quarryKeys.forEach(function(quarry, qi) {
+    var b = _dewQuarryBounds[quarry];
+    bgSvg += '<rect x="' + (b.x1 - 15) + '" y="' + (b.y1 - 35) + '"'
+          + ' width="' + (b.x2 - b.x1 + 30) + '" height="' + (b.y2 - b.y1 + 50) + '"'
+          + ' rx="12" fill="' + TC.quarryBg[qi % TC.quarryBg.length] + '"'
+          + ' stroke="' + TC.quarryBorder[qi % TC.quarryBorder.length] + '"'
+          + ' stroke-width="1"/>';
+    bgSvg += '<text x="' + (b.x1 - 5) + '" y="' + (b.y1 - 15) + '"'
+          + ' fill="' + TC.quarryLabel[qi % TC.quarryLabel.length] + '"'
+          + ' font-size="13" font-weight="600" letter-spacing="0.5">'
+          + escHTML(quarry) + '</text>';
+  });
+
+  svg.innerHTML = bgSvg + arrows;
 }
 
 function _dewDiagramStartDrag(e, nid) {

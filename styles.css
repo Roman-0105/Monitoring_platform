@@ -1264,3 +1264,81 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px;
 }
+
+/* ── Dewatering Diagram ──────────────────────────────────────── */
+
+/* Theme button strip */
+.dew-theme-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--line, rgba(255,255,255,0.12));
+  border-radius: 4px;
+  color: var(--txt-2, #8b949e);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dew-theme-btn:hover,
+.dew-theme-btn.active {
+  background: var(--accent, rgba(88,166,255,0.15));
+  color: var(--txt-1, #e8eaf0);
+  border-color: var(--accent-border, rgba(88,166,255,0.4));
+}
+
+/* Zoom controls */
+.dew-zoom-btn {
+  padding: 3px 8px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--line, rgba(255,255,255,0.12));
+  border-radius: 4px;
+  color: var(--txt-2, #8b949e);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dew-zoom-btn:hover { background: rgba(255,255,255,0.06); }
+
+#dew-zoom-label {
+  font-size: 11px;
+  color: var(--txt-3, #6e7681);
+  min-width: 36px;
+  text-align: center;
+}
+
+/* Viewport + canvas */
+#dew-diagram-viewport {
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  border: 1px solid var(--line, rgba(255,255,255,0.1));
+  border-radius: 6px;
+}
+#dew-diagram-viewport:active { cursor: grabbing; }
+#dew-diagram-canvas {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* Flow animations */
+@keyframes dew-flow-fwd {
+  from { stroke-dashoffset: 24; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes dew-flow-nozzle {
+  from { stroke-dashoffset: 18; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes dew-node-pulse {
+  0%,100% { opacity: 0.85; }
+  50%     { opacity: 1.0; }
+}
+
+/* Fullscreen overlay */
+#dew-diagram-overlay {
+  animation: dew-overlay-in 0.2s ease;
+}
+@keyframes dew-overlay-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
