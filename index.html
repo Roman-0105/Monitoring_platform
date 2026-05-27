@@ -39,10 +39,6 @@
           <button class="tab-btn" data-tab="dust"><span class="tab-icon">💦</span><span class="tab-label"> Журнал Пылеподавления</span></button>
         </div>
         <div class="sidebar-section">
-          <span class="sidebar-section-label">Данные</span>
-          <button class="tab-btn" data-tab="add"><span class="tab-icon">＋</span><span class="tab-label"> Добавить точку</span></button>
-        </div>
-        <div class="sidebar-section">
           <span class="sidebar-section-label">Система</span>
           <button class="tab-btn" data-tab="settings"><span class="tab-icon">◉</span><span class="tab-label"> Настройки</span></button>
           <button class="tab-btn" data-tab="diag"><span class="tab-icon">◌</span><span class="tab-label"> Диагностика</span></button>
@@ -73,146 +69,8 @@
     <div id="points-list"><p class="empty-msg">Загрузка...</p></div>
   </div>
 
-  <!-- Добавление точки -->
-  <div class="page" id="page-add">
-    <h2 class="section-title">Новая точка</h2>
-    <form id="add-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="f-num">Номер точки *</label>
-          <input class="form-input" id="f-num" type="text" placeholder="1, 2, К..." required>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-monitoring-date">Дата мониторинга</label>
-          <input class="form-input" id="f-monitoring-date" type="date">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="f-worker">Сотрудник</label>
-        <select class="form-select" id="f-worker"><option value="">— выберите —</option></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Координаты WGS-84</label>
-        <div class="form-row">
-          <input class="form-input" id="f-lat" type="text" inputmode="decimal" placeholder="Широта">
-          <input class="form-input" id="f-lon" type="text" inputmode="decimal" placeholder="Долгота">
-        </div>
-        <button type="button" class="btn-gps" id="btn-gps" style="margin-top:8px">
-          📍 Определить GPS
-        </button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Локальные координаты (СК-42)</label>
-        <div class="form-row">
-          <div style="position:relative;flex:1">
-            <label style="font-size:10px;color:var(--gray-600);position:absolute;top:3px;left:10px;z-index:1">Y</label>
-            <input class="form-input" id="f-xlocal" type="text" inputmode="decimal" placeholder="Y" style="padding-top:16px">
-          </div>
-          <div style="position:relative;flex:1">
-            <label style="font-size:10px;color:var(--gray-600);position:absolute;top:3px;left:10px;z-index:1">X</label>
-            <input class="form-input" id="f-ylocal" type="text" inputmode="decimal" placeholder="X" style="padding-top:16px">
-          </div>
-        </div>
-        <p class="form-hint" id="f-map-coord-info"></p>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="f-intensity">Интенсивность</label>
-          <select class="form-select" id="f-intensity">
-            <option value="">—</option>
-            <option>Слабая (капёж)</option>
-            <option>Умеренная</option>
-            <option>Сильная (поток)</option>
-            <option>Очень сильная</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-flowrate">Дебит, л/с</label>
-          <input class="form-input" id="f-flowrate" type="number" step="any" min="0">
-          <p class="form-hint" id="f-flowrate-m3h">—</p>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="f-color">Цвет воды</label>
-          <select class="form-select" id="f-color">
-            <option value="">—</option>
-            <option>Прозрачная</option>
-            <option>Слабожелтоватая</option>
-            <option>Мутная</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-status">Статус</label>
-          <select class="form-select" id="f-status">
-            <option value="Новая">Новая</option>
-            <option value="Активная">Активная</option>
-            <option value="Иссякает">Иссякает</option>
-            <option value="Пересохла">Пересохла</option>
-            <option value="Паводковая">Паводковая</option>
-            <option value="Перелив">Перелив</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="f-wall">Борт</label>
-          <select class="form-select" id="f-wall">
-            <option value="">—</option>
-            <option>Восточный</option>
-            <option>Западный</option>
-            <option>Северный</option>
-            <option>Северо-восточный</option>
-            <option>Северо-западный</option>
-            <option>Южный</option>
-            <option>Юго-восточный</option>
-            <option>Юго-западный</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-domain">Домен</label>
-          <select class="form-select" id="f-domain">
-            <option value="">—</option>
-            <option value="Domen-1">Domen-1</option><option value="Domen-2">Domen-2</option>
-            <option value="Domen-3">Domen-3</option><option value="Domen-4">Domen-4</option><option value="Domen-5">Domen-5</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="f-measure">Метод замера</label>
-          <select class="form-select" id="f-measure">
-            <option value="">— не указан —</option>
-            <option value="Объемным методом">Объемным методом</option>
-            <option value="Geopacks">Geopacks</option>
-            <option value="Визуальный (примерный)">Визуальный (примерный)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-horizon">Горизонт / уступ</label>
-          <input class="form-input" id="f-horizon" type="text" list="horizons-datalist" placeholder="напр. +240">
-          <datalist id="horizons-datalist"></datalist>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="f-comment">Комментарий</label>
-        <textarea class="form-textarea" id="f-comment" placeholder="Описание, наблюдения..."></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Фото</label>
-        <div id="f-photo-preview"></div>
-        <div id="f-photo-progress" style="display:none"></div>
-        <div class="photo-btn-row">
-          <label for="f-photo-cam" class="photo-pick-btn btn btn-sm btn-outline">📷 Сделать фото</label>
-          <input type="file" id="f-photo-cam" accept="image/*" capture="environment" class="photo-file-input">
-          <label for="f-photo-gal" class="photo-pick-btn btn btn-sm btn-outline">🖼 Из галереи</label>
-          <input type="file" id="f-photo-gal" accept="image/*" class="photo-file-input">
-        </div>
-        <p class="form-hint">Сжимается до 1200px перед отправкой</p>
-      </div>
-      <button type="submit" class="btn btn-primary btn-full">Сохранить точку</button>
-    </form>
-  </div>
+  <!-- datalist горизонтов — используется модалом редактирования -->
+  <datalist id="horizons-datalist"></datalist>
 
   <!-- Сотрудники -->
   <div class="page" id="page-workers">
@@ -328,8 +186,6 @@
     <div class="settings-subtabs">
       <button class="btn btn-sm btn-outline active" id="btn-settings-tab-main" data-settings-tab="main">Схемы</button>
       <button class="btn btn-sm btn-outline" id="btn-settings-tab-legend" data-settings-tab="legend">Легенда</button>
-      <button class="btn btn-sm btn-outline" id="btn-settings-tab-aliases" data-settings-tab="aliases">🔗 Связать точки</button>
-      <button class="btn btn-sm btn-outline" id="btn-settings-tab-horizons" data-settings-tab="horizons">⛰️ Горизонты</button>
       <button class="btn btn-sm btn-outline" id="btn-settings-tab-sync" data-settings-tab="sync">⏱ Синхронизация</button>
       <button class="btn btn-sm btn-outline" id="btn-settings-tab-users" data-settings-tab="users" style="display:none">👥 Пользователи</button>
     </div>
@@ -403,20 +259,6 @@
         <p class="form-hint" id="map-domain-save-msg"></p>
       </div>
     </div>
-    <div class="settings-panel" id="settings-panel-aliases">
-      <div class="card">
-        <div class="card-title">Связать точки одного места</div>
-        <div id="settings-alias-manager"></div>
-      </div>
-    </div>
-
-    <div class="settings-panel" id="settings-panel-horizons">
-      <div class="card">
-        <div class="card-title">Горизонты / уступы карьера</div>
-        <div id="settings-horizons-manager"></div>
-      </div>
-    </div>
-
     <div class="settings-panel" id="settings-panel-sync">
       <div class="card">
         <div class="card-title">Синхронизация</div>

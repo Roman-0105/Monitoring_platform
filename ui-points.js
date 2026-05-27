@@ -1078,30 +1078,6 @@ function renameWorker(id, newName) {
 
 // ── Форма добавления ──────────────────────────────────────
 
-function initAddForm() {
-  var form = document.getElementById('add-form');
-  if (form) form.addEventListener('submit', function(e) { e.preventDefault(); saveNewPoint(); });
-
-  var gps = document.getElementById('btn-gps');
-  if (gps) gps.addEventListener('click', function() { getGPSForForm('f'); });
-
-  var fLat = document.getElementById('f-lat');
-  var fLon = document.getElementById('f-lon');
-  if (fLat) fLat.addEventListener('change', function() { recalcLocalCoords('f'); });
-  if (fLon) fLon.addEventListener('change', function() { recalcLocalCoords('f'); });
-
-  var fFlow = document.getElementById('f-flowrate');
-  if (fFlow) fFlow.addEventListener('input', function() { updateFlowHint('f'); });
-  updateFlowHint('f');
-
-  // Ставим сегодняшнюю дату по умолчанию
-  var fDate = document.getElementById('f-monitoring-date');
-  if (fDate && !fDate.value) fDate.value = todayISO();
-
-  // Заполняем datalist горизонтов
-  fillHorizonsDatalist();
-}
-
 function fillHorizonsDatalist() {
   var dl = document.getElementById('horizons-datalist');
   if (!dl || typeof Storage === 'undefined') return;
@@ -1109,67 +1085,6 @@ function fillHorizonsDatalist() {
   dl.innerHTML = horizons.map(function(h) {
     return '<option value="' + escAttr(h) + '">';
   }).join('');
-}
-
-function resetAddForm() {
-  var form = document.getElementById('add-form');
-  if (form) form.reset();
-  ['f-photo-cam', 'f-photo-gal'].forEach(function(id) {
-    var inp = document.getElementById(id); if (inp) inp.value = '';
-  });
-  var fPhPrev = document.getElementById('f-photo-preview');
-  if (fPhPrev) fPhPrev.innerHTML = '';
-  updateFlowHint('f');
-  // После reset восстанавливаем сегодняшнюю дату
-  var fDate = document.getElementById('f-monitoring-date');
-  if (fDate) fDate.value = todayISO();
-  // Auto-fill worker for non-admins
-  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
-  if (!isAdmin && AppState.currentUser) {
-    setField('f-worker', AppState.currentUser.displayName || '');
-  }
-}
-
-function saveNewPoint() {
-  var data      = readFormFields('f');
-  if (!data.pointNumber) { alert('Укажите номер точки'); return; }
-  AppState.syncing = true;
-  showLoader('Сохранение...');
-
-  var photoFile = Photos.getFileAny(['f-photo-cam', 'f-photo-gal']);
-  var tid = Toast.progress('save-point', 'Сохранение точки...');
-  Points.create(data).then(function(savedPoint) {
-    if (!photoFile || !savedPoint || !savedPoint.id) return null;
-    Toast.progress('save-point', 'Загрузка фото на Drive...', 50);
-    var sizeMb = photoFile ? (photoFile.size/1024/1024).toFixed(2) + ' МБ' : '';
-    showPhotoProgress('f-photo-progress', 'compressing', sizeMb);
-    var _extra1 = { pointNumber: data.pointNumber, monitoringDate: data.monitoringDate, flowRate: data.flowRate };
-    return Photos.upload(photoFile, savedPoint.id, _extra1).then(function(driveUrl) {
-      showPhotoProgress('f-photo-progress', 'done');
-      var pt = Points.getById(savedPoint.id);
-      if (pt) { pt.photoUrls = [driveUrl]; Storage.cachePoints(Points.getList()); }
-    }).catch(function(photoErr) {
-      showPhotoProgress('f-photo-progress', 'error', photoErr.message);
-      Diagnostics.setError('photo', photoErr.message);
-      Toast.show('Точка сохранена, фото не загрузилось', 'warning');
-    });
-  }).then(function() {
-    resetAddForm();
-    return Points.load();
-  }).then(function() {
-    renderPointsList();
-    if (typeof _mapSchemeImg !== 'undefined' && _mapSchemeImg) redrawMap();
-    switchTab('points');
-    Diagnostics.set('pointsLoaded', Points.getList().length);
-    AppState.syncing = false;
-    hideLoader();
-    Toast.done('save-point', 'Точка сохранена');
-  }).catch(function(err) {
-    Diagnostics.setError('sync', err.message);
-    Toast.fail('save-point', 'Ошибка: ' + err.message);
-    AppState.syncing = false;
-    hideLoader();
-  });
 }
 
 // ── Модал редактирования ──────────────────────────────────
