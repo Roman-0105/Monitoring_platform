@@ -1239,3 +1239,28 @@ body {
 .pt-hero-badge-bad--dark  { background: rgba(248,113,113,.15); color: var(--bad);  border-color: rgba(248,113,113,.2); }
 .pt-hero-badge-neu--dark  { background: var(--bg-3); color: var(--txt-2); border-color: var(--line); }
 .pt-hero-unsync { border-left: 3px solid var(--warn); }
+
+/* ── Dewatering chart containers ─────────────────────────────── */
+#dew-ch-trend,
+#dew-ch-dest,
+#dew-ch-pumps,
+#dew-ch-sumps,
+#dew-lv-chart {
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  padding: 8px 0;
+}
+
+.dew-no-data {
+  color: var(--txt-3, #6e7681);
+  text-align: center;
+  padding: 2rem 0;
+  font-size: 13px;
+}
+
+.dew-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
