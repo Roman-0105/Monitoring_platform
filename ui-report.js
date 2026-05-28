@@ -25,6 +25,8 @@ var ReportState = {
     conclusions: '', apiKey: '',
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
+    filterDomains:  [],   // [] = all domains
+    filterHorizons: [],   // [] = all horizons
   },
   currentStep: 1,
 };
@@ -125,6 +127,8 @@ function restoreSettings() {
   if (s.customPrompt)  setField('rp-custom-prompt', s.customPrompt);
   if (s.quarryName)    setField('rp-quarry-name',   s.quarryName);
   if (s.objectName)    setField('rp-object-name',   s.objectName);
+  if (s.filterDomains)  ReportState.settings.filterDomains  = s.filterDomains;
+  if (s.filterHorizons) ReportState.settings.filterHorizons = s.filterHorizons;
   setField('rp-date', new Date().toISOString().slice(0, 10));
   restoreChk('rp-inc-map',        s.incMap);
   restoreChk('rp-inc-domens',     s.incDomens);
@@ -173,6 +177,7 @@ function restoreSettings() {
   // Update author info in steps sidebar
   var infoEl = document.getElementById('rp-steps-author-info');
   if (infoEl && s.author) infoEl.textContent = s.author + ' · v' + (s.reportVersion || 1);
+  if ((ReportState.allPoints || []).length > 0) renderRpFilters();
 }
 
 function saveReportSettings() {
@@ -194,6 +199,8 @@ function saveReportSettings() {
       incCompare:    getChk('rp-inc-compare'),
       incAI:         getChk('rp-inc-ai'),
       incDewatering: getChk('rp-inc-dewatering'),
+      filterDomains:  ReportState.settings.filterDomains  || [],
+      filterHorizons: ReportState.settings.filterHorizons || [],
     }));
   } catch(e) {}
 }
@@ -537,6 +544,62 @@ function switchStep(n) {
   if (n === 2) renderSectionsList();
 }
 
+function renderRpFilters() {
+  var pts = ReportState.allPoints || [];
+  // Collect unique domains and horizons
+  var domains = [], domSet = {};
+  var horizons = [], horzSet = {};
+  pts.forEach(function(p) {
+    var d = p.domain || p.domen || '—';
+    if (!domSet[d]) { domSet[d] = 1; domains.push(d); }
+    var h = p.horizon || p.gorizont || '';
+    if (h && !horzSet[h]) { horzSet[h] = 1; horizons.push(h); }
+  });
+  domains.sort(); horizons.sort();
+
+  var sel = ReportState.settings.filterDomains || [];
+  var selH = ReportState.settings.filterHorizons || [];
+
+  function makeChk(val, selArr, key) {
+    var checked = selArr.length === 0 || selArr.indexOf(val) >= 0;
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-1);cursor:pointer;white-space:nowrap">' +
+      '<input type="checkbox" data-filter-key="' + key + '" data-filter-val="' + escAttr(val) + '"' + (checked ? ' checked' : '') +
+        ' onchange="rpFilterChange(this)" style="accent-color:var(--blue)">' + escHTML(val) + '</label>';
+  }
+
+  var dEl = document.getElementById('rp-filter-domains');
+  var hEl = document.getElementById('rp-filter-horizons');
+  if (dEl) {
+    if (!domains.length) {
+      dEl.innerHTML = '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Нет данных</div>';
+    } else {
+      dEl.innerHTML = domains.map(function(d){ return makeChk(d, sel, 'domain'); }).join('');
+    }
+  }
+  if (hEl) {
+    if (!horizons.length) {
+      hEl.innerHTML = '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Нет горизонтов</div>';
+    } else {
+      hEl.innerHTML = horizons.map(function(h){ return makeChk(h, selH, 'horizon'); }).join('');
+    }
+  }
+}
+
+function rpFilterChange(el) {
+  var key = el.dataset.filterKey;
+  var field = key === 'domain' ? 'filterDomains' : 'filterHorizons';
+  var container = el.closest('[id^="rp-filter-"]');
+  // Collect all checked values in this container
+  var checked = [];
+  container.querySelectorAll('input[type=checkbox]').forEach(function(c) {
+    if (c.checked) checked.push(c.dataset.filterVal);
+  });
+  // If all checked — store as [] (means "all")
+  var total = container.querySelectorAll('input[type=checkbox]').length;
+  ReportState.settings[field] = (checked.length === total) ? [] : checked;
+  saveReportSettings();
+}
+
 // ── Список разделов (drag-and-drop) ──────────────────────
 function renderSectionsList() {
   var container = document.getElementById('rp-sections-list');
@@ -734,6 +797,23 @@ function buildSettingsUI() {
     '<div class="rp-panel-title">Содержание отчёта</div>' +
     '<div class="rp-panel-sub">Включите нужные разделы и перетащите для изменения порядка</div>' +
     '<div id="rp-sections-list" class="rp-sections-list"></div>' +
+    '<div style="margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px">' +
+      '<div style="font-size:11px;font-weight:700;color:var(--txt-2);margin-bottom:10px">🔽 Фильтры (необязательно)</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+        '<div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:6px">Домены (пусто = все)</div>' +
+          '<div id="rp-filter-domains" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;padding:6px;background:var(--card-bg2);border-radius:6px;border:1px solid var(--line-2)">' +
+            '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Загрузите данные</div>' +
+          '</div>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:6px">Горизонты (пусто = все)</div>' +
+          '<div id="rp-filter-horizons" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;padding:6px;background:var(--card-bg2);border-radius:6px;border:1px solid var(--line-2)">' +
+            '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Загрузите данные</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
     '<div style="margin-top:10px;display:flex;gap:8px">' +
       '<button class="btn btn-outline btn-sm" onclick="saveRpSectionsOrder(RP_SECTIONS.map(function(s){return s.id}));renderSectionsList()">↺ Исходный порядок</button>' +
     '</div>' +
@@ -966,6 +1046,7 @@ function loadReportData() {
     if (genBtn) { genBtn.style.opacity = '1'; genBtn.style.pointerEvents = ''; }
 
     Toast.show('Данные загружены: ' + allDates.length + ' дат мониторинга', 'success');
+    renderRpFilters();
     return loadDitchesHistory();
   }).catch(function(err) {
     Toast.show('Ошибка загрузки: ' + err.message, 'error');
@@ -1382,6 +1463,21 @@ function generateReport() {
   ReportState.ptsB = allPts.filter(function(p){ return (p.monitoringDate||'').slice(0,10) === s.dateB; });
   ReportState.dtsA = allDts.filter(function(d){ return (d.monitoringDate||'').slice(0,10) === s.dateA; });
   ReportState.dtsB = allDts.filter(function(d){ return (d.monitoringDate||'').slice(0,10) === s.dateB; });
+
+  // Apply domain filter
+  var fDom = s.filterDomains || [];
+  if (fDom.length > 0) {
+    ReportState.ptsA = ReportState.ptsA.filter(function(p){ return fDom.indexOf(p.domain||p.domen||'—') >= 0; });
+    ReportState.ptsB = ReportState.ptsB.filter(function(p){ return fDom.indexOf(p.domain||p.domen||'—') >= 0; });
+  }
+  // Apply horizon filter
+  var fHor = s.filterHorizons || [];
+  if (fHor.length > 0) {
+    ReportState.ptsA = ReportState.ptsA.filter(function(p){ return fHor.indexOf(p.horizon||p.gorizont||'') >= 0; });
+    ReportState.ptsB = ReportState.ptsB.filter(function(p){ return fHor.indexOf(p.horizon||p.gorizont||'') >= 0; });
+  }
+
+  s.dewDiagImg = s.includeDewatering ? captureDewDiagram() : null;
 
   Toast.progress('rp-gen', 'Захват схем карьера...');
 
