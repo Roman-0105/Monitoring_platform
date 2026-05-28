@@ -1651,14 +1651,19 @@ function extractDriveFileId(url) {
 }
 
 function fetchPhotoAsBase64(url) {
-  var fileId = extractDriveFileId(url);
-  if (!fileId) return Promise.resolve(null);
-  return Api.getImage(fileId).then(function(data) {
-    if (data && data.ok && data.base64 && data.mimeType) {
-      return 'data:' + data.mimeType + ';base64,' + data.base64;
-    }
-    return null;
-  }).catch(function() { return null; });
+  if (!url) return Promise.resolve(null);
+  return fetch(url)
+    .then(function(r) { return r.ok ? r.blob() : null; })
+    .then(function(blob) {
+      if (!blob) return null;
+      return new Promise(function(resolve) {
+        var fr = new FileReader();
+        fr.onload  = function() { resolve(fr.result); };
+        fr.onerror = function() { resolve(null); };
+        fr.readAsDataURL(blob);
+      });
+    })
+    .catch(function() { return null; });
 }
 
 function preloadAllPhotos(ptsA, ptsB, dtsA, dtsB) {
