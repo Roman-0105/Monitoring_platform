@@ -25,10 +25,22 @@ var ReportState = {
     conclusions: '', apiKey: '',
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
-  }
+  },
+  currentStep: 1,
 };
 
 // ── Утилиты ───────────────────────────────────────────────
+
+var RP_SECTIONS = [
+  { id: 'map',        chk: 'rp-inc-map',        label: 'Схема карьера',      icon: '🗺',  defOn: true  },
+  { id: 'domens',     chk: 'rp-inc-domens',      label: 'Домены / горизонты', icon: '📊',  defOn: true  },
+  { id: 'dewatering', chk: 'rp-inc-dewatering',  label: 'Водоотлив',          icon: '💧',  defOn: false },
+  { id: 'ditches',    chk: 'rp-inc-ditches',     label: 'Дренажные канавы',   icon: '🏗',  defOn: true  },
+  { id: 'photos',     chk: 'rp-inc-photos',      label: 'Фото точек',         icon: '📷',  defOn: true  },
+  { id: 'history',    chk: 'rp-inc-history',     label: 'История (графики)',  icon: '📈',  defOn: true  },
+  { id: 'compare',    chk: 'rp-inc-compare',     label: 'Сравнение А vs Б',   icon: '🔄',  defOn: false },
+  { id: 'ai',         chk: 'rp-inc-ai',          label: 'AI-заключение',      icon: '🤖',  defOn: true  },
+];
 
 // Рендер текста от AI: экранирует HTML + рендерит **bold** и переносы строк
 function renderAIText(text) {
@@ -427,12 +439,14 @@ function cancelEditPrompt() {
 }
 
 function switchRpTab(tab) {
-  ['settings','prompts'].forEach(function(t) {
-    var btn = document.getElementById('rp-tabbtn-' + t);
-    var panel = document.getElementById('rp-tab-' + t);
-    if (btn)   btn.classList.toggle('active', t === tab);
-    if (panel) panel.style.display = (t === tab) ? '' : 'none';
-  });
+  var panelPr = document.getElementById('rp-tab-prompts');
+  var panelSt = document.getElementById('rp-tab-settings');
+  if (panelPr) panelPr.style.display = (tab === 'prompts')  ? '' : 'none';
+  if (panelSt) panelSt.style.display = (tab === 'settings') ? '' : 'none';
+  var btnPr = document.getElementById('rp-tabbtn-prompts');
+  var btnSt = document.getElementById('rp-tabbtn-settings');
+  if (btnPr) btnPr.classList.toggle('active', tab === 'prompts');
+  if (btnSt) btnSt.classList.toggle('active', tab === 'settings');
   if (tab === 'prompts') renderPromptsTab();
 }
 
