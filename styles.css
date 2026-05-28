@@ -1563,3 +1563,77 @@ body {
   color: var(--txt-3);
   line-height: 1.4;
 }
+
+/* ── AI toggle switch (Panel 4) ── */
+.rp-ai-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.rp-ai-toggle-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.rp-ai-toggle-icon { font-size: 24px; flex-shrink: 0; }
+.rp-ai-toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt-1);
+  margin-bottom: 2px;
+}
+.rp-ai-toggle-sub {
+  font-size: 11px;
+  color: var(--txt-3);
+  line-height: 1.4;
+}
+
+/* iOS-style toggle */
+.rp-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 26px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rp-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.rp-toggle-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 13px;
+  background: var(--bg-3, #2a3447);
+  border: 1px solid var(--line-2, #2a3447);
+  transition: background .2s, border-color .2s;
+}
+.rp-toggle-pill::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: transform .2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.rp-toggle input:checked + .rp-toggle-pill {
+  background: var(--blue, #2563eb);
+  border-color: var(--blue, #2563eb);
+}
+.rp-toggle input:checked + .rp-toggle-pill::after {
+  transform: translateX(18px);
+}

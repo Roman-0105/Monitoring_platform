@@ -142,9 +142,13 @@ function restoreSettings() {
   restoreChk('rp-inc-compare',    s.incCompare);
   restoreChk('rp-inc-ai',         s.incAI);
   restoreChk('rp-inc-dewatering', s.incDewatering);
-  // Also sync the AI checkbox duplicate
+  // Sync the AI toggle and collapse body if disabled
   var aiCb = document.getElementById('rp-inc-ai-cb');
-  if (aiCb && s.incAI !== undefined) aiCb.checked = s.incAI;
+  if (aiCb && s.incAI !== undefined) {
+    aiCb.checked = s.incAI;
+    var aiBody = document.getElementById('rp-ai-settings-body');
+    if (aiBody) aiBody.style.display = s.incAI ? '' : 'none';
+  }
 
   if (s.reportTheme) {
     ReportState.settings.reportTheme = s.reportTheme;
@@ -976,14 +980,24 @@ function buildSettingsUI() {
   // ─── Panel 4: ИИ-анализ ──────────────────────────────────
   '<div id="rp-panel-4" class="rp-step-panel" style="display:none">' +
     '<div class="rp-panel-title">ИИ-анализ (Claude)</div>' +
-    '<div class="rp-panel-sub">Настройте автоматические текстовые выводы</div>' +
 
-    '<div class="card" style="margin-bottom:14px">' +
-      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">' +
-        '<input type="checkbox" id="rp-inc-ai-cb" checked ' +
-          'onchange="var cb=document.getElementById(\'rp-inc-ai\');if(cb)cb.checked=this.checked;saveReportSettings()"> ' +
-        'Включить AI-анализ при формировании' +
+    // ── Toggle-ряд ──
+    '<div class="rp-ai-toggle-row">' +
+      '<div class="rp-ai-toggle-info">' +
+        '<span class="rp-ai-toggle-icon">🤖</span>' +
+        '<div>' +
+          '<div class="rp-ai-toggle-label">Автоматический AI-анализ</div>' +
+          '<div class="rp-ai-toggle-sub">Включает генерацию текстовых выводов при формировании отчёта</div>' +
+        '</div>' +
+      '</div>' +
+      '<label class="rp-toggle">' +
+        '<input type="checkbox" id="rp-inc-ai-cb" checked onchange="rpAIToggle(this)">' +
+        '<span class="rp-toggle-pill"></span>' +
       '</label>' +
+    '</div>' +
+
+    '<div id="rp-ai-settings-body">' +
+    '<div class="card" style="margin-bottom:14px">' +
       '<label class="rp-lbl">Anthropic API ключ</label>' +
       '<input class="form-input" id="rp-apikey" type="password" placeholder="sk-ant-..." ' +
         'style="margin-top:4px;font-family:monospace;font-size:12px">' +
@@ -1062,6 +1076,7 @@ function buildSettingsUI() {
       '</div>' +
       '<textarea class="form-textarea" id="rp-conclusions" rows="4" placeholder="Введите заключение и рекомендации..." style="font-size:12px"></textarea>' +
     '</div>' +
+    '</div>' + // end rp-ai-settings-body
 
     '<div class="rp-panel-nav">' +
       '<button class="btn btn-outline" onclick="switchStep(3)">← Стиль</button>' +
@@ -1184,6 +1199,14 @@ function rpSelectTheme(id) {
   ReportState.settings.reportTheme = id;
   saveReportSettings();
 }
+function rpAIToggle(cb) {
+  var body = document.getElementById('rp-ai-settings-body');
+  if (body) body.style.display = cb.checked ? '' : 'none';
+  var hidden = document.getElementById('rp-inc-ai');
+  if (hidden) hidden.checked = cb.checked;
+  saveReportSettings();
+}
+
 function rpSelectLayout(id) {
   ReportState.settings.reportLayout = id;
   document.querySelectorAll('.rp-layout-card').forEach(function(c){
@@ -1651,14 +1674,19 @@ function extractDriveFileId(url) {
 }
 
 function fetchPhotoAsBase64(url) {
-  var fileId = extractDriveFileId(url);
-  if (!fileId) return Promise.resolve(null);
-  return Api.getImage(fileId).then(function(data) {
-    if (data && data.ok && data.base64 && data.mimeType) {
-      return 'data:' + data.mimeType + ';base64,' + data.base64;
-    }
-    return null;
-  }).catch(function() { return null; });
+  if (!url) return Promise.resolve(null);
+  return fetch(url)
+    .then(function(r) { return r.ok ? r.blob() : null; })
+    .then(function(blob) {
+      if (!blob) return null;
+      return new Promise(function(resolve) {
+        var fr = new FileReader();
+        fr.onload  = function() { resolve(fr.result); };
+        fr.onerror = function() { resolve(null); };
+        fr.readAsDataURL(blob);
+      });
+    })
+    .catch(function() { return null; });
 }
 
 function preloadAllPhotos(ptsA, ptsB, dtsA, dtsB) {
