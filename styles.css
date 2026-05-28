@@ -1524,3 +1524,42 @@ body {
 .rp-tpl-item:last-child, .rp-hist-item:last-child { border-bottom: none; }
 .rp-tpl-name, .rp-hist-name { font-size: 13px; font-weight: 600; color: var(--txt-1); }
 .rp-tpl-meta, .rp-hist-meta { font-size: 11px; color: var(--txt-3); margin-top: 2px; }
+
+/* ── Выбор макета отчёта ── */
+.rp-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.rp-layout-card {
+  border: 2px solid var(--line-2);
+  border-radius: 10px;
+  padding: 12px 10px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  text-align: center;
+}
+.rp-layout-card--active {
+  border-color: var(--blue, #2563eb);
+  background: rgba(37, 99, 235, .07);
+}
+.rp-layout-card:hover:not(.rp-layout-card--active) {
+  border-color: var(--txt-3);
+}
+.rp-layout-icon {
+  font-size: 22px;
+  margin-bottom: 6px;
+  line-height: 1;
+}
+.rp-layout-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--txt-1);
+  margin-bottom: 3px;
+}
+.rp-layout-sub {
+  font-size: 10px;
+  color: var(--txt-3);
+  line-height: 1.4;
+}

@@ -28,6 +28,7 @@ var ReportState = {
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
     reportTheme: 'blue',
+    reportLayout: 'a',
     filterDomains:  [],   // [] = all domains
     filterHorizons: [],   // [] = all horizons
   },
@@ -150,6 +151,12 @@ function restoreSettings() {
     // Mark the correct theme card active
     document.querySelectorAll('.rp-theme-card').forEach(function(c){ c.classList.toggle('rp-theme-card--active', c.dataset.theme === s.reportTheme); });
   }
+  if (s.reportLayout) {
+    ReportState.settings.reportLayout = s.reportLayout;
+    document.querySelectorAll('.rp-layout-card').forEach(function(c){
+      c.classList.toggle('rp-layout-card--active', c.dataset.layout === s.reportLayout);
+    });
+  }
   // Restore logo preview
   var savedLogo = localStorage.getItem('rp-logo-base64');
   if (savedLogo) rpLogoUpdatePreview(savedLogo);
@@ -227,6 +234,7 @@ function saveReportSettings() {
       incAI:         getChk('rp-inc-ai'),
       incDewatering: getChk('rp-inc-dewatering'),
       reportTheme:   ReportState.settings.reportTheme || 'blue',
+      reportLayout:  ReportState.settings.reportLayout || 'a',
       watermark:    (function(){ var v=getField('rp-watermark'); return v==='custom'?getField('rp-watermark-custom'):v; })(),
       approverName: getField('rp-approver-name'),
       incSignature: getChk('rp-inc-signature'),
@@ -894,7 +902,17 @@ function buildSettingsUI() {
   // ─── Panel 3: Стиль ──────────────────────────────────────
   '<div id="rp-panel-3" class="rp-step-panel" style="display:none">' +
     '<div class="rp-panel-title">Стиль отчёта</div>' +
-    '<div class="rp-panel-sub">Выберите цветовую схему (больше вариантов — в следующих обновлениях)</div>' +
+    '<div class="rp-panel-sub">Макет и цветовая схема определяют оформление отчёта</div>' +
+    '<div style="margin-bottom:18px">' +
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Макет отчёта</div>' +
+      '<div class="rp-layout-grid">' +
+        _rpLayoutCard('a',  '📄', 'A — Технический',   'Тёмная шапка, инженерный стиль, sans-serif') +
+        _rpLayoutCard('ab', '🔀', 'A+B — Гибрид',      'Тёмная шапка + цветные KPI-карточки') +
+        _rpLayoutCard('b',  '📊', 'B — Дашборд',        'Светлый фон, KPI-карточки с иконками') +
+        _rpLayoutCard('c',  '📋', 'C — Протокол',       'Бланк, serif-шрифт, ГОСТ-стиль') +
+      '</div>' +
+    '</div>' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Цветовая схема</div>' +
     '<div class="rp-theme-grid">' +
       _rpThemeCard('blue',   '🔵', 'Синяя',     '#1e3a8a,#3b82f6', true) +
       _rpThemeCard('green',  '🟢', 'Зелёная',   '#14532d,#16a34a', false) +
@@ -1120,6 +1138,15 @@ function _rpThemeCard(id, ico, name, colors, active) {
     '<div class="rp-theme-name">' + name + '</div>' +
   '</div>';
 }
+function _rpLayoutCard(id, ico, name, sub) {
+  var active = (ReportState.settings.reportLayout || 'a') === id;
+  return '<div class="rp-layout-card' + (active ? ' rp-layout-card--active' : '') + '" ' +
+    'data-layout="' + id + '" onclick="rpSelectLayout(\'' + id + '\')">' +
+    '<div class="rp-layout-icon">' + ico + '</div>' +
+    '<div class="rp-layout-name">' + name + '</div>' +
+    '<div class="rp-layout-sub">' + sub + '</div>' +
+  '</div>';
+}
 function rpLogoChange(input) {
   var file = input.files && input.files[0];
   if (!file) return;
@@ -1155,6 +1182,13 @@ function rpWatermarkChange(sel) {
 function rpSelectTheme(id) {
   document.querySelectorAll('.rp-theme-card').forEach(function(c){ c.classList.toggle('rp-theme-card--active', c.dataset.theme === id); });
   ReportState.settings.reportTheme = id;
+  saveReportSettings();
+}
+function rpSelectLayout(id) {
+  ReportState.settings.reportLayout = id;
+  document.querySelectorAll('.rp-layout-card').forEach(function(c){
+    c.classList.toggle('rp-layout-card--active', c.dataset.layout === id);
+  });
   saveReportSettings();
 }
 
@@ -1786,6 +1820,7 @@ function generateReport() {
   s.quarryName     = getField('rp-quarry-name') || 'ЮРГ';
   s.objectName     = getField('rp-object-name') || 'Пулково-42';
   s.reportTheme = ReportState.settings.reportTheme || 'blue';
+  s.reportLayout = ReportState.settings.reportLayout || 'a';
   s.logoBase64   = localStorage.getItem('rp-logo-base64') || '';
   var wmVal = getField('rp-watermark');
   s.watermark    = wmVal === 'custom' ? getField('rp-watermark-custom') : wmVal;
@@ -2513,6 +2548,170 @@ function buildDewateringSection(s) {
   '</section>';
 }
 
+// ── Титульная страница (зависит от макета) ────────────────
+function buildTitleHTML(s, isSingle) {
+  var layout = s.reportLayout || 'a';
+  var c = getThemeColors(s.reportTheme);
+
+  // Логотип
+  var logoHtml = s.logoBase64
+    ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" alt="logo">'
+    : '<div class="rp-title-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>';
+
+  var signatureHtml = s.includeSignature
+    ? '<div class="rp-signature-block">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;text-align:left">' +
+          '<div><div class="rp-sig-line">________________________</div>' +
+            '<div class="rp-sig-label">Составил: ' + escHTML(s.author || '') + '</div>' +
+            '<div class="rp-sig-role">' + escHTML(s.position || '') + '</div></div>' +
+          '<div><div class="rp-sig-line">________________________</div>' +
+            '<div class="rp-sig-label">Утвердил: ' + escHTML(s.approverName || '') + '</div></div>' +
+        '</div></div>'
+    : '';
+
+  var periodText = isSingle
+    ? 'Дата: ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escHTML(s.weekB) + ')' : '')
+    : fmtDate(s.dateA) + ' (' + escHTML(s.weekA) + ') → ' + fmtDate(s.dateB) + ' (' + escHTML(s.weekB) + ')';
+
+  // ── Вариант C: бланк ГОСТ ──
+  if (layout === 'c') {
+    return '<div class="rp-title-page rp-title-c">' +
+      '<div class="rp-lh-top">' +
+        '<div class="rp-lh-logo">' + (s.logoBase64 ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" alt="logo">' : '<div class="rp-lh-logo-box">' + escHTML(s.quarryName || 'ЮРГ') + '</div>') + '</div>' +
+        '<div class="rp-lh-org">' +
+          '<div class="rp-lh-org-name">' + escHTML(s.quarryName || 'ЮРГ') + ' · Гидрогеологический мониторинг</div>' +
+          '<div class="rp-lh-org-sub">Объект ' + escHTML(s.objectName || '') + '</div>' +
+        '</div>' +
+        '<div class="rp-lh-docnum">' +
+          '<div class="rp-lh-label">Документ</div>' +
+          '<div class="rp-lh-num">№ v' + (s.reportVersion || 1) + '</div>' +
+          '<div class="rp-lh-date">' + fmtDate(s.dateReport) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="rp-lh-title-block">' +
+        '<div class="rp-lh-doctype">Технический отчёт</div>' +
+        '<div class="rp-lh-main">Отчёт по мониторингу подземных вод<br>' + escHTML(s.quarryName || 'ЮРГ') + ' · ' + escHTML(s.objectName || '') + '</div>' +
+        '<div class="rp-lh-period-box">' + periodText + '</div>' +
+      '</div>' +
+      '<div class="rp-lh-signers">' +
+        '<div><div class="rp-lh-role">Составил</div><div class="rp-lh-line"></div><div class="rp-lh-name">' + escHTML(s.author || '—') + ' · ' + escHTML(s.position || '') + '</div></div>' +
+        '<div><div class="rp-lh-role">Утвердил</div><div class="rp-lh-line"></div><div class="rp-lh-name">' + escHTML(s.approverName || '—') + '</div></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Вариант B: дашборд ──
+  if (layout === 'b') {
+    return '<div class="rp-title-page rp-title-b">' +
+      '<div class="rp-title-b-topbar">' +
+        (s.logoBase64
+          ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" style="max-height:36px;border-radius:4px" alt="logo">'
+          : '<div class="rp-title-b-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>') +
+        '<div><div class="rp-title-b-org-label">' + escHTML(s.quarryName || 'ЮРГ') + ' · Гидрогеологический мониторинг</div>' +
+          '<div class="rp-title-b-org-name">Объект ' + escHTML(s.objectName || '') + '</div></div>' +
+        '<div style="margin-left:auto;text-align:right">' +
+          '<div class="rp-title-b-vnum-label">Версия</div>' +
+          '<div class="rp-title-b-vnum">v' + (s.reportVersion || 1) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="rp-title-b-bottom">' +
+        '<h1 class="rp-title-b-h1">Отчёт по мониторингу подземных вод</h1>' +
+        '<div class="rp-title-b-chips">' +
+          '<span class="rp-title-b-chip rp-title-b-chip--blue">📅 ' + periodText + '</span>' +
+          '<span class="rp-title-b-chip">👤 ' + escHTML(s.author || '—') + ' · ' + fmtDate(s.dateReport) + '</span>' +
+        '</div>' +
+      '</div>' +
+      signatureHtml +
+    '</div>';
+  }
+
+  // ── Варианты A и A+B: тёмная gradient-шапка ──
+  return '<div class="rp-title-page rp-title-a">' +
+    '<div class="rp-title-a-content">' +
+      logoHtml +
+      '<div class="rp-title-body">' +
+        '<div class="rp-title-org">Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Отдел гидрогеологии</div>' +
+        '<h1 class="rp-title-main">Отчёт по мониторингу<br>подземных вод</h1>' +
+        '<div class="rp-title-sub">Объект ' + escHTML(s.objectName || '') + '</div>' +
+        '<div class="rp-title-period">' + periodText + '</div>' +
+        '<div class="rp-title-meta">' +
+          '<div>Составил: <b>' + escHTML(s.author || '—') + '</b> · ' + escHTML(s.position || '') + '</div>' +
+          '<div>Дата: <b>' + fmtDate(s.dateReport) + '</b> · v' + (s.reportVersion || 1) + '</div>' +
+          (s.approverName ? '<div>Утверждает: <b>' + escHTML(s.approverName) + '</b></div>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    signatureHtml +
+  '</div>';
+}
+
+// ── KPI-блок (зависит от макета) ──────────────────────────
+function buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB) {
+  var layout = s.reportLayout || 'a';
+  var dtQA = dtsA.reduce(function(a,d){ return a+(d.flowM3h||0); },0);
+  var dtQB = dtsB.reduce(function(a,d){ return a+(d.flowM3h||0); },0);
+  var floodB = ptsB.filter(function(p){ return p.status==='Паводковая'||p.status==='Перелив'; }).length;
+  var floodA = ptsA.filter(function(p){ return p.status==='Паводковая'||p.status==='Перелив'; }).length;
+  var dFlood = floodB - floodA;
+
+  if (layout === 'b' || layout === 'ab') {
+    // Цветные KPI-карточки
+    var cards = [
+      { icon:'💧', cls:'blue',  val: qB.toFixed(1) + ' л/с',        lbl:'Σ Q нед. Б',          sub: isSingle ? '' : 'нед. А: ' + qA.toFixed(1) },
+      { icon:'📈', cls: dQ>=0 ? 'red':'green',
+                               val: (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(1), lbl:'Изменение Δ л/с',   sub: (dQ>=0?'+':'')+((qA>0?(dQ/qA*100):0).toFixed(1))+'%' },
+      { icon:'⚠️', cls:'amber', val: String(floodB),                 lbl:'Паводковых точек',     sub: dFlood!==0?(dFlood>0?'▲+'+dFlood:'▼'+dFlood)+' vs нед.А':'' },
+      { icon:'✅', cls:'green2',val: String(ptsB.length),             lbl:'Точек замерено',       sub: '' },
+      { icon:'🏗',  cls:'purple',val: dtsB.length + ' / ' + dtQB.toFixed(0)+' м³/ч', lbl:'Канав / Σ Q канав', sub: '' },
+    ];
+    return '<div class="rp-kpi-cards">' +
+      cards.map(function(k){
+        return '<div class="rp-kpi-card rp-kpi-card--' + k.cls + '">' +
+          '<div class="rp-kpi-card-icon">' + k.icon + '</div>' +
+          '<div class="rp-kpi-card-val">' + k.val + '</div>' +
+          '<div class="rp-kpi-card-lbl">' + k.lbl + '</div>' +
+          (k.sub ? '<div class="rp-kpi-card-sub">' + k.sub + '</div>' : '') +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  // Вариант A и C: горизонтальный KPI-бар
+  if (isSingle) {
+    return '<div class="rp-kpi-grid">' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsB.length + '</div><div class="rp-kpi-label">Точек мониторинга</div></div>' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + qB.toFixed(1) + ' <span style="font-size:13px">л/с</span></div><div class="rp-kpi-label">Суммарный водоприток</div></div>' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + floodB + '</div><div class="rp-kpi-label">Активных/паводковых</div></div>' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsB.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQB.toFixed(1) + ' <span style="font-size:13px">м³/ч</span></div><div class="rp-kpi-label">ΣQ канав</div></div>' +
+    '</div>';
+  }
+  var trend = dQ >= 0 ? 'rp-kpi--up' : 'rp-kpi--down';
+  return '<div class="rp-kpi-compare">' +
+    '<div class="rp-kpi-compare-week rp-kpi-compare-week--a">' +
+      '<div class="rp-kpi-compare-label">Нед. А · ' + fmtDate(s.dateA) + '</div>' +
+      '<div class="rp-kpi-grid2">' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsA.length + '</div><div class="rp-kpi-label">Точек</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + qA.toFixed(1) + '</div><div class="rp-kpi-label">Q л/с</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsA.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQA.toFixed(1) + '</div><div class="rp-kpi-label">Q канав м³/ч</div></div>' +
+      '</div></div>' +
+    '<div class="rp-kpi-arrow">' +
+      '<div style="font-size:20px;color:#aaa">→</div>' +
+      '<div class="rp-kpi ' + trend + '" style="min-width:70px;text-align:center">' +
+        '<div class="rp-kpi-val" style="font-size:15px">' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(1) + '</div>' +
+        '<div class="rp-kpi-label">Δ л/с</div></div></div>' +
+    '<div class="rp-kpi-compare-week rp-kpi-compare-week--b">' +
+      '<div class="rp-kpi-compare-label" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + '</div>' +
+      '<div class="rp-kpi-grid2">' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsB.length + '</div><div class="rp-kpi-label">Точек</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + qB.toFixed(1) + '</div><div class="rp-kpi-label">Q л/с</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsB.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQB.toFixed(1) + '</div><div class="rp-kpi-label">Q канав м³/ч</div></div>' +
+      '</div></div>' +
+  '</div>';
+}
+
 // ── Основной HTML отчёта ──────────────────────────────────
 function buildReportHTML(s) {
   var ptsA = ReportState.ptsA || [], ptsB = ReportState.ptsB || [];
@@ -2539,85 +2738,20 @@ function buildReportHTML(s) {
   }
 
   // ── Титул
-  var logoHtml = s.logoBase64
-    ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" alt="logo">'
-    : '<div class="rp-title-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>';
-
-  var signatureHtml = s.includeSignature
-    ? '<div class="rp-signature-block">' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;text-align:left">' +
-          '<div>' +
-            '<div class="rp-sig-line">________________________</div>' +
-            '<div class="rp-sig-label">Составил: ' + escHTML(s.author || '') + '</div>' +
-            '<div class="rp-sig-role">' + escHTML(s.position || '') + '</div>' +
-          '</div>' +
-          '<div>' +
-            '<div class="rp-sig-line">________________________</div>' +
-            '<div class="rp-sig-label">Утвердил: ' + escHTML(s.approverName || '') + '</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>'
-    : '';
-
-  var title = '<div class="rp-title-page">' +
-    logoHtml +
-    '<h1 class="rp-title-main">Отчёт по мониторингу<br>подземных вод</h1>' +
-    '<div class="rp-title-sub">Карьер ' + escHTML(s.quarryName) + ' · ' + escHTML(s.objectName) + '</div>' +
-    '<div class="rp-title-period">' + (isSingle
-      ? 'Дата: ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escAttr(s.weekB) + ')' : '')
-      : fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ') → ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')'
-    ) + '</div>' +
-    '<div class="rp-title-meta">' +
-      '<div>Составил: <b>' + escAttr(s.author||'—') + '</b> · ' + escAttr(s.position||'') + '</div>' +
-      '<div>Дата: <b>' + fmtDate(s.dateReport) + '</b></div>' +
-      '<div style="margin-top:6px;opacity:.5;font-size:11px">v' + s.reportVersion + '</div>' +
-    '</div>' +
-    signatureHtml +
-  '</div>';
+  var title = buildTitleHTML(s, isSingle);
 
   // ── Сводка
   var summaryAI = ai.error
     ? '<div class="rp-ai-text" style="color:#d93025"><span class="rp-ai-badge" style="background:#d93025">AI</span>⚠ ' + escHTML(ai.error) + '</div>'
     : ai.summary ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.summary) + '</div>' : '';
 
-  var summaryContent = '';
-  if (isSingle) {
-    summaryContent =
-      '<div class="rp-kpi-grid">' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsB.length + '</div><div class="rp-kpi-label">Точек мониторинга</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + qB.toFixed(1) + ' <span style="font-size:13px">л/с</span></div><div class="rp-kpi-label">Суммарный водоприток</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsB.filter(function(p){return p.status==='Активная'||p.status==='Паводковая';}).length + '</div><div class="rp-kpi-label">Активных точек</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsB.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQB.toFixed(1) + ' <span style="font-size:13px">м³/ч</span></div><div class="rp-kpi-label">ΣQ канав</div></div>' +
-      '</div>';
-  } else {
-    var trend = dQ >= 0 ? 'rp-kpi--up' : 'rp-kpi--down';
-    summaryContent =
-      '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start;margin-bottom:16px">' +
-        '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:12px">' +
-          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:8px">Нед. А · ' + fmtDate(s.dateA) + '</div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsA.length + '</div><div class="rp-kpi-label">Точек</div></div>' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsA.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + qA.toFixed(1) + '</div><div class="rp-kpi-label">Q точек, л/с</div></div>' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQA.toFixed(1) + '</div><div class="rp-kpi-label">Q канав, м³/ч</div></div>' +
-          '</div></div>' +
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:20px">' +
-          '<div style="font-size:22px;color:#888">→</div>' +
-          '<div class="rp-kpi ' + trend + '" style="min-width:80px;text-align:center">' +
-            '<div class="rp-kpi-val" style="font-size:16px">' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(1) + '</div>' +
-            '<div class="rp-kpi-label">Δ л/с</div></div></div>' +
-        '<div style="background:#f8f9fa;border:2px solid #1a73e8;border-radius:8px;padding:12px">' +
-          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#1a73e8;margin-bottom:8px">Нед. Б · ' + fmtDate(s.dateB) + '</div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsB.length + '</div><div class="rp-kpi-label">Точек</div></div>' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsB.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + qB.toFixed(1) + '</div><div class="rp-kpi-label">Q точек, л/с</div></div>' +
-            '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQB.toFixed(1) + '</div><div class="rp-kpi-label">Q канав, м³/ч</div></div>' +
-          '</div></div>' +
-      '</div>' +
-      // Диаграммы
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">' +
+  var summaryContent = buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB);
+  // Сравнительные диаграммы (только для compare + layout не-B/AB)
+  var summaryCharts = '';
+  var layout = s.reportLayout || 'a';
+  if (!isSingle && layout !== 'b' && layout !== 'ab') {
+    summaryCharts =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">' +
         '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:12px">' +
           '<div style="font-size:11px;font-weight:600;margin-bottom:8px">Статус — нед. А (' + ptsA.length + ')</div>' +
           buildDonutSVG(countBy(ptsA,'status'), STATUSES, STATUS_COLORS, ptsA.length) + '</div>' +
@@ -2669,7 +2803,7 @@ function buildReportHTML(s) {
   }).join('');
 
   var summary = '<section class="rp-section"><h2>1. Итоговая сводка</h2>' +
-    summaryAI + summaryContent +
+    summaryAI + summaryContent + summaryCharts +
     '<div class="rp-section-sub" style="margin-top:14px">Водоприток по горизонтам / уступам</div>' +
     horizonContent +
     (domenRows ? '<div class="rp-section-sub" style="margin-top:14px">Водоприток по доменам</div>' +
@@ -2845,7 +2979,7 @@ function buildReportHTML(s) {
   return '<!DOCTYPE html><html lang="ru"><head>' +
     '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>Отчёт — Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' — ' + fmtDate(s.dateB) + '</title>' +
-    '<style>' + getReportCSS(s.reportTheme) + '</style>' +
+    '<style>' + getReportCSS(s.reportTheme, s.reportLayout) + '</style>' +
     (s.watermark ? '<style>body::before{content:"' + (s.watermark||'').replace(/"/g,'') + '";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:80px;font-weight:900;color:rgba(150,0,0,0.06);pointer-events:none;z-index:9999;letter-spacing:8px;white-space:nowrap;}</style>' : '') +
     '</head><body>' +
     title +
@@ -2876,7 +3010,7 @@ function getThemeColors(theme) {
   return t[theme] || t.blue;
 }
 
-function getReportCSS(theme) {
+function getReportCSS(theme, layout) {
   var c = getThemeColors(theme);
   return [
   '* { box-sizing: border-box; margin: 0; padding: 0; }',
@@ -2953,6 +3087,93 @@ function getReportCSS(theme) {
   '.rp-section { counter-increment: section; }',
   '.rp-print-btn { position:fixed;bottom:20px;right:20px;z-index:100; }',
   '.rp-print-btn button { padding:10px 20px;font-size:13px;cursor:pointer;background:' + c.primary + ';color:#fff;border:none;border-radius:6px;font-weight:500; }',
+  // ── Layout B: Dashboard body ──
+  (layout === 'b' || layout === 'ab'
+    ? 'body { background: #f1f5f9; }'
+    : ''),
+
+  // ── Title page: Variant A (default) ──
+  '.rp-title-logo-img { max-width:200px;max-height:80px;width:auto;height:auto;border-radius:8px;object-fit:contain;margin:0 auto 16px;display:block; }',
+
+  // ── Title A/AB ──
+  '.rp-title-a { background:linear-gradient(135deg,#0d2137 0%,#1a3a5c 60%,#0f4c81 100%);color:#fff;padding:0;page-break-after:always; }',
+  '.rp-title-a-content { display:flex;gap:28px;align-items:flex-start;padding:40px 48px 32px; }',
+  '.rp-title-body { flex:1; }',
+  '.rp-title-org { font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.5);margin-bottom:10px; }',
+  '.rp-title-main { font-size:24px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:6px; }',
+  '.rp-title-sub { font-size:13px;color:rgba(255,255,255,.65);margin-bottom:16px; }',
+  '.rp-title-period { display:inline-block;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:7px 16px;font-size:12px;color:#fff;margin-bottom:14px; }',
+  '.rp-title-meta { font-size:11px;color:rgba(255,255,255,.6);line-height:1.9; }',
+  '.rp-title-meta b { color:#fff; }',
+  '.rp-title-logo { width:64px;height:64px;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0; }',
+
+  // ── Title B ──
+  '.rp-title-b { page-break-after:always; }',
+  '.rp-title-b-topbar { background:#0f172a;padding:16px 32px;display:flex;align-items:center;gap:18px; }',
+  '.rp-title-b-logo { background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:6px 14px;border-radius:6px;font-size:15px;font-weight:900;color:#fff; }',
+  '.rp-title-b-org-label { font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.06em; }',
+  '.rp-title-b-org-name { font-size:14px;font-weight:600;color:#fff; }',
+  '.rp-title-b-vnum-label { font-size:9px;color:rgba(255,255,255,.3);text-transform:uppercase; }',
+  '.rp-title-b-vnum { font-size:16px;font-weight:700;color:#60a5fa; }',
+  '.rp-title-b-bottom { padding:20px 32px;background:#fff;border-bottom:1px solid #e2e8f0; }',
+  '.rp-title-b-h1 { font-size:20px;font-weight:700;color:#0f172a;margin-bottom:10px; }',
+  '.rp-title-b-chips { display:flex;gap:10px;flex-wrap:wrap; }',
+  '.rp-title-b-chip { background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;font-size:12px;color:#475569; }',
+  '.rp-title-b-chip--blue { background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8; }',
+
+  // ── Title C ──
+  '.rp-title-c { page-break-after:always;font-family:\'Times New Roman\',Georgia,serif; }',
+  '.rp-lh-top { display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;padding:20px 40px;border-bottom:3px double #8b1a1a; }',
+  '.rp-lh-logo-box { width:64px;height:64px;border:2px solid #8b1a1a;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:Arial,sans-serif;color:#8b1a1a; }',
+  '.rp-lh-org { text-align:center; }',
+  '.rp-lh-org-name { font-size:14px;font-weight:700;color:#8b1a1a;text-transform:uppercase;letter-spacing:.04em; }',
+  '.rp-lh-org-sub { font-size:11px;color:#555;margin-top:4px; }',
+  '.rp-lh-docnum { text-align:right;font-size:11px;color:#555; }',
+  '.rp-lh-num { font-size:16px;font-weight:700;color:#8b1a1a;font-family:Arial,sans-serif; }',
+  '.rp-lh-date { font-size:10px;color:#888;margin-top:4px; }',
+  '.rp-lh-title-block { padding:28px 40px;text-align:center;border-bottom:1px solid #ccc; }',
+  '.rp-lh-doctype { font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#888;margin-bottom:8px; }',
+  '.rp-lh-main { font-size:20px;font-weight:700;color:#1c1c1c;line-height:1.35;margin-bottom:10px; }',
+  '.rp-lh-period-box { display:inline-block;border:1px solid #8b1a1a;padding:6px 18px;font-size:12px;color:#8b1a1a; }',
+  '.rp-lh-signers { display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:16px 40px;border-bottom:2px solid #1c1c1c; }',
+  '.rp-lh-role { font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px; }',
+  '.rp-lh-line { border-bottom:1px solid #1c1c1c;min-height:22px;margin-bottom:3px; }',
+  '.rp-lh-name { font-size:11px;color:#555; }',
+
+  // ── KPI-cards (layout B and AB) ──
+  '.rp-kpi-cards { display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px; }',
+  '.rp-kpi-card { border-radius:10px;padding:14px 14px;border:1px solid #e2e8f0;background:#fff;position:relative;overflow:hidden; }',
+  '.rp-kpi-card::before { content:"";position:absolute;top:0;left:0;right:0;height:3px; }',
+  '.rp-kpi-card--blue::before   { background:#3b82f6; }',
+  '.rp-kpi-card--red::before    { background:#ef4444; }',
+  '.rp-kpi-card--green::before  { background:#22c55e; }',
+  '.rp-kpi-card--green2::before { background:#22c55e; }',
+  '.rp-kpi-card--amber::before  { background:#f59e0b; }',
+  '.rp-kpi-card--purple::before { background:#8b5cf6; }',
+  '.rp-kpi-card-icon { font-size:18px;margin-bottom:6px; }',
+  '.rp-kpi-card-val  { font-size:18px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:3px; }',
+  '.rp-kpi-card-lbl  { font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em; }',
+  '.rp-kpi-card-sub  { font-size:10px;color:#64748b;margin-top:4px;font-weight:500; }',
+
+  // ── KPI-compare (layout A and C) ──
+  '.rp-kpi-compare { display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:start;margin-bottom:16px; }',
+  '.rp-kpi-compare-week { background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:10px 12px; }',
+  '.rp-kpi-compare-week--b { border-color:#1a73e8;border-width:2px; }',
+  '.rp-kpi-compare-label { font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:8px; }',
+  '.rp-kpi-grid2 { display:grid;grid-template-columns:1fr 1fr;gap:6px; }',
+  '.rp-kpi-arrow { display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:20px; }',
+
+  // ── Layout C body overrides ──
+  (layout === 'c'
+    ? [
+      '.rp-body { font-family: \'Times New Roman\',Georgia,serif; }',
+      '.rp-section h2 { font-family: \'Times New Roman\',Georgia,serif; border-bottom: 1px solid #ccc; border-width: 1px; }',
+      '.rp-table th { background:#f4f4f4;border:1px solid #ccc; }',
+      '.rp-table td { border:1px solid #ccc; }',
+      '.rp-footer { border-top:2px solid #1c1c1c; }',
+    ].join('\n')
+    : ''),
+
   '@media print {',
   '  @page { margin:15mm 18mm; size:A4 portrait; }',
   '  @page { @bottom-right { content: "Стр. " counter(page); font-size:9pt; color:#aaa; font-family:sans-serif; } }',
