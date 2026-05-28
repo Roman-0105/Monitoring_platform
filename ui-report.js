@@ -23,6 +23,8 @@ var ReportState = {
     includeMap: true, include3d: false, includeHistory: true,
     includeCompare: true, includeAI: true,
     conclusions: '', apiKey: '',
+    aiModel: 'claude-haiku-4-5-20251001',
+    aiTone: 'official',
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
     reportTheme: 'blue',
@@ -164,6 +166,8 @@ function restoreSettings() {
   }
   if (s.approverName) setField('rp-approver-name', s.approverName);
   restoreChk('rp-inc-signature', s.incSignature);
+  if (s.aiModel) { ReportState.settings.aiModel = s.aiModel; setField('rp-ai-model', s.aiModel); }
+  if (s.aiTone)  { ReportState.settings.aiTone  = s.aiTone;  setField('rp-ai-tone',  s.aiTone);  }
 
   // Если данные уже были загружены — восстанавливаем даты
   var allDates = ReportState.allDates || [];
@@ -226,6 +230,8 @@ function saveReportSettings() {
       watermark:    (function(){ var v=getField('rp-watermark'); return v==='custom'?getField('rp-watermark-custom'):v; })(),
       approverName: getField('rp-approver-name'),
       incSignature: getChk('rp-inc-signature'),
+      aiModel: getField('rp-ai-model') || 'claude-haiku-4-5-20251001',
+      aiTone:  getField('rp-ai-tone')  || 'official',
       filterDomains:  ReportState.settings.filterDomains  || [],
       filterHorizons: ReportState.settings.filterHorizons || [],
     }));
@@ -270,6 +276,15 @@ function bindEvents() {
   fillPresetSelect();
   // Initialize sections list after first render
   setTimeout(function(){ renderSectionsList(); }, 0);
+  ['rp-ai-model','rp-ai-tone'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', function() {
+      ReportState.settings.aiModel = getField('rp-ai-model') || 'claude-haiku-4-5-20251001';
+      ReportState.settings.aiTone  = getField('rp-ai-tone')  || 'official';
+      saveReportSettings();
+    });
+  });
+  setTimeout(updateAICacheInfo, 100);
 }
 
 // ── UI настроек ───────────────────────────────────────────
@@ -280,24 +295,28 @@ function bindEvents() {
 var DEFAULT_PROMPTS = [
   {
     id: 'default-1',
+    category: 'Общий',
     name: 'Стандартный: обстановка + риски',
     desc: 'Еженедельный отчёт. Описывает общую гидрогеологическую обстановку, выделяет паводковые зоны и точки с аномальным Q.',
     text: 'Составь краткий профессиональный вывод по гидрогеологической обстановке карьера ЮРГ. Укажи основные зоны водопритока, горизонты с максимальным Q, состояние паводковых точек и аномальные изменения. Без рекомендаций.'
   },
   {
     id: 'default-2',
+    category: 'Риски',
     name: 'Паводковый анализ',
     desc: 'Акцент на паводковые точки и точки "Перелив". Оценивает угрозу для горных работ.',
     text: 'Проанализируй паводковые точки и точки со статусом "Перелив". Оцени масштаб обводнённости и потенциальную угрозу для ведения горных работ. Укажи борта карьера и горизонты с наибольшим риском. Без рекомендаций.'
   },
   {
     id: 'default-3',
+    category: 'Общий',
     name: 'Краткая сводка для руководства',
     desc: '2-3 предложения без технических деталей. Для управленческой аудитории.',
     text: 'Дай краткую сводку (2-3 предложения) по водопритоку карьера. Только ключевые факты: суммарный Q, основные зоны, критические точки. Нетехнический язык, без специализированных терминов.'
   },
   {
     id: 'default-4',
+    category: 'Сравнение',
     name: 'Сравнительный анализ периодов',
     desc: 'Для режима "Сравнение недель". Описывает динамику изменений Q между двумя датами.',
     text: 'Составь сравнительный анализ двух периодов мониторинга. Укажи динамику суммарного Q, зоны с ростом и снижением водопритока, изменения статусов точек. Без рекомендаций.'
@@ -322,10 +341,10 @@ function savePromptsBank(prompts) {
   } catch(e) {}
 }
 
-function addPromptToBank(name, desc, text) {
+function addPromptToBank(name, desc, text, category) {
   if (!name || !text) return false;
   var prompts = getPromptsBank().filter(function(p){ return p.id.indexOf('default-') < 0; });
-  prompts.push({ id: 'u-' + Date.now(), name: name, desc: desc, text: text });
+  prompts.push({ id: 'u-' + Date.now(), name: name, desc: desc, text: text, category: category || 'Мои' });
   savePromptsBank(prompts);
   return true;
 }
@@ -353,23 +372,41 @@ function applyPrompt(text) {
   Toast.show('Промпт применён', 'success');
 }
 
-function renderPromptsTab() {
+function renderPromptsTab(filterCat) {
   var root = document.getElementById('rp-tab-prompts');
   if (!root) return;
-  var prompts = getPromptsBank();
+  var allPrompts = getPromptsBank();
+  window._rpPrompts = allPrompts;
 
-  // Сохраняем в глобальную переменную для доступа из onclick по индексу
-  window._rpPrompts = prompts;
+  // Collect all categories
+  var catSet = {}, cats = [];
+  allPrompts.forEach(function(p){ var c = p.category || 'Общий'; if(!catSet[c]){catSet[c]=1;cats.push(c);} });
 
-  var html = '<div style="margin-bottom:14px">';
-  prompts.forEach(function(p, idx) {
+  var activeCat = filterCat || window._rpActiveCat || 'все';
+  window._rpActiveCat = activeCat;
+  var filtered = activeCat === 'все' ? allPrompts : allPrompts.filter(function(p){ return (p.category||'Общий') === activeCat; });
+
+  var catTabs = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
+    ['все'].concat(cats).map(function(c) {
+      var active = c === activeCat;
+      return '<button onclick="renderPromptsTab(\'' + c + '\')" style="padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid var(--line-2);' +
+        (active ? 'background:var(--blue,#2563eb);color:#fff;border-color:transparent' : 'background:transparent;color:var(--txt-2)') + '">' + c + '</button>';
+    }).join('') +
+  '</div>';
+
+  var html = catTabs + '<div style="margin-bottom:14px">';
+  filtered.forEach(function(p) {
+    // find original index in allPrompts
+    var origIdx = allPrompts.indexOf(p);
     var isDefault = p.id.indexOf('default-') === 0;
     var borderColor = isDefault ? '#1a73e8' : '#f9ab00';
+    var catBadge = p.category ? '<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg2);color:var(--txt-3);margin-left:4px">' + escHTML(p.category) + '</span>' : '';
     html += '<div style="border:0.5px solid var(--line-2);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--card-bg)">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
         '<div style="flex:1;min-width:0">' +
           '<div style="font-weight:600;font-size:13px;color:var(--txt-1);margin-bottom:3px">' + escAttr(p.name) +
             (isDefault ? '<span style="font-size:10px;font-weight:400;color:#1a73e8;margin-left:6px;padding:1px 6px;background:#e8f0fe;border-radius:3px">встроенный</span>' : '') +
+            catBadge +
           '</div>' +
           '<div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">' + escAttr(p.desc || '—') + '</div>' +
           '<div style="font-size:12px;color:var(--txt-2);background:var(--card-bg2,#1e2535);padding:8px 10px;border-radius:6px;border-left:2px solid ' + borderColor + ';white-space:pre-wrap">' +
@@ -377,9 +414,9 @@ function renderPromptsTab() {
           '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' +
-          '<button class="btn btn-sm btn-outline" data-rp-idx="' + idx + '" data-rp-action="apply">▶ Применить</button>' +
-          (!isDefault ? '<button class="btn btn-sm btn-outline" data-rp-idx="' + idx + '" data-rp-action="edit">✏ Изменить</button>' : '') +
-          (!isDefault ? '<button class="btn btn-sm btn-outline" data-rp-idx="' + idx + '" data-rp-action="del" style="color:var(--red);border-color:rgba(224,80,80,.3)">🗑 Удалить</button>' : '') +
+          '<button class="btn btn-sm btn-outline" data-rp-idx="' + origIdx + '" data-rp-action="apply">▶ Применить</button>' +
+          (!isDefault ? '<button class="btn btn-sm btn-outline" data-rp-idx="' + origIdx + '" data-rp-action="edit">✏ Изменить</button>' : '') +
+          (!isDefault ? '<button class="btn btn-sm" style="background:transparent;border:0.5px solid var(--red,#e53935);color:var(--red,#e53935)" data-rp-idx="' + origIdx + '" data-rp-action="del">✕</button>' : '') +
         '</div>' +
       '</div>' +
     '</div>';
@@ -387,24 +424,25 @@ function renderPromptsTab() {
   html += '</div>';
 
   // Форма добавления / редактирования
-  html += '<div style="border-top:1px solid var(--line-2);padding-top:14px">' +
-    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px" id="np-form-title">Добавить новый промпт</div>' +
+  html += '<div style="border:0.5px solid var(--line-2);border-radius:10px;padding:12px;background:var(--card-bg)">' +
+    '<div style="font-size:11px;font-weight:600;color:var(--txt-2);margin-bottom:8px" id="np-form-title">➕ Добавить промпт</div>' +
     '<input type="hidden" id="np-edit-id">' +
-    '<div style="margin-bottom:8px">' +
-      '<label style="font-size:11px;color:var(--txt-3)">Название</label>' +
-      '<input class="form-input" id="np-name" type="text" placeholder="напр. Анализ после ливня" style="margin-top:4px">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+      '<input class="form-input" id="np-name" placeholder="Название">' +
+      '<select class="form-select" id="np-category">' +
+        '<option value="Общий">Общий</option>' +
+        '<option value="Риски">Риски</option>' +
+        '<option value="Сравнение">Сравнение</option>' +
+        '<option value="Водоотлив">Водоотлив</option>' +
+        '<option value="Рекомендации">Рекомендации</option>' +
+        '<option value="Мои">Мои</option>' +
+      '</select>' +
     '</div>' +
-    '<div style="margin-bottom:8px">' +
-      '<label style="font-size:11px;color:var(--txt-3)">Описание (подсказка)</label>' +
-      '<input class="form-input" id="np-desc" type="text" placeholder="Для чего этот промпт, когда применять" style="margin-top:4px">' +
-    '</div>' +
-    '<div style="margin-bottom:10px">' +
-      '<label style="font-size:11px;color:var(--txt-3)">Текст промпта</label>' +
-      '<textarea class="form-textarea" id="np-text" rows="4" placeholder="Напишите инструкцию для AI..." style="margin-top:4px"></textarea>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+    '<input class="form-input" id="np-desc" placeholder="Описание" style="margin-bottom:8px">' +
+    '<textarea class="form-textarea" id="np-text" rows="3" placeholder="Текст промпта..." style="margin-bottom:8px"></textarea>' +
+    '<div style="display:flex;gap:8px">' +
+      '<button class="btn btn-primary btn-sm" id="np-save-btn" onclick="saveNewPromptUI()">Сохранить</button>' +
       '<button class="btn btn-outline btn-sm" id="np-cancel-btn" onclick="cancelEditPrompt()" style="display:none">Отмена</button>' +
-      '<button class="btn btn-outline btn-sm" id="np-save-btn" onclick="saveNewPromptUI()">💾 Сохранить промпт</button>' +
     '</div>' +
   '</div>';
 
@@ -429,10 +467,12 @@ function renderPromptsTab() {
       var editId = document.getElementById('np-edit-id');
       var titleEl = document.getElementById('np-form-title');
       var cancelBtn = document.getElementById('np-cancel-btn');
+      var catSel = document.getElementById('np-category');
       if (nameEl) nameEl.value = p.name;
       if (descEl) descEl.value = p.desc || '';
       if (textEl) textEl.value = p.text;
       if (editId) editId.value = p.id;
+      if (catSel && p.category) catSel.value = p.category;
       if (titleEl) titleEl.textContent = 'Редактировать промпт';
       if (cancelBtn) cancelBtn.style.display = '';
       nameEl && nameEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -441,7 +481,7 @@ function renderPromptsTab() {
       if (!confirm('Удалить промпт "' + p.name + '"?')) return;
       deletePromptFromBank(p.id);
       fillPresetSelect();
-      renderPromptsTab();
+      renderPromptsTab(activeCat);
       Toast.show('Промпт удалён', 'success');
     }
   });
@@ -452,16 +492,17 @@ function saveNewPromptUI() {
   var desc   = ((document.getElementById('np-desc')  ||{}).value || '').trim();
   var text   = ((document.getElementById('np-text')  ||{}).value || '').trim();
   var editId = ((document.getElementById('np-edit-id')||{}).value || '').trim();
+  var cat    = getField('np-category') || 'Мои';
   if (!name || !text) { Toast.show('Заполните название и текст', 'warning'); return; }
   if (editId) {
     updatePromptInBank(editId, name, desc, text);
     Toast.show('Промпт обновлён', 'success');
   } else {
-    addPromptToBank(name, desc, text);
+    addPromptToBank(name, desc, text, cat);
     Toast.show('Промпт сохранён', 'success');
   }
   fillPresetSelect();
-  renderPromptsTab();
+  renderPromptsTab(window._rpActiveCat);
 }
 
 function cancelEditPrompt() {
@@ -475,7 +516,7 @@ function cancelEditPrompt() {
   if (descEl)   descEl.value   = '';
   if (textEl)   textEl.value   = '';
   if (editIdEl) editIdEl.value = '';
-  if (titleEl)  titleEl.textContent = 'Добавить новый промпт';
+  if (titleEl)  titleEl.textContent = '➕ Добавить промпт';
   if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
@@ -932,6 +973,32 @@ function buildSettingsUI() {
     '</div>' +
 
     '<div class="card" style="margin-bottom:14px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+        '<div>' +
+          '<label class="rp-lbl">Модель Claude</label>' +
+          '<select class="form-select" id="rp-ai-model" style="margin-top:4px" onchange="saveReportSettings()">' +
+            '<option value="claude-haiku-4-5-20251001">Haiku 4.5 — быстро и дёшево</option>' +
+            '<option value="claude-sonnet-4-6">Sonnet 4.6 — баланс (рекомендуется)</option>' +
+            '<option value="claude-opus-4-7">Opus 4.7 — глубокий анализ</option>' +
+          '</select>' +
+        '</div>' +
+        '<div>' +
+          '<label class="rp-lbl">Тон анализа</label>' +
+          '<select class="form-select" id="rp-ai-tone" style="margin-top:4px" onchange="saveReportSettings()">' +
+            '<option value="official">Официальный технический</option>' +
+            '<option value="brief">Краткий (2-3 абзаца)</option>' +
+            '<option value="detailed">Детальный с рекомендациями</option>' +
+            '<option value="executive">Для руководства (нетехнический)</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">' +
+        '<div style="font-size:11px;color:var(--txt-3)" id="rp-ai-cache-info">Кэш: пусто</div>' +
+        '<button class="btn btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--line-2);color:var(--txt-3)" onclick="clearAICache()">✕ Очистить кэш</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:14px">' +
       '<div style="display:flex;gap:4px;border-bottom:1px solid var(--line-2);margin-bottom:12px">' +
         '<button id="rp-tabbtn-prompts" class="btn btn-sm active" onclick="switchRpTab(\'prompts\')" ' +
           'style="border-radius:8px 8px 0 0;border-bottom:none;padding:7px 16px">🗒 Банк промптов</button>' +
@@ -1199,6 +1266,58 @@ function loadDitchesHistory() {
 
 
 
+// ── AI-кэш ───────────────────────────────────────────────
+function getAICacheKey(s) {
+  var prompt = (s.customPrompt || '').slice(0, 80);
+  return [s.dateA, s.dateB, s.reportMode, s.aiModel || '', s.aiTone || '', prompt].join('|');
+}
+function getCachedAI(key) {
+  try {
+    var cache = JSON.parse(localStorage.getItem('rp-ai-cache') || '{}');
+    var entry = cache[key];
+    if (entry && entry.ts && (Date.now() - entry.ts < 24 * 60 * 60 * 1000)) return entry.data;
+  } catch(e) {}
+  return null;
+}
+function setCachedAI(key, data) {
+  try {
+    var cache = JSON.parse(localStorage.getItem('rp-ai-cache') || '{}');
+    cache[key] = { ts: Date.now(), data: data };
+    // Keep only last 20 entries
+    var keys = Object.keys(cache);
+    if (keys.length > 20) {
+      keys.sort(function(a,b){ return cache[a].ts - cache[b].ts; });
+      keys.slice(0, keys.length - 20).forEach(function(k){ delete cache[k]; });
+    }
+    localStorage.setItem('rp-ai-cache', JSON.stringify(cache));
+  } catch(e) {}
+}
+function clearAICache() {
+  localStorage.removeItem('rp-ai-cache');
+  var el = document.getElementById('rp-ai-cache-info');
+  if (el) el.textContent = 'Кэш очищен';
+  Toast.show('AI-кэш очищен', 'success');
+}
+function updateAICacheInfo() {
+  var el = document.getElementById('rp-ai-cache-info');
+  if (!el) return;
+  try {
+    var cache = JSON.parse(localStorage.getItem('rp-ai-cache') || '{}');
+    var cnt = Object.keys(cache).length;
+    el.textContent = cnt > 0 ? 'Кэш: ' + cnt + ' запис.' : 'Кэш: пусто';
+  } catch(e) {}
+}
+
+function getAITonePrefix(tone) {
+  var prefixes = {
+    official:  'Пиши в официальном техническом стиле. Используй профессиональную терминологию. ',
+    brief:     'Будь краток — не более 2-3 абзацев, только ключевые факты и выводы. ',
+    detailed:  'Дай детальный анализ и конкретные технические рекомендации по каждому пункту. ',
+    executive: 'Пиши для руководства без технических деталей. Простой язык, только ключевые выводы и риски. ',
+  };
+  return prefixes[tone] || prefixes.official;
+}
+
 // ── Генерация AI заключения ───────────────────────────────
 function generateAIConclusion() {
   var apiKey = getField('rp-apikey');
@@ -1226,7 +1345,10 @@ function generateAIConclusion() {
       buildDataContext(ctx, ctx.isSingle);
   }
 
-  callClaudeAPI(apiKey, prompt).then(function(text) {
+  var tone = getField('rp-ai-tone') || ReportState.settings.aiTone || 'official';
+  prompt = getAITonePrefix(tone) + prompt;
+  var model = getField('rp-ai-model') || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
+  callClaudeAPI(apiKey, prompt, model).then(function(text) {
     var ta = document.getElementById('rp-conclusions');
     if (ta) ta.value = text;
     Toast.show('Заключение сгенерировано', 'success');
@@ -1237,7 +1359,8 @@ function generateAIConclusion() {
   });
 }
 
-function callClaudeAPI(apiKey, prompt) {
+function callClaudeAPI(apiKey, prompt, model) {
+  var mdl = model || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
   return fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -1247,7 +1370,7 @@ function callClaudeAPI(apiKey, prompt) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: mdl,
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }]
     })
@@ -1380,32 +1503,44 @@ function buildDataContext(ctx, isSingleMode) {
 
 function generateAIBlocks(s) {
   if (!s.apiKey) return Promise.resolve({});
+  // Check cache first
+  var cacheKey = getAICacheKey(s);
+  var cached = getCachedAI(cacheKey);
+  if (cached) {
+    setTimeout(updateAICacheInfo, 0);
+    return Promise.resolve(Object.assign({ _fromCache: true }, cached));
+  }
   var ctx = buildAIContext(s);
 
+  // Tone prefix
+  var tonePrefix = getAITonePrefix(s.aiTone);
   // Пользовательский промпт из поля (или дефолтный)
   var userPrompt = (s.customPrompt || '').trim();
   var prompt;
   if (userPrompt) {
     // Пользователь написал свой промпт — подставляем данные в конце
-    prompt = userPrompt + buildDataContext(ctx, ctx.isSingle);
+    prompt = tonePrefix + userPrompt + buildDataContext(ctx, ctx.isSingle);
   } else {
     // Дефолтный промпт
     if (ctx.isSingle) {
-      prompt = 'Ты опытный гидрогеолог карьера ЮРГ (Казахстан). ' +
+      prompt = tonePrefix + 'Ты опытный гидрогеолог карьера ЮРГ (Казахстан). ' +
         'Составь профессиональный вывод по гидрогеологической обстановке. ' +
         'Укажи суммарный водоприток, основные зоны, состояние паводковых точек. Без рекомендаций.' +
         buildDataContext(ctx, true);
     } else {
-      prompt = 'Ты опытный гидрогеолог карьера ЮРГ (Казахстан). ' +
+      prompt = tonePrefix + 'Ты опытный гидрогеолог карьера ЮРГ (Казахстан). ' +
         'Составь сравнительный анализ двух периодов мониторинга. ' +
         'Укажи динамику Q, зоны роста/снижения водопритока, паводковые риски. Без рекомендаций.' +
         buildDataContext(ctx, false);
     }
   }
 
-  return callClaudeAPI(s.apiKey, prompt).then(function(text) {
+  return callClaudeAPI(s.apiKey, prompt, s.aiModel).then(function(text) {
     var clean = text.replace(/```/g,'').trim();
-    return { summary: clean, compare: '', recommendations: '' };
+    var result = { summary: clean, compare: '', recommendations: '' };
+    setCachedAI(cacheKey, result);
+    setTimeout(updateAICacheInfo, 0);
+    return result;
   }).catch(function(err) {
     return { error: err && err.message ? err.message : 'Ошибка API' };
   });
@@ -1574,6 +1709,8 @@ function preGenerateAI() {
   s.dateB        = s.reportMode === 'single' ? s.dateA : s.dateB;
   s.apiKey       = apiKey;
   s.customPrompt = getField('rp-custom-prompt');
+  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
+  s.aiTone  = getField('rp-ai-tone')  || ReportState.settings.aiTone  || 'official';
 
   var allPts = ReportState.allPoints || [];
   ReportState.ptsA = allPts.filter(function(p){ return (p.monitoringDate||'').slice(0,10) === s.dateA; });
@@ -1654,6 +1791,8 @@ function generateReport() {
   s.watermark    = wmVal === 'custom' ? getField('rp-watermark-custom') : wmVal;
   s.approverName = getField('rp-approver-name');
   s.includeSignature = getChk('rp-inc-signature');
+  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
+  s.aiTone  = getField('rp-ai-tone')  || ReportState.settings.aiTone  || 'official';
   s.reportVersion  = (parseInt(s.reportVersion) || 0) + 1;
   addRpHistory(s);
   saveReportSettings();
