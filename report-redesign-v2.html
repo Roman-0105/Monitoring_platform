@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Предложения по редизайну отчёта v2</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+
+  /* ── Навигация ── */
+  .nav { position: sticky; top: 0; z-index: 100; background: #0f1117; border-bottom: 1px solid #1e2535; display: flex; gap: 0; overflow-x: auto; }
+  .nav-btn { padding: 14px 22px; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; border: none; background: transparent; border-bottom: 3px solid transparent; white-space: nowrap; transition: all .2s; }
+  .nav-btn.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+  .nav-btn:hover:not(.active) { color: #94a3b8; }
+
+  /* ── Панели ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Шапка страницы ── */
+  .page-header { padding: 40px 40px 0; max-width: 1200px; margin: 0 auto; }
+  .page-header h1 { font-size: 22px; font-weight: 700; color: #f1f5f9; margin-bottom: 8px; }
+  .page-header p  { font-size: 13px; color: #64748b; line-height: 1.7; max-width: 700px; }
+
+  /* ── Сетка карточек ── */
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; padding: 24px 40px; max-width: 1200px; margin: 0 auto; }
+  .info-card { background: #1e2535; border: 1px solid #2a3447; border-radius: 12px; padding: 20px; }
+  .info-card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #60a5fa; margin-bottom: 10px; }
+  .info-card ul { list-style: none; }
+  .info-card ul li { font-size: 12px; color: #94a3b8; padding: 4px 0; display: flex; gap: 8px; }
+  .info-card ul li::before { content: '•'; color: #60a5fa; flex-shrink: 0; }
+  .bug-card { background: #1e2535; border: 1px solid #ef4444; border-radius: 12px; padding: 20px; }
+  .bug-card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #ef4444; margin-bottom: 10px; }
+  .bug-card .bug-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #2a3447; }
+  .bug-card .bug-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .bug-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 4px; }
+  .bug-tag.red   { background: #7f1d1d; color: #fca5a5; }
+  .bug-tag.amber { background: #78350f; color: #fcd34d; }
+  .bug-card .bug-cause { font-size: 11px; color: #64748b; margin-top: 4px; }
+  .bug-card .bug-fix   { font-size: 11px; color: #4ade80; margin-top: 3px; }
+
+  /* ── Разделитель вариантов ── */
+  .variant-header { max-width: 1200px; margin: 32px auto 0; padding: 0 40px; }
+  .variant-header h2 { font-size: 18px; font-weight: 700; color: #f1f5f9; }
+  .variant-header p  { font-size: 13px; color: #64748b; margin-top: 6px; }
+  .variant-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .pill { font-size: 11px; padding: 3px 10px; border-radius: 100px; border: 1px solid; }
+  .pill-green  { color: #4ade80; border-color: #166534; background: #052e16; }
+  .pill-blue   { color: #60a5fa; border-color: #1e40af; background: #0c1a3a; }
+  .pill-amber  { color: #fbbf24; border-color: #92400e; background: #1c1108; }
+  .pill-purple { color: #c084fc; border-color: #6b21a8; background: #1a0b2e; }
+
+  /* ── Контейнер отчёта ── */
+  .report-preview { max-width: 1200px; margin: 20px auto 40px; padding: 0 40px; }
+  .report-wrap { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+
+  /* ══════════════════════════════════════════════════
+     ВАРИАНТ A — «Технический документ»
+  ══════════════════════════════════════════════════ */
+  .va { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a2e; line-height: 1.5; background: #fff; }
+
+  .va-title { background: linear-gradient(135deg, #0d2137 0%, #1a3a5c 60%, #0f4c81 100%); color: #fff; padding: 48px 48px 40px; display: flex; gap: 32px; align-items: flex-start; }
+  .va-title-logo { width: 80px; height: 80px; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.25); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; flex-shrink: 0; letter-spacing: -1px; }
+  .va-title-body { flex: 1; }
+  .va-title-org { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.5); margin-bottom: 12px; }
+  .va-title-main { font-size: 26px; font-weight: 700; line-height: 1.25; margin-bottom: 6px; }
+  .va-title-sub  { font-size: 14px; color: rgba(255,255,255,.7); margin-bottom: 20px; }
+  .va-title-badge { display: inline-flex; gap: 16px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 10px 18px; font-size: 12px; }
+  .va-title-badge span { color: rgba(255,255,255,.5); }
+  .va-title-badge b { color: #fff; }
+  .va-title-meta { margin-top: 20px; display: flex; gap: 24px; font-size: 11px; color: rgba(255,255,255,.5); }
+  .va-title-meta b { color: rgba(255,255,255,.85); }
+
+  .va-body { padding: 28px 40px; max-width: 100%; }
+
+  /* KPI bar */
+  .va-kpi-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
+  .va-kpi { background: #fff; padding: 14px 16px; text-align: center; }
+  .va-kpi-val { font-size: 22px; font-weight: 700; color: #0d2137; line-height: 1.1; }
+  .va-kpi-val.blue { color: #1a73e8; }
+  .va-kpi-val.red  { color: #d93025; }
+  .va-kpi-val.green{ color: #188038; }
+  .va-kpi-lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+
+  /* Секции */
+  .va-section { margin-bottom: 24px; }
+  .va-section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #0d2137; padding-bottom: 6px; border-bottom: 2px solid #1a73e8; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  .va-section-title .num { width: 22px; height: 22px; background: #1a73e8; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+
+  /* Таблица доменов */
+  .va-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .va-table th { background: #f1f5f9; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+  .va-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+  .va-table tr:last-child td { border-bottom: none; font-weight: 700; background: #f8fafc; }
+  .va-up { color: #d93025; font-weight: 600; }
+  .va-dn { color: #188038; font-weight: 600; }
+  .va-status { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 100px; font-weight: 600; }
+  .s-active   { background: #dcfce7; color: #166534; }
+  .s-flood    { background: #dbeafe; color: #1e40af; }
+  .s-overflow { background: #ede9fe; color: #5b21b6; }
+  .s-fading   { background: #fef9c3; color: #854d0e; }
+  .s-dry      { background: #fee2e2; color: #991b1b; }
+
+  /* Карточки точек — стиль A */
+  .va-point { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+  .va-point-header { display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+  .va-point-num { font-size: 16px; font-weight: 800; color: #0d2137; }
+  .va-point-body { display: grid; grid-template-columns: 180px 1fr; }
+  .va-point-photo { background: #e8edf2; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; color: #94a3b8; font-size: 11px; min-height: 130px; }
+  .va-point-photo .icon { font-size: 28px; }
+  .va-point-data { padding: 12px 16px; }
+  .va-point-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e2e8f0; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  .va-metric { background: #fff; padding: 8px 10px; }
+  .va-metric-val { font-size: 16px; font-weight: 700; color: #0d2137; }
+  .va-metric-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin-top: 2px; }
+  .va-trend-bar { display: flex; align-items: flex-end; gap: 2px; height: 32px; margin-top: 8px; }
+  .va-trend-bar .b { background: #93c5fd; border-radius: 2px 2px 0 0; width: 10px; flex-shrink: 0; }
+  .va-trend-bar .b.current { background: #1a73e8; }
+  .va-observation { background: #fffbeb; border-left: 3px solid #f59e0b; padding: 8px 12px; font-size: 11px; color: #78350f; margin: 8px 0 0; }
+
+  /* Подвал отчёта A */
+  .va-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 40px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; background: #f8fafc; }
+
+  /* ══════════════════════════════════════════════════
+     ВАРИАНТ B — «Аналитический дашборд»
+  ══════════════════════════════════════════════════ */
+  .vb { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1e293b; line-height: 1.5; background: #f1f5f9; }
+
+  .vb-title { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 0; }
+  .vb-title-top { background: #0f172a; padding: 20px 32px; display: flex; align-items: center; gap: 20px; }
+  .vb-logo-rect { background: linear-gradient(135deg, #1a73e8, #0d47a1); width: 120px; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: #fff; letter-spacing: -1px; flex-shrink: 0; }
+  .vb-title-label { font-size: 11px; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .08em; }
+  .vb-title-name  { font-size: 16px; font-weight: 700; color: #fff; }
+  .vb-title-bottom { padding: 20px 32px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .vb-h1 { font-size: 20px; font-weight: 700; color: #0f172a; flex: 1; min-width: 200px; }
+  .vb-period-chip { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 16px; font-size: 12px; color: #1d4ed8; }
+  .vb-meta-chip { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 16px; font-size: 11px; color: #475569; }
+
+  .vb-body { padding: 20px 32px; }
+
+  /* KPI карточки B */
+  .vb-kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .vb-kpi { background: #fff; border-radius: 12px; padding: 16px 18px; border: 1px solid #e2e8f0; position: relative; overflow: hidden; }
+  .vb-kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .vb-kpi.blue::before  { background: #3b82f6; }
+  .vb-kpi.green::before { background: #22c55e; }
+  .vb-kpi.red::before   { background: #ef4444; }
+  .vb-kpi.amber::before { background: #f59e0b; }
+  .vb-kpi.purple::before{ background: #8b5cf6; }
+  .vb-kpi-icon { font-size: 20px; margin-bottom: 8px; }
+  .vb-kpi-val  { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 4px; }
+  .vb-kpi-lbl  { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+  .vb-kpi-delta { font-size: 11px; font-weight: 600; margin-top: 6px; }
+
+  /* Сравнение А vs Б */
+  .vb-compare { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; margin-bottom: 20px; align-items: start; }
+  .vb-week { background: #fff; border-radius: 12px; padding: 16px 18px; border: 1px solid #e2e8f0; }
+  .vb-week-a .vb-week-title { color: #475569; }
+  .vb-week-b { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+  .vb-week-b .vb-week-title { color: #1d4ed8; }
+  .vb-week-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .vb-week-stat { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; border-bottom: 1px solid #f1f5f9; }
+  .vb-week-stat:last-child { border: none; }
+  .vb-week-stat .lbl { color: #94a3b8; }
+  .vb-week-stat .val { font-weight: 600; color: #1e293b; }
+  .vb-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding-top: 36px; }
+  .vb-arrow-icon { font-size: 24px; color: #94a3b8; }
+  .vb-delta-chip { background: #fee2e2; color: #dc2626; font-size: 14px; font-weight: 800; padding: 8px 14px; border-radius: 8px; }
+  .vb-delta-chip.down { background: #dcfce7; color: #16a34a; }
+
+  /* Секции B */
+  .vb-section { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; margin-bottom: 16px; }
+  .vb-section-head { padding: 12px 18px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  .vb-section-head h3 { font-size: 13px; font-weight: 700; color: #0f172a; }
+  .vb-section-head .cnt { font-size: 11px; color: #94a3b8; margin-left: auto; }
+  .vb-section-body { padding: 16px 18px; }
+
+  /* Таблица B */
+  .vb-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .vb-table th { padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+  .vb-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; }
+  .vb-table tr:hover td { background: #f8fafc; }
+
+  /* Карточки точек B */
+  .vb-point { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; margin-bottom: 12px; }
+  .vb-point-header { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; }
+  .vb-point-num { width: 32px; height: 32px; background: #0f172a; color: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }
+  .vb-point-body-grid { display: grid; grid-template-columns: 200px 1fr; }
+  .vb-point-photo { background: #f1f5f9; min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #94a3b8; border-right: 1px solid #e2e8f0; }
+  .vb-point-photo .big { font-size: 36px; }
+  .vb-point-photo .lbl { font-size: 10px; }
+  .vb-point-right { padding: 14px 16px; }
+  .vb-metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .vb-mini-kpi { background: #f8fafc; border-radius: 8px; padding: 8px 10px; border: 1px solid #e2e8f0; }
+  .vb-mini-kpi .v { font-size: 18px; font-weight: 700; color: #0f172a; }
+  .vb-mini-kpi .v.up { color: #dc2626; }
+  .vb-mini-kpi .v.dn { color: #16a34a; }
+  .vb-mini-kpi .l { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin-top: 2px; }
+  .vb-sparkline { display: flex; align-items: flex-end; gap: 3px; height: 36px; margin-top: 4px; }
+  .vb-sparkline .b { background: #dbeafe; border-radius: 2px 2px 0 0; flex: 1; }
+  .vb-sparkline .b.hi { background: #3b82f6; }
+  .vb-point-comment { background: #fefce8; border-left: 3px solid #eab308; padding: 8px 12px; font-size: 11px; color: #713f12; border-radius: 0 6px 6px 0; margin-top: 8px; }
+
+  /* Подвал B */
+  .vb-footer { background: #0f172a; padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .vb-footer-left { color: rgba(255,255,255,.5); font-size: 10px; }
+  .vb-footer-right { color: rgba(255,255,255,.4); font-size: 10px; }
+
+  /* ══════════════════════════════════════════════════
+     ВАРИАНТ C — «Геологический протокол»
+  ══════════════════════════════════════════════════ */
+  .vc { font-family: 'Times New Roman', Georgia, serif; font-size: 12px; color: #1c1c1c; line-height: 1.6; background: #fff; }
+
+  .vc-letterhead { display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center; padding: 24px 40px; border-bottom: 3px double #8b1a1a; }
+  .vc-logo-box { width: 72px; height: 72px; border: 2px solid #8b1a1a; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 900; font-family: 'Segoe UI', sans-serif; color: #8b1a1a; }
+  .vc-org-block { text-align: center; }
+  .vc-org-name { font-size: 14px; font-weight: 700; color: #8b1a1a; text-transform: uppercase; letter-spacing: .06em; }
+  .vc-org-sub  { font-size: 11px; color: #555; margin-top: 4px; }
+  .vc-doc-num  { text-align: right; font-size: 11px; color: #555; }
+  .vc-doc-num .num { font-size: 15px; font-weight: 700; color: #8b1a1a; font-family: 'Segoe UI', sans-serif; }
+
+  .vc-title-block { padding: 32px 40px; text-align: center; border-bottom: 1px solid #ccc; }
+  .vc-doc-type { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: #888; margin-bottom: 8px; }
+  .vc-main-title { font-size: 20px; font-weight: 700; color: #1c1c1c; line-height: 1.3; margin-bottom: 6px; }
+  .vc-object { font-size: 13px; color: #555; margin-bottom: 16px; }
+  .vc-period-box { display: inline-block; border: 1px solid #8b1a1a; padding: 6px 20px; font-size: 12px; color: #8b1a1a; }
+
+  .vc-signers { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding: 20px 40px; border-bottom: 2px solid #1c1c1c; }
+  .vc-signer-role { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #888; margin-bottom: 4px; }
+  .vc-signer-line { border-bottom: 1px solid #1c1c1c; margin-bottom: 3px; min-height: 24px; }
+  .vc-signer-name { font-size: 11px; color: #555; }
+
+  .vc-body { padding: 24px 40px; }
+
+  /* Разделы C */
+  .vc-section { margin-bottom: 24px; }
+  .vc-section-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; padding-bottom: 4px; border-bottom: 1px solid #ccc; color: #1c1c1c; }
+  .vc-section-title .n { color: #8b1a1a; margin-right: 4px; }
+
+  /* Сводная таблица C */
+  .vc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .vc-table th { background: #f4f4f4; border: 1px solid #ccc; padding: 7px 10px; text-align: center; font-weight: 700; }
+  .vc-table td { border: 1px solid #ccc; padding: 7px 10px; }
+  .vc-up { color: #8b1a1a; font-weight: 700; }
+  .vc-dn { color: #1a5c1a; font-weight: 700; }
+  .vc-bold { font-weight: 700; background: #f9f9f9; }
+
+  /* Карточки точек C */
+  .vc-point { border: 1px solid #ccc; margin-bottom: 14px; page-break-inside: avoid; }
+  .vc-point-head { display: flex; align-items: stretch; background: #f4f4f4; border-bottom: 1px solid #ccc; }
+  .vc-point-head-num { padding: 8px 16px; background: #8b1a1a; color: #fff; font-size: 16px; font-weight: 700; font-family: 'Segoe UI', sans-serif; display: flex; align-items: center; flex-shrink: 0; }
+  .vc-point-head-info { flex: 1; padding: 8px 14px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .vc-point-head-q { margin-left: auto; text-align: right; padding: 8px 14px; }
+  .vc-point-grid { display: grid; grid-template-columns: 160px 1fr; }
+  .vc-point-photo { background: #e8e8e8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #777; font-size: 10px; border-right: 1px solid #ccc; }
+  .vc-point-photo span { font-size: 24px; }
+  .vc-point-content { padding: 10px 14px; }
+  .vc-params-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #ccc; border: 1px solid #ccc; margin-top: 8px; }
+  .vc-param { background: #fff; padding: 7px 10px; }
+  .vc-param-l { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #888; }
+  .vc-param-v { font-size: 13px; font-weight: 700; font-family: 'Segoe UI', sans-serif; color: #1c1c1c; margin-top: 2px; }
+  .vc-obs { background: #fffbf0; border-top: 1px solid #f0d080; padding: 8px 14px; font-style: italic; font-size: 11px; color: #5c4a00; }
+
+  /* Подвал C */
+  .vc-footer { border-top: 2px solid #1c1c1c; padding: 10px 40px; display: flex; justify-content: space-between; font-size: 10px; color: #555; font-family: 'Segoe UI', sans-serif; }
+
+  /* ══════════════════════════════════════════════════
+     Панель «Какой выбрать»
+  ══════════════════════════════════════════════════ */
+  .compare-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 24px 40px; max-width: 1200px; margin: 0 auto; }
+  .compare-card { background: #1e2535; border: 1px solid #2a3447; border-radius: 12px; overflow: hidden; }
+  .compare-card-head { padding: 16px 20px; font-size: 15px; font-weight: 700; }
+  .compare-card-head.blue   { background: linear-gradient(135deg, #1e3a5f, #1a73e8); color: #fff; }
+  .compare-card-head.teal   { background: linear-gradient(135deg, #0c2e2e, #0d9488); color: #fff; }
+  .compare-card-head.maroon { background: linear-gradient(135deg, #3b0c0c, #8b1a1a); color: #fff; }
+  .compare-card-sub { font-size: 11px; opacity: .7; margin-top: 3px; }
+  .compare-card-body { padding: 16px 20px; }
+  .compare-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #2a3447; font-size: 12px; }
+  .compare-row:last-child { border: none; }
+  .compare-row .k { color: #64748b; }
+  .compare-row .v { color: #e2e8f0; font-weight: 500; text-align: right; }
+  .best-tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 4px; }
+  .best-tag.y { background: #052e16; color: #4ade80; }
+  .best-tag.n { background: #3f1515; color: #fca5a5; }
+  .best-tag.m { background: #1c1108; color: #fbbf24; }
+
+  /* ══════════════════════════════════════════════════
+     Панель «Исправление багов»
+  ══════════════════════════════════════════════════ */
+  .bugs-full { max-width: 1200px; margin: 0 auto; padding: 24px 40px; display: flex; flex-direction: column; gap: 20px; }
+  .bug-full-card { background: #1e2535; border-radius: 12px; overflow: hidden; border: 1px solid #2a3447; }
+  .bug-full-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #2a3447; }
+  .bug-full-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .bug-full-icon.red    { background: #7f1d1d; }
+  .bug-full-icon.amber  { background: #78350f; }
+  .bug-full-icon.purple { background: #4c1d95; }
+  .bug-full-head h3 { font-size: 14px; font-weight: 700; color: #f1f5f9; }
+  .bug-full-head .sev { font-size: 11px; padding: 2px 10px; border-radius: 100px; font-weight: 700; }
+  .bug-full-head .sev.red    { background: #7f1d1d; color: #fca5a5; }
+  .bug-full-head .sev.amber  { background: #78350f; color: #fcd34d; }
+  .bug-full-head .sev.purple { background: #4c1d95; color: #c084fc; }
+  .bug-full-body { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .bug-col h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .bug-col.cause h4 { color: #ef4444; }
+  .bug-col.fix   h4 { color: #4ade80; }
+  .bug-col pre { background: #0f1117; border: 1px solid #2a3447; border-radius: 6px; padding: 12px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 11px; color: #94a3b8; white-space: pre-wrap; line-height: 1.5; }
+  .bug-col pre .del { color: #f87171; }
+  .bug-col pre .add { color: #4ade80; }
+  .bug-col pre .comment { color: #475569; }
+</style>
+</head>
+<body>
+
+<!-- Навигация -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="show('overview')">📋 Обзор</button>
+  <button class="nav-btn" onclick="show('bugs')">🐛 Баги (3 шт.)</button>
+  <button class="nav-btn" onclick="show('va')">Вариант A — Технический документ</button>
+  <button class="nav-btn" onclick="show('vb')">Вариант B — Дашборд</button>
+  <button class="nav-btn" onclick="show('vc')">Вариант C — Протокол (ГОСТ)</button>
+  <button class="nav-btn" onclick="show('compare')">⚖ Сравнить варианты</button>
+</nav>
+
+<!-- ═══════════════════════════════ ОБЗОР ═══════════════════════════════ -->
+<div id="panel-overview" class="panel active">
+  <div class="page-header">
+    <h1>Предложения по редизайну отчёта v2</h1>
+    <p>Анализ текущих проблем и три концепции нового дизайна. Выберите понравившийся стиль — и он будет реализован с исправлением всех трёх багов.</p>
+  </div>
+
+  <div class="cards-grid">
+    <div class="bug-card">
+      <h3>🐛 Найденные баги</h3>
+      <div class="bug-item">
+        <span class="bug-tag red">Критично</span>
+        <div style="font-size:12px;color:#e2e8f0;font-weight:600">Фотографии не отображаются</div>
+        <div class="bug-cause">Функция fetchPhotoAsBase64 ищет ID Google Drive (/d/ID), но фото хранятся в Supabase Storage — URL не совпадает, функция возвращает null.</div>
+        <div class="bug-fix">→ Добавить прямую загрузку через fetch() для Supabase URL, сохранять base64 в кэш</div>
+      </div>
+      <div class="bug-item">
+        <span class="bug-tag amber">Важно</span>
+        <div style="font-size:12px;color:#e2e8f0;font-weight:600">Динамика точек не считается</div>
+        <div class="bug-cause">В режиме «одна дата» ptHistory не загружается заранее. buildPointHistoryChart получает пустой массив → delta = null везде.</div>
+        <div class="bug-fix">→ Загружать историю перед генерацией отчёта, передавать в buildPointCard напрямую</div>
+      </div>
+      <div class="bug-item">
+        <span class="bug-tag red">Важно</span>
+        <div style="font-size:12px;color:#e2e8f0;font-weight:600">Логотип обрезается в круг</div>
+        <div class="bug-cause">CSS: border-radius:50%; object-fit:cover; width:64px; height:64px — прямоугольные логотипы обрезаются, пропорции нарушаются.</div>
+        <div class="bug-fix">→ Сменить на max-height:80px; width:auto; border-radius:8px с сохранением пропорций</div>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <h3>📐 Что меняем в структуре</h3>
+      <ul>
+        <li>Титульная страница — логотип прямоугольный, правильные пропорции</li>
+        <li>KPI-блок — крупные цифры, иконки, тренд-стрелки</li>
+        <li>Карточки точек — фото слева, метрики справа, мини-график</li>
+        <li>Динамика — отдельная колонка с цветным Δ и % изменения</li>
+        <li>Разделы по доменам — компактнее, без дублирования данных</li>
+        <li>Подвал — номер страницы, дата, версия, имя автора</li>
+        <li>Печать — оптимизированные @page, page-break-inside:avoid</li>
+      </ul>
+    </div>
+
+    <div class="info-card">
+      <h3>🎨 Три варианта дизайна</h3>
+      <ul>
+        <li><b style="color:#60a5fa">A — Технический документ</b>: тёмная шапка, белое тело, KPI-строка, таблицы в инженерном стиле. Универсально.</li>
+        <li><b style="color:#34d399">B — Дашборд</b>: светлый фон, цветные карточки, иконки, современный UI. Для презентаций руководству.</li>
+        <li><b style="color:#f87171">C — Геологический протокол</b>: serif-шрифт, рамки, гриф, ГОСТ-ish. Для официальных документов и архива.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ БАГИ ═══════════════════════════════ -->
+<div id="panel-bugs" class="panel">
+  <div class="page-header">
+    <h1>🐛 Детали багов и способы исправления</h1>
+    <p>Три конкретных проблемы с кодом, причины и готовые патчи.</p>
+  </div>
+
+  <div class="bugs-full">
+
+    <div class="bug-full-card">
+      <div class="bug-full-head">
+        <div class="bug-full-icon red">📷</div>
+        <div>
+          <h3>Баг #1 — Фотографии не загружаются в отчёт</h3>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">ui-report.js → fetchPhotoAsBase64() → extractDriveFileId()</div>
+        </div>
+        <span class="sev red" style="margin-left:auto">Критично</span>
+      </div>
+      <div class="bug-full-body">
+        <div class="bug-col cause">
+          <h4>Причина</h4>
+          <pre><span class="comment">// Текущий код ищет только Google Drive URLs:</span>
+function extractDriveFileId(url) {
+  var m = url.match(<span class="del">/\/d\/([^/?&]+)/</span>);
+  return m ? m[1] : null;  <span class="comment">// null для Supabase!</span>
+}
+
+function fetchPhotoAsBase64(url) {
+  var fileId = extractDriveFileId(url);
+  if (<span class="del">!fileId</span>) return Promise.resolve(null);
+  <span class="comment">// ← сразу null, фото не грузится</span>
+  return Api.getImage(fileId)...
+}
+
+<span class="comment">// URL из Supabase выглядит как:
+// https://xxx.supabase.co/storage/v1/object/
+//   public/photos/IMG_001.jpg</span></pre>
+        </div>
+        <div class="bug-col fix">
+          <h4>Исправление</h4>
+          <pre>function fetchPhotoAsBase64(url) {
+  if (!url) return Promise.resolve(null);
+
+  <span class="comment">// Supabase Storage URL — загружаем напрямую</span>
+  if (<span class="add">url.includes('supabase.co') ||
+      url.includes('supabase.in')</span>) {
+    return fetch(url)
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) {
+        return new Promise(function(res) {
+          var fr = new FileReader();
+          fr.onload = function(){ res(fr.result); };
+          fr.readAsDataURL(blob);
+        });
+      }).catch(function(){ return null; });
+  }
+
+  <span class="comment">// Google Drive — как раньше</span>
+  var fileId = extractDriveFileId(url);
+  if (!fileId) return Promise.resolve(null);
+  return Api.getImage(fileId)...
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="bug-full-card">
+      <div class="bug-full-head">
+        <div class="bug-full-icon amber">📈</div>
+        <div>
+          <h3>Баг #2 — Динамика точек (Δ) не отображается</h3>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">ui-report.js → buildPointCard() → ReportState.ptHistory</div>
+        </div>
+        <span class="sev amber" style="margin-left:auto">Важно</span>
+      </div>
+      <div class="bug-full-body">
+        <div class="bug-col cause">
+          <h4>Причина</h4>
+          <pre><span class="comment">// ptHistory заполняется внутри buildPointHistoryChart,
+// но история загружается только если includeHistory=true.
+// В режиме single — pa=null, delta=null везде.</span>
+
+<span class="comment">// generateReport() НЕ загружает историю отдельно:</span>
+mapPromise.then(function(mapImgs) {
+  <span class="del">// история не загружается здесь!</span>
+  if (s.includePhotos) { ... }
+  ...
+}).then(function() {
+  <span class="del">// ReportState.ptHistory = {} — ПУСТО</span>
+  var html = buildReportHTML(s);
+});</pre>
+        </div>
+        <div class="bug-col fix">
+          <h4>Исправление</h4>
+          <pre><span class="comment">// Добавить загрузку истории ДО генерации отчёта</span>
+mapPromise
+  .then(function(mapImgs) { ... })
+  .then(function() {
+    <span class="add">// Загружаем историю для delta-расчётов
+    return loadPointHistoryForReport(
+      ReportState.ptsB,
+      s.dateB
+    );</span>
+  })
+  .then(function() { ... buildReportHTML(s) ... });
+
+<span class="add">function loadPointHistoryForReport(pts, currentDate) {
+  if (!pts.length) return Promise.resolve();
+  var nums = pts.map(function(p){return p.pointNumber;});
+  return Api.getPointHistory(nums, currentDate)
+    .then(function(hist) {
+      ReportState.ptHistory = hist || {};
+    }).catch(function(){ return; });
+}</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="bug-full-card">
+      <div class="bug-full-head">
+        <div class="bug-full-icon purple">🖼</div>
+        <div>
+          <h3>Баг #3 — Логотип обрезается в круг</h3>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">ui-report.js → getReportCSS() → .rp-title-logo-img</div>
+        </div>
+        <span class="sev purple" style="margin-left:auto">Визуальный</span>
+      </div>
+      <div class="bug-full-body">
+        <div class="bug-col cause">
+          <h4>Причина</h4>
+          <pre><span class="comment">// В getReportCSS():</span>
+'.rp-title-logo-img { ' +
+  'width:<span class="del">64px</span>;' +
+  'height:<span class="del">64px</span>;' +
+  'border-radius:<span class="del">50%</span>;' +    <span class="comment">← круг!</span>
+  'object-fit:<span class="del">cover</span>;' +  <span class="comment">← обрезает</span>
+  'margin:0 auto 14px;' +
+  'display:block;' +
+  'border:2px solid ' + c.border +
+'}'
+
+<span class="comment">// Результат: любой прямоугольный логотип
+// (например 300×100px) обрезается в круг 64×64</span></pre>
+        </div>
+        <div class="bug-col fix">
+          <h4>Исправление</h4>
+          <pre><span class="comment">// Заменить правило на пропорциональное:</span>
+'.rp-title-logo-img { ' +
+  'max-width:<span class="add">200px</span>;' +
+  'max-height:<span class="add">80px</span>;' +
+  'width:<span class="add">auto</span>;' +
+  'height:<span class="add">auto</span>;' +
+  'border-radius:<span class="add">8px</span>;' +   <span class="comment">← мягкое</span>
+  'object-fit:<span class="add">contain</span>;' + <span class="comment">← вмещает</span>
+  'margin:0 auto 16px;' +
+  'display:block;' +
+'}'
+
+<span class="comment">// Логотип теперь показывается в своих пропорциях,
+// вписанный в прямоугольник 200×80px</span></pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ ВАРИАНТ A ═══════════════════════════════ -->
+<div id="panel-va" class="panel">
+  <div class="variant-header">
+    <h2>Вариант A — «Технический документ»</h2>
+    <p>Тёмная профессиональная шапка, белое тело, инженерные таблицы. Подходит для любой аудитории.</p>
+    <div class="variant-pills">
+      <span class="pill pill-blue">Универсальный стиль</span>
+      <span class="pill pill-green">Отлично печатается</span>
+      <span class="pill pill-blue">Чёткая типографика</span>
+      <span class="pill pill-amber">Среднее время разработки</span>
+    </div>
+  </div>
+
+  <div class="report-preview">
+  <div class="report-wrap">
+  <div class="va">
+
+    <!-- Титульная страница A -->
+    <div class="va-title">
+      <div class="va-title-logo">ЮРГ</div>
+      <div class="va-title-body">
+        <div class="va-title-org">АО «Горнодобывающая компания» · Отдел гидрогеологии</div>
+        <div class="va-title-main">Отчёт по мониторингу<br>подземных вод</div>
+        <div class="va-title-sub">Карьер ЮРГ · Объект Пулково-42</div>
+        <div class="va-title-badge">
+          <div><span>Период:</span> <b>12.05.2025 (нед. 19) → 19.05.2025 (нед. 20)</b></div>
+          <div><span>Версия:</span> <b>v14</b></div>
+        </div>
+        <div class="va-title-meta">
+          <div>Составил: <b>Иванов И.И.</b> · Гидрогеолог I кат.</div>
+          <div>Дата составления: <b>20.05.2025</b></div>
+          <div>Утверждает: <b>Петров П.П.</b> · Главный геолог</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Тело отчёта A -->
+    <div class="va-body">
+
+      <!-- KPI-строка -->
+      <div class="va-kpi-bar">
+        <div class="va-kpi"><div class="va-kpi-val">42</div><div class="va-kpi-lbl">Точек мониторинга</div></div>
+        <div class="va-kpi"><div class="va-kpi-val blue">187.4 <span style="font-size:12px">л/с</span></div><div class="va-kpi-lbl">Σ водоприток (нед. Б)</div></div>
+        <div class="va-kpi"><div class="va-kpi-val red">▲ +12.8 <span style="font-size:12px">л/с</span></div><div class="va-kpi-lbl">Изменение Δ</div></div>
+        <div class="va-kpi"><div class="va-kpi-val">7</div><div class="va-kpi-lbl">Паводковых точек</div></div>
+        <div class="va-kpi"><div class="va-kpi-val green">3</div><div class="va-kpi-lbl">Точек на спаде ▼</div></div>
+      </div>
+
+      <!-- Секция: Сводка -->
+      <div class="va-section">
+        <div class="va-section-title"><span class="num">1</span> Итоговая сводка по доменам</div>
+        <table class="va-table">
+          <thead>
+            <tr>
+              <th>Домен</th>
+              <th style="text-align:center">Точек А</th>
+              <th style="text-align:right">Q нед. А, л/с</th>
+              <th style="text-align:center">Точек Б</th>
+              <th style="text-align:right">Q нед. Б, л/с</th>
+              <th style="text-align:right">Δ, л/с</th>
+              <th style="text-align:right">Δ, %</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Северный</b></td>
+              <td style="text-align:center">12</td>
+              <td style="text-align:right">54.2</td>
+              <td style="text-align:center">12</td>
+              <td style="text-align:right">62.1</td>
+              <td style="text-align:right" class="va-up">+7.9</td>
+              <td style="text-align:right" class="va-up">+14.6%</td>
+            </tr>
+            <tr>
+              <td><b>Западный</b></td>
+              <td style="text-align:center">8</td>
+              <td style="text-align:right">31.0</td>
+              <td style="text-align:center">8</td>
+              <td style="text-align:right">38.4</td>
+              <td style="text-align:right" class="va-up">+7.4</td>
+              <td style="text-align:right" class="va-up">+23.9%</td>
+            </tr>
+            <tr>
+              <td><b>Южный</b></td>
+              <td style="text-align:center">14</td>
+              <td style="text-align:right">72.4</td>
+              <td style="text-align:center">14</td>
+              <td style="text-align:right">70.2</td>
+              <td style="text-align:right" class="va-dn">−2.2</td>
+              <td style="text-align:right" class="va-dn">−3.0%</td>
+            </tr>
+            <tr>
+              <td><b>Восточный</b></td>
+              <td style="text-align:center">8</td>
+              <td style="text-align:right">17.0</td>
+              <td style="text-align:center">8</td>
+              <td style="text-align:right">16.7</td>
+              <td style="text-align:right" class="va-dn">−0.3</td>
+              <td style="text-align:right" class="va-dn">−1.8%</td>
+            </tr>
+            <tr>
+              <td><b>ИТОГО</b></td>
+              <td style="text-align:center"><b>42</b></td>
+              <td style="text-align:right"><b>174.6</b></td>
+              <td style="text-align:center"><b>42</b></td>
+              <td style="text-align:right"><b>187.4</b></td>
+              <td style="text-align:right" class="va-up"><b>+12.8</b></td>
+              <td style="text-align:right" class="va-up"><b>+7.3%</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Секция: карточки точек -->
+      <div class="va-section">
+        <div class="va-section-title"><span class="num">3</span> Мониторинговые точки — Северный домен</div>
+
+        <!-- Точка 1 -->
+        <div class="va-point">
+          <div class="va-point-header">
+            <span class="va-point-num">#7</span>
+            <span class="va-status s-flood">Паводковая</span>
+            <span style="font-size:11px;color:#555">Северный · гор. −95</span>
+            <span style="margin-left:auto;font-size:10px;color:#94a3b8">Умеренная интенсивность · вода мутная</span>
+          </div>
+          <div class="va-point-body">
+            <div class="va-point-photo">
+              <div class="icon">📷</div>
+              <div style="font-size:10px;text-align:center">Фото 19.05.2025<br><span style="color:#4ade80">✓ загружено</span></div>
+            </div>
+            <div class="va-point-data">
+              <div style="font-size:11px;color:#555;margin-bottom:6px">Метод замера: объёмный · Оборудование: ковш 10л</div>
+              <div class="va-point-metrics">
+                <div class="va-metric"><div class="va-metric-val" style="color:#888">3.84</div><div class="va-metric-lbl">Q нед. А (12.05)</div></div>
+                <div class="va-metric"><div class="va-metric-val" style="color:#1a73e8">4.21</div><div class="va-metric-lbl">Q нед. Б (19.05), л/с</div></div>
+                <div class="va-metric"><div class="va-metric-val" style="color:#d93025">▲ +0.37</div><div class="va-metric-lbl">Δ л/с (+9.6%)</div></div>
+                <div class="va-metric"><div class="va-metric-val" style="color:#555">6</div><div class="va-metric-lbl">Замеров в истории</div></div>
+              </div>
+              <!-- Мини-график тренда -->
+              <div style="margin-top:8px;font-size:10px;color:#94a3b8;margin-bottom:4px">Динамика Q, л/с (последние 6 замеров)</div>
+              <div class="va-trend-bar">
+                <div class="b" style="height:40%"></div>
+                <div class="b" style="height:55%"></div>
+                <div class="b" style="height:48%"></div>
+                <div class="b" style="height:62%"></div>
+                <div class="b" style="height:70%"></div>
+                <div class="b current" style="height:80%"></div>
+              </div>
+              <div class="va-observation">⚠ Полевое наблюдение: Усиление дебита в сравнении с прошлой неделей. На бермах горизонта −95 наблюдается фильтрация из массива. Рекомендуется усиленный контроль.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Точка 2 -->
+        <div class="va-point">
+          <div class="va-point-header">
+            <span class="va-point-num">#12</span>
+            <span class="va-status s-active">Активная</span>
+            <span style="font-size:11px;color:#555">Северный · гор. −110</span>
+            <span style="margin-left:auto;font-size:10px;color:#94a3b8">Слабая интенсивность · вода чистая</span>
+          </div>
+          <div class="va-point-body">
+            <div class="va-point-photo">
+              <div class="icon">📷</div>
+              <div style="font-size:10px;text-align:center">Фото 19.05.2025<br><span style="color:#4ade80">✓ загружено</span></div>
+            </div>
+            <div class="va-point-data">
+              <div style="font-size:11px;color:#555;margin-bottom:6px">Метод замера: объёмный</div>
+              <div class="va-point-metrics">
+                <div class="va-metric"><div class="va-metric-val" style="color:#888">1.20</div><div class="va-metric-lbl">Q нед. А, л/с</div></div>
+                <div class="va-metric"><div class="va-metric-val" style="color:#1a73e8">1.05</div><div class="va-metric-lbl">Q нед. Б, л/с</div></div>
+                <div class="va-metric"><div class="va-metric-val" style="color:#188038">▼ −0.15</div><div class="va-metric-lbl">Δ л/с (−12.5%)</div></div>
+                <div class="va-metric"><div class="va-metric-val" style="color:#555">14</div><div class="va-metric-lbl">Замеров</div></div>
+              </div>
+              <div class="va-trend-bar">
+                <div class="b" style="height:90%"></div>
+                <div class="b" style="height:85%"></div>
+                <div class="b" style="height:88%"></div>
+                <div class="b" style="height:78%"></div>
+                <div class="b" style="height:72%"></div>
+                <div class="b current" style="height:60%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /секция точек -->
+    </div><!-- /va-body -->
+
+    <div class="va-footer">
+      <span>ЮРГ · Мониторинг подземных вод · v14</span>
+      <span>Составил: Иванов И.И. · 20.05.2025</span>
+      <span>Стр. 3 из 8</span>
+    </div>
+  </div><!-- /va -->
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════════ ВАРИАНТ B ═══════════════════════════════ -->
+<div id="panel-vb" class="panel">
+  <div class="variant-header">
+    <h2>Вариант B — «Аналитический дашборд»</h2>
+    <p>Светлый фон, цветные карточки, иконки, современный UI. Идеален для презентаций руководству и внешних отчётов.</p>
+    <div class="variant-pills">
+      <span class="pill pill-blue">Для руководства</span>
+      <span class="pill pill-blue">Современный стиль</span>
+      <span class="pill pill-amber">Хорошо на экране</span>
+      <span class="pill pill-amber">Умеренно при печати</span>
+    </div>
+  </div>
+
+  <div class="report-preview">
+  <div class="report-wrap">
+  <div class="vb">
+
+    <!-- Шапка B -->
+    <div class="vb-title">
+      <div class="vb-title-top">
+        <div class="vb-logo-rect">ЮРГ</div>
+        <div>
+          <div class="vb-title-label">Карьер ЮРГ · Гидрогеологический мониторинг</div>
+          <div class="vb-title-name">Объект Пулково-42</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:10px;color:rgba(255,255,255,.4)">Версия</div>
+          <div style="font-size:16px;font-weight:700;color:#60a5fa">v14</div>
+        </div>
+      </div>
+      <div class="vb-title-bottom">
+        <div class="vb-h1">Отчёт по мониторингу подземных вод</div>
+        <div class="vb-period-chip">📅 12.05–19.05.2025 · нед. 19→20</div>
+        <div class="vb-meta-chip">👤 Иванов И.И. · 20.05.2025</div>
+      </div>
+    </div>
+
+    <div class="vb-body">
+
+      <!-- KPI карточки B -->
+      <div class="vb-kpi-row">
+        <div class="vb-kpi blue">
+          <div class="vb-kpi-icon">💧</div>
+          <div class="vb-kpi-val">187.4</div>
+          <div class="vb-kpi-lbl">Σ Q нед. Б, л/с</div>
+          <div class="vb-kpi-delta" style="color:#3b82f6">174.6 нед. А</div>
+        </div>
+        <div class="vb-kpi red">
+          <div class="vb-kpi-icon">📈</div>
+          <div class="vb-kpi-val">+12.8</div>
+          <div class="vb-kpi-lbl">Δ Q, л/с</div>
+          <div class="vb-kpi-delta" style="color:#ef4444">▲ +7.3% рост</div>
+        </div>
+        <div class="vb-kpi amber">
+          <div class="vb-kpi-icon">⚠️</div>
+          <div class="vb-kpi-val">7</div>
+          <div class="vb-kpi-lbl">Паводковых точек</div>
+          <div class="vb-kpi-delta" style="color:#f59e0b">+2 vs нед. А</div>
+        </div>
+        <div class="vb-kpi green">
+          <div class="vb-kpi-icon">✅</div>
+          <div class="vb-kpi-val">42</div>
+          <div class="vb-kpi-lbl">Всего точек</div>
+          <div class="vb-kpi-delta" style="color:#22c55e">все замерены</div>
+        </div>
+        <div class="vb-kpi purple">
+          <div class="vb-kpi-icon">🏗</div>
+          <div class="vb-kpi-val">8</div>
+          <div class="vb-kpi-lbl">Канав</div>
+          <div class="vb-kpi-delta" style="color:#8b5cf6">1240 м³/ч</div>
+        </div>
+      </div>
+
+      <!-- Сравнение недель -->
+      <div class="vb-compare">
+        <div class="vb-week vb-week-a">
+          <div class="vb-week-title">📋 Неделя А · 12.05.2025</div>
+          <div class="vb-week-stat"><span class="lbl">Точек замерено</span><span class="val">42</span></div>
+          <div class="vb-week-stat"><span class="lbl">Σ Q точек</span><span class="val">174.6 л/с</span></div>
+          <div class="vb-week-stat"><span class="lbl">Σ Q канав</span><span class="val">1180 м³/ч</span></div>
+          <div class="vb-week-stat"><span class="lbl">Паводковых</span><span class="val">5 точек</span></div>
+          <div class="vb-week-stat"><span class="lbl">Перелив</span><span class="val" style="color:#dc2626">2 точки</span></div>
+        </div>
+        <div class="vb-arrow">
+          <div class="vb-arrow-icon">→</div>
+          <div class="vb-delta-chip">▲ +7.3%</div>
+        </div>
+        <div class="vb-week vb-week-b">
+          <div class="vb-week-title">📋 Неделя Б · 19.05.2025</div>
+          <div class="vb-week-stat"><span class="lbl">Точек замерено</span><span class="val">42</span></div>
+          <div class="vb-week-stat"><span class="lbl">Σ Q точек</span><span class="val" style="color:#1d4ed8;font-weight:700">187.4 л/с</span></div>
+          <div class="vb-week-stat"><span class="lbl">Σ Q канав</span><span class="val">1240 м³/ч</span></div>
+          <div class="vb-week-stat"><span class="lbl">Паводковых</span><span class="val" style="color:#dc2626">7 точек</span></div>
+          <div class="vb-week-stat"><span class="lbl">Перелив</span><span class="val" style="color:#dc2626">3 точки</span></div>
+        </div>
+      </div>
+
+      <!-- Секция точек B -->
+      <div class="vb-section">
+        <div class="vb-section-head">
+          <span style="font-size:16px">📍</span>
+          <h3>Мониторинговые точки — Северный домен</h3>
+          <span class="cnt">12 точек · Σ Q = 62.1 л/с · ▲ +7.9 л/с</span>
+        </div>
+        <div class="vb-section-body">
+
+          <!-- Точка B1 -->
+          <div class="vb-point">
+            <div class="vb-point-header">
+              <div class="vb-point-num">7</div>
+              <span class="va-status s-flood">Паводковая</span>
+              <span style="font-size:11px;color:#64748b">Северный · гор. −95 · Умеренная</span>
+              <div style="margin-left:auto;font-size:13px;font-weight:800;color:#dc2626">▲ +0.37 л/с</div>
+            </div>
+            <div class="vb-point-body-grid">
+              <div class="vb-point-photo">
+                <div class="big">📷</div>
+                <div class="lbl" style="text-align:center;font-size:10px">19.05.2025<br><span style="color:#4ade80">✓ загружено</span></div>
+              </div>
+              <div class="vb-point-right">
+                <div class="vb-metric-row">
+                  <div class="vb-mini-kpi"><div class="v" style="color:#94a3b8">3.84</div><div class="l">Q нед. А</div></div>
+                  <div class="vb-mini-kpi"><div class="v" style="color:#1d4ed8">4.21</div><div class="l">Q нед. Б, л/с</div></div>
+                  <div class="vb-mini-kpi"><div class="v up">+0.37</div><div class="l">Δ л/с (+9.6%)</div></div>
+                  <div class="vb-mini-kpi"><div class="v" style="color:#555">6</div><div class="l">Замеров всего</div></div>
+                </div>
+                <div style="font-size:10px;color:#94a3b8;margin-bottom:4px">Динамика Q (последние замеры)</div>
+                <div class="vb-sparkline">
+                  <div class="b" style="height:40%"></div>
+                  <div class="b" style="height:55%"></div>
+                  <div class="b" style="height:48%"></div>
+                  <div class="b" style="height:62%"></div>
+                  <div class="b" style="height:70%"></div>
+                  <div class="b hi" style="height:85%"></div>
+                </div>
+                <div class="vb-point-comment">⚠ Усиление дебита в сравнении с прошлой неделей. На бермах горизонта −95 наблюдается фильтрация из массива.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Точка B2 -->
+          <div class="vb-point">
+            <div class="vb-point-header">
+              <div class="vb-point-num">12</div>
+              <span class="va-status s-active">Активная</span>
+              <span style="font-size:11px;color:#64748b">Северный · гор. −110 · Слабая</span>
+              <div style="margin-left:auto;font-size:13px;font-weight:800;color:#16a34a">▼ −0.15 л/с</div>
+            </div>
+            <div class="vb-point-body-grid">
+              <div class="vb-point-photo">
+                <div class="big">📷</div>
+                <div class="lbl" style="text-align:center;font-size:10px">19.05.2025<br><span style="color:#4ade80">✓ загружено</span></div>
+              </div>
+              <div class="vb-point-right">
+                <div class="vb-metric-row">
+                  <div class="vb-mini-kpi"><div class="v" style="color:#94a3b8">1.20</div><div class="l">Q нед. А</div></div>
+                  <div class="vb-mini-kpi"><div class="v" style="color:#1d4ed8">1.05</div><div class="l">Q нед. Б, л/с</div></div>
+                  <div class="vb-mini-kpi"><div class="v dn">−0.15</div><div class="l">Δ л/с (−12.5%)</div></div>
+                  <div class="vb-mini-kpi"><div class="v" style="color:#555">14</div><div class="l">Замеров</div></div>
+                </div>
+                <div style="font-size:10px;color:#94a3b8;margin-bottom:4px">Динамика Q (последние замеры)</div>
+                <div class="vb-sparkline">
+                  <div class="b hi" style="height:90%"></div>
+                  <div class="b hi" style="height:85%"></div>
+                  <div class="b hi" style="height:88%"></div>
+                  <div class="b hi" style="height:78%"></div>
+                  <div class="b" style="height:72%"></div>
+                  <div class="b" style="height:60%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /секция -->
+
+    </div><!-- /vb-body -->
+
+    <div class="vb-footer">
+      <div class="vb-footer-left">Карьер ЮРГ · Мониторинг подземных вод · v14 · 20.05.2025</div>
+      <div class="vb-footer-right">Иванов И.И. · Гидрогеолог I кат. · Стр. 3 / 8</div>
+    </div>
+  </div><!-- /vb -->
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════════ ВАРИАНТ C ═══════════════════════════════ -->
+<div id="panel-vc" class="panel">
+  <div class="variant-header">
+    <h2>Вариант C — «Геологический протокол»</h2>
+    <p>Serif-шрифт, рамки, классическое оформление в духе официальных технических документов. Для архива и государственных органов.</p>
+    <div class="variant-pills">
+      <span class="pill pill-green">Официальный документ</span>
+      <span class="pill pill-green">Архивный стандарт</span>
+      <span class="pill pill-purple">Serif типографика</span>
+      <span class="pill pill-amber">Менее наглядный</span>
+    </div>
+  </div>
+
+  <div class="report-preview">
+  <div class="report-wrap">
+  <div class="vc">
+
+    <!-- Шапка C (бланк) -->
+    <div class="vc-letterhead">
+      <div class="vc-logo-box">ЮРГ</div>
+      <div class="vc-org-block">
+        <div class="vc-org-name">АО «Горнодобывающая компания»</div>
+        <div class="vc-org-sub">Отдел гидрогеологического мониторинга</div>
+        <div class="vc-org-sub">Карьер ЮРГ · Объект Пулково-42</div>
+      </div>
+      <div class="vc-doc-num">
+        <div>ГИДРОГЕОЛ.-2025-</div>
+        <div class="num">№ 014</div>
+        <div style="font-size:10px;color:#888;margin-top:4px">от 20.05.2025</div>
+      </div>
+    </div>
+
+    <!-- Название документа C -->
+    <div class="vc-title-block">
+      <div class="vc-doc-type">Технический отчёт</div>
+      <div class="vc-main-title">Отчёт по мониторингу подземных вод<br>карьера ЮРГ (объект Пулково-42)</div>
+      <div class="vc-object">за период 12 мая 2025 г. (нед. 19) — 19 мая 2025 г. (нед. 20)</div>
+      <div class="vc-period-box">Период наблюдений: 12.05.2025 — 19.05.2025</div>
+    </div>
+
+    <!-- Подписанты C -->
+    <div class="vc-signers">
+      <div>
+        <div class="vc-signer-role">Составил</div>
+        <div class="vc-signer-line"></div>
+        <div class="vc-signer-name">Иванов Иван Иванович · Гидрогеолог I категории</div>
+      </div>
+      <div>
+        <div class="vc-signer-role">Утвердил</div>
+        <div class="vc-signer-line"></div>
+        <div class="vc-signer-name">Петров Пётр Петрович · Главный геолог</div>
+      </div>
+    </div>
+
+    <!-- Тело C -->
+    <div class="vc-body">
+
+      <!-- Таблица по доменам C -->
+      <div class="vc-section">
+        <div class="vc-section-title"><span class="n">1.</span>Сводная таблица водопритока по доменам</div>
+        <table class="vc-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Домен</th>
+              <th colspan="3" style="text-align:center;border-bottom:1px solid #ccc">Неделя А (12.05.2025)</th>
+              <th colspan="3" style="text-align:center;border-bottom:1px solid #ccc">Неделя Б (19.05.2025)</th>
+              <th rowspan="2" style="text-align:center">Δ Q, л/с</th>
+              <th rowspan="2" style="text-align:center">Δ %</th>
+            </tr>
+            <tr>
+              <th style="text-align:center">Точек</th><th style="text-align:right">Q, л/с</th><th style="text-align:center">Паводк.</th>
+              <th style="text-align:center">Точек</th><th style="text-align:right">Q, л/с</th><th style="text-align:center">Паводк.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Северный</td>
+              <td style="text-align:center">12</td><td style="text-align:right">54.2</td><td style="text-align:center">2</td>
+              <td style="text-align:center">12</td><td style="text-align:right">62.1</td><td style="text-align:center">3</td>
+              <td style="text-align:right" class="vc-up">+7.9</td><td style="text-align:right" class="vc-up">+14.6</td>
+            </tr>
+            <tr>
+              <td>Западный</td>
+              <td style="text-align:center">8</td><td style="text-align:right">31.0</td><td style="text-align:center">1</td>
+              <td style="text-align:center">8</td><td style="text-align:right">38.4</td><td style="text-align:center">2</td>
+              <td style="text-align:right" class="vc-up">+7.4</td><td style="text-align:right" class="vc-up">+23.9</td>
+            </tr>
+            <tr>
+              <td>Южный</td>
+              <td style="text-align:center">14</td><td style="text-align:right">72.4</td><td style="text-align:center">2</td>
+              <td style="text-align:center">14</td><td style="text-align:right">70.2</td><td style="text-align:center">2</td>
+              <td style="text-align:right" class="vc-dn">−2.2</td><td style="text-align:right" class="vc-dn">−3.0</td>
+            </tr>
+            <tr class="vc-bold">
+              <td>ИТОГО</td>
+              <td style="text-align:center">42</td><td style="text-align:right">174.6</td><td style="text-align:center">5</td>
+              <td style="text-align:center">42</td><td style="text-align:right">187.4</td><td style="text-align:center">7</td>
+              <td style="text-align:right" class="vc-up">+12.8</td><td style="text-align:right" class="vc-up">+7.3</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Карточки точек C -->
+      <div class="vc-section">
+        <div class="vc-section-title"><span class="n">3.</span>Характеристика мониторинговых точек — Северный домен</div>
+
+        <div class="vc-point">
+          <div class="vc-point-head">
+            <div class="vc-point-head-num">Тч. №7</div>
+            <div class="vc-point-head-info">
+              <span><b>Домен:</b> Северный</span>
+              <span><b>Горизонт:</b> −95</span>
+              <span><b>Статус:</b> Паводковая</span>
+              <span><b>Интенсивность:</b> Умеренная</span>
+              <span><b>Цвет воды:</b> Мутная</span>
+            </div>
+            <div class="vc-point-head-q">
+              <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.04em">Q нед. Б</div>
+              <div style="font-size:20px;font-weight:700;color:#8b1a1a;font-family:'Segoe UI',sans-serif">4.21 <span style="font-size:11px">л/с</span></div>
+            </div>
+          </div>
+          <div class="vc-point-grid">
+            <div class="vc-point-photo">
+              <span>📷</span>
+              <div style="font-size:10px;text-align:center">Фото 19.05.2025<br><span style="color:#166534">✓ загружено</span></div>
+            </div>
+            <div class="vc-point-content">
+              <div style="font-size:11px;color:#555;margin-bottom:6px"><b>Метод:</b> объёмный · <b>Оборудование:</b> ковш 10л</div>
+              <div class="vc-params-grid">
+                <div class="vc-param">
+                  <div class="vc-param-l">Q нед. А (12.05)</div>
+                  <div class="vc-param-v">3.84 л/с</div>
+                </div>
+                <div class="vc-param">
+                  <div class="vc-param-l">Q нед. Б (19.05)</div>
+                  <div class="vc-param-v" style="color:#8b1a1a">4.21 л/с</div>
+                </div>
+                <div class="vc-param">
+                  <div class="vc-param-l">Изменение Δ</div>
+                  <div class="vc-param-v" style="color:#8b1a1a">+0.37 л/с (+9.6%)</div>
+                </div>
+                <div class="vc-param">
+                  <div class="vc-param-l">Замеров в истории</div>
+                  <div class="vc-param-v">6</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="vc-obs">Полевое наблюдение: Усиление дебита в сравнении с прошлой неделей. На бермах горизонта −95 наблюдается фильтрация из массива. Рекомендуется усиленный контроль.</div>
+        </div>
+
+      </div>
+
+    </div><!-- /vc-body -->
+
+    <div class="vc-footer">
+      <span>Карьер ЮРГ · Отчёт ГИДРОГЕОЛ.-2025-014 · Составил: Иванов И.И.</span>
+      <span>Стр. 3 из 8 · 20.05.2025</span>
+    </div>
+  </div><!-- /vc -->
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════════ СРАВНЕНИЕ ═══════════════════════════════ -->
+<div id="panel-compare" class="panel">
+  <div class="page-header" style="margin-bottom:16px">
+    <h1>⚖ Сравнение вариантов</h1>
+    <p>Объективное сравнение по ключевым критериям для выбора оптимального решения.</p>
+  </div>
+
+  <div class="compare-grid">
+    <div class="compare-card">
+      <div class="compare-card-head blue">
+        <div>Вариант A</div>
+        <div class="compare-card-sub">«Технический документ»</div>
+      </div>
+      <div class="compare-card-body">
+        <div class="compare-row"><span class="k">Аудитория</span><span class="v">Инженеры, геологи</span></div>
+        <div class="compare-row"><span class="k">Печать (A4)</span><span class="v"><span class="best-tag y">Отлично</span></span></div>
+        <div class="compare-row"><span class="k">Экран</span><span class="v"><span class="best-tag y">Хорошо</span></span></div>
+        <div class="compare-row"><span class="k">Логотип</span><span class="v"><span class="best-tag y">Прямоугольный</span></span></div>
+        <div class="compare-row"><span class="k">Шрифт</span><span class="v">Arial/Segoe — читаемый</span></div>
+        <div class="compare-row"><span class="k">Сложность реализации</span><span class="v"><span class="best-tag m">Средняя</span></span></div>
+        <div class="compare-row"><span class="k">Δ и тренды</span><span class="v"><span class="best-tag y">Мини-график + %</span></span></div>
+        <div class="compare-row"><span class="k">Фото точек</span><span class="v"><span class="best-tag y">Боковой столбец</span></span></div>
+        <div class="compare-row"><span class="k">Официальность</span><span class="v"><span class="best-tag m">Высокая</span></span></div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #2a3447;font-size:12px;color:#94a3b8">Рекомендуется как основной вариант. Баланс информативности и профессионального вида.</div>
+      </div>
+    </div>
+
+    <div class="compare-card">
+      <div class="compare-card-head teal">
+        <div>Вариант B</div>
+        <div class="compare-card-sub">«Аналитический дашборд»</div>
+      </div>
+      <div class="compare-card-body">
+        <div class="compare-row"><span class="k">Аудитория</span><span class="v">Руководство, менеджеры</span></div>
+        <div class="compare-row"><span class="k">Печать (A4)</span><span class="v"><span class="best-tag m">Приемлемо</span></span></div>
+        <div class="compare-row"><span class="k">Экран</span><span class="v"><span class="best-tag y">Отлично</span></span></div>
+        <div class="compare-row"><span class="k">Логотип</span><span class="v"><span class="best-tag y">Прямоугольный</span></span></div>
+        <div class="compare-row"><span class="k">Шрифт</span><span class="v">Segoe UI — современный</span></div>
+        <div class="compare-row"><span class="k">Сложность реализации</span><span class="v"><span class="best-tag m">Средняя</span></span></div>
+        <div class="compare-row"><span class="k">Δ и тренды</span><span class="v"><span class="best-tag y">Sparkline + badge</span></span></div>
+        <div class="compare-row"><span class="k">Фото точек</span><span class="v"><span class="best-tag y">Боковой столбец</span></span></div>
+        <div class="compare-row"><span class="k">Официальность</span><span class="v"><span class="best-tag m">Средняя</span></span></div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #2a3447;font-size:12px;color:#94a3b8">Лучший выбор для PDF-презентаций. Цвета и иконки помогают быстро воспринять ключевые цифры.</div>
+      </div>
+    </div>
+
+    <div class="compare-card">
+      <div class="compare-card-head maroon">
+        <div>Вариант C</div>
+        <div class="compare-card-sub">«Геологический протокол»</div>
+      </div>
+      <div class="compare-card-body">
+        <div class="compare-row"><span class="k">Аудитория</span><span class="v">Госорганы, архив</span></div>
+        <div class="compare-row"><span class="k">Печать (A4)</span><span class="v"><span class="best-tag y">Отлично</span></span></div>
+        <div class="compare-row"><span class="k">Экран</span><span class="v"><span class="best-tag m">Приемлемо</span></span></div>
+        <div class="compare-row"><span class="k">Логотип</span><span class="v"><span class="best-tag y">Прямоугольный</span></span></div>
+        <div class="compare-row"><span class="k">Шрифт</span><span class="v">Times NR — формальный</span></div>
+        <div class="compare-row"><span class="k">Сложность реализации</span><span class="v"><span class="best-tag m">Средняя</span></span></div>
+        <div class="compare-row"><span class="k">Δ и тренды</span><span class="v"><span class="best-tag m">Числа в таблице</span></span></div>
+        <div class="compare-row"><span class="k">Фото точек</span><span class="v"><span class="best-tag m">Маленький столбец</span></span></div>
+        <div class="compare-row"><span class="k">Официальность</span><span class="v"><span class="best-tag y">Максимальная</span></span></div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #2a3447;font-size:12px;color:#94a3b8">Для официальных документов и регуляторной отчётности. Менее наглядный, зато формально корректный.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Возможные комбинации -->
+  <div class="page-header" style="margin-top:0;padding-top:0">
+    <h1 style="font-size:16px;margin-bottom:8px">💡 Также возможны комбинации</h1>
+  </div>
+  <div class="cards-grid" style="padding-top:0">
+    <div class="info-card">
+      <h3>Вариант A + B (рекомендуется)</h3>
+      <ul>
+        <li>KPI-строка и цветовые карточки из B</li>
+        <li>Таблицы и структура из A</li>
+        <li>Карточки точек в стиле A (компактнее)</li>
+        <li>Тёмная шапка из A</li>
+      </ul>
+    </div>
+    <div class="info-card">
+      <h3>Два режима печати</h3>
+      <ul>
+        <li>Экранная версия (B) — яркие цвета</li>
+        <li>Печатная версия (A/C) — ч/б совместимо</li>
+        <li>Переключатель перед генерацией</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
