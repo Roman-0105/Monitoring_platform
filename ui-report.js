@@ -25,6 +25,7 @@ var ReportState = {
     conclusions: '', apiKey: '',
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
+    reportTheme: 'blue',
     filterDomains:  [],   // [] = all domains
     filterHorizons: [],   // [] = all horizons
   },
@@ -142,6 +143,28 @@ function restoreSettings() {
   var aiCb = document.getElementById('rp-inc-ai-cb');
   if (aiCb && s.incAI !== undefined) aiCb.checked = s.incAI;
 
+  if (s.reportTheme) {
+    ReportState.settings.reportTheme = s.reportTheme;
+    // Mark the correct theme card active
+    document.querySelectorAll('.rp-theme-card').forEach(function(c){ c.classList.toggle('rp-theme-card--active', c.dataset.theme === s.reportTheme); });
+  }
+  // Restore logo preview
+  var savedLogo = localStorage.getItem('rp-logo-base64');
+  if (savedLogo) rpLogoUpdatePreview(savedLogo);
+  // Restore watermark
+  if (s.watermark) {
+    var wmSel = document.getElementById('rp-watermark');
+    if (wmSel) {
+      var isCustom = !['','ДСП','Внутренний','Для заказчика','Черновик'].includes(s.watermark);
+      wmSel.value = isCustom ? 'custom' : s.watermark;
+      var wrap = document.getElementById('rp-watermark-custom-wrap');
+      if (wrap) wrap.style.display = isCustom ? '' : 'none';
+      if (isCustom) setField('rp-watermark-custom', s.watermark);
+    }
+  }
+  if (s.approverName) setField('rp-approver-name', s.approverName);
+  restoreChk('rp-inc-signature', s.incSignature);
+
   // Если данные уже были загружены — восстанавливаем даты
   var allDates = ReportState.allDates || [];
   if (allDates.length > 0) {
@@ -199,6 +222,10 @@ function saveReportSettings() {
       incCompare:    getChk('rp-inc-compare'),
       incAI:         getChk('rp-inc-ai'),
       incDewatering: getChk('rp-inc-dewatering'),
+      reportTheme:   ReportState.settings.reportTheme || 'blue',
+      watermark:    (function(){ var v=getField('rp-watermark'); return v==='custom'?getField('rp-watermark-custom'):v; })(),
+      approverName: getField('rp-approver-name'),
+      incSignature: getChk('rp-inc-signature'),
       filterDomains:  ReportState.settings.filterDomains  || [],
       filterHorizons: ReportState.settings.filterHorizons || [],
     }));
@@ -230,12 +257,12 @@ function onPresetChange(sel) {
 }
 
 function bindEvents() {
-  ['rp-author','rp-position','rp-apikey','rp-quarry-name','rp-object-name'].forEach(function(id) {
+  ['rp-author','rp-position','rp-apikey','rp-quarry-name','rp-object-name','rp-approver-name'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', saveReportSettings);
   });
   ['rp-inc-map','rp-inc-domens','rp-inc-photos','rp-inc-history',
-   'rp-inc-ditches','rp-inc-compare','rp-inc-ai','rp-inc-dewatering'].forEach(function(id) {
+   'rp-inc-ditches','rp-inc-compare','rp-inc-ai','rp-inc-dewatering','rp-inc-signature'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('change', saveReportSettings);
   });
@@ -834,8 +861,52 @@ function buildSettingsUI() {
       _rpThemeCard('red',    '🔴', 'Красная',   '#7c2d12,#ea580c', false) +
       _rpThemeCard('violet', '🟣', 'Фиолетовая','#4c1d95,#7c3aed', false) +
     '</div>' +
-    '<div style="margin-top:16px;padding:12px;background:var(--card-bg2);border-radius:8px;font-size:12px;color:var(--txt-3)">' +
-      '🔜 В следующих обновлениях: загрузка логотипа, водяной знак, кастомные цвета' +
+    '<div style="margin-top:20px">' +
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Логотип на титульной странице</div>' +
+      '<div class="card" style="margin-bottom:14px">' +
+        '<div style="display:flex;align-items:center;gap:14px">' +
+          '<div id="rp-logo-preview" style="width:56px;height:56px;border-radius:50%;background:var(--card-bg2);border:2px dashed var(--line-2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden">🏭</div>' +
+          '<div style="flex:1">' +
+            '<label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-block">' +
+              '📁 Выбрать файл (PNG, SVG)' +
+              '<input type="file" id="rp-logo-input" accept="image/*" style="display:none" onchange="rpLogoChange(this)">' +
+            '</label>' +
+            '<div style="font-size:11px;color:var(--txt-3);margin-top:6px">Рекомендуется квадратный PNG, мин. 100×100 px</div>' +
+            '<button class="btn btn-sm" id="rp-logo-clear-btn" style="display:none;margin-top:6px;font-size:11px;background:transparent;border:none;color:var(--txt-3);cursor:pointer;padding:0" onclick="rpLogoClear()">✕ Удалить логотип</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Водяной знак</div>' +
+      '<div class="card" style="margin-bottom:14px">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end">' +
+          '<div><label class="rp-lbl">Гриф документа</label>' +
+            '<select class="form-select" id="rp-watermark" style="margin-top:4px" onchange="rpWatermarkChange(this)">' +
+              '<option value="">Без водяного знака</option>' +
+              '<option value="ДСП">ДСП (Для служебного пользования)</option>' +
+              '<option value="Внутренний">Внутренний</option>' +
+              '<option value="Для заказчика">Для заказчика</option>' +
+              '<option value="Черновик">Черновик</option>' +
+              '<option value="custom">Свой текст...</option>' +
+            '</select>' +
+          '</div>' +
+          '<div id="rp-watermark-custom-wrap" style="display:none">' +
+            '<label class="rp-lbl">Свой текст</label>' +
+            '<input class="form-input" id="rp-watermark-custom" placeholder="Конфиденциально" style="margin-top:4px" oninput="saveReportSettings()">' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Блок подписи</div>' +
+      '<div class="card">' +
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">' +
+          '<input type="checkbox" id="rp-inc-signature" onchange="saveReportSettings()"> ' +
+          'Добавить блок подписи на титульную страницу' +
+        '</label>' +
+        '<div><label class="rp-lbl">ФИО утверждающего (необязательно)</label>' +
+          '<input class="form-input" id="rp-approver-name" placeholder="Гл. геолог Петров А.С." style="margin-top:4px" oninput="saveReportSettings()">' +
+        '</div>' +
+      '</div>' +
     '</div>' +
     '<div class="rp-panel-nav">' +
       '<button class="btn btn-outline" onclick="switchStep(2)">← Содержание</button>' +
@@ -981,6 +1052,38 @@ function _rpThemeCard(id, ico, name, colors, active) {
     '<div class="rp-theme-swatch" style="background:' + grad + '">' + ico + '</div>' +
     '<div class="rp-theme-name">' + name + '</div>' +
   '</div>';
+}
+function rpLogoChange(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var b64 = e.target.result;
+    localStorage.setItem('rp-logo-base64', b64);
+    rpLogoUpdatePreview(b64);
+  };
+  reader.readAsDataURL(file);
+}
+function rpLogoClear() {
+  localStorage.removeItem('rp-logo-base64');
+  rpLogoUpdatePreview(null);
+}
+function rpLogoUpdatePreview(b64) {
+  var prev = document.getElementById('rp-logo-preview');
+  var clearBtn = document.getElementById('rp-logo-clear-btn');
+  if (prev) {
+    if (b64) {
+      prev.innerHTML = '<img src="' + b64 + '" style="width:56px;height:56px;object-fit:cover;border-radius:50%">';
+    } else {
+      prev.innerHTML = '🏭';
+    }
+  }
+  if (clearBtn) clearBtn.style.display = b64 ? '' : 'none';
+}
+function rpWatermarkChange(sel) {
+  var wrap = document.getElementById('rp-watermark-custom-wrap');
+  if (wrap) wrap.style.display = (sel.value === 'custom') ? '' : 'none';
+  saveReportSettings();
 }
 function rpSelectTheme(id) {
   document.querySelectorAll('.rp-theme-card').forEach(function(c){ c.classList.toggle('rp-theme-card--active', c.dataset.theme === id); });
@@ -1545,6 +1648,12 @@ function generateReport() {
   s.includeDewatering = !!(document.getElementById('rp-inc-dewatering') || {checked:false}).checked;
   s.quarryName     = getField('rp-quarry-name') || 'ЮРГ';
   s.objectName     = getField('rp-object-name') || 'Пулково-42';
+  s.reportTheme = ReportState.settings.reportTheme || 'blue';
+  s.logoBase64   = localStorage.getItem('rp-logo-base64') || '';
+  var wmVal = getField('rp-watermark');
+  s.watermark    = wmVal === 'custom' ? getField('rp-watermark-custom') : wmVal;
+  s.approverName = getField('rp-approver-name');
+  s.includeSignature = getChk('rp-inc-signature');
   s.reportVersion  = (parseInt(s.reportVersion) || 0) + 1;
   addRpHistory(s);
   saveReportSettings();
@@ -2291,8 +2400,28 @@ function buildReportHTML(s) {
   }
 
   // ── Титул
+  var logoHtml = s.logoBase64
+    ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" alt="logo">'
+    : '<div class="rp-title-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>';
+
+  var signatureHtml = s.includeSignature
+    ? '<div class="rp-signature-block">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;text-align:left">' +
+          '<div>' +
+            '<div class="rp-sig-line">________________________</div>' +
+            '<div class="rp-sig-label">Составил: ' + escHTML(s.author || '') + '</div>' +
+            '<div class="rp-sig-role">' + escHTML(s.position || '') + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="rp-sig-line">________________________</div>' +
+            '<div class="rp-sig-label">Утвердил: ' + escHTML(s.approverName || '') + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    : '';
+
   var title = '<div class="rp-title-page">' +
-    '<div class="rp-title-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>' +
+    logoHtml +
     '<h1 class="rp-title-main">Отчёт по мониторингу<br>подземных вод</h1>' +
     '<div class="rp-title-sub">Карьер ' + escHTML(s.quarryName) + ' · ' + escHTML(s.objectName) + '</div>' +
     '<div class="rp-title-period">' + (isSingle
@@ -2303,7 +2432,9 @@ function buildReportHTML(s) {
       '<div>Составил: <b>' + escAttr(s.author||'—') + '</b> · ' + escAttr(s.position||'') + '</div>' +
       '<div>Дата: <b>' + fmtDate(s.dateReport) + '</b></div>' +
       '<div style="margin-top:6px;opacity:.5;font-size:11px">v' + s.reportVersion + '</div>' +
-    '</div></div>';
+    '</div>' +
+    signatureHtml +
+  '</div>';
 
   // ── Сводка
   var summaryAI = ai.error
@@ -2575,7 +2706,9 @@ function buildReportHTML(s) {
   return '<!DOCTYPE html><html lang="ru"><head>' +
     '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>Отчёт — Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' — ' + fmtDate(s.dateB) + '</title>' +
-    '<style>' + getReportCSS() + '</style></head><body>' +
+    '<style>' + getReportCSS(s.reportTheme) + '</style>' +
+    (s.watermark ? '<style>body::before{content:"' + (s.watermark||'').replace(/"/g,'') + '";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:80px;font-weight:900;color:rgba(150,0,0,0.06);pointer-events:none;z-index:9999;letter-spacing:8px;white-space:nowrap;}</style>' : '') +
+    '</head><body>' +
     title +
     (function() {
       var dewateringSection = s.includeDewatering ? buildDewateringSection(s) : '';
@@ -2593,23 +2726,40 @@ function buildReportHTML(s) {
 }
 
 // ── CSS отчёта ─────────────────────────────────────────────
-function getReportCSS() {
+function getThemeColors(theme) {
+  var t = {
+    blue:   { primary:'#1a73e8', dark:'#1a1a2e', light:'#e8f0fe', mid:'#1967d2', border:'#c8d8f5' },
+    green:  { primary:'#16a34a', dark:'#14532d', light:'#dcfce7', mid:'#15803d', border:'#a7d7b5' },
+    mono:   { primary:'#475569', dark:'#1e293b', light:'#f1f5f9', mid:'#334155', border:'#cbd5e1' },
+    red:    { primary:'#ea580c', dark:'#7c2d12', light:'#ffedd5', mid:'#c2410c', border:'#fcc49a' },
+    violet: { primary:'#7c3aed', dark:'#4c1d95', light:'#ede9fe', mid:'#6d28d9', border:'#c4b5fd' },
+  };
+  return t[theme] || t.blue;
+}
+
+function getReportCSS(theme) {
+  var c = getThemeColors(theme);
   return [
   '* { box-sizing: border-box; margin: 0; padding: 0; }',
   'body { font-family: Arial, sans-serif; font-size: 12px; color: #222; background: #fff; line-height: 1.5; }',
-  '.rp-title-page { display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;border-bottom:3px solid #1a73e8;page-break-after:always; }',
-  '.rp-title-logo { width:56px;height:56px;border-radius:50%;background:#1a73e8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;margin:0 auto 14px; }',
-  '.rp-title-main { font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:8px; }',
+  '.rp-title-page { display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;border-bottom:3px solid ' + c.primary + ';page-break-after:always; }',
+  '.rp-title-logo { width:56px;height:56px;border-radius:50%;background:' + c.primary + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;margin:0 auto 14px; }',
+  '.rp-title-logo-img { width:64px;height:64px;border-radius:50%;object-fit:cover;margin:0 auto 14px;display:block;border:2px solid ' + c.border + '; }',
+  '.rp-title-main { font-size:22px;font-weight:700;color:' + c.dark + ';margin-bottom:8px; }',
   '.rp-title-sub  { font-size:13px;color:#555;margin-bottom:14px; }',
-  '.rp-title-period { background:#e8f0fe;border-radius:6px;padding:8px 20px;font-size:13px;color:#1a73e8;font-weight:500;margin-bottom:18px; }',
+  '.rp-title-period { background:' + c.light + ';border-radius:6px;padding:8px 20px;font-size:13px;color:' + c.primary + ';font-weight:500;margin-bottom:18px; }',
   '.rp-title-meta { font-size:12px;color:#444;line-height:1.8; }',
+  '.rp-signature-block { margin-top:24px;padding-top:20px;border-top:1px dashed #dee2e6;width:100%; }',
+  '.rp-sig-line { font-size:13px;color:#222;margin-bottom:4px; }',
+  '.rp-sig-label { font-size:11px;color:#555;font-weight:600; }',
+  '.rp-sig-role { font-size:10px;color:#888; }',
   '.rp-body { max-width:860px;margin:0 auto;padding:20px 30px; }',
   '.rp-section { margin-bottom:24px; }',
-  '.rp-section h2 { font-size:14px;font-weight:700;color:#1a1a2e;padding:5px 0;border-bottom:2px solid #1a73e8;margin-bottom:12px; }',
+  '.rp-section h2 { font-size:14px;font-weight:700;color:' + c.dark + ';padding:5px 0;border-bottom:2px solid ' + c.primary + ';margin-bottom:12px; }',
   '.rp-section-sub { font-size:12px;font-weight:600;color:#444;margin:12px 0 6px; }',
   '.rp-kpi-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px; }',
   '.rp-kpi { background:#f8f9fa;border-radius:6px;padding:10px 12px;border:1px solid #e9ecef; }',
-  '.rp-kpi-val { font-size:20px;font-weight:700;color:#1a73e8;line-height:1.2; }',
+  '.rp-kpi-val { font-size:20px;font-weight:700;color:' + c.primary + ';line-height:1.2; }',
   '.rp-kpi-label { font-size:10px;color:#666;margin-top:2px; }',
   '.rp-kpi--up .rp-kpi-val { color:#d93025; }',
   '.rp-kpi--down .rp-kpi-val { color:#188038; }',
@@ -2622,16 +2772,16 @@ function getReportCSS() {
   '.rp-up { color:#d93025; } .rp-down { color:#188038; }',
   '.rp-domen-block { border:1px solid #dee2e6;border-radius:6px;margin-bottom:12px;overflow:hidden; }',
   '.rp-domen-header { display:flex;align-items:center;gap:10px;background:#f1f3f4;padding:7px 12px;border-bottom:1px solid #dee2e6;flex-wrap:wrap; }',
-  '.rp-domen-name { font-weight:700;font-size:13px;color:#1a1a2e; }',
-  '.rp-domen-badge { background:#e8f0fe;color:#1967d2;font-size:10px;padding:1px 7px;border-radius:10px;font-weight:500; }',
+  '.rp-domen-name { font-weight:700;font-size:13px;color:' + c.dark + '; }',
+  '.rp-domen-badge { background:' + c.light + ';color:' + c.mid + ';font-size:10px;padding:1px 7px;border-radius:10px;font-weight:500; }',
   '.rp-domen-q { font-size:12px;color:#444;margin-left:auto; }',
   '.rp-delta { font-size:11px;font-weight:600;padding:1px 6px;border-radius:3px; }',
   '.rp-delta.up { color:#d93025;background:#fce8e6; } .rp-delta.down { color:#188038;background:#e6f4ea; }',
   '.rp-ditch-block { border:1px solid #dee2e6;border-radius:6px;margin-bottom:16px;overflow:hidden; }',
-  '.rp-ditch-header { display:flex;align-items:center;gap:8px;background:#e8f4fd;padding:7px 12px;border-bottom:1px solid #c8e1f5; }',
-  '.rp-ditch-icon { font-size:16px;color:#1a73e8; }',
-  '.rp-ditch-name { font-weight:700;font-size:13px;color:#1a1a2e; }',
-  '.rp-ditch-status { background:#1a73e8;color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:auto; }',
+  '.rp-ditch-header { display:flex;align-items:center;gap:8px;background:' + c.light + ';padding:7px 12px;border-bottom:1px solid ' + c.border + '; }',
+  '.rp-ditch-icon { font-size:16px;color:' + c.primary + '; }',
+  '.rp-ditch-name { font-weight:700;font-size:13px;color:' + c.dark + '; }',
+  '.rp-ditch-status { background:' + c.primary + ';color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:auto; }',
   '.rp-ditch-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#dee2e6;border-bottom:1px solid #dee2e6; }',
   '.rp-param { background:#fff;padding:6px 10px; } .rp-param--accent { background:#f8fff8; }',
   '.rp-param-l { display:block;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.04em;margin-bottom:1px; }',
@@ -2652,7 +2802,7 @@ function getReportCSS() {
   '.rp-photo-meta td { padding:3px 0;vertical-align:top; }',
   '.rp-photo-meta td:first-child { color:#888;width:110px;font-size:10px;text-transform:uppercase;letter-spacing:.04em; }',
   '.rp-photo-meta td:last-child { color:#222;font-weight:500; }',
-  '.rp-photo-comment { font-size:11px;color:#444;background:#f8f9fa;border-left:3px solid #1a73e8;border-radius:0 4px 4px 0;padding:6px 8px;line-height:1.5; }',
+  '.rp-photo-comment { font-size:11px;color:#444;background:#f8f9fa;border-left:3px solid ' + c.primary + ';border-radius:0 4px 4px 0;padding:6px 8px;line-height:1.5; }',
   '.rp-photo-comment--empty { color:#aaa;font-style:italic;border-left-color:#dee2e6; }',
   '.rp-ai-text { background:#f3f0ff;border-left:3px solid #7f77dd;border-radius:0 5px 5px 0;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#333;line-height:1.6; }',
   '.rp-ai-badge { display:inline-block;background:#7f77dd;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;margin-right:6px;letter-spacing:.05em; }',
@@ -2663,7 +2813,7 @@ function getReportCSS() {
   '.rp-footer { display:flex;justify-content:space-between;max-width:860px;margin:20px auto 0;padding:12px 30px;font-size:10px;color:#aaa;border-top:1px solid #e9ecef; }',
   '.rp-section { counter-increment: section; }',
   '.rp-print-btn { position:fixed;bottom:20px;right:20px;z-index:100; }',
-  '.rp-print-btn button { padding:10px 20px;font-size:13px;cursor:pointer;background:#1a73e8;color:#fff;border:none;border-radius:6px;font-weight:500; }',
+  '.rp-print-btn button { padding:10px 20px;font-size:13px;cursor:pointer;background:' + c.primary + ';color:#fff;border:none;border-radius:6px;font-weight:500; }',
   '@media print {',
   '  @page { margin:15mm 18mm; size:A4 portrait; }',
   '  @page { @bottom-right { content: "Стр. " counter(page); font-size:9pt; color:#aaa; font-family:sans-serif; } }',
