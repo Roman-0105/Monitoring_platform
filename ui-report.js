@@ -111,6 +111,7 @@ function initReportTab() {
   var root = document.getElementById('report-root');
   if (!root) return;
   root.innerHTML = buildSettingsUI();
+  switchStep(1);
   bindEvents();
   restoreSettings();
 }
@@ -526,7 +527,7 @@ function switchStep(n) {
   for (var i = 1; i <= 5; i++) {
     var panel = document.getElementById('rp-panel-' + i);
     var btn   = document.getElementById('rp-stepbtn-' + i);
-    if (panel) panel.style.display = (i === n) ? '' : 'none';
+    if (panel) panel.style.display = (i === n) ? 'block' : 'none';
     if (btn) {
       btn.classList.toggle('rp-step--active', i === n);
       btn.classList.toggle('rp-step--done',   i < n);
