@@ -22,7 +22,9 @@ var ReportState = {
     includeDomens: true, includeDitches: true, includePhotos: true,
     includeMap: true, include3d: false, includeHistory: true,
     includeCompare: true, includeAI: true,
-    conclusions: '', apiKey: ''
+    conclusions: '', apiKey: '',
+    quarryName: 'ЮРГ',
+    objectName: 'Пулково-42',
   }
 };
 
@@ -81,6 +83,17 @@ function onReportDateChange() {
   }
 }
 
+function getChk(id) {
+  var el = document.getElementById(id);
+  return el ? el.checked : undefined;
+}
+
+function restoreChk(id, val) {
+  if (val === null || val === undefined) return;
+  var el = document.getElementById(id);
+  if (el) el.checked = val;
+}
+
 // ── Инициализация ─────────────────────────────────────────
 function initReportTab() {
   var root = document.getElementById('report-root');
@@ -97,7 +110,20 @@ function restoreSettings() {
   if (s.position)      setField('rp-position',      s.position);
   if (s.apiKey)        setField('rp-apikey',        s.apiKey);
   if (s.customPrompt)  setField('rp-custom-prompt', s.customPrompt);
+  if (s.quarryName)    setField('rp-quarry-name',   s.quarryName);
+  if (s.objectName)    setField('rp-object-name',   s.objectName);
   setField('rp-date', new Date().toISOString().slice(0, 10));
+  restoreChk('rp-inc-map',        s.incMap);
+  restoreChk('rp-inc-domens',     s.incDomens);
+  restoreChk('rp-inc-photos',     s.incPhotos);
+  restoreChk('rp-inc-history',    s.incHistory);
+  restoreChk('rp-inc-ditches',    s.incDitches);
+  restoreChk('rp-inc-compare',    s.incCompare);
+  restoreChk('rp-inc-ai',         s.incAI);
+  restoreChk('rp-inc-dewatering', s.incDewatering);
+  // Also sync the AI checkbox duplicate
+  var aiCb = document.getElementById('rp-inc-ai-cb');
+  if (aiCb && s.incAI !== undefined) aiCb.checked = s.incAI;
 
   // Если данные уже были загружены — восстанавливаем даты
   var allDates = ReportState.allDates || [];
@@ -139,8 +165,18 @@ function saveReportSettings() {
       position:      getField('rp-position'),
       apiKey:        getField('rp-apikey'),
       customPrompt:  getField('rp-custom-prompt'),
+      quarryName:    getField('rp-quarry-name'),
+      objectName:    getField('rp-object-name'),
       reportVersion: ReportState.settings.reportVersion,
-      reportMode:    ReportState.settings.reportMode || 'single'
+      reportMode:    ReportState.settings.reportMode || 'single',
+      incMap:        getChk('rp-inc-map'),
+      incDomens:     getChk('rp-inc-domens'),
+      incPhotos:     getChk('rp-inc-photos'),
+      incHistory:    getChk('rp-inc-history'),
+      incDitches:    getChk('rp-inc-ditches'),
+      incCompare:    getChk('rp-inc-compare'),
+      incAI:         getChk('rp-inc-ai'),
+      incDewatering: getChk('rp-inc-dewatering'),
     }));
   } catch(e) {}
 }
@@ -170,9 +206,14 @@ function onPresetChange(sel) {
 }
 
 function bindEvents() {
-  ['rp-author','rp-position','rp-apikey'].forEach(function(id) {
+  ['rp-author','rp-position','rp-apikey','rp-quarry-name','rp-object-name'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', saveReportSettings);
+  });
+  ['rp-inc-map','rp-inc-domens','rp-inc-photos','rp-inc-history',
+   'rp-inc-ditches','rp-inc-compare','rp-inc-ai','rp-inc-dewatering'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', saveReportSettings);
   });
   // Инициализируем выпадающий список промптов
   fillPresetSelect();
@@ -428,6 +469,10 @@ function buildSettingsUI() {
         '<div><label style="font-size:11px;color:var(--txt-3)">ФИО</label><input class="form-input" id="rp-author" placeholder="Юкин Р.А." style="margin-top:4px"></div>' +
         '<div><label style="font-size:11px;color:var(--txt-3)">Должность</label><input class="form-input" id="rp-position" placeholder="Гидрогеолог" style="margin-top:4px"></div>' +
         '<div><label style="font-size:11px;color:var(--txt-3)">Дата составления</label><input class="form-input" id="rp-date" type="date" style="margin-top:4px;width:150px"></div>' +
+        '<div><label style="font-size:11px;color:var(--txt-3)">Название карьера</label>' +
+        '<input class="form-input" id="rp-quarry-name" placeholder="ЮРГ" style="margin-top:4px"></div>' +
+        '<div><label style="font-size:11px;color:var(--txt-3)">Объект / участок</label>' +
+        '<input class="form-input" id="rp-object-name" placeholder="Пулково-42" style="margin-top:4px"></div>' +
       '</div>' +
     '</div>' +
 
@@ -463,6 +508,7 @@ function buildSettingsUI() {
           '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-ditches" checked> Детали канав</label>' +
           '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-compare"> Сравнительный анализ А vs Б</label>' +
           '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-ai"      checked> AI-вывод по промпту</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-dewatering"> Водоотлив (насосы, объём, уровни)</label>' +
         '</div>' +
       '</div>' +
       '<div id="rp-data-status" style="display:none;border-top:0.5px solid var(--line-2);padding-top:8px;margin-top:8px">' +
@@ -987,6 +1033,9 @@ function generateReport() {
   s.includeHistory = !!(document.getElementById('rp-inc-history') || {checked:true}).checked;
   s.includeCompare = !!(document.getElementById('rp-inc-compare') || {checked:true}).checked;
   s.includeAI      = !!(document.getElementById('rp-inc-ai')      || {checked:true}).checked;
+  s.includeDewatering = !!(document.getElementById('rp-inc-dewatering') || {checked:false}).checked;
+  s.quarryName     = getField('rp-quarry-name') || 'ЮРГ';
+  s.objectName     = getField('rp-object-name') || 'Пулково-42';
   s.reportVersion  = (parseInt(s.reportVersion) || 0) + 1;
   saveReportSettings();
 
@@ -1580,6 +1629,111 @@ function buildDitchHistTable(name, hist) {
     '<tbody>' + rows + '</tbody></table></div>';
 }
 
+// ── Секция водоотлива ─────────────────────────────────────
+function buildDewateringSection(s) {
+  if (typeof DewateringState === 'undefined') return '';
+
+  var isSingle = s.reportMode === 'single';
+  var dateFrom = isSingle ? s.dateB : s.dateA;
+  var dateTo   = s.dateB;
+  if (!dateFrom || !dateTo) return '';
+
+  // Pump readings in the period
+  var readings = (DewateringState.meterReadings || []).filter(function(r) {
+    return r.date >= dateFrom && r.date <= dateTo;
+  });
+
+  // Volume per pump
+  var pumpVolMap = {};
+  readings.forEach(function(r) {
+    var vol = DewateringState.computedVolume ? (DewateringState.computedVolume(r) || 0) : 0;
+    pumpVolMap[r.pumpId] = (pumpVolMap[r.pumpId] || 0) + vol;
+  });
+
+  var totalVol = Object.keys(pumpVolMap).reduce(function(a, id) { return a + pumpVolMap[id]; }, 0);
+  var activePumps = (DewateringState.pumps || []).filter(function(p) {
+    return p.status === 'working';
+  });
+
+  // Water levels in period (latest per sump)
+  var latestLevel = {};
+  (DewateringState.waterLevels || [])
+    .filter(function(w) { return w.date >= dateFrom && w.date <= dateTo; })
+    .forEach(function(w) {
+      if (!latestLevel[w.sumpId] || w.date > latestLevel[w.sumpId].date) {
+        latestLevel[w.sumpId] = w;
+      }
+    });
+
+  // Sumps
+  var sumps = DewateringState.sumps || [];
+  if (!sumps.length && !readings.length) return '';
+
+  // KPI row
+  var kpiHtml =
+    '<div class="rp-kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + sumps.length + '</div><div class="rp-kpi-label">Зумпфов</div></div>' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + activePumps.length + '</div><div class="rp-kpi-label">Работающих насосов</div></div>' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + Math.round(totalVol).toLocaleString('ru-RU') + '</div><div class="rp-kpi-label">Объём откачки, м³</div></div>' +
+      '<div class="rp-kpi"><div class="rp-kpi-val">' + Object.keys(latestLevel).length + '</div><div class="rp-kpi-label">Зумпфов с замерами уровня</div></div>' +
+    '</div>';
+
+  // Pumps table
+  var pumpRows = (DewateringState.pumps || []).map(function(p) {
+    var vol = pumpVolMap[p.id] || 0;
+    var sump = DewateringState.sumpById ? DewateringState.sumpById(p.sumpId) : null;
+    var STATUS_RU = { working:'Работает', standby:'Резерв', repair:'Ремонт', off:'Отключён' };
+    var statusTxt = STATUS_RU[p.status] || p.status || '—';
+    var statusClr = p.status === 'working' ? '#188038' : p.status === 'repair' ? '#d93025' : '#888';
+    return '<tr>' +
+      '<td><b>' + escHTML(p.name || p.id) + '</b></td>' +
+      '<td>' + escHTML(sump ? sump.name : p.sumpId || '—') + '</td>' +
+      '<td style="color:' + statusClr + ';font-weight:600">' + escHTML(statusTxt) + '</td>' +
+      '<td>' + escHTML(p.model || '—') + '</td>' +
+      '<td style="text-align:right"><b>' + (vol > 0 ? Math.round(vol).toLocaleString('ru-RU') : '—') + '</b></td>' +
+    '</tr>';
+  }).join('');
+
+  var pumpsTable = pumpRows
+    ? '<div class="rp-section-sub">Насосы</div>' +
+      '<table class="rp-table"><thead><tr>' +
+        '<th>Насос</th><th>Зумпф</th><th>Статус</th><th>Модель</th><th style="text-align:right">Объём, м³</th>' +
+      '</tr></thead><tbody>' + pumpRows + '</tbody></table>'
+    : '';
+
+  // Water levels table
+  var wlRows = sumps.filter(function(su) { return latestLevel[su.id]; }).map(function(su) {
+    var wl = latestLevel[su.id];
+    var elev = DewateringState.sumpCurrentElevation ? DewateringState.sumpCurrentElevation(su.id) : null;
+    var depth = (wl.elevation != null && elev != null) ? (wl.elevation - elev).toFixed(2) + ' м' : '—';
+    return '<tr>' +
+      '<td><b>' + escHTML(su.name) + '</b></td>' +
+      '<td>' + escHTML(su.quarry || '—') + '</td>' +
+      '<td>' + escHTML(wl.date ? wl.date : '—') + '</td>' +
+      '<td style="text-align:right"><b>' + (wl.elevation != null ? wl.elevation.toFixed(2) + ' м абс.' : '—') + '</b></td>' +
+      '<td style="text-align:right">' + depth + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var wlTable = wlRows
+    ? '<div class="rp-section-sub" style="margin-top:14px">Отметки уровня воды в зумпфах</div>' +
+      '<table class="rp-table"><thead><tr>' +
+        '<th>Зумпф</th><th>Карьер</th><th>Дата замера</th>' +
+        '<th style="text-align:right">Уровень</th><th style="text-align:right">Глубина</th>' +
+      '</tr></thead><tbody>' + wlRows + '</tbody></table>'
+    : '';
+
+  if (!kpiHtml && !pumpsTable && !wlTable) return '';
+
+  return '<section class="rp-section">' +
+    '<h2>Водоотлив: насосы и уровни воды</h2>' +
+    '<div style="font-size:11px;color:#888;margin-bottom:10px">Период: ' +
+      escHTML(dateFrom) + (dateFrom !== dateTo ? ' — ' + escHTML(dateTo) : '') +
+    '</div>' +
+    kpiHtml + pumpsTable + wlTable +
+  '</section>';
+}
+
 // ── Основной HTML отчёта ──────────────────────────────────
 function buildReportHTML(s) {
   var ptsA = ReportState.ptsA || [], ptsB = ReportState.ptsB || [];
@@ -1607,9 +1761,9 @@ function buildReportHTML(s) {
 
   // ── Титул
   var title = '<div class="rp-title-page">' +
-    '<div class="rp-title-logo">ЮРГ</div>' +
+    '<div class="rp-title-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>' +
     '<h1 class="rp-title-main">Отчёт по мониторингу<br>подземных вод</h1>' +
-    '<div class="rp-title-sub">Карьер ЮРГ · Пулково-42</div>' +
+    '<div class="rp-title-sub">Карьер ' + escHTML(s.quarryName) + ' · ' + escHTML(s.objectName) + '</div>' +
     '<div class="rp-title-period">' + (isSingle
       ? 'Дата: ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escAttr(s.weekB) + ')' : '')
       : fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ') → ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')'
@@ -1729,11 +1883,11 @@ function buildReportHTML(s) {
   var mapSection = '';
   if (s.includeMap && (imgs.imgA || imgs.imgB)) {
     if (isSingle && imgs.imgB) {
-      mapSection = '<section class="rp-section"><h2>2. Схема карьера ЮРГ</h2>' +
+      mapSection = '<section class="rp-section"><h2>2. Схема карьера ' + escHTML(s.quarryName) + '</h2>' +
         '<div class="rp-map-wrap"><img src="' + imgs.imgB + '" alt="Схема" style="width:100%;border:1px solid #dee2e6;border-radius:4px">' +
         '<div class="rp-map-caption">Рис. 1. Схема карьера · ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')</div></div></section>';
     } else {
-      mapSection = '<section class="rp-section"><h2>2. Схемы карьера ЮРГ — сравнение</h2>' +
+      mapSection = '<section class="rp-section"><h2>2. Схемы карьера ' + escHTML(s.quarryName) + ' — сравнение</h2>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
           (imgs.imgA ? '<div class="rp-map-wrap"><img src="' + imgs.imgA + '" alt="Нед. А" style="width:100%;border:1px solid #dee2e6;border-radius:4px">' +
             '<div class="rp-map-caption">Нед. А · ' + fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ')</div></div>'
@@ -1889,11 +2043,14 @@ function buildReportHTML(s) {
 
   return '<!DOCTYPE html><html lang="ru"><head>' +
     '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>Отчёт — Карьер ЮРГ — ' + fmtDate(s.dateB) + '</title>' +
+    '<title>Отчёт — Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' — ' + fmtDate(s.dateB) + '</title>' +
     '<style>' + getReportCSS() + '</style></head><body>' +
     title +
-    '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + compareSection + concl + '</div>' +
-    '<div class="rp-footer"><div>Карьер ЮРГ · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</div><div>v' + s.reportVersion + '</div></div>' +
+    (function() {
+      var dewateringSection = s.includeDewatering ? buildDewateringSection(s) : '';
+      return '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + dewateringSection + compareSection + concl + '</div>';
+    })() +
+    '<div class="rp-footer"><div>Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</div><div>v' + s.reportVersion + '</div></div>' +
     '<div class="rp-print-btn no-print">' +
       '<button onclick="window.print()">🖨 Печать / PDF</button>' +
       '<button onclick="window.close()" style="margin-left:8px">✕ Закрыть</button>' +
