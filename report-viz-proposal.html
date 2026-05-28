@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Визуализация отчёта — предложения</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; }
+
+.nav { position: sticky; top: 0; z-index: 100; background: #0f1117; border-bottom: 1px solid #1e2535; display: flex; gap: 0; overflow-x: auto; }
+.nav-btn { padding: 13px 20px; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; border: none; background: transparent; border-bottom: 3px solid transparent; white-space: nowrap; transition: all .2s; }
+.nav-btn.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+.nav-btn:hover:not(.active) { color: #94a3b8; }
+
+.panel { display: none; padding: 32px 40px; max-width: 1100px; margin: 0 auto; }
+.panel.active { display: block; }
+
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #60a5fa; margin-bottom: 16px; margin-top: 32px; }
+.section-title:first-child { margin-top: 0; }
+.note { font-size: 12px; color: #475569; margin-bottom: 20px; line-height: 1.6; }
+
+/* ── Report canvas (white report inside dark shell) ── */
+.report-canvas { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.5); margin-bottom: 32px; }
+.report-body { padding: 24px 32px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1e293b; }
+.rpt-section-head { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #0d2137; padding-bottom: 6px; border-bottom: 2px solid #1a73e8; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+.rpt-section-head .num { width: 22px; height: 22px; background: #1a73e8; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+
+/* ══ KPI CARDS ══ */
+.kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+.kpi-cell { background: #fff; padding: 14px 14px 12px; }
+.kpi-val { font-size: 24px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.kpi-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+.kpi-delta { font-size: 11px; font-weight: 600; margin-top: 5px; }
+
+/* New: KPI with trend badge */
+.kpi-cards-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+.kpi-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 14px 12px; position: relative; overflow: hidden; }
+.kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.kpi-card.c-blue::before   { background: #3b82f6; }
+.kpi-card.c-red::before    { background: #ef4444; }
+.kpi-card.c-green::before  { background: #22c55e; }
+.kpi-card.c-amber::before  { background: #f59e0b; }
+.kpi-card.c-purple::before { background: #8b5cf6; }
+.kpi-card-icon { font-size: 18px; margin-bottom: 6px; }
+.kpi-card-val  { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 3px; }
+.kpi-card-lbl  { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
+.kpi-card-trend { font-size: 11px; font-weight: 600; margin-top: 5px; display: flex; align-items: center; gap: 4px; }
+.trend-up   { color: #ef4444; }
+.trend-down { color: #22c55e; }
+.trend-none { color: #94a3b8; }
+
+/* ══ BAR CHARTS ══ */
+.chart-wrap { margin-bottom: 20px; }
+.chart-title { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 10px; }
+svg text { font-family: 'Segoe UI', Arial, sans-serif; }
+
+/* ══ ДОМЕННЫЙ BAR CHART ══ */
+.domain-bars { display: flex; flex-direction: column; gap: 8px; }
+.domain-bar-row { display: grid; grid-template-columns: 100px 1fr 70px; gap: 10px; align-items: center; }
+.domain-bar-label { font-size: 11px; color: #334155; font-weight: 600; text-align: right; }
+.domain-bar-track { height: 22px; background: #f1f5f9; border-radius: 4px; overflow: hidden; position: relative; }
+.domain-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; }
+.domain-bar-fill span { font-size: 10px; font-weight: 700; color: #fff; white-space: nowrap; }
+.domain-bar-meta { font-size: 10px; color: #64748b; }
+.bar-a { background: #93c5fd; }
+.bar-b { background: #1a73e8; }
+.bar-up   { background: #ef4444; }
+.bar-down { background: #22c55e; }
+
+/* ══ СТАТУС DONUT ══ */
+.status-legend { display: flex; flex-direction: column; gap: 5px; justify-content: center; }
+.legend-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ══ TIMELINE CHART ══ */
+.timeline-wrap { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+
+/* ══ TOP CHANGES ══ */
+.top-changes { display: flex; flex-direction: column; gap: 6px; }
+.change-row { display: grid; grid-template-columns: 36px 1fr 60px 80px; gap: 8px; align-items: center; }
+.change-num { width: 28px; height: 28px; border-radius: 6px; background: #0f172a; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; }
+.change-bar-wrap { height: 18px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.change-bar { height: 100%; border-radius: 4px; }
+.change-val { font-size: 12px; font-weight: 700; text-align: right; }
+.change-pct { font-size: 10px; color: #94a3b8; text-align: right; }
+
+/* ══ POINT CARD ══ */
+.point-card { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+.point-head { display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+.point-num { font-size: 16px; font-weight: 800; color: #0d2137; }
+.point-body { display: grid; grid-template-columns: 180px 1fr; }
+.point-photo { background: #e8edf2; min-height: 140px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; color: #94a3b8; border-right: 1px solid #e2e8f0; font-size: 10px; }
+.point-data { padding: 12px 16px; }
+.point-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
+.pm { background: #fff; padding: 8px 10px; }
+.pm-val { font-size: 16px; font-weight: 700; color: #0d2137; }
+.pm-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin-top: 2px; }
+.sparkline-wrap { margin-top: 10px; }
+.sparkline-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; margin-bottom: 5px; }
+
+/* ══ АНАЛИТИКА ══ */
+.analytics-section { background: #fff; }
+.analytics-header { background: linear-gradient(135deg, #0d2137, #1a3a5c); padding: 20px 32px; color: #fff; }
+.analytics-header h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.analytics-header p  { font-size: 12px; color: rgba(255,255,255,.6); }
+.analytics-body { padding: 20px 32px; }
+.analytic-card { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+.analytic-card-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
+.analytic-card-head .ico { font-size: 18px; }
+.analytic-card-head .ttl { font-size: 12px; font-weight: 700; color: #0f172a; }
+.analytic-card-head .badge { margin-left: auto; font-size: 10px; padding: 2px 8px; border-radius: 100px; font-weight: 700; }
+.badge-red    { background: #fee2e2; color: #dc2626; }
+.badge-amber  { background: #fef9c3; color: #a16207; }
+.badge-green  { background: #dcfce7; color: #16a34a; }
+.badge-blue   { background: #dbeafe; color: #1d4ed8; }
+.analytic-card-body { padding: 12px 14px; font-size: 11px; color: #475569; line-height: 1.7; }
+.analytic-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.analytic-table th { padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+.analytic-table td { padding: 8px 10px; border-bottom: 1px solid #f8fafc; }
+.risk-bar { height: 6px; border-radius: 3px; margin-top: 3px; }
+.risk-high   { background: #ef4444; }
+.risk-medium { background: #f59e0b; }
+.risk-low    { background: #22c55e; }
+.ai-block { background: #f3f0ff; border-left: 3px solid #7c3aed; border-radius: 0 8px 8px 0; padding: 12px 14px; font-size: 12px; color: #3b0764; line-height: 1.7; }
+.ai-badge { display: inline-flex; align-items: center; gap: 5px; background: #7c3aed; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+
+/* ══ COMPARE MODE EXTRAS ══ */
+.compare-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #e2e8f0; border-top: 1px solid #e2e8f0; }
+.compare-photo { display: flex; flex-direction: column; }
+.photo-mock { background: #e8edf2; height: 120px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; color: #94a3b8; font-size: 10px; }
+.photo-caption { display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 10px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ══ Status colors ══ */
+.s-active   { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 600; }
+.s-flood    { background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 600; }
+.s-overflow { background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 600; }
+
+/* ══ Dark panel notes ══ */
+.dark-note { background: #1e2535; border: 1px solid #2a3447; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; font-size: 12px; color: #94a3b8; line-height: 1.7; }
+.dark-note b { color: #e2e8f0; }
+.imp-list { list-style: none; }
+.imp-list li { padding: 5px 0; display: flex; gap: 8px; font-size: 12px; color: #94a3b8; }
+.imp-list li::before { content: '→'; color: #60a5fa; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <button class="nav-btn active" onclick="show('kpi')">1. KPI-блок</button>
+  <button class="nav-btn" onclick="show('charts')">2. Графики</button>
+  <button class="nav-btn" onclick="show('points')">3. Карточки точек</button>
+  <button class="nav-btn" onclick="show('analytics')">4. Аналитика</button>
+  <button class="nav-btn" onclick="show('single')">Режим: 1 неделя</button>
+  <button class="nav-btn" onclick="show('compare')">Режим: Сравнение</button>
+</nav>
+
+<!-- ══════════════════════ 1. KPI ══════════════════════ -->
+<div id="panel-kpi" class="panel active">
+
+  <div class="section-title">Вариант A — KPI-полоска (5 ячеек)</div>
+  <div class="note">Компактно, хорошо печатается. Подходит для вариантов макета A и C.</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="kpi-strip">
+        <div class="kpi-cell"><div class="kpi-val" style="color:#1a73e8">42</div><div class="kpi-lbl">Точек замерено</div></div>
+        <div class="kpi-cell"><div class="kpi-val" style="color:#1a73e8">187.4 <span style="font-size:14px">л/с</span></div><div class="kpi-lbl">Σ Водоприток</div></div>
+        <div class="kpi-cell"><div class="kpi-val" style="color:#ef4444">▲ +12.8</div><div class="kpi-lbl">Δ vs пред. нед., л/с</div><div class="kpi-delta trend-up">+7.3% рост</div></div>
+        <div class="kpi-cell"><div class="kpi-val" style="color:#f59e0b">7</div><div class="kpi-lbl">Паводковых точек</div><div class="kpi-delta trend-up">▲ +2 vs нед. А</div></div>
+        <div class="kpi-cell"><div class="kpi-val" style="color:#475569">8 / 1 240</div><div class="kpi-lbl">Канав / Σ Q м³/ч</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Вариант B — KPI-карточки с иконками и трендом</div>
+  <div class="note">Наглядно, легко читать руководству. Для вариантов макета B и A+B. Цветная полоска сверху кодирует тип метрики.</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="kpi-cards-row">
+        <div class="kpi-card c-blue">
+          <div class="kpi-card-icon">💧</div>
+          <div class="kpi-card-val">187.4</div>
+          <div class="kpi-card-lbl">Σ Q, л/с</div>
+          <div class="kpi-card-trend trend-none">174.6 нед. А</div>
+        </div>
+        <div class="kpi-card c-red">
+          <div class="kpi-card-icon">📈</div>
+          <div class="kpi-card-val">+12.8</div>
+          <div class="kpi-card-lbl">Δ Q, л/с</div>
+          <div class="kpi-card-trend trend-up">▲ +7.3% рост</div>
+        </div>
+        <div class="kpi-card c-amber">
+          <div class="kpi-card-icon">⚠️</div>
+          <div class="kpi-card-val">7</div>
+          <div class="kpi-card-lbl">Паводковых точек</div>
+          <div class="kpi-card-trend trend-up">▲ +2 vs нед. А</div>
+        </div>
+        <div class="kpi-card c-green">
+          <div class="kpi-card-icon">✅</div>
+          <div class="kpi-card-val">42</div>
+          <div class="kpi-card-lbl">Замерено точек</div>
+          <div class="kpi-card-trend trend-none">все охвачены</div>
+        </div>
+        <div class="kpi-card c-purple">
+          <div class="kpi-card-icon">🏗</div>
+          <div class="kpi-card-val">8 / 1 240</div>
+          <div class="kpi-card-lbl">Канав / Q м³/ч</div>
+          <div class="kpi-card-trend trend-up">▲ +60 м³/ч</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-note">
+    <b>Рекомендация по KPI:</b> Вариант B (карточки) информативнее — каждая метрика имеет иконку, тренд и предыдущее значение.
+    Добавить: <b>% от максимума сезона</b> — понятно насколько близки к пику.
+  </div>
+</div>
+
+<!-- ══════════════════════ 2. ГРАФИКИ ══════════════════════ -->
+<div id="panel-charts" class="panel">
+
+  <div class="section-title">График 1 — Водоприток по доменам (горизонтальные бары)</div>
+  <div class="note">Сравнение доменов между собой. В режиме сравнения — бары А (серый) и Б (синий) рядом.</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="chart-title">Водоприток Q по доменам, л/с · нед. Б (19.05.2025)</div>
+      <div class="domain-bars">
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">Южный</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill bar-b" style="width:100%"><span>70.2 л/с</span></div>
+          </div>
+          <div class="domain-bar-meta" style="color:#22c55e">▼ −2.2</div>
+        </div>
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">Северный</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill" style="width:88%;background:#1a73e8"><span>62.1 л/с</span></div>
+          </div>
+          <div class="domain-bar-meta" style="color:#ef4444">▲ +7.9</div>
+        </div>
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">Западный</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill" style="width:55%;background:#1a73e8"><span>38.4 л/с</span></div>
+          </div>
+          <div class="domain-bar-meta" style="color:#ef4444">▲ +7.4</div>
+        </div>
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">Восточный</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill" style="width:24%;background:#64748b"><span>16.7 л/с</span></div>
+          </div>
+          <div class="domain-bar-meta" style="color:#22c55e">▼ −0.3</div>
+        </div>
+        <!-- Итого -->
+        <div style="border-top:1px solid #e2e8f0;margin-top:4px;padding-top:8px">
+          <div class="domain-bar-row">
+            <div class="domain-bar-label" style="font-weight:800">ИТОГО</div>
+            <div style="font-size:18px;font-weight:800;color:#1a73e8;padding-left:4px">187.4 л/с</div>
+            <div class="domain-bar-meta" style="color:#ef4444;font-weight:700">▲ +12.8</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">График 2 — Динамика суммарного Q по неделям (area chart)</div>
+  <div class="note">Показывает сезонность и тренды за 8–12 недель. Паводковые пики хорошо видны.</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="chart-title">Σ Q точек мониторинга, л/с · последние 10 недель</div>
+      <svg width="100%" height="140" viewBox="0 0 700 140">
+        <defs>
+          <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3b82f6" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#3b82f6" stop-opacity=".03"/>
+          </linearGradient>
+        </defs>
+        <!-- Grid lines -->
+        <line x1="0" y1="110" x2="700" y2="110" stroke="#f1f5f9" stroke-width="1"/>
+        <line x1="0" y1="80"  x2="700" y2="80"  stroke="#f1f5f9" stroke-width="1"/>
+        <line x1="0" y1="50"  x2="700" y2="50"  stroke="#f1f5f9" stroke-width="1"/>
+        <line x1="0" y1="20"  x2="700" y2="20"  stroke="#f1f5f9" stroke-width="1"/>
+        <!-- Y labels -->
+        <text x="0" y="113" font-size="9" fill="#94a3b8">100</text>
+        <text x="0" y="83"  font-size="9" fill="#94a3b8">150</text>
+        <text x="0" y="53"  font-size="9" fill="#94a3b8">200</text>
+        <text x="0" y="23"  font-size="9" fill="#94a3b8">250</text>
+        <!-- Area fill -->
+        <path d="M28,95 L98,88 L168,78 L238,65 L308,72 L378,90 L448,85 L518,62 L588,48 L658,40 L658,120 L28,120 Z"
+              fill="url(#areaGrad)"/>
+        <!-- Line -->
+        <polyline points="28,95 98,88 168,78 238,65 308,72 378,90 448,85 518,62 588,48 658,40"
+                  fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- Current point -->
+        <circle cx="658" cy="40" r="5" fill="#1a73e8" stroke="#fff" stroke-width="2"/>
+        <circle cx="588" cy="48" r="4" fill="#3b82f6" stroke="#fff" stroke-width="2"/>
+        <!-- Flood annotation -->
+        <rect x="220" y="8" width="76" height="18" rx="4" fill="#fef9c3"/>
+        <text x="258" y="21" font-size="9" fill="#a16207" text-anchor="middle">⚠ паводок</text>
+        <line x1="238" y1="26" x2="238" y2="65" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,2"/>
+        <!-- X labels -->
+        <text x="28"  y="133" font-size="9" fill="#94a3b8" text-anchor="middle">нед.10</text>
+        <text x="168" y="133" font-size="9" fill="#94a3b8" text-anchor="middle">нед.12</text>
+        <text x="308" y="133" font-size="9" fill="#94a3b8" text-anchor="middle">нед.14</text>
+        <text x="448" y="133" font-size="9" fill="#94a3b8" text-anchor="middle">нед.16</text>
+        <text x="588" y="133" font-size="9" fill="#94a3b8" text-anchor="middle">нед.19</text>
+        <text x="658" y="133" font-size="9" fill="#1a73e8" text-anchor="middle" font-weight="700">нед.20</text>
+        <!-- Current value label -->
+        <rect x="630" y="18" width="64" height="18" rx="4" fill="#1a73e8"/>
+        <text x="662" y="31" font-size="10" fill="#fff" font-weight="700" text-anchor="middle">187.4 л/с</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="section-title">График 3 — Топ-5 точек роста (только для режима «Сравнение»)</div>
+  <div class="note">Сортировка по ΔQ — сразу видны проблемные точки. Красный = рост, зелёный = снижение.</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="chart-title">Наибольшие изменения Q · нед. А → нед. Б, л/с</div>
+      <div class="top-changes">
+        <div class="change-row">
+          <div class="change-num" style="background:#ef4444">7</div>
+          <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Северный · гор. −95 · Паводковая</div>
+            <div class="change-bar-wrap"><div class="change-bar" style="width:85%;background:#ef4444"></div></div></div>
+          <div class="change-val trend-up">+3.84</div>
+          <div class="change-pct">3.20 → 7.04 л/с</div>
+        </div>
+        <div class="change-row">
+          <div class="change-num" style="background:#f97316">23</div>
+          <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Западный · гор. −110 · Активная</div>
+            <div class="change-bar-wrap"><div class="change-bar" style="width:60%;background:#f97316"></div></div></div>
+          <div class="change-val trend-up">+2.71</div>
+          <div class="change-pct">1.44 → 4.15 л/с</div>
+        </div>
+        <div class="change-row">
+          <div class="change-num" style="background:#fbbf24">15</div>
+          <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Северный · гор. −80 · Перелив</div>
+            <div class="change-bar-wrap"><div class="change-bar" style="width:45%;background:#fbbf24"></div></div></div>
+          <div class="change-val trend-up">+2.10</div>
+          <div class="change-pct">4.20 → 6.30 л/с</div>
+        </div>
+        <div style="border-top:1px solid #f1f5f9;margin-top:4px;padding-top:8px">
+          <div class="change-row">
+            <div class="change-num" style="background:#22c55e">31</div>
+            <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Южный · гор. −125 · Иссякает</div>
+              <div class="change-bar-wrap"><div class="change-bar" style="width:40%;background:#22c55e"></div></div></div>
+            <div class="change-val trend-down">−1.82</div>
+            <div class="change-pct">3.40 → 1.58 л/с</div>
+          </div>
+          <div class="change-row" style="margin-top:6px">
+            <div class="change-num" style="background:#16a34a">8</div>
+            <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Южный · гор. −110 · Пересохла</div>
+              <div class="change-bar-wrap"><div class="change-bar" style="width:25%;background:#16a34a"></div></div></div>
+            <div class="change-val trend-down">−1.20</div>
+            <div class="change-pct">1.20 → 0.00 л/с</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">График 4 — Распределение статусов (donut) + Горизонты</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <!-- Donut -->
+        <div>
+          <div class="chart-title">Статусы точек · нед. Б (42 точки)</div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <svg width="110" height="110" viewBox="0 0 110 110">
+              <!-- Donut segments approximated -->
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#e2e8f0" stroke-width="18"/>
+              <!-- Active 38% -->
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#39d98a" stroke-width="18"
+                stroke-dasharray="90.7 238.8" stroke-dashoffset="0" transform="rotate(-90 55 55)"/>
+              <!-- Flood 17% -->
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#60a5fa" stroke-width="18"
+                stroke-dasharray="40.5 238.8" stroke-dashoffset="-90.7" transform="rotate(-90 55 55)"/>
+              <!-- Overflow 7% -->
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#a78bfa" stroke-width="18"
+                stroke-dasharray="16.7 238.8" stroke-dashoffset="-131.2" transform="rotate(-90 55 55)"/>
+              <!-- Fading 19% -->
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#f3bf4a" stroke-width="18"
+                stroke-dasharray="45.4 238.8" stroke-dashoffset="-147.9" transform="rotate(-90 55 55)"/>
+              <!-- Dry 19% -->
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#ff6b6b" stroke-width="18"
+                stroke-dasharray="45.4 238.8" stroke-dashoffset="-193.3" transform="rotate(-90 55 55)"/>
+              <text x="55" y="51" text-anchor="middle" font-size="14" font-weight="800" fill="#0f172a">42</text>
+              <text x="55" y="63" text-anchor="middle" font-size="9" fill="#94a3b8">точки</text>
+            </svg>
+            <div class="status-legend">
+              <div class="legend-row"><div class="legend-dot" style="background:#39d98a"></div><span>Активная — 16 (38%)</span></div>
+              <div class="legend-row"><div class="legend-dot" style="background:#60a5fa"></div><span>Паводковая — 7 (17%)</span></div>
+              <div class="legend-row"><div class="legend-dot" style="background:#a78bfa"></div><span>Перелив — 3 (7%)</span></div>
+              <div class="legend-row"><div class="legend-dot" style="background:#f3bf4a"></div><span>Иссякает — 8 (19%)</span></div>
+              <div class="legend-row"><div class="legend-dot" style="background:#ff6b6b"></div><span>Пересохла — 8 (19%)</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- Horizon heatmap -->
+        <div>
+          <div class="chart-title">Q по горизонтам, л/с</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="display:grid;grid-template-columns:50px 1fr 40px;gap:6px;align-items:center">
+              <span style="font-size:10px;color:#334155;text-align:right">−80</span>
+              <div style="height:14px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:35%;background:#3b82f6"></div></div>
+              <span style="font-size:10px;color:#64748b">22.4</span>
+            </div>
+            <div style="display:grid;grid-template-columns:50px 1fr 40px;gap:6px;align-items:center">
+              <span style="font-size:10px;color:#334155;text-align:right">−95</span>
+              <div style="height:14px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:88%;background:#1a73e8"></div></div>
+              <span style="font-size:10px;color:#64748b">56.3</span>
+            </div>
+            <div style="display:grid;grid-template-columns:50px 1fr 40px;gap:6px;align-items:center">
+              <span style="font-size:10px;color:#334155;text-align:right">−110</span>
+              <div style="height:14px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:#1a73e8"></div></div>
+              <span style="font-size:10px;color:#64748b">64.1</span>
+            </div>
+            <div style="display:grid;grid-template-columns:50px 1fr 40px;gap:6px;align-items:center">
+              <span style="font-size:10px;color:#334155;text-align:right">−125</span>
+              <div style="height:14px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:70%;background:#64748b"></div></div>
+              <span style="font-size:10px;color:#64748b">44.6</span>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:8px">Горизонт −110 — максимальный водоприток</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-note">
+    <b>Итого предлагаемые графики:</b><br>
+    <ul class="imp-list" style="margin-top:8px">
+      <li>Горизонтальные бары по доменам с Δ — всегда</li>
+      <li>Area-chart динамики Σ Q по неделям — всегда</li>
+      <li>Топ-5 изменений с цветными барами — только в режиме «Сравнение»</li>
+      <li>Donut статусов + бары по горизонтам — всегда</li>
+      <li>Sparkline на карточке каждой точки — вместо отдельного раздела «История»</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════ 3. КАРТОЧКИ ══════════════════════ -->
+<div id="panel-points" class="panel">
+
+  <div class="section-title">Карточка точки — Одна дата (с мини-спарклайном)</div>
+  <div class="note">Фото слева, метрики справа. Мини-спарклайн показывает 6 последних замеров — динамика без отдельного раздела «История».</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="point-card">
+        <div class="point-head">
+          <span class="point-num">#7</span>
+          <span class="s-flood">Паводковая</span>
+          <span style="font-size:11px;color:#64748b">Северный · гор. −95 · Умеренная</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;color:#94a3b8">пред.: 3.20</span>
+            <span style="color:#cbd5e1">→</span>
+            <span style="font-size:14px;font-weight:800;color:#1a73e8">7.04 л/с</span>
+            <span style="font-size:13px;font-weight:700;color:#ef4444">▲ +3.84</span>
+          </div>
+        </div>
+        <div class="point-body">
+          <div class="point-photo">
+            <span style="font-size:28px">📷</span>
+            <span>19.05.2025</span>
+            <span style="color:#4ade80">✓ загружено</span>
+          </div>
+          <div class="point-data">
+            <div style="font-size:11px;color:#64748b;margin-bottom:8px">
+              Метод: объёмный · Вода: мутная · <b style="color:#dc2626">⚠ аномальный рост +120%</b>
+            </div>
+            <div class="point-metrics">
+              <div class="pm"><div class="pm-val" style="color:#94a3b8">3.20</div><div class="pm-lbl">Пред. замер</div></div>
+              <div class="pm"><div class="pm-val" style="color:#1a73e8">7.04</div><div class="pm-lbl">Текущий, л/с</div></div>
+              <div class="pm"><div class="pm-val" style="color:#ef4444">▲+3.84</div><div class="pm-lbl">Изменение</div></div>
+              <div class="pm"><div class="pm-val" style="color:#ef4444">+120%</div><div class="pm-lbl">Δ %</div></div>
+            </div>
+            <div class="sparkline-wrap">
+              <div class="sparkline-lbl">Q, л/с · последние 6 замеров</div>
+              <svg width="100%" height="40" viewBox="0 0 300 40">
+                <defs>
+                  <linearGradient id="sg1" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#3b82f6" stop-opacity=".2"/>
+                    <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M10,32 L60,30 L110,28 L160,25 L210,22 L260,8 L260,38 L10,38 Z" fill="url(#sg1)"/>
+                <polyline points="10,32 60,30 110,28 160,25 210,22 260,8" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round"/>
+                <circle cx="260" cy="8" r="4" fill="#1a73e8" stroke="#fff" stroke-width="2"/>
+                <text x="265" y="7" font-size="9" fill="#1a73e8" font-weight="700">7.04</text>
+                <text x="10" y="38" font-size="8" fill="#94a3b8">н.15</text>
+                <text x="56" y="38" font-size="8" fill="#94a3b8">н.16</text>
+                <text x="106" y="38" font-size="8" fill="#94a3b8">н.17</text>
+                <text x="156" y="38" font-size="8" fill="#94a3b8">н.18</text>
+                <text x="206" y="38" font-size="8" fill="#94a3b8">н.19</text>
+                <text x="248" y="38" font-size="8" fill="#1a73e8" font-weight="700">н.20</text>
+              </svg>
+            </div>
+            <div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:6px 10px;font-size:11px;color:#78350f;margin-top:6px;border-radius:0 6px 6px 0">
+              ⚠ Полевое наблюдение: Усиление дебита. На бермах −95 фильтрация из массива.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Карточка точки — Сравнение (фото А | Б рядом)</div>
+  <div class="note">Фото двух периодов рядом — сразу виден визуальный контраст. Метрики в 4 ячейках.</div>
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="point-card">
+        <div class="point-head">
+          <span class="point-num">#7</span>
+          <span class="s-flood">Паводковая</span>
+          <span style="font-size:11px;color:#64748b">Северный · гор. −95</span>
+          <div style="margin-left:auto;font-size:14px;font-weight:800;color:#ef4444">▲ +3.84 л/с (+120%)</div>
+        </div>
+        <div class="compare-photos">
+          <div class="compare-photo">
+            <div class="photo-mock"><span style="font-size:24px">📷</span><span>12.05 · нед. А</span></div>
+            <div class="photo-caption">
+              <div class="dot" style="background:#94a3b8"></div>
+              <span style="font-weight:600">Неделя А</span>
+              <span style="margin-left:auto;color:#64748b">3.20 л/с</span>
+            </div>
+          </div>
+          <div class="compare-photo">
+            <div class="photo-mock" style="background:#dbeafe"><span style="font-size:24px">📷</span><span style="color:#1d4ed8">19.05 · нед. Б</span></div>
+            <div class="photo-caption" style="background:#eff6ff">
+              <div class="dot" style="background:#1a73e8"></div>
+              <span style="font-weight:600;color:#1d4ed8">Неделя Б</span>
+              <span style="margin-left:auto;color:#1d4ed8;font-weight:700">7.04 л/с</span>
+            </div>
+          </div>
+        </div>
+        <div class="point-metrics" style="border-radius:0;border-top:1px solid #e2e8f0">
+          <div class="pm"><div class="pm-val" style="color:#94a3b8">3.20</div><div class="pm-lbl">Q нед. А, л/с</div></div>
+          <div class="pm"><div class="pm-val" style="color:#1a73e8">7.04</div><div class="pm-lbl">Q нед. Б, л/с</div></div>
+          <div class="pm"><div class="pm-val" style="color:#ef4444">+3.84</div><div class="pm-lbl">Δ л/с</div></div>
+          <div class="pm"><div class="pm-val" style="color:#ef4444">+120%</div><div class="pm-lbl">Δ %</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════ 4. АНАЛИТИКА ══════════════════════ -->
+<div id="panel-analytics" class="panel">
+
+  <div class="note">Аналитический раздел в конце отчёта — автоматический (без AI) + AI-текст. Делится на три блока: риски, аномалии, сводные выводы.</div>
+
+  <div class="report-canvas">
+  <div class="analytics-section">
+
+    <!-- Шапка раздела -->
+    <div class="analytics-header">
+      <h2>Аналитика и выводы</h2>
+      <p>Автоматически рассчитанные показатели · Карьер ЮРГ · 19.05.2025</p>
+    </div>
+
+    <div class="analytics-body">
+
+      <!-- Риск-таблица -->
+      <div class="analytic-card">
+        <div class="analytic-card-head">
+          <span class="ico">🎯</span>
+          <span class="ttl">Оценка рисков по доменам</span>
+          <span class="badge badge-red">3 зоны повышенного риска</span>
+        </div>
+        <div class="analytic-card-body">
+          <table class="analytic-table">
+            <thead>
+              <tr>
+                <th>Домен</th>
+                <th>Q нед. Б</th>
+                <th>Δ vs А</th>
+                <th>Паводковых</th>
+                <th>Уровень риска</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Западный</b></td>
+                <td>38.4 л/с</td>
+                <td style="color:#ef4444;font-weight:700">▲ +23.9%</td>
+                <td>2 точки</td>
+                <td>
+                  <span style="color:#ef4444;font-weight:700">Высокий</span>
+                  <div class="risk-bar risk-high" style="width:90%"></div>
+                </td>
+              </tr>
+              <tr>
+                <td><b>Северный</b></td>
+                <td>62.1 л/с</td>
+                <td style="color:#ef4444;font-weight:700">▲ +14.6%</td>
+                <td>3 точки</td>
+                <td>
+                  <span style="color:#ef4444;font-weight:700">Высокий</span>
+                  <div class="risk-bar risk-high" style="width:75%"></div>
+                </td>
+              </tr>
+              <tr>
+                <td><b>Южный</b></td>
+                <td>70.2 л/с</td>
+                <td style="color:#22c55e;font-weight:700">▼ −3.0%</td>
+                <td>2 точки</td>
+                <td>
+                  <span style="color:#f59e0b;font-weight:700">Средний</span>
+                  <div class="risk-bar risk-medium" style="width:45%"></div>
+                </td>
+              </tr>
+              <tr>
+                <td><b>Восточный</b></td>
+                <td>16.7 л/с</td>
+                <td style="color:#22c55e;font-weight:700">▼ −1.8%</td>
+                <td>0 точек</td>
+                <td>
+                  <span style="color:#22c55e;font-weight:700">Низкий</span>
+                  <div class="risk-bar risk-low" style="width:20%"></div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Аномалии -->
+      <div class="analytic-card">
+        <div class="analytic-card-head">
+          <span class="ico">⚡</span>
+          <span class="ttl">Аномальные изменения</span>
+          <span class="badge badge-amber">4 точки требуют внимания</span>
+        </div>
+        <div class="analytic-card-body">
+          <table class="analytic-table">
+            <thead>
+              <tr><th>Точка</th><th>Домен</th><th>Горизонт</th><th>Событие</th><th>Q нед. А → Б</th></tr>
+            </thead>
+            <tbody>
+              <tr style="background:#fff5f5">
+                <td><b>#7</b></td><td>Северный</td><td>−95</td>
+                <td style="color:#dc2626;font-weight:600">Рост Q &gt; 100%</td>
+                <td>3.20 → <b style="color:#dc2626">7.04 л/с</b></td>
+              </tr>
+              <tr style="background:#fff5f5">
+                <td><b>#23</b></td><td>Западный</td><td>−110</td>
+                <td style="color:#dc2626;font-weight:600">Новая паводковая</td>
+                <td>Иссякает → <b style="color:#dc2626">Паводковая</b></td>
+              </tr>
+              <tr style="background:#fffbf0">
+                <td><b>#15</b></td><td>Северный</td><td>−80</td>
+                <td style="color:#d97706;font-weight:600">Рост Q &gt; 50%</td>
+                <td>4.20 → <b style="color:#d97706">6.30 л/с</b></td>
+              </tr>
+              <tr style="background:#f0fdf4">
+                <td><b>#31</b></td><td>Южный</td><td>−125</td>
+                <td style="color:#16a34a;font-weight:600">Иссякание</td>
+                <td>3.40 → <b style="color:#16a34a">1.58 л/с</b></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Статистика -->
+      <div class="analytic-card">
+        <div class="analytic-card-head">
+          <span class="ico">📊</span>
+          <span class="ttl">Статистические показатели</span>
+          <span class="badge badge-blue">авто-расчёт</span>
+        </div>
+        <div class="analytic-card-body">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Медиана Q</div>
+              <div style="font-size:18px;font-weight:700;color:#0f172a">3.84 л/с</div>
+              <div style="font-size:10px;color:#64748b">среди 42 точек</div>
+            </div>
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Макс. Q одной точки</div>
+              <div style="font-size:18px;font-weight:700;color:#ef4444">12.4 л/с</div>
+              <div style="font-size:10px;color:#64748b">точка #3 · Южный −110</div>
+            </div>
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Точек без изменений</div>
+              <div style="font-size:18px;font-weight:700;color:#475569">18</div>
+              <div style="font-size:10px;color:#64748b">43% от общего числа</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI-заключение -->
+      <div class="analytic-card">
+        <div class="analytic-card-head">
+          <span class="ico">🤖</span>
+          <span class="ttl">AI-заключение (Claude)</span>
+          <span class="badge badge-blue">Sonnet 4.6 · официальный тон</span>
+        </div>
+        <div class="analytic-card-body">
+          <div class="ai-block">
+            <div class="ai-badge">🤖 AI · Claude Sonnet 4.6</div>
+            <div>
+              По результатам мониторинга за период <b>12–19 мая 2025 г.</b> суммарный водоприток по точкам карьера ЮРГ составил <b>187.4 л/с</b>, что на <b>12.8 л/с (+7.3%)</b> превышает показатели предыдущей недели.
+              <br><br>
+              Наибольший рост зафиксирован в <b>Северном и Западном доменах</b> (+14.6% и +23.9% соответственно). Особого внимания требует точка <b>#7 (гор. −95)</b> с увеличением Q более чем в 2 раза, что может свидетельствовать об активизации трещинно-карстовой фильтрации в блоке.
+              <br><br>
+              Количество паводковых точек возросло с 5 до <b>7</b>. В Южном домене отмечается обратная тенденция — снижение дебитов на 3%, что соответствует плановой динамике дренирования уступа −125.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ РЕЖИМ: 1 НЕДЕЛЯ ══════════════════════ -->
+<div id="panel-single" class="panel">
+  <div class="dark-note">
+    <b>Структура отчёта · Режим «Одна дата»</b> — акцент на текущее состояние, сравнение с предыдущим замером из истории.
+  </div>
+
+  <div class="report-canvas">
+    <div class="report-body">
+
+      <div class="rpt-section-head"><span class="num">1</span>Итоговая сводка · 19.05.2025</div>
+      <!-- KPI -->
+      <div class="kpi-cards-row">
+        <div class="kpi-card c-blue"><div class="kpi-card-icon">💧</div><div class="kpi-card-val">187.4</div><div class="kpi-card-lbl">Σ Q, л/с</div><div class="kpi-card-trend trend-up">▲ +12.8 vs пред.</div></div>
+        <div class="kpi-card c-amber"><div class="kpi-card-icon">⚠️</div><div class="kpi-card-val">7</div><div class="kpi-card-lbl">Паводковых</div><div class="kpi-card-trend trend-up">▲ +2 vs пред.</div></div>
+        <div class="kpi-card c-green"><div class="kpi-card-icon">✅</div><div class="kpi-card-val">42</div><div class="kpi-card-lbl">Точек замерено</div><div class="kpi-card-trend trend-none">все охвачены</div></div>
+        <div class="kpi-card c-purple"><div class="kpi-card-icon">🏗</div><div class="kpi-card-val">8</div><div class="kpi-card-lbl">Канав</div><div class="kpi-card-trend trend-none">1 240 м³/ч</div></div>
+        <div class="kpi-card" style="border-color:#e2e8f0"><div class="kpi-card-icon">📍</div><div class="kpi-card-val">3</div><div class="kpi-card-lbl">Перелив</div><div class="kpi-card-trend trend-up" style="color:#ef4444">▲ +1 vs пред.</div></div>
+      </div>
+      <!-- Бары по доменам -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin:14px 0 10px">Водоприток по доменам</div>
+      <div class="domain-bars">
+        <div class="domain-bar-row"><div class="domain-bar-label">Южный</div><div class="domain-bar-track"><div class="domain-bar-fill bar-b" style="width:100%"><span>70.2 л/с</span></div></div><div class="domain-bar-meta trend-down">▼ −3.0%</div></div>
+        <div class="domain-bar-row"><div class="domain-bar-label">Северный</div><div class="domain-bar-track"><div class="domain-bar-fill" style="width:88%;background:#1a73e8"><span>62.1 л/с</span></div></div><div class="domain-bar-meta trend-up">▲ +14.6%</div></div>
+        <div class="domain-bar-row"><div class="domain-bar-label">Западный</div><div class="domain-bar-track"><div class="domain-bar-fill" style="width:55%;background:#1a73e8"><span>38.4 л/с</span></div></div><div class="domain-bar-meta trend-up">▲ +23.9%</div></div>
+      </div>
+      <!-- Donut + timeline side by side -->
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;margin-top:16px">
+        <div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:8px">Статусы точек</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <svg width="80" height="80" viewBox="0 0 110 110">
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#e2e8f0" stroke-width="18"/>
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#39d98a" stroke-width="18" stroke-dasharray="90.7 238.8" stroke-dashoffset="0" transform="rotate(-90 55 55)"/>
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#60a5fa" stroke-width="18" stroke-dasharray="40.5 238.8" stroke-dashoffset="-90.7" transform="rotate(-90 55 55)"/>
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#a78bfa" stroke-width="18" stroke-dasharray="16.7 238.8" stroke-dashoffset="-131.2" transform="rotate(-90 55 55)"/>
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#f3bf4a" stroke-width="18" stroke-dasharray="45.4 238.8" stroke-dashoffset="-147.9" transform="rotate(-90 55 55)"/>
+              <circle cx="55" cy="55" r="38" fill="none" stroke="#ff6b6b" stroke-width="18" stroke-dasharray="45.4 238.8" stroke-dashoffset="-193.3" transform="rotate(-90 55 55)"/>
+              <text x="55" y="51" text-anchor="middle" font-size="14" font-weight="800" fill="#0f172a">42</text>
+              <text x="55" y="63" text-anchor="middle" font-size="9" fill="#94a3b8">точки</text>
+            </svg>
+            <div class="status-legend" style="font-size:10px">
+              <div class="legend-row"><div class="legend-dot" style="background:#39d98a"></div>Актив. 16</div>
+              <div class="legend-row"><div class="legend-dot" style="background:#60a5fa"></div>Паводк. 7</div>
+              <div class="legend-row"><div class="legend-dot" style="background:#a78bfa"></div>Перелив 3</div>
+              <div class="legend-row"><div class="legend-dot" style="background:#f3bf4a"></div>Иссяк. 8</div>
+              <div class="legend-row"><div class="legend-dot" style="background:#ff6b6b"></div>Пересохла 8</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:8px">Динамика Σ Q, л/с</div>
+          <svg width="100%" height="70" viewBox="0 0 400 70">
+            <path d="M10,55 L65,50 L120,45 L175,37 L230,40 L285,52 L340,46 L380,22 L380,65 L10,65 Z" fill="url(#areaGrad)"/>
+            <polyline points="10,55 65,50 120,45 175,37 230,40 285,52 340,46 380,22" fill="none" stroke="#3b82f6" stroke-width="2"/>
+            <circle cx="380" cy="22" r="4" fill="#1a73e8" stroke="#fff" stroke-width="2"/>
+            <text x="375" y="16" font-size="9" fill="#1a73e8" font-weight="700" text-anchor="middle">187.4</text>
+          </svg>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ РЕЖИМ: СРАВНЕНИЕ ══════════════════════ -->
+<div id="panel-compare" class="panel">
+  <div class="dark-note">
+    <b>Структура отчёта · Режим «Сравнение недель»</b> — акцент на изменения, дельты, «что выросло, что упало».
+  </div>
+
+  <div class="report-canvas">
+    <div class="report-body">
+      <div class="rpt-section-head"><span class="num">1</span>Итоговая сводка · нед. 19 → нед. 20</div>
+
+      <!-- KPI с Δ как главными числами -->
+      <div class="kpi-cards-row">
+        <div class="kpi-card c-red"><div class="kpi-card-icon">📈</div><div class="kpi-card-val" style="color:#ef4444">▲ +12.8</div><div class="kpi-card-lbl">Δ Q, л/с</div><div class="kpi-card-trend" style="color:#64748b">174.6 → 187.4</div></div>
+        <div class="kpi-card c-amber"><div class="kpi-card-icon">⚠️</div><div class="kpi-card-val" style="color:#f59e0b">▲ +2</div><div class="kpi-card-lbl">Δ паводковых</div><div class="kpi-card-trend" style="color:#64748b">5 → 7 точек</div></div>
+        <div class="kpi-card c-blue"><div class="kpi-card-icon">💧</div><div class="kpi-card-val">187.4</div><div class="kpi-card-lbl">Σ Q нед. Б</div><div class="kpi-card-trend" style="color:#64748b">+7.3% vs нед. А</div></div>
+        <div class="kpi-card c-green"><div class="kpi-card-icon">✅</div><div class="kpi-card-val">42 / 42</div><div class="kpi-card-lbl">Точек А / Б</div><div class="kpi-card-trend trend-none">охват 100%</div></div>
+        <div class="kpi-card"><div class="kpi-card-icon">📍</div><div class="kpi-card-val" style="color:#dc2626">▲ +1</div><div class="kpi-card-lbl">Δ перелив</div><div class="kpi-card-trend" style="color:#64748b">2 → 3 точки</div></div>
+      </div>
+
+      <!-- Топ изменений -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin:14px 0 10px">⚡ Топ изменений</div>
+      <div class="top-changes">
+        <div class="change-row">
+          <div class="change-num" style="background:#ef4444">7</div>
+          <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Северный · −95 · Паводковая</div><div class="change-bar-wrap"><div class="change-bar" style="width:85%;background:#ef4444"></div></div></div>
+          <div class="change-val trend-up">+3.84</div><div class="change-pct">3.20 → 7.04</div>
+        </div>
+        <div class="change-row">
+          <div class="change-num" style="background:#f97316">23</div>
+          <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Западный · −110 · Активная</div><div class="change-bar-wrap"><div class="change-bar" style="width:60%;background:#f97316"></div></div></div>
+          <div class="change-val trend-up">+2.71</div><div class="change-pct">1.44 → 4.15</div>
+        </div>
+        <div class="change-row">
+          <div class="change-num" style="background:#22c55e">31</div>
+          <div><div style="font-size:10px;color:#64748b;margin-bottom:2px">Южный · −125 · Иссякает</div><div class="change-bar-wrap"><div class="change-bar" style="width:35%;background:#22c55e"></div></div></div>
+          <div class="change-val trend-down">−1.82</div><div class="change-pct">3.40 → 1.58</div>
+        </div>
+      </div>
+
+      <!-- Сравнение А vs Б по доменам -->
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin:14px 0 10px">Домены А vs Б</div>
+      <div class="domain-bars">
+        <div style="display:grid;grid-template-columns:100px 1fr 1fr 70px;gap:6px;margin-bottom:4px;font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">
+          <div></div><div>Нед. А</div><div>Нед. Б</div><div>Δ</div>
+        </div>
+        <div style="display:grid;grid-template-columns:100px 1fr 1fr 70px;gap:6px;align-items:center;margin-bottom:6px">
+          <div style="font-size:11px;color:#334155;font-weight:600;text-align:right">Южный</div>
+          <div style="height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:#93c5fd;display:flex;align-items:center;padding-left:6px"><span style="font-size:10px;font-weight:700;color:#1e40af">72.4</span></div></div>
+          <div style="height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:97%;background:#1a73e8;display:flex;align-items:center;padding-left:6px"><span style="font-size:10px;font-weight:700;color:#fff">70.2</span></div></div>
+          <div style="font-size:11px;color:#22c55e;font-weight:600">▼ −2.2</div>
+        </div>
+        <div style="display:grid;grid-template-columns:100px 1fr 1fr 70px;gap:6px;align-items:center;margin-bottom:6px">
+          <div style="font-size:11px;color:#334155;font-weight:600;text-align:right">Северный</div>
+          <div style="height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:77%;background:#93c5fd;display:flex;align-items:center;padding-left:6px"><span style="font-size:10px;font-weight:700;color:#1e40af">54.2</span></div></div>
+          <div style="height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:88%;background:#1a73e8;display:flex;align-items:center;padding-left:6px"><span style="font-size:10px;font-weight:700;color:#fff">62.1</span></div></div>
+          <div style="font-size:11px;color:#ef4444;font-weight:600">▲ +7.9</div>
+        </div>
+        <div style="display:grid;grid-template-columns:100px 1fr 1fr 70px;gap:6px;align-items:center">
+          <div style="font-size:11px;color:#334155;font-weight:600;text-align:right">Западный</div>
+          <div style="height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:44%;background:#93c5fd;display:flex;align-items:center;padding-left:6px"><span style="font-size:10px;font-weight:700;color:#1e40af">31.0</span></div></div>
+          <div style="height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:55%;background:#1a73e8;display:flex;align-items:center;padding-left:6px"><span style="font-size:10px;font-weight:700;color:#fff">38.4</span></div></div>
+          <div style="font-size:11px;color:#ef4444;font-weight:600">▲ +7.4</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
