@@ -2202,6 +2202,11 @@ function buildPointCard(pb, pa, s) {
   var qb = parseFloat(pb.flowRate) || 0;
   var isSingle = s.reportMode === 'single';
 
+  // In single mode ptsA===ptsB (same date), so passed pa is the same record — not a "previous" value
+  if (isSingle && pa && normDateISO(pa.monitoringDate) === normDateISO(pb.monitoringDate)) {
+    pa = null;
+  }
+
   // В single режиме pa может быть null — берём предыдущую дату из истории
   if (pa == null && isSingle) {
     var hist = (ReportState.ptHistory || {})[String(pb.pointNumber)] || [];
@@ -2740,6 +2745,267 @@ function buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB) {
   '</div>';
 }
 
+// ── Горизонтальный бар-чарт по доменам ───────────────────
+function buildDomainBarsChart(ptsA, ptsB, isSingle) {
+  var domenSet = {}, domenKeys = [];
+  ptsA.concat(ptsB).forEach(function(p) {
+    var d = p.domain || p.domen || '—';
+    if (!domenSet[d]) { domenSet[d] = 1; domenKeys.push(d); }
+  });
+  domenKeys.sort();
+  if (!domenKeys.length) return '';
+
+  var rows = domenKeys.map(function(dom) {
+    var dA = ptsA.filter(function(p){ return (p.domain||p.domen||'—') === dom; });
+    var dB = ptsB.filter(function(p){ return (p.domain||p.domen||'—') === dom; });
+    var qDA = dA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); }, 0);
+    var qDB = dB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); }, 0);
+    return { dom: dom, qA: qDA, qB: qDB, nB: dB.length, delta: qDB - qDA };
+  });
+
+  var maxQ = Math.max.apply(null, rows.map(function(r){ return Math.max(r.qA, r.qB); })) || 1;
+
+  var barsHtml = rows.map(function(r) {
+    var wB = Math.round(r.qB / maxQ * 100);
+    var wA = Math.round(r.qA / maxQ * 100);
+    var isUp = r.delta > 0.001, isDown = r.delta < -0.001;
+    var dColor = isUp ? '#d93025' : isDown ? '#188038' : '#888';
+    var dTxt = Math.abs(r.delta) > 0.001 ? (isUp ? '▲+' : '▼') + Math.abs(r.delta).toFixed(1) : '→';
+    var track = isSingle
+      ? '<div style="height:20px;background:#f1f5f9;border-radius:3px;overflow:hidden">' +
+          '<div style="height:100%;width:' + wB + '%;background:#1a73e8;border-radius:3px;display:flex;align-items:center;padding-left:' + (wB > 15 ? '8px' : '2px') + '">' +
+          (wB > 12 ? '<span style="font-size:9px;font-weight:700;color:#fff;white-space:nowrap">' + r.qB.toFixed(1) + ' л/с</span>' : '') +
+          '</div></div>'
+      : '<div>' +
+          '<div style="height:7px;background:#f1f5f9;border-radius:2px;overflow:hidden;margin-bottom:3px">' +
+            '<div style="height:100%;width:' + wA + '%;background:#93c5fd;border-radius:2px"></div></div>' +
+          '<div style="height:13px;background:#f1f5f9;border-radius:2px;overflow:hidden">' +
+            '<div style="height:100%;width:' + wB + '%;background:#1a73e8;border-radius:2px;display:flex;align-items:center;padding-left:' + (wB > 15 ? '6px' : '2px') + '">' +
+            (wB > 12 ? '<span style="font-size:9px;font-weight:700;color:#fff;white-space:nowrap">' + r.qB.toFixed(1) + '</span>' : '') +
+            '</div></div></div>';
+    return '<div style="display:grid;grid-template-columns:110px 1fr 90px;gap:10px;align-items:center">' +
+      '<div style="font-size:11px;color:#334155;font-weight:600;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escAttr(r.dom) + '</div>' +
+      '<div>' + track + '</div>' +
+      '<div style="text-align:right">' +
+        '<div style="font-size:11px;font-weight:700;color:#1a73e8;white-space:nowrap">' + r.qB.toFixed(1) + ' л/с</div>' +
+        (!isSingle
+          ? '<div style="font-size:10px;font-weight:700;color:' + dColor + ';white-space:nowrap">' + dTxt + '</div>'
+          : '<div style="font-size:9px;color:#94a3b8">' + r.nB + ' тч.</div>') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var legend = isSingle ? '' :
+    '<div style="display:flex;gap:16px;font-size:9px;color:#94a3b8;margin-bottom:8px">' +
+      '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:5px;background:#93c5fd;border-radius:1px"></span>Нед. А</span>' +
+      '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;background:#1a73e8;border-radius:1px"></span>Нед. Б</span>' +
+    '</div>';
+
+  return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-top:14px">' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:10px">Σ Q по доменам, л/с</div>' +
+    legend +
+    '<div style="display:flex;flex-direction:column;gap:8px">' + barsHtml + '</div>' +
+  '</div>';
+}
+
+// ── Топ-5 изменений Q (только compare) ──────────────────
+function buildTopChangesChart(ptsA, ptsB) {
+  var changes = [];
+  ptsB.forEach(function(pb) {
+    var pa = null;
+    for (var i = 0; i < ptsA.length; i++) { if (ptsA[i].pointNumber === pb.pointNumber) { pa = ptsA[i]; break; } }
+    if (!pa) return;
+    var qa = parseFloat(pa.flowRate) || 0;
+    var qb = parseFloat(pb.flowRate) || 0;
+    var delta = qb - qa;
+    if (Math.abs(delta) < 0.001) return;
+    changes.push({ num: pb.pointNumber, domain: pb.domain||pb.domen||'—', qa: qa, qb: qb, delta: delta });
+  });
+  if (!changes.length) return '';
+  changes.sort(function(a, b){ return Math.abs(b.delta) - Math.abs(a.delta); });
+  var top = changes.slice(0, 5);
+  var maxAbs = Math.max.apply(null, top.map(function(r){ return Math.abs(r.delta); })) || 1;
+
+  var html = top.map(function(r, i) {
+    var w = Math.round(Math.abs(r.delta) / maxAbs * 100);
+    var isUp = r.delta > 0;
+    var color = isUp ? '#d93025' : '#188038';
+    var pct = r.qa > 0 ? (Math.abs(r.delta) / r.qa * 100).toFixed(0) + '%' : '—';
+    return '<div style="display:grid;grid-template-columns:28px 1fr 76px 44px;gap:8px;align-items:center;margin-bottom:6px">' +
+      '<div style="width:24px;height:24px;border-radius:4px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">' + (i+1) + '</div>' +
+      '<div>' +
+        '<div style="font-size:10px;font-weight:600;color:#334155;margin-bottom:3px">#' + escAttr(String(r.num)) + ' · ' + escAttr(r.domain) + '</div>' +
+        '<div style="height:12px;background:#f1f5f9;border-radius:3px;overflow:hidden">' +
+          '<div style="height:100%;width:' + w + '%;background:' + color + ';border-radius:3px"></div></div>' +
+      '</div>' +
+      '<div style="text-align:right;font-size:11px;font-weight:700;color:' + color + ';white-space:nowrap">' + (isUp?'▲+':'▼') + Math.abs(r.delta).toFixed(2) + ' л/с</div>' +
+      '<div style="text-align:right;font-size:10px;color:#94a3b8">' + pct + '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-top:14px">' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:10px">Топ-5 изменений Q (нед. А → Б)</div>' +
+    html +
+  '</div>';
+}
+
+// ── Динамика Σ Q по неделям (из истории точек) ───────────
+function buildSummaryTimeline(s) {
+  var ptH = ReportState.ptHistory || {};
+  var byDate = {};
+  Object.keys(ptH).forEach(function(num) {
+    (ptH[num] || []).forEach(function(e) {
+      var d = normDateISO(e.monitoringDate);
+      var q = parseFloat(e.flowRate);
+      if (!d || isNaN(q)) return;
+      byDate[d] = (byDate[d] || 0) + q;
+    });
+  });
+  var allDates = Object.keys(byDate).sort();
+  if (allDates.length < 3) return '';
+  if (allDates.length > 12) allDates = allDates.slice(allDates.length - 12);
+  var data = allDates.map(function(d) { return { date: d, q: byDate[d] }; });
+  var n = data.length;
+
+  var markerB = s.dateB || '';
+  var markerA = s.reportMode !== 'single' ? (s.dateA || '') : '';
+
+  var W = 680, CH = 90, DH = 38, H = CH + DH;
+  var PL = 40, PR = 12, PT = 12, PB = 2;
+  var iW = W - PL - PR, iH = CH - PT - PB;
+
+  var minQ = Math.min.apply(null, data.map(function(d){ return d.q; }));
+  var maxQ = Math.max.apply(null, data.map(function(d){ return d.q; }));
+  if (maxQ === minQ) { minQ = Math.max(0, minQ - 1); maxQ += 1; }
+  var qRange = maxQ - minQ;
+
+  function sx(i) { return PL + i / (n - 1) * iW; }
+  function sy(q) { return PT + iH - (q - minQ) / qRange * iH; }
+
+  var polyline = data.map(function(d,i){ return sx(i).toFixed(1) + ',' + sy(d.q).toFixed(1); }).join(' ');
+  var area = polyline + ' ' + (PL+iW).toFixed(1) + ',' + (PT+iH) + ' ' + PL + ',' + (PT+iH);
+
+  var yAxis = '';
+  for (var yi = 0; yi <= 3; yi++) {
+    var qv = minQ + qRange * yi / 3;
+    var yp = sy(qv).toFixed(1);
+    yAxis += '<line x1="' + (PL-3) + '" y1="' + yp + '" x2="' + (PL+iW) + '" y2="' + yp + '" stroke="#f0f0f0" stroke-width="1"/>' +
+      '<text x="' + (PL-5) + '" y="' + yp + '" text-anchor="end" font-size="9" dominant-baseline="middle" fill="#bbb">' + qv.toFixed(0) + '</text>';
+  }
+
+  var dots = '', dateLabels = '', markers = '';
+  data.forEach(function(d, i) {
+    var cx = sx(i), cy = sy(d.q);
+    var isMkB = d.date === markerB, isMkA = !!(markerA && d.date === markerA);
+    var fill = isMkB ? '#1a73e8' : isMkA ? '#888' : '#fff';
+    var stroke = isMkB ? '#1a73e8' : isMkA ? '#888' : '#1a73e8';
+    var r = (isMkA || isMkB) ? 5 : 3;
+    dots += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.5"/>';
+    if (isMkA) markers += '<line x1="' + cx.toFixed(1) + '" y1="' + PT + '" x2="' + cx.toFixed(1) + '" y2="' + (PT+iH) + '" stroke="#aaa" stroke-width="1" stroke-dasharray="3,2"/>';
+    if (isMkB) markers += '<line x1="' + cx.toFixed(1) + '" y1="' + PT + '" x2="' + cx.toFixed(1) + '" y2="' + (PT+iH) + '" stroke="#1a73e8" stroke-width="1.5" stroke-dasharray="3,2"/>';
+    var dp = d.date.split('-');
+    var lbl = dp.length === 3 ? dp[2] + '.' + dp[1] : d.date.slice(5);
+    var lColor = isMkB ? '#1a73e8' : isMkA ? '#666' : '#aaa';
+    var lSize = (isMkA || isMkB) ? 9 : 8;
+    dateLabels += '<text transform="rotate(-38,' + cx.toFixed(1) + ',' + CH + ')" x="' + cx.toFixed(1) + '" y="' + CH + '" text-anchor="end" font-size="' + lSize + '" fill="' + lColor + '">' + lbl + '</text>';
+  });
+
+  return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-top:14px">' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:6px">Σ Q (все точки), л/с — динамика по неделям</div>' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" style="width:100%;display:block;overflow:visible">' +
+      '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT+iH) + '" stroke="#e8e8e8" stroke-width="1"/>' +
+      '<line x1="' + PL + '" y1="' + (PT+iH) + '" x2="' + (PL+iW) + '" y2="' + (PT+iH) + '" stroke="#e8e8e8" stroke-width="1"/>' +
+      yAxis + markers +
+      '<polygon points="' + area + '" fill="#1a73e8" opacity=".07"/>' +
+      '<polyline points="' + polyline + '" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round"/>' +
+      dots + dateLabels +
+    '</svg>' +
+  '</div>';
+}
+
+// ── Аналитика и оценка рисков ─────────────────────────────
+function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) {
+  var STATUS_COLORS = { 'Новая':'#4f8dff','Активная':'#39d98a','Иссякает':'#f3bf4a','Пересохла':'#ff6b6b','Паводковая':'#a78bfa','Перелив':'#38bdf8' };
+
+  // Аномалии: точки с изменением ≥ 30% (только compare)
+  var anomaliesHtml = '';
+  if (!isSingle && ptsA.length && ptsB.length) {
+    var anomList = [];
+    ptsB.forEach(function(pb) {
+      var pa = null;
+      for (var i = 0; i < ptsA.length; i++) { if (ptsA[i].pointNumber === pb.pointNumber) { pa = ptsA[i]; break; } }
+      if (!pa) return;
+      var qa = parseFloat(pa.flowRate) || 0;
+      var qb = parseFloat(pb.flowRate) || 0;
+      var delta = qb - qa;
+      var pct = qa > 0 ? delta / qa * 100 : (qb > 0 ? 100 : 0);
+      if (Math.abs(pct) < 30) return;
+      anomList.push({ num: pb.pointNumber, domain: pb.domain||pb.domen||'—', status: pb.status||'—', qa: qa, qb: qb, delta: delta, pct: pct });
+    });
+    if (anomList.length) {
+      anomList.sort(function(a, b){ return Math.abs(b.pct) - Math.abs(a.pct); });
+      var anomRows = anomList.map(function(r) {
+        var isUp = r.delta > 0;
+        var risk = isUp ? (r.pct > 100 ? '🔴 Критично' : '🟡 Рост') : '🟢 Снижение';
+        return '<tr style="background:' + (isUp ? '#fff8e1' : '#f0fef4') + '">' +
+          '<td><b>#' + escAttr(String(r.num)) + '</b></td>' +
+          '<td>' + escAttr(r.domain) + '</td>' +
+          '<td>' + escAttr(r.status) + '</td>' +
+          '<td style="text-align:right">' + r.qa.toFixed(2) + '</td>' +
+          '<td style="text-align:right;font-weight:700;color:#1a73e8">' + r.qb.toFixed(2) + '</td>' +
+          '<td style="text-align:right;font-weight:700;color:' + (isUp?'#d93025':'#188038') + '">' + (isUp?'▲+':'▼') + Math.abs(r.delta).toFixed(2) + '</td>' +
+          '<td style="text-align:right;color:' + (isUp?'#d93025':'#188038') + '">' + (isUp?'+':'') + r.pct.toFixed(0) + '%</td>' +
+          '<td>' + risk + '</td>' +
+        '</tr>';
+      }).join('');
+      anomaliesHtml = '<div class="rp-section-sub">Аномалии — изменение Q ≥ 30%</div>' +
+        '<table class="rp-table" style="margin-bottom:14px"><thead><tr>' +
+          '<th>№</th><th>Домен</th><th>Статус</th>' +
+          '<th style="text-align:right">Q нед. А, л/с</th><th style="text-align:right">Q нед. Б, л/с</th>' +
+          '<th style="text-align:right">Δ л/с</th><th style="text-align:right">Δ %</th><th>Оценка</th>' +
+        '</tr></thead><tbody>' + anomRows + '</tbody></table>';
+    }
+  }
+
+  // Статистика Q по точкам нед. Б
+  var statsHtml = '';
+  var qVals = ptsB.map(function(p){ return parseFloat(p.flowRate)||0; }).filter(function(q){ return q > 0; });
+  if (qVals.length >= 2) {
+    var qSum = qVals.reduce(function(a,b){ return a+b; }, 0);
+    var qAvg = qSum / qVals.length;
+    var qMin = Math.min.apply(null, qVals);
+    var qMax = Math.max.apply(null, qVals);
+    var qStd = Math.sqrt(qVals.reduce(function(a,q){ return a + Math.pow(q-qAvg,2); }, 0) / qVals.length);
+    var byStatus = {};
+    ptsB.forEach(function(p){ var st = p.status||'—'; byStatus[st] = (byStatus[st]||0)+1; });
+    var statusChips = Object.keys(byStatus).map(function(st) {
+      return '<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px 4px 0;font-size:10px">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + (STATUS_COLORS[st]||'#888') + ';flex-shrink:0"></span>' +
+        '<b>' + byStatus[st] + '</b> ' + escAttr(st) + '</span>';
+    }).join('');
+    statsHtml = '<div class="rp-section-sub" style="margin-top:14px">Статистика Q ' + (isSingle ? '· ' + fmtDate(s.dateB) : '· нед. Б') + '</div>' +
+      '<div class="rp-kpi-grid" style="margin-bottom:10px">' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + qMin.toFixed(2) + '</div><div class="rp-kpi-label">Min Q, л/с</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + qMax.toFixed(2) + '</div><div class="rp-kpi-label">Max Q, л/с</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + qAvg.toFixed(2) + '</div><div class="rp-kpi-label">Ср. Q, л/с</div></div>' +
+        '<div class="rp-kpi"><div class="rp-kpi-val">' + qStd.toFixed(2) + '</div><div class="rp-kpi-label">Ст. откл. σ</div></div>' +
+      '</div>' +
+      '<div style="margin-bottom:12px">' + statusChips + '</div>';
+  }
+
+  // AI-рекомендации
+  var aiBlock = ai.recommendations
+    ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.recommendations) + '</div>'
+    : '';
+
+  if (!anomaliesHtml && !statsHtml && !aiBlock) return '';
+
+  return '<section class="rp-section">' +
+    '<h2>' + secNum + '. Аналитика</h2>' +
+    anomaliesHtml + statsHtml + aiBlock +
+  '</section>';
+}
+
 // ── Основной HTML отчёта ──────────────────────────────────
 function buildReportHTML(s) {
   var ptsA = ReportState.ptsA || [], ptsB = ReportState.ptsB || [];
@@ -2830,8 +3096,12 @@ function buildReportHTML(s) {
       '<td class="' + (dd>=0?'rp-up':'rp-down') + '">' + (dd>=0?'+':'') + dd.toFixed(2) + '</td></tr>';
   }).join('');
 
+  var domainBarsHtml = buildDomainBarsChart(ptsA, ptsB, isSingle);
+  var topChangesHtml = isSingle ? '' : buildTopChangesChart(ptsA, ptsB);
+  var timelineHtml   = buildSummaryTimeline(s);
+
   var summary = '<section class="rp-section"><h2>1. Итоговая сводка</h2>' +
-    summaryAI + summaryContent + summaryCharts +
+    summaryAI + summaryContent + domainBarsHtml + topChangesHtml + summaryCharts + timelineHtml +
     '<div class="rp-section-sub" style="margin-top:14px">Водоприток по горизонтам / уступам</div>' +
     horizonContent +
     (domenRows ? '<div class="rp-section-sub" style="margin-top:14px">Водоприток по доменам</div>' +
@@ -2995,15 +3265,6 @@ function buildReportHTML(s) {
       '</tbody></table></section>';
   }
 
-  // ── Заключение
-  var aiRec = ai.recommendations ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.recommendations) + '</div>' : '';
-  var concl = '<section class="rp-section"><h2>6. Заключение и рекомендации</h2>' +
-    aiRec +
-    (s.conclusions
-      ? '<div class="rp-conclusion-text">' + escAttr(s.conclusions).replace(/\n/g,'<br>') + '</div>'
-      : '<div class="rp-conclusion-text rp-conclusion-text--empty">Заключение не заполнено</div>') +
-  '</section>';
-
   return '<!DOCTYPE html><html lang="ru"><head>' +
     '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>Отчёт — Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' — ' + fmtDate(s.dateB) + '</title>' +
@@ -3013,7 +3274,20 @@ function buildReportHTML(s) {
     title +
     (function() {
       var dewateringSection = s.includeDewatering ? buildDewateringSection(s) : '';
-      return '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + dewateringSection + compareSection + concl + '</div>';
+      var secCount = 1 +
+        (mapSection      ? 1 : 0) +
+        (domensSection   ? 1 : 0) +
+        (ditchesSection  ? 1 : 0) +
+        (dewateringSection ? 1 : 0) +
+        (compareSection  ? 1 : 0);
+      var analyticsSection = buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secCount + 1);
+      var conclNum = analyticsSection ? secCount + 2 : secCount + 1;
+      var concl = '<section class="rp-section"><h2>' + conclNum + '. Заключение и рекомендации</h2>' +
+        (s.conclusions
+          ? '<div class="rp-conclusion-text">' + escAttr(s.conclusions).replace(/\n/g,'<br>') + '</div>'
+          : '<div class="rp-conclusion-text rp-conclusion-text--empty">Заключение не заполнено</div>') +
+      '</section>';
+      return '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + dewateringSection + compareSection + analyticsSection + concl + '</div>';
     })() +
     '<div class="rp-footer">' +
   '<div>Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</div>' +
