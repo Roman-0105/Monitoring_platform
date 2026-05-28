@@ -168,6 +168,10 @@ function restoreSettings() {
   var mode = s.reportMode || 'single';
   ReportState.settings.reportMode = mode;
   setReportMode(mode);
+  updateRpPreviewPanel();
+  // Update author info in steps sidebar
+  var infoEl = document.getElementById('rp-steps-author-info');
+  if (infoEl && s.author) infoEl.textContent = s.author + ' · v' + (s.reportVersion || 1);
 }
 
 function saveReportSettings() {
@@ -229,6 +233,8 @@ function bindEvents() {
   });
   // Инициализируем выпадающий список промптов
   fillPresetSelect();
+  // Initialize sections list after first render
+  setTimeout(function(){ renderSectionsList(); }, 0);
 }
 
 // ── UI настроек ───────────────────────────────────────────
@@ -438,6 +444,212 @@ function cancelEditPrompt() {
   if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
+// ── Порядок разделов ─────────────────────────────────────
+function getRpSectionsOrder() {
+  try {
+    var saved = JSON.parse(localStorage.getItem('rp-sections-order') || 'null');
+    if (saved && Array.isArray(saved) && saved.length === RP_SECTIONS.length) return saved;
+  } catch(e) {}
+  return RP_SECTIONS.map(function(s){ return s.id; });
+}
+function saveRpSectionsOrder(order) {
+  try { localStorage.setItem('rp-sections-order', JSON.stringify(order)); } catch(e) {}
+}
+function getSortedSections() {
+  var order = getRpSectionsOrder();
+  return order.map(function(id){ return RP_SECTIONS.find(function(s){ return s.id === id; }); }).filter(Boolean);
+}
+
+// ── Шаблоны ───────────────────────────────────────────────
+function getRpTemplates() {
+  try { return JSON.parse(localStorage.getItem('rp-templates') || '[]'); } catch(e) { return []; }
+}
+function saveRpTemplate(name) {
+  if (!name) return;
+  var tpls = getRpTemplates();
+  var s = ReportState.settings;
+  var order = getRpSectionsOrder();
+  var checks = {};
+  RP_SECTIONS.forEach(function(sec) {
+    var el = document.getElementById(sec.chk);
+    checks[sec.id] = el ? el.checked : sec.defOn;
+  });
+  tpls.unshift({ id: 't-' + Date.now(), name: name, createdAt: new Date().toISOString().slice(0,10),
+    settings: { author: s.author, position: s.position, quarryName: s.quarryName, objectName: s.objectName, reportMode: s.reportMode },
+    sections: order, checkboxes: checks });
+  if (tpls.length > 20) tpls = tpls.slice(0, 20);
+  try { localStorage.setItem('rp-templates', JSON.stringify(tpls)); } catch(e) {}
+}
+function loadRpTemplate(id) {
+  var tpl = getRpTemplates().find(function(t){ return t.id === id; });
+  if (!tpl) return;
+  if (tpl.settings) {
+    if (tpl.settings.author)     setField('rp-author',      tpl.settings.author);
+    if (tpl.settings.position)   setField('rp-position',    tpl.settings.position);
+    if (tpl.settings.quarryName) setField('rp-quarry-name', tpl.settings.quarryName);
+    if (tpl.settings.objectName) setField('rp-object-name', tpl.settings.objectName);
+    if (tpl.settings.reportMode) setReportMode(tpl.settings.reportMode);
+  }
+  if (tpl.sections) saveRpSectionsOrder(tpl.sections);
+  if (tpl.checkboxes) {
+    RP_SECTIONS.forEach(function(sec) {
+      var el = document.getElementById(sec.chk);
+      if (el && tpl.checkboxes[sec.id] !== undefined) el.checked = tpl.checkboxes[sec.id];
+    });
+  }
+  renderSectionsList();
+  saveReportSettings();
+  Toast.show('Шаблон «' + escHTML(tpl.name) + '» загружен', 'success');
+}
+function deleteRpTemplate(id) {
+  var tpls = getRpTemplates().filter(function(t){ return t.id !== id; });
+  try { localStorage.setItem('rp-templates', JSON.stringify(tpls)); } catch(e) {}
+  renderRpTemplatesList();
+}
+
+// ── История отчётов ───────────────────────────────────────
+function getRpHistory() {
+  try { return JSON.parse(localStorage.getItem('rp-report-history') || '[]'); } catch(e) { return []; }
+}
+function addRpHistory(s) {
+  var hist = getRpHistory();
+  var secs = RP_SECTIONS.filter(function(sec){ var el = document.getElementById(sec.chk); return el && el.checked; }).map(function(sec){ return sec.id; });
+  hist.unshift({ id: 'h-' + Date.now(), date: s.dateReport || new Date().toISOString().slice(0,10),
+    quarryName: s.quarryName || '—', dateA: s.dateA, dateB: s.dateB, mode: s.reportMode, version: s.reportVersion, sections: secs });
+  if (hist.length > 10) hist = hist.slice(0, 10);
+  try { localStorage.setItem('rp-report-history', JSON.stringify(hist)); } catch(e) {}
+}
+
+// ── Переключение шагов ────────────────────────────────────
+function switchStep(n) {
+  ReportState.currentStep = n;
+  for (var i = 1; i <= 5; i++) {
+    var panel = document.getElementById('rp-panel-' + i);
+    var btn   = document.getElementById('rp-stepbtn-' + i);
+    if (panel) panel.style.display = (i === n) ? '' : 'none';
+    if (btn) {
+      btn.classList.toggle('rp-step--active', i === n);
+      btn.classList.toggle('rp-step--done',   i < n);
+    }
+  }
+  if (n === 5) renderRpStep5();
+  if (n === 2) renderSectionsList();
+}
+
+// ── Список разделов (drag-and-drop) ──────────────────────
+function renderSectionsList() {
+  var container = document.getElementById('rp-sections-list');
+  if (!container) return;
+  var sorted = getSortedSections();
+  container.innerHTML = sorted.map(function(sec) {
+    var el = document.getElementById(sec.chk);
+    var checked = el ? el.checked : sec.defOn;
+    return '<div class="rp-sec-card" draggable="true" data-sec-id="' + sec.id + '" ' +
+      'ondragstart="rpSecDragStart(event)" ondragover="rpSecDragOver(event)" ' +
+      'ondrop="rpSecDrop(event)" ondragend="rpSecDragEnd(event)">' +
+      '<span class="rp-sec-grip">⠿</span>' +
+      '<span class="rp-sec-icon">' + sec.icon + '</span>' +
+      '<span class="rp-sec-label">' + sec.label + '</span>' +
+      '<input type="checkbox" id="' + sec.chk + '"' + (checked ? ' checked' : '') + ' onchange="saveReportSettings();updateRpPreviewPanel()">' +
+    '</div>';
+  }).join('');
+  updateRpPreviewPanel();
+}
+
+// Drag-and-drop
+var _rpDragSrcId = null;
+function rpSecDragStart(e) {
+  _rpDragSrcId = e.currentTarget.dataset.secId;
+  e.currentTarget.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function rpSecDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.rp-sec-card').forEach(function(c){ c.classList.remove('rp-sec-card--over'); });
+  e.currentTarget.classList.add('rp-sec-card--over');
+}
+function rpSecDrop(e) {
+  e.stopPropagation();
+  var targetId = e.currentTarget.dataset.secId;
+  if (_rpDragSrcId && _rpDragSrcId !== targetId) {
+    var order = getRpSectionsOrder();
+    var from = order.indexOf(_rpDragSrcId);
+    var to   = order.indexOf(targetId);
+    if (from >= 0 && to >= 0) {
+      order.splice(from, 1);
+      order.splice(to, 0, _rpDragSrcId);
+      saveRpSectionsOrder(order);
+      renderSectionsList();
+    }
+  }
+  return false;
+}
+function rpSecDragEnd(e) {
+  _rpDragSrcId = null;
+  document.querySelectorAll('.rp-sec-card').forEach(function(c){
+    c.style.opacity = '';
+    c.classList.remove('rp-sec-card--over');
+  });
+}
+
+// ── Правая панель превью ──────────────────────────────────
+function updateRpPreviewPanel() {
+  var listEl = document.getElementById('rp-preview-sections');
+  if (!listEl) return;
+  var sorted = getSortedSections();
+  listEl.innerHTML = sorted.map(function(sec) {
+    var el = document.getElementById(sec.chk);
+    var on = el ? el.checked : sec.defOn;
+    return '<div class="rp-preview-sec' + (on ? ' rp-preview-sec--on' : '') + '">' +
+      '<span class="rp-preview-dot' + (on ? ' rp-preview-dot--on' : '') + '"></span>' +
+      '<span>' + sec.icon + ' ' + sec.label + '</span>' +
+    '</div>';
+  }).join('');
+  var cnt = sorted.filter(function(sec){ var el = document.getElementById(sec.chk); return el && el.checked; }).length;
+  var pageEl = document.getElementById('rp-preview-pages');
+  if (pageEl) pageEl.textContent = cnt + ' разд. · ~' + (cnt * 2 + 3) + ' стр.';
+}
+
+// ── Шаг 5: шаблоны и история ─────────────────────────────
+function renderRpTemplatesList() {
+  var el = document.getElementById('rp-templates-list');
+  if (!el) return;
+  var tpls = getRpTemplates();
+  if (!tpls.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--txt-3);text-align:center;padding:8px">Нет сохранённых шаблонов</div>';
+    return;
+  }
+  el.innerHTML = tpls.map(function(t) {
+    return '<div class="rp-tpl-item">' +
+      '<div style="flex:1;min-width:0"><div class="rp-tpl-name">' + escHTML(t.name) + '</div>' +
+      '<div class="rp-tpl-meta">' + fmtDate(t.createdAt) + '</div></div>' +
+      '<button class="btn btn-sm btn-outline" onclick="loadRpTemplate(\'' + t.id + '\')">Загрузить</button>' +
+      '<button class="btn btn-sm" style="background:transparent;border:none;color:var(--txt-3);cursor:pointer;padding:4px 6px" ' +
+        'onclick="deleteRpTemplate(\'' + t.id + '\')">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
+function renderRpStep5() {
+  var histEl = document.getElementById('rp-history-list');
+  if (histEl) {
+    var hist = getRpHistory();
+    if (!hist.length) {
+      histEl.innerHTML = '<div style="font-size:12px;color:var(--txt-3);text-align:center;padding:12px">История пуста — отчёты появятся здесь после генерации</div>';
+    } else {
+      histEl.innerHTML = hist.map(function(h) {
+        var dates = fmtDate(h.dateA) + (h.mode !== 'single' ? ' → ' + fmtDate(h.dateB) : '');
+        return '<div class="rp-hist-item">' +
+          '<div style="font-size:13px;font-weight:600;color:var(--txt-1)">' + escHTML(h.quarryName) + ' · v' + h.version + '</div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-top:2px">' + dates + ' · составлен ' + fmtDate(h.date) + '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+  renderRpTemplatesList();
+}
+
 function switchRpTab(tab) {
   var panelPr = document.getElementById('rp-tab-prompts');
   var panelSt = document.getElementById('rp-tab-settings');
@@ -451,97 +663,134 @@ function switchRpTab(tab) {
 }
 
 function buildSettingsUI() {
-  return '<div style="max-width:900px;margin:0 auto;padding:14px 0">' +
+  return '<div class="rp-constructor">' +
 
-  // ── Шапка
-  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
-    '<div>' +
-      '<h2 style="margin:0;font-size:17px;font-weight:600;color:var(--txt-1)">Формирование отчёта</h2>' +
-      '<div style="font-size:12px;color:var(--txt-3);margin-top:2px">Мониторинг подземных вод карьера ЮРГ</div>' +
+  // ═══ LEFT: STEPS NAV ════════════════════════════════════
+  '<nav class="rp-steps-nav">' +
+    '<div class="rp-steps-nav-title">ЭТАПЫ</div>' +
+    _rpStepBtn(1, 'Период и объект', 'Режим, даты, автор') +
+    _rpStepBtn(2, 'Содержание',      'Разделы и порядок') +
+    _rpStepBtn(3, 'Стиль',           'Цвет, оформление') +
+    _rpStepBtn(4, 'ИИ-анализ',       'Промпты, заключение') +
+    _rpStepBtn(5, 'Генерация',        'Шаблоны, история') +
+    '<div class="rp-steps-nav-footer">' +
+      '<div id="rp-steps-author-info" style="font-size:11px;color:var(--txt-3)"></div>' +
     '</div>' +
-    '<div style="display:flex;gap:8px">' +
-      '<button class="btn btn-outline" id="rp-load-btn" onclick="loadReportData()" style="white-space:nowrap">📥 Загрузить данные</button>' +
-      '<button class="btn btn-primary" id="rp-generate-btn" onclick="generateReport()" style="opacity:.5;pointer-events:none;white-space:nowrap">📄 Сформировать отчёт</button>' +
-    '</div>' +
-  '</div>' +
+  '</nav>' +
 
-  // ── Вкладки
-  '<div style="display:flex;gap:4px;border-bottom:1px solid var(--line-2);margin-bottom:16px">' +
-    '<button id="rp-tabbtn-settings" class="btn btn-sm active" onclick="switchRpTab(\'settings\')" ' +
-      'style="border-radius:8px 8px 0 0;border-bottom:none;padding:7px 16px">⚙ Настройки</button>' +
-    '<button id="rp-tabbtn-prompts" onclick="switchRpTab(\'prompts\')" ' +
-      'style="border-radius:8px 8px 0 0;border:0.5px solid var(--line-2);border-bottom:none;padding:7px 16px;background:transparent;cursor:pointer;color:var(--txt-2);font-size:13px">🗒 Промпты AI</button>' +
-  '</div>' +
+  // ═══ CENTER: STEP PANELS ════════════════════════════════
+  '<div class="rp-step-panels">' +
 
-  // ════ ПАНЕЛЬ: НАСТРОЙКИ ═══════════════════════════════════
-  '<div id="rp-tab-settings">' +
+  // ─── Panel 1: Период ────────────────────────────────────
+  '<div id="rp-panel-1" class="rp-step-panel">' +
+    '<div class="rp-panel-title">Период и объект</div>' +
+    '<div class="rp-panel-sub">Укажите карьер, составителя и даты мониторинга</div>' +
 
-    // Составитель
-    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Составитель</div>' +
-    '<div class="card" style="margin-bottom:14px">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:start">' +
-        '<div><label style="font-size:11px;color:var(--txt-3)">ФИО</label><input class="form-input" id="rp-author" placeholder="Юкин Р.А." style="margin-top:4px"></div>' +
-        '<div><label style="font-size:11px;color:var(--txt-3)">Должность</label><input class="form-input" id="rp-position" placeholder="Гидрогеолог" style="margin-top:4px"></div>' +
-        '<div><label style="font-size:11px;color:var(--txt-3)">Дата составления</label><input class="form-input" id="rp-date" type="date" style="margin-top:4px;width:150px"></div>' +
-        '<div><label style="font-size:11px;color:var(--txt-3)">Название карьера</label>' +
-        '<input class="form-input" id="rp-quarry-name" placeholder="ЮРГ" style="margin-top:4px"></div>' +
-        '<div><label style="font-size:11px;color:var(--txt-3)">Объект / участок</label>' +
-        '<input class="form-input" id="rp-object-name" placeholder="Пулково-42" style="margin-top:4px"></div>' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Объект и составитель</div>' +
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
+        '<div><label class="rp-lbl">Название карьера</label><input class="form-input" id="rp-quarry-name" placeholder="ЮРГ" style="margin-top:4px"></div>' +
+        '<div><label class="rp-lbl">Объект / участок</label><input class="form-input" id="rp-object-name" placeholder="Пулково-42" style="margin-top:4px"></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">' +
+        '<div><label class="rp-lbl">ФИО составителя</label><input class="form-input" id="rp-author" placeholder="Юкин Р.А." style="margin-top:4px"></div>' +
+        '<div><label class="rp-lbl">Должность</label><input class="form-input" id="rp-position" placeholder="Гидрогеолог" style="margin-top:4px"></div>' +
+        '<div><label class="rp-lbl">Дата составления</label><input class="form-input" id="rp-date" type="date" style="margin-top:4px;width:148px"></div>' +
       '</div>' +
     '</div>' +
 
-    // Тип отчёта
-    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Тип отчёта</div>' +
-    '<div class="card" style="margin-bottom:14px">' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Тип и период отчёта</div>' +
+    '<div class="card" style="margin-bottom:16px">' +
       '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-        '<button id="rp-mode-single" class="btn btn-primary" onclick="setReportMode(\'single\')" style="flex:1;font-size:13px">📅 Одна неделя</button>' +
-        '<button id="rp-mode-compare" class="btn btn-outline" onclick="setReportMode(\'compare\')" style="flex:1;font-size:13px">📊 Сравнение периодов</button>' +
+        '<button id="rp-mode-single"  class="btn btn-primary" onclick="setReportMode(\'single\')"  style="flex:1;font-size:13px">📅 Один срез</button>' +
+        '<button id="rp-mode-compare" class="btn btn-outline" onclick="setReportMode(\'compare\')" style="flex:1;font-size:13px">📊 Сравнение</button>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-        '<div><label id="rp-label-a" style="font-size:11px;color:var(--txt-3)">Дата мониторинга</label>' +
+        '<div><label id="rp-label-a" class="rp-lbl">Дата мониторинга</label>' +
           '<select class="form-select" id="rp-date-a" onchange="onReportDateChange()" style="margin-top:4px"></select></div>' +
         '<div id="rp-period-b-block" style="display:none">' +
-          '<label style="font-size:11px;color:var(--txt-3)">Период Б (текущий)</label>' +
+          '<label class="rp-lbl">Период Б (текущий)</label>' +
           '<select class="form-select" id="rp-date-b" onchange="onReportDateChange()" style="margin-top:4px"></select>' +
         '</div>' +
       '</div>' +
       '<div id="rp-dates-status" style="font-size:11px;color:var(--txt-3);margin-top:6px"></div>' +
     '</div>' +
 
-    // Содержание
-    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Содержание отчёта</div>' +
-    '<div class="card" style="margin-bottom:14px">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">' +
-        '<div>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-map"     checked> Схема карьера с точками</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-domens"  checked> По горизонтам и доменам</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-photos"  checked> Фотофиксация точек</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-history" checked> История замеров (графики)</label>' +
-        '</div>' +
-        '<div>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-ditches" checked> Детали канав</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-compare"> Сравнительный анализ А vs Б</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-ai"      checked> AI-вывод по промпту</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rp-inc-dewatering"> Водоотлив (насосы, объём, уровни)</label>' +
-        '</div>' +
-      '</div>' +
-      '<div id="rp-data-status" style="display:none;border-top:0.5px solid var(--line-2);padding-top:8px;margin-top:8px">' +
-        '<div id="rp-data-summary" style="font-size:12px;color:var(--txt-2)"></div>' +
-      '</div>' +
+    '<div id="rp-data-status" style="display:none;margin-bottom:12px">' +
+      '<div class="card"><div id="rp-data-summary" style="font-size:12px;color:var(--txt-2)"></div></div>' +
     '</div>' +
 
-    // Claude AI
-    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Claude AI — автовыводы</div>' +
-    '<div class="card" style="margin-bottom:14px">' +
-      '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="rp-inc-ai-cb" checked onchange="document.getElementById(\'rp-inc-ai\').checked=this.checked"> Включить AI-анализ при формировании</label>' +
-      '<label style="font-size:11px;color:var(--txt-3)">Anthropic API ключ</label>' +
-      '<input class="form-input" id="rp-apikey" type="password" placeholder="sk-ant-..." style="margin-top:4px;font-family:monospace;font-size:12px">' +
-      '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">Ключ хранится только в браузере</div>' +
+    '<button class="btn btn-outline" id="rp-load-btn-step" onclick="loadReportData()" style="white-space:nowrap;margin-bottom:16px">📥 Загрузить данные</button>' +
 
-      '<div style="margin-top:12px;border-top:0.5px solid var(--line-2);padding-top:10px">' +
+    '<div class="rp-panel-nav">' +
+      '<div></div>' +
+      '<button class="btn btn-primary" onclick="switchStep(2)">Содержание →</button>' +
+    '</div>' +
+  '</div>' +
+
+  // ─── Panel 2: Содержание ─────────────────────────────────
+  '<div id="rp-panel-2" class="rp-step-panel" style="display:none">' +
+    '<div class="rp-panel-title">Содержание отчёта</div>' +
+    '<div class="rp-panel-sub">Включите нужные разделы и перетащите для изменения порядка</div>' +
+    '<div id="rp-sections-list" class="rp-sections-list"></div>' +
+    '<div style="margin-top:10px;display:flex;gap:8px">' +
+      '<button class="btn btn-outline btn-sm" onclick="saveRpSectionsOrder(RP_SECTIONS.map(function(s){return s.id}));renderSectionsList()">↺ Исходный порядок</button>' +
+    '</div>' +
+    '<div class="rp-panel-nav">' +
+      '<button class="btn btn-outline" onclick="switchStep(1)">← Период</button>' +
+      '<button class="btn btn-primary" onclick="switchStep(3)">Стиль →</button>' +
+    '</div>' +
+  '</div>' +
+
+  // ─── Panel 3: Стиль ──────────────────────────────────────
+  '<div id="rp-panel-3" class="rp-step-panel" style="display:none">' +
+    '<div class="rp-panel-title">Стиль отчёта</div>' +
+    '<div class="rp-panel-sub">Выберите цветовую схему (больше вариантов — в следующих обновлениях)</div>' +
+    '<div class="rp-theme-grid">' +
+      _rpThemeCard('blue',   '🔵', 'Синяя',     '#1e3a8a,#3b82f6', true) +
+      _rpThemeCard('green',  '🟢', 'Зелёная',   '#14532d,#16a34a', false) +
+      _rpThemeCard('mono',   '⚫', 'Монохром',  '#1e293b,#475569', false) +
+      _rpThemeCard('red',    '🔴', 'Красная',   '#7c2d12,#ea580c', false) +
+      _rpThemeCard('violet', '🟣', 'Фиолетовая','#4c1d95,#7c3aed', false) +
+    '</div>' +
+    '<div style="margin-top:16px;padding:12px;background:var(--card-bg2);border-radius:8px;font-size:12px;color:var(--txt-3)">' +
+      '🔜 В следующих обновлениях: загрузка логотипа, водяной знак, кастомные цвета' +
+    '</div>' +
+    '<div class="rp-panel-nav">' +
+      '<button class="btn btn-outline" onclick="switchStep(2)">← Содержание</button>' +
+      '<button class="btn btn-primary" onclick="switchStep(4)">ИИ-анализ →</button>' +
+    '</div>' +
+  '</div>' +
+
+  // ─── Panel 4: ИИ-анализ ──────────────────────────────────
+  '<div id="rp-panel-4" class="rp-step-panel" style="display:none">' +
+    '<div class="rp-panel-title">ИИ-анализ (Claude)</div>' +
+    '<div class="rp-panel-sub">Настройте автоматические текстовые выводы</div>' +
+
+    '<div class="card" style="margin-bottom:14px">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">' +
+        '<input type="checkbox" id="rp-inc-ai-cb" checked ' +
+          'onchange="var cb=document.getElementById(\'rp-inc-ai\');if(cb)cb.checked=this.checked;saveReportSettings()"> ' +
+        'Включить AI-анализ при формировании' +
+      '</label>' +
+      '<label class="rp-lbl">Anthropic API ключ</label>' +
+      '<input class="form-input" id="rp-apikey" type="password" placeholder="sk-ant-..." ' +
+        'style="margin-top:4px;font-family:monospace;font-size:12px">' +
+      '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">Ключ хранится только в браузере</div>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div style="display:flex;gap:4px;border-bottom:1px solid var(--line-2);margin-bottom:12px">' +
+        '<button id="rp-tabbtn-prompts" class="btn btn-sm active" onclick="switchRpTab(\'prompts\')" ' +
+          'style="border-radius:8px 8px 0 0;border-bottom:none;padding:7px 16px">🗒 Банк промптов</button>' +
+        '<button id="rp-tabbtn-settings" onclick="switchRpTab(\'settings\')" ' +
+          'style="border-radius:8px 8px 0 0;border:0.5px solid var(--line-2);border-bottom:none;padding:7px 16px;background:transparent;cursor:pointer;color:var(--txt-2);font-size:13px">✏ Свой промпт</button>' +
+      '</div>' +
+      '<div id="rp-tab-prompts"></div>' +
+      '<div id="rp-tab-settings" style="display:none">' +
         '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">' +
           '<div style="flex:1">' +
-            '<label style="font-size:11px;color:var(--txt-3)">Готовый промпт</label>' +
+            '<label class="rp-lbl">Готовый промпт из банка</label>' +
             '<div style="position:relative;margin-top:4px">' +
               '<select class="form-select" id="rp-preset-select" style="appearance:none;-webkit-appearance:none;padding-right:32px" onchange="onPresetChange(this)">' +
                 '<option value="">— выбрать из банка —</option>' +
@@ -549,32 +798,103 @@ function buildSettingsUI() {
               '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--txt-3);font-size:12px">▼</span>' +
             '</div>' +
           '</div>' +
-          '<button class="btn btn-outline btn-sm" onclick="switchRpTab(\'prompts\')" style="white-space:nowrap;margin-bottom:1px">⊕ Банк промптов</button>' +
         '</div>' +
-        '<label style="font-size:11px;color:var(--txt-3)">Свой промпт (инструкция для AI)</label>' +
+        '<label class="rp-lbl">Свой промпт (инструкция для AI)</label>' +
         '<textarea class="form-textarea" id="rp-custom-prompt" rows="4" ' +
-          'placeholder="Составь краткий вывод по гидрогеологической обстановке карьера ЮРГ. Укажи основные зоны водопритока и состояние паводковых точек. Без рекомендаций." ' +
+          'placeholder="Составь краткий вывод по гидрогеологической обстановке..." ' +
           'style="margin-top:4px;font-size:12px" oninput="saveReportSettings()"></textarea>' +
-        '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">AI получает: Q, статусы, горизонты, домены, борт, цвет воды, полевые наблюдения по топ-10 точкам</div>' +
+        '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">AI получает: Q, статусы, горизонты, домены, борт, цвет воды, наблюдения по топ-10 точкам</div>' +
       '</div>' +
     '</div>' +
 
-    // Заключение
     '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Заключение и рекомендации</div>' +
     '<div class="card" style="margin-bottom:14px">' +
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
         '<button class="btn btn-outline" id="rp-ai-concl-btn" onclick="generateAIConclusion()" style="white-space:nowrap">✨ Сгенерировать через AI</button>' +
         '<span style="font-size:12px;color:var(--txt-3)">или введите вручную ↓</span>' +
       '</div>' +
-      '<textarea class="form-textarea" id="rp-conclusions" rows="5" placeholder="Введите заключение и рекомендации..." style="font-size:12px"></textarea>' +
+      '<textarea class="form-textarea" id="rp-conclusions" rows="4" placeholder="Введите заключение и рекомендации..." style="font-size:12px"></textarea>' +
     '</div>' +
+
+    '<div class="rp-panel-nav">' +
+      '<button class="btn btn-outline" onclick="switchStep(3)">← Стиль</button>' +
+      '<button class="btn btn-primary" onclick="switchStep(5)">Генерация →</button>' +
+    '</div>' +
+  '</div>' +
+
+  // ─── Panel 5: Генерация ──────────────────────────────────
+  '<div id="rp-panel-5" class="rp-step-panel" style="display:none">' +
+    '<div class="rp-panel-title">Генерация отчёта</div>' +
+    '<div class="rp-panel-sub">Проверьте настройки и запустите формирование</div>' +
+
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Шаблоны</div>' +
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px">' +
+        '<input class="form-input" id="rp-tpl-name" placeholder="Название шаблона..." style="flex:1">' +
+        '<button class="btn btn-outline" onclick="var n=getField(\'rp-tpl-name\');if(n){saveRpTemplate(n);Toast.show(\'Шаблон сохранён\',\'success\');renderRpTemplatesList();setField(\'rp-tpl-name\',\'\');}">Сохранить</button>' +
+      '</div>' +
+      '<div id="rp-templates-list"></div>' +
+    '</div>' +
+
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">История отчётов</div>' +
+    '<div class="card" style="margin-bottom:20px">' +
+      '<div id="rp-history-list"><div style="font-size:12px;color:var(--txt-3);text-align:center;padding:12px">История пуста</div></div>' +
+    '</div>' +
+
+    '<div class="rp-panel-nav">' +
+      '<button class="btn btn-outline" onclick="switchStep(4)">← ИИ-анализ</button>' +
+      '<div></div>' +
+    '</div>' +
+  '</div>' +
 
   '</div>' +
 
-  // ════ ПАНЕЛЬ: ПРОМПТЫ ═════════════════════════════════════
-  '<div id="rp-tab-prompts" style="display:none"></div>' +
+  // ═══ RIGHT: PREVIEW PANEL ══════════════════════════════
+  '<aside class="rp-preview-panel">' +
+    '<div class="rp-preview-title">ПРЕДПРОСМОТР</div>' +
+    '<div class="rp-mini-report">' +
+      '<div class="rp-mini-page">' +
+        '<div class="rp-mini-hdr"></div>' +
+        '<div class="rp-mini-kpis"><div></div><div></div><div></div></div>' +
+        '<div class="rp-mini-line" style="width:80%"></div>' +
+        '<div class="rp-mini-line" style="width:60%"></div>' +
+        '<div class="rp-mini-block"></div>' +
+        '<div class="rp-mini-line" style="width:70%"></div>' +
+      '</div>' +
+      '<div id="rp-preview-pages" style="font-size:11px;color:var(--txt-3);text-align:center;margin-top:8px">— разделов не выбрано —</div>' +
+    '</div>' +
+
+    '<div class="rp-preview-title" style="margin-top:4px">РАЗДЕЛЫ</div>' +
+    '<div id="rp-preview-sections" class="rp-preview-sections"></div>' +
+
+    '<div style="margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:12px">' +
+      '<button class="btn btn-outline" id="rp-load-btn" onclick="loadReportData()" style="white-space:nowrap;font-size:13px">📥 Загрузить данные</button>' +
+      '<button class="btn btn-primary" id="rp-generate-btn" onclick="generateReport()" ' +
+        'style="opacity:.5;pointer-events:none;font-size:13px;background:linear-gradient(135deg,#2563eb,#7c3aed)">⚡ Сформировать</button>' +
+    '</div>' +
+  '</aside>' +
 
   '</div>';
+}
+
+// Helpers for buildSettingsUI
+function _rpStepBtn(n, label, sub) {
+  return '<div id="rp-stepbtn-' + n + '" class="rp-step' + (n === 1 ? ' rp-step--active' : '') + '" onclick="switchStep(' + n + ')">' +
+    '<div class="rp-step-num">' + n + '</div>' +
+    '<div><div class="rp-step-lbl">' + label + '</div><div class="rp-step-sub">' + sub + '</div></div>' +
+  '</div>';
+}
+function _rpThemeCard(id, ico, name, colors, active) {
+  var grad = 'linear-gradient(135deg,' + colors + ')';
+  return '<div class="rp-theme-card' + (active ? ' rp-theme-card--active' : '') + '" onclick="rpSelectTheme(\'' + id + '\')" data-theme="' + id + '">' +
+    '<div class="rp-theme-swatch" style="background:' + grad + '">' + ico + '</div>' +
+    '<div class="rp-theme-name">' + name + '</div>' +
+  '</div>';
+}
+function rpSelectTheme(id) {
+  document.querySelectorAll('.rp-theme-card').forEach(function(c){ c.classList.toggle('rp-theme-card--active', c.dataset.theme === id); });
+  ReportState.settings.reportTheme = id;
+  saveReportSettings();
 }
 
 function setReportMode(mode) {
@@ -1051,6 +1371,7 @@ function generateReport() {
   s.quarryName     = getField('rp-quarry-name') || 'ЮРГ';
   s.objectName     = getField('rp-object-name') || 'Пулково-42';
   s.reportVersion  = (parseInt(s.reportVersion) || 0) + 1;
+  addRpHistory(s);
   saveReportSettings();
 
   // Фильтруем данные по датам
