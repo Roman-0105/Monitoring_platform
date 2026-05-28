@@ -25,6 +25,8 @@ var ReportState = {
     conclusions: '', apiKey: '',
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
+    filterDomains:  [],   // [] = all domains
+    filterHorizons: [],   // [] = all horizons
   },
   currentStep: 1,
 };
@@ -125,6 +127,8 @@ function restoreSettings() {
   if (s.customPrompt)  setField('rp-custom-prompt', s.customPrompt);
   if (s.quarryName)    setField('rp-quarry-name',   s.quarryName);
   if (s.objectName)    setField('rp-object-name',   s.objectName);
+  if (s.filterDomains)  ReportState.settings.filterDomains  = s.filterDomains;
+  if (s.filterHorizons) ReportState.settings.filterHorizons = s.filterHorizons;
   setField('rp-date', new Date().toISOString().slice(0, 10));
   restoreChk('rp-inc-map',        s.incMap);
   restoreChk('rp-inc-domens',     s.incDomens);
@@ -173,6 +177,7 @@ function restoreSettings() {
   // Update author info in steps sidebar
   var infoEl = document.getElementById('rp-steps-author-info');
   if (infoEl && s.author) infoEl.textContent = s.author + ' · v' + (s.reportVersion || 1);
+  if ((ReportState.allPoints || []).length > 0) renderRpFilters();
 }
 
 function saveReportSettings() {
@@ -194,6 +199,8 @@ function saveReportSettings() {
       incCompare:    getChk('rp-inc-compare'),
       incAI:         getChk('rp-inc-ai'),
       incDewatering: getChk('rp-inc-dewatering'),
+      filterDomains:  ReportState.settings.filterDomains  || [],
+      filterHorizons: ReportState.settings.filterHorizons || [],
     }));
   } catch(e) {}
 }
@@ -537,6 +544,62 @@ function switchStep(n) {
   if (n === 2) renderSectionsList();
 }
 
+function renderRpFilters() {
+  var pts = ReportState.allPoints || [];
+  // Collect unique domains and horizons
+  var domains = [], domSet = {};
+  var horizons = [], horzSet = {};
+  pts.forEach(function(p) {
+    var d = p.domain || p.domen || '—';
+    if (!domSet[d]) { domSet[d] = 1; domains.push(d); }
+    var h = p.horizon || p.gorizont || '';
+    if (h && !horzSet[h]) { horzSet[h] = 1; horizons.push(h); }
+  });
+  domains.sort(); horizons.sort();
+
+  var sel = ReportState.settings.filterDomains || [];
+  var selH = ReportState.settings.filterHorizons || [];
+
+  function makeChk(val, selArr, key) {
+    var checked = selArr.length === 0 || selArr.indexOf(val) >= 0;
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-1);cursor:pointer;white-space:nowrap">' +
+      '<input type="checkbox" data-filter-key="' + key + '" data-filter-val="' + escAttr(val) + '"' + (checked ? ' checked' : '') +
+        ' onchange="rpFilterChange(this)" style="accent-color:var(--blue)">' + escHTML(val) + '</label>';
+  }
+
+  var dEl = document.getElementById('rp-filter-domains');
+  var hEl = document.getElementById('rp-filter-horizons');
+  if (dEl) {
+    if (!domains.length) {
+      dEl.innerHTML = '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Нет данных</div>';
+    } else {
+      dEl.innerHTML = domains.map(function(d){ return makeChk(d, sel, 'domain'); }).join('');
+    }
+  }
+  if (hEl) {
+    if (!horizons.length) {
+      hEl.innerHTML = '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Нет горизонтов</div>';
+    } else {
+      hEl.innerHTML = horizons.map(function(h){ return makeChk(h, selH, 'horizon'); }).join('');
+    }
+  }
+}
+
+function rpFilterChange(el) {
+  var key = el.dataset.filterKey;
+  var field = key === 'domain' ? 'filterDomains' : 'filterHorizons';
+  var container = el.closest('[id^="rp-filter-"]');
+  // Collect all checked values in this container
+  var checked = [];
+  container.querySelectorAll('input[type=checkbox]').forEach(function(c) {
+    if (c.checked) checked.push(c.dataset.filterVal);
+  });
+  // If all checked — store as [] (means "all")
+  var total = container.querySelectorAll('input[type=checkbox]').length;
+  ReportState.settings[field] = (checked.length === total) ? [] : checked;
+  saveReportSettings();
+}
+
 // ── Список разделов (drag-and-drop) ──────────────────────
 function renderSectionsList() {
   var container = document.getElementById('rp-sections-list');
@@ -734,6 +797,23 @@ function buildSettingsUI() {
     '<div class="rp-panel-title">Содержание отчёта</div>' +
     '<div class="rp-panel-sub">Включите нужные разделы и перетащите для изменения порядка</div>' +
     '<div id="rp-sections-list" class="rp-sections-list"></div>' +
+    '<div style="margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px">' +
+      '<div style="font-size:11px;font-weight:700;color:var(--txt-2);margin-bottom:10px">🔽 Фильтры (необязательно)</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+        '<div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:6px">Домены (пусто = все)</div>' +
+          '<div id="rp-filter-domains" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;padding:6px;background:var(--card-bg2);border-radius:6px;border:1px solid var(--line-2)">' +
+            '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Загрузите данные</div>' +
+          '</div>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:6px">Горизонты (пусто = все)</div>' +
+          '<div id="rp-filter-horizons" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;padding:6px;background:var(--card-bg2);border-radius:6px;border:1px solid var(--line-2)">' +
+            '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:4px">Загрузите данные</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
     '<div style="margin-top:10px;display:flex;gap:8px">' +
       '<button class="btn btn-outline btn-sm" onclick="saveRpSectionsOrder(RP_SECTIONS.map(function(s){return s.id}));renderSectionsList()">↺ Исходный порядок</button>' +
     '</div>' +
@@ -808,6 +888,16 @@ function buildSettingsUI() {
       '</div>' +
     '</div>' +
 
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Предпросмотр AI-текстов</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">' +
+        '<button class="btn btn-outline btn-sm" onclick="preGenerateAI()" id="rp-pre-ai-btn">✨ Сгенерировать тексты</button>' +
+        '<span style="font-size:11px;color:var(--txt-3)">Результаты можно отредактировать перед включением в отчёт</span>' +
+      '</div>' +
+      '<div id="rp-ai-preview-blocks" style="display:flex;flex-direction:column;gap:10px">' +
+        '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:8px">Нажмите «Сгенерировать тексты» для предпросмотра AI-анализа</div>' +
+      '</div>' +
+    '</div>' +
     '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Заключение и рекомендации</div>' +
     '<div class="card" style="margin-bottom:14px">' +
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
@@ -966,6 +1056,7 @@ function loadReportData() {
     if (genBtn) { genBtn.style.opacity = '1'; genBtn.style.pointerEvents = ''; }
 
     Toast.show('Данные загружены: ' + allDates.length + ' дат мониторинга', 'success');
+    renderRpFilters();
     return loadDitchesHistory();
   }).catch(function(err) {
     Toast.show('Ошибка загрузки: ' + err.message, 'error');
@@ -1339,6 +1430,89 @@ function preloadAllPhotos(ptsA, ptsB, dtsA, dtsB) {
   return Promise.all(tasks);
 }
 
+function captureDewDiagram() {
+  var svg = document.getElementById('dew-diagram-svg');
+  if (!svg) return null;
+  try {
+    var canvas = document.getElementById('dew-diagram-canvas');
+    var w = canvas ? (parseInt(canvas.style.width)  || 2400) : 2400;
+    var h = canvas ? (parseInt(canvas.style.height) || 1200) : 1200;
+    var clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
+    // Dark background
+    var bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%'); bg.setAttribute('fill', '#141928');
+    clone.insertBefore(bg, clone.firstChild);
+    // Remove animated elements (SMIL animations cause issues in static export)
+    clone.querySelectorAll('animate,animateTransform').forEach(function(a){ a.remove(); });
+    var svgStr = new XMLSerializer().serializeToString(clone);
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+  } catch(e) { return null; }
+}
+
+function preGenerateAI() {
+  var apiKey = getField('rp-apikey');
+  if (!apiKey) { Toast.show('Введите API-ключ Claude', 'error'); return; }
+  if (!ReportState.allPoints.length) { Toast.show('Сначала загрузите данные (Шаг 1)', 'error'); return; }
+
+  var btn = document.getElementById('rp-pre-ai-btn');
+  var container = document.getElementById('rp-ai-preview-blocks');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+  if (container) container.innerHTML = '<div style="font-size:12px;color:var(--txt-3);text-align:center;padding:12px">Запрос к Claude API...</div>';
+
+  var s = Object.assign({}, ReportState.settings);
+  s.author       = getField('rp-author');
+  s.position     = getField('rp-position');
+  s.dateA        = getField('rp-date-a');
+  s.dateB        = getField('rp-date-b');
+  s.reportMode   = ReportState.settings.reportMode || 'compare';
+  s.dateB        = s.reportMode === 'single' ? s.dateA : s.dateB;
+  s.apiKey       = apiKey;
+  s.customPrompt = getField('rp-custom-prompt');
+
+  var allPts = ReportState.allPoints || [];
+  ReportState.ptsA = allPts.filter(function(p){ return (p.monitoringDate||'').slice(0,10) === s.dateA; });
+  ReportState.ptsB = allPts.filter(function(p){ return (p.monitoringDate||'').slice(0,10) === s.dateB; });
+
+  generateAIBlocks(s).then(function(aiBlocks) {
+    ReportState.aiText = aiBlocks || {};
+    renderAIPreviewBlocks();
+  }).catch(function(err) {
+    Toast.show('Ошибка AI: ' + (err && err.message ? err.message : String(err)), 'error');
+  }).finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Сгенерировать тексты'; }
+  });
+}
+
+function renderAIPreviewBlocks() {
+  var container = document.getElementById('rp-ai-preview-blocks');
+  if (!container) return;
+  var ai = ReportState.aiText || {};
+  var blocks = [
+    { key: 'summary',         label: 'Сводный анализ' },
+    { key: 'compare',         label: 'Сравнительный анализ' },
+    { key: 'recommendations', label: 'Рекомендации' },
+  ];
+  if (ai.error) {
+    container.innerHTML = '<div style="color:var(--red);font-size:12px;padding:8px">⚠ ' + escHTML(ai.error) + '</div>';
+    return;
+  }
+  var hasContent = blocks.some(function(b){ return !!ai[b.key]; });
+  if (!hasContent) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--txt-3);text-align:center;padding:8px">AI не вернул текстов</div>';
+    return;
+  }
+  container.innerHTML = blocks.filter(function(b){ return !!ai[b.key]; }).map(function(b) {
+    return '<div>' +
+      '<div style="font-size:11px;font-weight:700;color:var(--txt-2);margin-bottom:4px">' + b.label + '</div>' +
+      '<textarea class="form-textarea" rows="4" style="font-size:12px;line-height:1.5" ' +
+        'oninput="ReportState.aiText[\'' + b.key + '\']=this.value">' + escHTML(ai[b.key] || '') + '</textarea>' +
+    '</div>';
+  }).join('');
+}
+
 // ── Генерация отчёта ──────────────────────────────────────
 function generateReport() {
   if (ReportState.generating) return;
@@ -1383,6 +1557,21 @@ function generateReport() {
   ReportState.dtsA = allDts.filter(function(d){ return (d.monitoringDate||'').slice(0,10) === s.dateA; });
   ReportState.dtsB = allDts.filter(function(d){ return (d.monitoringDate||'').slice(0,10) === s.dateB; });
 
+  // Apply domain filter
+  var fDom = s.filterDomains || [];
+  if (fDom.length > 0) {
+    ReportState.ptsA = ReportState.ptsA.filter(function(p){ return fDom.indexOf(p.domain||p.domen||'—') >= 0; });
+    ReportState.ptsB = ReportState.ptsB.filter(function(p){ return fDom.indexOf(p.domain||p.domen||'—') >= 0; });
+  }
+  // Apply horizon filter
+  var fHor = s.filterHorizons || [];
+  if (fHor.length > 0) {
+    ReportState.ptsA = ReportState.ptsA.filter(function(p){ return fHor.indexOf(p.horizon||p.gorizont||'') >= 0; });
+    ReportState.ptsB = ReportState.ptsB.filter(function(p){ return fHor.indexOf(p.horizon||p.gorizont||'') >= 0; });
+  }
+
+  s.dewDiagImg = s.includeDewatering ? captureDewDiagram() : null;
+
   Toast.progress('rp-gen', 'Захват схем карьера...');
 
   var wkA = dateToWeekKey(s.dateA);
@@ -1402,6 +1591,11 @@ function generateReport() {
   }).then(function() {
     // AI текстовый анализ (если включён)
     if (s.includeAI && s.apiKey) {
+      // If already pre-generated and has content, skip re-generation
+      var existing = ReportState.aiText || {};
+      if (existing.summary || existing.compare || existing.recommendations) {
+        return Promise.resolve(existing);
+      }
       Toast.progress('rp-gen', 'Генерация AI анализа...');
       return generateAIBlocks(s);
     }
@@ -2063,6 +2257,7 @@ function buildDewateringSection(s) {
 
   return '<section class="rp-section">' +
     '<h2>Водоотлив: насосы и уровни воды</h2>' +
+    (s.dewDiagImg ? '<div style="margin-bottom:16px;text-align:center"><img src="' + s.dewDiagImg + '" style="max-width:100%;border-radius:8px;border:1px solid #dee2e6" alt="Схема водоотлива"></div>' : '') +
     '<div style="font-size:11px;color:#888;margin-bottom:10px">Период: ' +
       escHTML(dateFrom) + (dateFrom !== dateTo ? ' — ' + escHTML(dateTo) : '') +
     '</div>' +
@@ -2386,7 +2581,11 @@ function buildReportHTML(s) {
       var dewateringSection = s.includeDewatering ? buildDewateringSection(s) : '';
       return '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + dewateringSection + compareSection + concl + '</div>';
     })() +
-    '<div class="rp-footer"><div>Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</div><div>v' + s.reportVersion + '</div></div>' +
+    '<div class="rp-footer">' +
+  '<div>Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</div>' +
+  '<div style="text-align:center;color:#aaa">v' + s.reportVersion + '</div>' +
+  '<div style="text-align:right">Стр. <span class="rp-page-counter"></span></div>' +
+'</div>' +
     '<div class="rp-print-btn no-print">' +
       '<button onclick="window.print()">🖨 Печать / PDF</button>' +
       '<button onclick="window.close()" style="margin-left:8px">✕ Закрыть</button>' +
@@ -2462,10 +2661,14 @@ function getReportCSS() {
   '.rp-conclusion-text { background:#f8f9fa;border-radius:5px;padding:10px 14px;font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap; }',
   '.rp-conclusion-text--empty { color:#aaa;font-style:italic; }',
   '.rp-footer { display:flex;justify-content:space-between;max-width:860px;margin:20px auto 0;padding:12px 30px;font-size:10px;color:#aaa;border-top:1px solid #e9ecef; }',
+  '.rp-section { counter-increment: section; }',
   '.rp-print-btn { position:fixed;bottom:20px;right:20px;z-index:100; }',
   '.rp-print-btn button { padding:10px 20px;font-size:13px;cursor:pointer;background:#1a73e8;color:#fff;border:none;border-radius:6px;font-weight:500; }',
   '@media print {',
-  '  @page { margin:15mm 18mm;size:A4 portrait; }',
+  '  @page { margin:15mm 18mm; size:A4 portrait; }',
+  '  @page { @bottom-right { content: "Стр. " counter(page); font-size:9pt; color:#aaa; font-family:sans-serif; } }',
+  '  body { counter-reset: page; }',
+  '  .rp-section { counter-increment: page; }',
   '  .no-print { display:none !important; }',
   '  body { font-size:11px; }',
   '  * { -webkit-print-color-adjust:exact;print-color-adjust:exact; }',
@@ -2475,6 +2678,7 @@ function getReportCSS() {
   '  .rp-photo-img-wrap { flex:0 0 200px !important; }',
   '  .rp-photo-img { width:200px !important;height:150px !important; }',
   '  .rp-map-wrap img,.rp-ditch-block img { max-width:100% !important;height:auto !important;max-height:220px !important; }',
+  '  .rp-page-counter::before { content: counter(page); }',
   '}'
   ].join('\n');
 }
