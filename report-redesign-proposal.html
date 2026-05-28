@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Предложения по редизайну вкладки «Отчёт»</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;font-size:14px}
+a{color:#60a5fa;text-decoration:none}
+
+/* ── Nav ── */
+.top-nav{background:#1a1f2e;border-bottom:1px solid #2d3748;padding:0 24px;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:100}
+.top-nav h1{font-size:15px;font-weight:700;color:#f1f5f9;padding:14px 0;margin-right:32px;white-space:nowrap}
+.nav-tabs{display:flex;gap:0}
+.nav-tab{padding:14px 20px;cursor:pointer;color:#94a3b8;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+.nav-tab:hover{color:#e2e8f0}
+.nav-tab.active{color:#60a5fa;border-bottom-color:#60a5fa}
+
+/* ── Content ── */
+.section{display:none;padding:32px 40px;max-width:1400px;margin:0 auto}
+.section.active{display:block}
+.section-title{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px}
+.section-desc{color:#94a3b8;font-size:14px;margin-bottom:32px;line-height:1.6}
+
+/* ── Feature list ── */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:32px}
+.feature-card{background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:20px}
+.feature-card h3{font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.feature-card h3 .badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600}
+.badge-new{background:#1e3a5f;color:#60a5fa}
+.badge-upgrade{background:#1c3a2a;color:#4ade80}
+.badge-ai{background:#3b1f5e;color:#c084fc}
+.feature-item{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid #1e2535}
+.feature-item:last-child{border-bottom:none}
+.feature-item .check{width:18px;height:18px;border-radius:4px;border:1px solid #374151;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;cursor:pointer;transition:.2s}
+.feature-item .check.on{background:#2563eb;border-color:#2563eb;color:#fff}
+.feature-item .check.on::after{content:'✓';font-size:11px}
+.feature-item p{font-size:13px;color:#cbd5e1;line-height:1.5}
+.feature-item p strong{color:#f1f5f9}
+.feature-item p em{color:#94a3b8;font-size:12px;font-style:normal;display:block;margin-top:2px}
+
+/* ── Designs ── */
+.design-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
+.design-tab{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;border:1px solid #2d3748;color:#94a3b8;transition:.2s;background:#1a1f2e}
+.design-tab:hover{border-color:#4b5563;color:#e2e8f0}
+.design-tab.active{background:#1e3a5f;border-color:#2563eb;color:#60a5fa}
+.design-panel{display:none}
+.design-panel.active{display:block}
+
+/* ── Mockup ── */
+.mockup-wrap{background:#0d1117;border:1px solid #2d3748;border-radius:16px;overflow:hidden;margin-bottom:24px}
+.mockup-bar{background:#161b27;padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #2d3748}
+.mockup-dot{width:10px;height:10px;border-radius:50%}
+.mockup-url{flex:1;background:#0d1117;border-radius:6px;padding:4px 12px;font-size:11px;color:#4b5563;margin:0 12px}
+
+/* DESIGN A – Конструктор с шагами */
+.da-layout{display:grid;grid-template-columns:220px 1fr 280px;height:580px}
+.da-steps{background:#111827;border-right:1px solid #1e2535;padding:16px 0}
+.da-step{padding:12px 20px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:.15s;position:relative}
+.da-step:hover{background:#1a2035}
+.da-step.active{background:#1e2d4a}
+.da-step.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#2563eb;border-radius:0 2px 2px 0}
+.da-step.done .da-step-num{background:#16a34a;color:#fff}
+.da-step-num{width:28px;height:28px;border-radius:50%;background:#1e2535;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#64748b;flex-shrink:0}
+.da-step.active .da-step-num{background:#2563eb;color:#fff}
+.da-step-label{font-size:12px;font-weight:600;color:#94a3b8}
+.da-step.active .da-step-label{color:#f1f5f9}
+.da-step-sub{font-size:11px;color:#4b5563;margin-top:2px}
+
+.da-main{padding:24px;overflow-y:auto;background:#0f1117}
+.da-h{font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
+.da-sub{font-size:12px;color:#64748b;margin-bottom:20px}
+.da-row{display:flex;gap:12px;margin-bottom:14px}
+.da-field{flex:1}
+.da-field label{display:block;font-size:11px;color:#64748b;margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.da-input{width:100%;background:#1a1f2e;border:1px solid #2d3748;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px}
+.da-mode-row{display:flex;gap:10px;margin-bottom:16px}
+.da-mode{flex:1;border:2px solid #2d3748;border-radius:10px;padding:12px;cursor:pointer;transition:.2s;text-align:center}
+.da-mode.sel{border-color:#2563eb;background:#1e3a5f}
+.da-mode-ico{font-size:22px;margin-bottom:6px}
+.da-mode-name{font-size:12px;font-weight:700;color:#f1f5f9}
+.da-mode-desc{font-size:11px;color:#64748b;margin-top:3px}
+
+.da-sidebar{background:#111827;border-left:1px solid #1e2535;padding:16px;display:flex;flex-direction:column;gap:12px}
+.da-preview-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.da-mini-report{background:#1a1f2e;border-radius:8px;flex:1;padding:12px;overflow:hidden;position:relative}
+.da-mini-page{background:#fff;border-radius:4px;padding:8px;height:160px;overflow:hidden}
+.da-mini-hdr{background:#1e3a8a;height:20px;border-radius:3px;margin-bottom:6px}
+.da-mini-kpi{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:6px}
+.da-mini-kpi div{background:#eff6ff;height:24px;border-radius:3px}
+.da-mini-line{height:6px;background:#e2e8f0;border-radius:3px;margin-bottom:4px}
+.da-mini-line.w60{width:60%}
+.da-mini-line.w80{width:80%}
+.da-mini-line.w40{width:40%}
+.da-section-list{display:flex;flex-direction:column;gap:6px}
+.da-section-item{background:#1e2535;border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;color:#cbd5e1;cursor:grab}
+.da-section-item .grip{color:#374151;font-size:14px}
+.da-section-item.off{opacity:.4}
+.da-toggle{margin-left:auto;width:28px;height:16px;background:#374151;border-radius:8px;position:relative;cursor:pointer;flex-shrink:0}
+.da-toggle.on{background:#2563eb}
+.da-toggle::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:.2s}
+.da-toggle.on::after{left:14px}
+.da-nav-btns{display:flex;gap:8px}
+.da-btn{flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;transition:.2s}
+.da-btn-back{background:#1e2535;color:#94a3b8}
+.da-btn-next{background:#2563eb;color:#fff}
+.da-btn-gen{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;padding:12px;border-radius:10px;font-size:14px;font-weight:700;border:none;cursor:pointer;width:100%}
+
+/* DESIGN B – Сплит-дашборд */
+.db-layout{display:grid;grid-template-columns:360px 1fr;height:620px}
+.db-left{background:#111827;border-right:1px solid #1e2535;overflow-y:auto;padding:0}
+.db-section-hdr{padding:12px 20px;background:#0d1117;border-bottom:1px solid #1e2535;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.db-section-hdr span{transition:.2s}
+.db-section-body{padding:16px 20px;border-bottom:1px solid #0f1117}
+.db-field{margin-bottom:12px}
+.db-field label{display:block;font-size:11px;color:#64748b;margin-bottom:5px;font-weight:600}
+.db-input{width:100%;background:#0f1117;border:1px solid #2d3748;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px}
+.db-chk-list{display:flex;flex-direction:column;gap:8px}
+.db-chk-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#0f1117;border-radius:8px}
+.db-chk-label{font-size:12px;color:#cbd5e1;display:flex;align-items:center;gap:8px}
+.db-chk-label .ico{font-size:15px}
+.db-toggle{width:32px;height:18px;background:#374151;border-radius:9px;position:relative;cursor:pointer;flex-shrink:0}
+.db-toggle.on{background:#2563eb}
+.db-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.2s}
+.db-toggle.on::after{left:16px}
+.db-gen-btn{margin:16px 20px;width:calc(100% - 40px);padding:12px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
+.db-right{background:#0f1117;display:flex;flex-direction:column}
+.db-preview-toolbar{padding:12px 20px;background:#111827;border-bottom:1px solid #1e2535;display:flex;align-items:center;gap:12px}
+.db-preview-toolbar span{font-size:12px;color:#64748b;font-weight:600}
+.db-preview-btn{padding:5px 12px;border-radius:6px;font-size:12px;background:#1e2535;border:1px solid #2d3748;color:#94a3b8;cursor:pointer}
+.db-preview-btn.active{background:#1e3a5f;border-color:#2563eb;color:#60a5fa}
+.db-iframe-wrap{flex:1;padding:16px;overflow:auto}
+.db-iframe{width:100%;height:100%;border-radius:8px;background:#fff;border:none;position:relative;overflow:hidden}
+.db-iframe-inner{padding:20px;color:#1e293b}
+.db-iframe-hdr{background:#1e3a8a;color:#fff;padding:20px;border-radius:6px;margin-bottom:16px}
+.db-iframe-hdr h2{font-size:18px;margin-bottom:4px}
+.db-iframe-hdr p{font-size:11px;opacity:.8}
+.db-kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.db-kpi{background:#f8fafc;border-radius:8px;padding:12px;text-align:center}
+.db-kpi-val{font-size:20px;font-weight:800;color:#1e3a8a}
+.db-kpi-lbl{font-size:10px;color:#64748b;margin-top:2px}
+.db-section-block{background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:12px}
+.db-section-block h3{font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #e2e8f0}
+.db-section-block p{font-size:11px;color:#475569;line-height:1.5}
+
+/* DESIGN C – Wizard полноэкранный */
+.dc-layout{height:580px;display:flex;flex-direction:column;background:#0f1117}
+.dc-progress{background:#111827;padding:20px 40px;border-bottom:1px solid #1e2535}
+.dc-steps-row{display:flex;align-items:center;gap:0;margin-bottom:12px}
+.dc-step-dot{width:32px;height:32px;border-radius:50%;background:#1e2535;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#4b5563;flex-shrink:0;transition:.3s}
+.dc-step-dot.done{background:#16a34a;color:#fff}
+.dc-step-dot.active{background:#2563eb;color:#fff;box-shadow:0 0 0 4px rgba(37,99,235,.25)}
+.dc-step-line{flex:1;height:2px;background:#1e2535}
+.dc-step-line.done{background:#16a34a}
+.dc-steps-labels{display:flex;justify-content:space-between;padding:0 4px}
+.dc-step-lbl{font-size:11px;color:#4b5563;text-align:center;width:80px;font-weight:600}
+.dc-step-lbl.active{color:#60a5fa}
+.dc-body{flex:1;display:grid;grid-template-columns:1fr 320px;overflow:hidden}
+.dc-content{padding:32px 40px;overflow-y:auto}
+.dc-content h2{font-size:20px;font-weight:800;color:#f1f5f9;margin-bottom:4px}
+.dc-content p{font-size:13px;color:#64748b;margin-bottom:24px}
+.dc-card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.dc-section-card{border:2px solid #2d3748;border-radius:12px;padding:16px;cursor:pointer;transition:.2s;background:#111827;text-align:center}
+.dc-section-card:hover{border-color:#4b5563}
+.dc-section-card.sel{border-color:#2563eb;background:#1e3a5f}
+.dc-section-card .ico{font-size:28px;margin-bottom:8px}
+.dc-section-card .name{font-size:12px;font-weight:700;color:#f1f5f9}
+.dc-section-card .desc{font-size:11px;color:#64748b;margin-top:4px;line-height:1.4}
+.dc-right{background:#111827;border-left:1px solid #1e2535;padding:20px;display:flex;flex-direction:column;gap:12px}
+.dc-summary-title{font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}
+.dc-summary-list{display:flex;flex-direction:column;gap:6px;flex:1}
+.dc-summary-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#cbd5e1}
+.dc-summary-item .dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0}
+.dc-summary-item .dot.off{background:#374151}
+.dc-footer{background:#111827;border-top:1px solid #1e2535;padding:16px 40px;display:flex;justify-content:space-between;align-items:center}
+.dc-footer-btns{display:flex;gap:10px}
+.dc-btn{padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer}
+.dc-btn-back{background:#1e2535;color:#94a3b8}
+.dc-btn-next{background:#2563eb;color:#fff}
+.dc-btn-gen{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;padding:10px 28px}
+.dc-step-info{font-size:12px;color:#4b5563}
+
+/* ── Architecture ── */
+.arch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.arch-card{background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:20px}
+.arch-card h3{font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.arch-list{display:flex;flex-direction:column;gap:6px}
+.arch-item{font-size:12px;color:#94a3b8;padding:6px 10px;background:#0f1117;border-radius:6px;border-left:3px solid #2d3748;line-height:1.4}
+.arch-item b{color:#e2e8f0;display:block;margin-bottom:2px}
+.arch-item.accent{border-left-color:#2563eb}
+.arch-item.green{border-left-color:#16a34a}
+.arch-item.purple{border-left-color:#7c3aed}
+.arch-item.yellow{border-left-color:#ca8a04}
+
+/* ── Comparison table ── */
+.cmp-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:32px}
+.cmp-table th{padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;background:#111827;border-bottom:1px solid #2d3748}
+.cmp-table td{padding:10px 16px;border-bottom:1px solid #1e2535;vertical-align:top;color:#cbd5e1}
+.cmp-table tr:hover td{background:#111827}
+.cmp-table td:first-child{color:#f1f5f9;font-weight:600}
+.cmp-table .tick{color:#4ade80;font-weight:700}
+.cmp-table .cross{color:#f87171}
+.cmp-table .partial{color:#fbbf24}
+
+/* ── Priority tags ── */
+.pri{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-left:6px}
+.pri-must{background:#1c3a2a;color:#4ade80}
+.pri-should{background:#1e3a5f;color:#60a5fa}
+.pri-could{background:#2d1f3a;color:#c084fc}
+.pri-future{background:#1e2535;color:#64748b}
+
+/* AI block */
+.ai-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.ai-field{background:#0f1117;border-radius:8px;padding:12px;border:1px solid #1e2535}
+.ai-field label{font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:6px}
+.ai-field select,.ai-field input{width:100%;background:#111827;border:1px solid #2d3748;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px}
+.ai-prompts{background:#0f1117;border-radius:8px;padding:12px;border:1px solid #1e2535;margin-bottom:16px}
+.ai-prompts label{font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:8px}
+.ai-prompt-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.ai-tag{padding:4px 12px;background:#1e3a5f;border-radius:20px;font-size:11px;color:#93c5fd;cursor:pointer;border:1px solid #2563eb;transition:.2s}
+.ai-tag:hover{background:#1e40af}
+.ai-textarea{width:100%;background:#111827;border:1px solid #2d3748;border-radius:8px;padding:10px;color:#e2e8f0;font-size:12px;resize:vertical;min-height:80px;font-family:inherit;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="top-nav">
+  <h1>🗂 Редизайн вкладки «Отчёт»</h1>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="showSection('overview')">Обзор функций</div>
+    <div class="nav-tab" onclick="showSection('design-a')">Вариант A — Конструктор</div>
+    <div class="nav-tab" onclick="showSection('design-b')">Вариант B — Дашборд</div>
+    <div class="nav-tab" onclick="showSection('design-c')">Вариант C — Мастер</div>
+    <div class="nav-tab" onclick="showSection('architecture')">Архитектура</div>
+    <div class="nav-tab" onclick="showSection('comparison')">Сравнение</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- OVERVIEW -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="section active" id="s-overview">
+  <div class="section-title">Полный список предлагаемых улучшений</div>
+  <div class="section-desc">
+    Ниже — все функции, сгруппированные по категориям. Пометки:
+    <span class="pri pri-must">ОБЯЗАТЕЛЬНО</span> — без этого не обойтись,
+    <span class="pri pri-should">ВАЖНО</span> — значительно улучшит UX,
+    <span class="pri pri-could">ЖЕЛАТЕЛЬНО</span> — приятный бонус,
+    <span class="pri pri-future">ПОТОМ</span> — на будущее.
+  </div>
+
+  <div class="feature-grid">
+
+    <div class="feature-card">
+      <h3><span>📐</span> Конструктор разделов <span class="badge badge-new">НОВОЕ</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Drag-and-drop порядок разделов</strong><span class="pri pri-should">ВАЖНО</span><em>Пользователь сам определяет, в каком порядке идут разделы в отчёте</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Включение/выключение каждого раздела</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Тоглы с сохранением состояния (уже частично реализовано)</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Свёртывание/раскрытие разделов</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Можно скрыть раздел полностью или показать только заголовок</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Шаблоны набора разделов</strong><span class="pri pri-should">ВАЖНО</span><em>«Краткий», «Полный», «Для инвестора» — сохранённые наборы настроек</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Числовой порядок страниц в навигации</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Оглавление автоматически нумерует разделы по выбранному порядку</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>📊</span> Данные и фильтрация <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Две модели: «Срез» и «Сравнение»</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает — оставить, улучшить UI переключения</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Фильтрация по горизонту</strong><span class="pri pri-should">ВАЖНО</span><em>Включить в отчёт только нужные горизонты (УВ-1, УВ-2, …)</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Фильтрация по домену</strong><span class="pri pri-should">ВАЖНО</span><em>Выбрать только «Северный», «Южный» борт и т.д.</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Пакетная генерация</strong><span class="pri pri-future">ПОТОМ</span><em>Сформировать отчёты за несколько недель сразу — архив ZIP</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Исключить конкретные точки</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Мультиселект точек/дренажей, которые не войдут в отчёт</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>🎨</span> Брендинг и стиль <span class="badge badge-new">НОВОЕ</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Название карьера и объекта из настроек</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже реализовано в последнем коммите</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Цветовая схема отчёта</strong><span class="pri pri-should">ВАЖНО</span><em>3–4 варианта: «Синяя» (текущая), «Зелёная», «Серая», «Корпоративная»</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Логотип компании</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Загрузить PNG/SVG — вставляется в шапку вместо текста «ЮРГ»</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Штамп / гриф секретности</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>«ДСП», «Внутренний», «Для заказчика» — ватермарк на страницах</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Шрифт и размер</strong><span class="pri pri-future">ПОТОМ</span><em>Выбор шрифта: Система, PT Serif, Roboto</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>🤖</span> ИИ-интеграция <span class="badge badge-ai">AI</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Claude API для заключений</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает — генерирует текстовые блоки анализа</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Банк промптов с категориями</strong><span class="pri pri-should">ВАЖНО</span><em>Промпты сгруппированы: «Водоотлив», «Дренажи», «Рекомендации»</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Выбор модели (Sonnet / Opus / Haiku)</strong><span class="pri pri-should">ВАЖНО</span><em>Haiku — быстро и дёшево, Opus — глубокий анализ</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Тон ответа</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>«Официальный», «Краткий», «С рекомендациями» — пресеты стиля</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Редактирование AI-текста прямо в UI</strong><span class="pri pri-should">ВАЖНО</span><em>После генерации можно поправить текст перед включением в отчёт</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Кэширование AI-результатов</strong><span class="pri pri-should">ВАЖНО</span><em>Не перегенерировать, если данные не изменились — экономит токены</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>👁</span> Предпросмотр <span class="badge badge-new">НОВОЕ</span></h3>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Live-превью прямо во вкладке</strong><span class="pri pri-should">ВАЖНО</span><em>iframe с live-обновлением по мере изменения настроек</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Мини-превью структуры</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Вертикальная «карта страниц» — видно какие разделы включены</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Переключение A4 / Экран</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Предпросмотр в разных форматах прямо в браузере</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Отметка «изменено» при несинхронизации</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Кнопка «Обновить превью» появляется, если настройки изменились</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>💾</span> Экспорт и архив <span class="badge badge-new">НОВОЕ</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Экспорт в HTML</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Экспорт в PDF через печать</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Кнопка «Печать / PDF» открывает диалог браузера — уже работает в отчёте</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>История сгенерированных отчётов</strong><span class="pri pri-should">ВАЖНО</span><em>Список последних 10 отчётов с датой, версией — можно открыть заново</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Сохранение конфигурации как «шаблон»</strong><span class="pri pri-should">ВАЖНО</span><em>Назвать и сохранить текущий набор настроек для повторного использования</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Копирование ссылки / шеринг</strong><span class="pri pri-future">ПОТОМ</span><em>Загрузить HTML в облако и поделиться ссылкой</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Версионирование отчётов (v1, v2…)</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Счётчик версии сохраняется — видно «это версия 3 для этого периода»</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>📷</span> Фото и медиа <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Фото из Google Drive</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Выбор количества колонок для галереи</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>1, 2 или 3 фото в ряд — настраивается для каждого вида точек</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Максимум фото на точку</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Ограничить 1–5 фото, чтобы отчёт не был слишком большим</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Подписи к фото</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Автоматически подставлять «Точка X, дата Y» под каждым фото</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>🗺</span> Карта и схемы <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Снимок карты в отчёт</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Снимок схемы водоотлива в отчёт</strong><span class="pri pri-should">ВАЖНО</span><em>Захватить SVG-диаграмму как изображение через canvas</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Вставка схемы дренажей в раздел «Дренажи»</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>2D-профиль дренажа уже строится — добавить в раздел</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Масштаб и рамка карты</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Выбрать zoom карты перед захватом, добавить масштабную линейку</em></p>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <h3><span>📋</span> Текст и структура <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
+      <div class="feature-item">
+        <div class="check on"></div>
+        <p><strong>Оглавление</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Автогенерация с якорными ссылками — уже есть, улучшить нумерацию</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Аннотации к разделам</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Ввести кастомный текст-вставку перед каждым разделом</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Подпись и печать на титуле</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>«Блок подписи»: ФИО, должность, дата, строчка для подписи</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Нумерация страниц A4</strong><span class="pri pri-should">ВАЖНО</span><em>CSS @page counter — «Стр. 3 из 12» в нижнем колонтитуле при печати</em></p>
+      </div>
+      <div class="feature-item">
+        <div class="check"></div>
+        <p><strong>Динамические итоги</strong><span class="pri pri-should">ВАЖНО</span><em>Раздел «Итого по карьеру»: сводная таблица всех KPI за период</em></p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- DESIGN A -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-design-a">
+  <div class="section-title">Вариант A — «Конструктор с шагами»</div>
+  <div class="section-desc">
+    Левая панель — 5 шагов-этапов (Период → Содержание → Стиль → ИИ → Генерация).
+    По центру — настройки текущего шага. Справа — живая миниатюра отчёта и список активных разделов.
+    <br><strong>Лучше всего подходит:</strong> для создания «взвешенных» отчётов, когда пользователь хочет контролировать каждый шаг.
+  </div>
+
+  <div class="mockup-wrap">
+    <div class="mockup-bar">
+      <div class="mockup-dot" style="background:#ff5f57"></div>
+      <div class="mockup-dot" style="background:#febc2e"></div>
+      <div class="mockup-dot" style="background:#28c840"></div>
+      <div class="mockup-url">Мониторинг карьера — Отчёт</div>
+    </div>
+    <div class="da-layout">
+      <!-- Steps sidebar -->
+      <div class="da-steps">
+        <div style="padding:14px 20px 10px;font-size:10px;font-weight:700;color:#374151;letter-spacing:1px;text-transform:uppercase">ЭТАПЫ</div>
+        <div class="da-step done">
+          <div class="da-step-num">✓</div>
+          <div><div class="da-step-label">1. Период</div><div class="da-step-sub">28.04 – 05.05.2025</div></div>
+        </div>
+        <div class="da-step active">
+          <div class="da-step-num">2</div>
+          <div><div class="da-step-label">2. Содержание</div><div class="da-step-sub">6 / 8 разделов</div></div>
+        </div>
+        <div class="da-step">
+          <div class="da-step-num">3</div>
+          <div><div class="da-step-label">3. Стиль</div><div class="da-step-sub">Не настроен</div></div>
+        </div>
+        <div class="da-step">
+          <div class="da-step-num">4</div>
+          <div><div class="da-step-label">4. ИИ-анализ</div><div class="da-step-sub">Не настроен</div></div>
+        </div>
+        <div class="da-step">
+          <div class="da-step-num">5</div>
+          <div><div class="da-step-label">5. Генерация</div><div class="da-step-sub">Готов к запуску</div></div>
+        </div>
+        <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 20px;border-top:1px solid #1e2535;background:#111827">
+          <div style="font-size:11px;color:#4b5563;margin-bottom:8px">Составитель: Иванов А.В.</div>
+          <div style="font-size:11px;color:#4b5563">Версия отчёта: v3</div>
+        </div>
+      </div>
+
+      <!-- Main content: step 2 - Contents -->
+      <div class="da-main">
+        <div class="da-h">Содержание отчёта</div>
+        <div class="da-sub">Включите нужные разделы и перетащите для изменения порядка</div>
+
+        <div class="da-section-list">
+          <div class="da-section-item">
+            <span class="grip">⠿</span>
+            <span>🗺</span>
+            <span style="flex:1">Схема карьера (карта)</span>
+            <div class="da-toggle on"></div>
+          </div>
+          <div class="da-section-item">
+            <span class="grip">⠿</span>
+            <span>📊</span>
+            <span style="flex:1">Домены и горизонты</span>
+            <div class="da-toggle on"></div>
+          </div>
+          <div class="da-section-item">
+            <span class="grip">⠿</span>
+            <span>💧</span>
+            <span style="flex:1">Водоотлив (насосы, объёмы)</span>
+            <div class="da-toggle on"></div>
+          </div>
+          <div class="da-section-item">
+            <span class="grip">⠿</span>
+            <span>🏗</span>
+            <span style="flex:1">Дренажные канавы</span>
+            <div class="da-toggle on"></div>
+          </div>
+          <div class="da-section-item">
+            <span class="grip">⠿</span>
+            <span>📷</span>
+            <span style="flex:1">Фото точек наблюдения</span>
+            <div class="da-toggle on"></div>
+          </div>
+          <div class="da-section-item">
+            <span class="grip">⠿</span>
+            <span>📈</span>
+            <span style="flex:1">История наблюдений (графики)</span>
+            <div class="da-toggle on"></div>
+          </div>
+          <div class="da-section-item off">
+            <span class="grip">⠿</span>
+            <span>🔄</span>
+            <span style="flex:1">Сравнительный анализ</span>
+            <div class="da-toggle"></div>
+          </div>
+          <div class="da-section-item off">
+            <span class="grip">⠿</span>
+            <span>🤖</span>
+            <span style="flex:1">ИИ-заключение (Claude)</span>
+            <div class="da-toggle"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: preview + controls -->
+      <div class="da-sidebar">
+        <div class="da-preview-title">Мини-превью</div>
+        <div class="da-mini-report">
+          <div class="da-mini-page">
+            <div class="da-mini-hdr"></div>
+            <div class="da-mini-kpi"><div></div><div></div><div></div></div>
+            <div class="da-mini-line w80"></div>
+            <div class="da-mini-line w60"></div>
+            <div class="da-mini-line w80"></div>
+            <div style="background:#e2e8f0;height:40px;border-radius:3px;margin-bottom:6px"></div>
+            <div class="da-mini-line w40"></div>
+            <div class="da-mini-line w80"></div>
+            <div class="da-mini-line w60"></div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:#4b5563;text-align:center">6 разделов · ~12 стр.</div>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.5px">Активные разделы</div>
+        <div style="font-size:11px;color:#94a3b8;display:flex;flex-direction:column;gap:4px">
+          <div style="color:#4ade80">✓ 1. Схема карьера</div>
+          <div style="color:#4ade80">✓ 2. Домены</div>
+          <div style="color:#4ade80">✓ 3. Водоотлив</div>
+          <div style="color:#4ade80">✓ 4. Дренажи</div>
+          <div style="color:#4ade80">✓ 5. Фото</div>
+          <div style="color:#4ade80">✓ 6. История</div>
+          <div style="color:#374151">✗ Сравнение</div>
+          <div style="color:#374151">✗ ИИ-анализ</div>
+        </div>
+
+        <div class="da-nav-btns">
+          <button class="da-btn da-btn-back">← Назад</button>
+          <button class="da-btn da-btn-next">Далее →</button>
+        </div>
+        <button class="da-btn-gen">⚡ Сгенерировать</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:20px;margin-bottom:20px">
+    <h3 style="color:#f1f5f9;margin-bottom:12px;font-size:14px">📋 Шаг 4 — ИИ-анализ (пример экрана)</h3>
+    <div class="ai-settings">
+      <div class="ai-field">
+        <label>Модель</label>
+        <select><option>claude-sonnet-4-6 (рекомендуется)</option><option>claude-opus-4-7 (детально)</option><option>claude-haiku-4-5 (быстро)</option></select>
+      </div>
+      <div class="ai-field">
+        <label>Тон анализа</label>
+        <select><option>Официальный технический</option><option>Краткий выводы</option><option>Детальный с рекомендациями</option></select>
+      </div>
+    </div>
+    <div class="ai-prompts">
+      <label>Быстрые промпты</label>
+      <div class="ai-prompt-tags">
+        <div class="ai-tag">📊 Тренд уровней</div>
+        <div class="ai-tag">💧 Водоотлив</div>
+        <div class="ai-tag">⚠️ Риски</div>
+        <div class="ai-tag">🔧 Рекомендации</div>
+        <div class="ai-tag">📈 Динамика</div>
+        <div class="ai-tag">+ Добавить</div>
+      </div>
+      <textarea class="ai-textarea" rows="3">Проанализируй изменения уровня подземных вод за указанный период. Выяви тренды, аномалии и потенциальные риски для добычи. Дай конкретные технические рекомендации.</textarea>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div style="flex:1;background:#0f1117;border-radius:8px;padding:12px;border:1px solid #1e2535">
+        <div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:6px">Сгенерированный текст</div>
+        <div style="font-size:12px;color:#94a3b8;line-height:1.6">За отчётный период (28.04–05.05) зафиксировано снижение уровня на 1.2–3.4 м по западному борту. Насос П-3 обеспечил откачку 24 800 м³…<br><span style="color:#4b5563">← Редактируемый блок</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#1a2035;border:1px solid #1e3a5f;border-radius:8px;padding:16px">
+    <div style="color:#60a5fa;font-weight:700;margin-bottom:6px">✅ Преимущества варианта A</div>
+    <div style="color:#94a3b8;font-size:13px;line-height:1.7">
+      • Пользователь чётко понимает, на каком этапе находится<br>
+      • Шаги можно делать поэтапно, возвращаться назад<br>
+      • Правая панель всегда показывает актуальное состояние<br>
+      • Drag-and-drop порядок разделов — наглядно и удобно<br>
+      • Идеально для новых пользователей — «нельзя ничего пропустить»
+    </div>
+    <div style="color:#f87171;font-size:13px;margin-top:8px">
+      ⚠ Минус: требует больше кликов для опытных пользователей (можно решить кнопкой «Пропустить всё → Генерация»)
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- DESIGN B -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-design-b">
+  <div class="section-title">Вариант B — «Сплит-дашборд»</div>
+  <div class="section-desc">
+    Левая панель — аккордеон-настройки (всё сразу, без шагов). Правая — живой предпросмотр отчёта в iframe, обновляется по кнопке.
+    <br><strong>Лучше всего подходит:</strong> для опытных пользователей, которые знают что хотят и хотят сразу видеть результат.
+  </div>
+
+  <div class="mockup-wrap">
+    <div class="mockup-bar">
+      <div class="mockup-dot" style="background:#ff5f57"></div>
+      <div class="mockup-dot" style="background:#febc2e"></div>
+      <div class="mockup-dot" style="background:#28c840"></div>
+      <div class="mockup-url">Мониторинг карьера — Отчёт</div>
+    </div>
+    <div class="db-layout">
+      <div class="db-left">
+        <!-- Период -->
+        <div class="db-section-hdr">📅 ПЕРИОД И РЕЖИМ <span>▾</span></div>
+        <div class="db-section-body">
+          <div class="db-field">
+            <label>Режим</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="background:#1e3a5f;border:1px solid #2563eb;border-radius:8px;padding:8px;text-align:center;font-size:12px;color:#60a5fa;cursor:pointer;font-weight:600">📊 Сравнение</div>
+              <div style="background:#0f1117;border:1px solid #2d3748;border-radius:8px;padding:8px;text-align:center;font-size:12px;color:#64748b;cursor:pointer">📋 Срез</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="db-field"><label>Период A</label><input class="db-input" value="28.04.2025" type="text"></div>
+            <div class="db-field"><label>Период B</label><input class="db-input" value="05.05.2025" type="text"></div>
+          </div>
+        </div>
+
+        <!-- Разделы -->
+        <div class="db-section-hdr">📋 СОДЕРЖАНИЕ <span>▾</span></div>
+        <div class="db-section-body">
+          <div class="db-chk-list">
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🗺</span>Карта</div><div class="db-toggle on"></div></div>
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">📊</span>Домены</div><div class="db-toggle on"></div></div>
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">💧</span>Водоотлив</div><div class="db-toggle on"></div></div>
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🏗</span>Дренажи</div><div class="db-toggle on"></div></div>
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">📷</span>Фото</div><div class="db-toggle on"></div></div>
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">📈</span>История</div><div class="db-toggle on"></div></div>
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🔄</span>Сравнение</div><div class="db-toggle on"></div></div>
+            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🤖</span>ИИ-анализ</div><div class="db-toggle"></div></div>
+          </div>
+        </div>
+
+        <!-- Автор -->
+        <div class="db-section-hdr">👤 АВТОР И ОБЪЕКТ <span>▸</span></div>
+
+        <!-- ИИ -->
+        <div class="db-section-hdr">🤖 ИИ-АНАЛИЗ <span>▸</span></div>
+
+        <!-- Стиль -->
+        <div class="db-section-hdr">🎨 СТИЛЬ <span>▸</span></div>
+
+        <button class="db-gen-btn">⚡ Сгенерировать отчёт</button>
+      </div>
+
+      <!-- Preview -->
+      <div class="db-right">
+        <div class="db-preview-toolbar">
+          <span>ПРЕДПРОСМОТР</span>
+          <button class="db-preview-btn active">🖥 Экран</button>
+          <button class="db-preview-btn">📄 A4</button>
+          <div style="flex:1"></div>
+          <button class="db-preview-btn" style="background:#1c3a2a;border-color:#16a34a;color:#4ade80">🔄 Обновить</button>
+        </div>
+        <div class="db-iframe-wrap">
+          <div class="db-iframe">
+            <div class="db-iframe-inner">
+              <div class="db-iframe-hdr">
+                <h2>Карьер ЮРГ · Пулково-42</h2>
+                <p>Отчёт о состоянии подземных вод · 28.04 – 05.05.2025 · Гидрогеолог Иванов А.В. · v3</p>
+              </div>
+              <div class="db-kpi-row">
+                <div class="db-kpi"><div class="db-kpi-val">42</div><div class="db-kpi-lbl">Точек наблюдения</div></div>
+                <div class="db-kpi"><div class="db-kpi-val">128.4</div><div class="db-kpi-lbl">Ср. уровень, м</div></div>
+                <div class="db-kpi"><div class="db-kpi-val">−2.1</div><div class="db-kpi-lbl">Δ за период, м</div></div>
+              </div>
+              <div class="db-section-block">
+                <h3>1. Схема карьера</h3>
+                <div style="background:#e2e8f0;height:80px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px">[ Карта карьера ]</div>
+              </div>
+              <div class="db-section-block">
+                <h3>2. Домены и горизонты</h3>
+                <p>Анализ по 4 доменам: Северный борт, Южный борт, Центральная зона, Западный склон...</p>
+              </div>
+              <div class="db-section-block">
+                <h3>3. Водоотлив</h3>
+                <p>Активных насосов: 7. Суммарный объём откачки за период: 48 200 м³...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#1a2035;border:1px solid #1e3a5f;border-radius:8px;padding:16px">
+    <div style="color:#60a5fa;font-weight:700;margin-bottom:6px">✅ Преимущества варианта B</div>
+    <div style="color:#94a3b8;font-size:13px;line-height:1.7">
+      • Всё настраивается в одном месте — нет необходимости переключать шаги<br>
+      • Живой предпросмотр — сразу видишь что получишь<br>
+      • Аккордеон скрывает редко меняемые настройки (автор, стиль)<br>
+      • Привычный UX — похож на настройки в других инструментах
+    </div>
+    <div style="color:#f87171;font-size:13px;margin-top:8px">
+      ⚠ Минус: нет drag-and-drop порядка разделов; превью требует постоянного обновления
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- DESIGN C -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-design-c">
+  <div class="section-title">Вариант C — «Полноэкранный мастер»</div>
+  <div class="section-desc">
+    Прогресс-бар сверху, каждый экран — одна задача. Максимально чистый и понятный интерфейс.
+    <br><strong>Лучше всего подходит:</strong> когда нужно сделать отчёт быстро, не отвлекаясь.
+  </div>
+
+  <div class="mockup-wrap">
+    <div class="mockup-bar">
+      <div class="mockup-dot" style="background:#ff5f57"></div>
+      <div class="mockup-dot" style="background:#febc2e"></div>
+      <div class="mockup-dot" style="background:#28c840"></div>
+      <div class="mockup-url">Мониторинг карьера — Отчёт</div>
+    </div>
+    <div class="dc-layout">
+      <!-- Progress -->
+      <div class="dc-progress">
+        <div class="dc-steps-row">
+          <div class="dc-step-dot done">✓</div>
+          <div class="dc-step-line done"></div>
+          <div class="dc-step-dot done">✓</div>
+          <div class="dc-step-line done"></div>
+          <div class="dc-step-dot active">3</div>
+          <div class="dc-step-line"></div>
+          <div class="dc-step-dot">4</div>
+          <div class="dc-step-line"></div>
+          <div class="dc-step-dot">5</div>
+        </div>
+        <div class="dc-steps-labels">
+          <div class="dc-step-lbl">Период</div>
+          <div class="dc-step-lbl">Разделы</div>
+          <div class="dc-step-lbl active">Стиль</div>
+          <div class="dc-step-lbl">ИИ</div>
+          <div class="dc-step-lbl">Готово</div>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="dc-body">
+        <div class="dc-content">
+          <h2>Выберите стиль отчёта</h2>
+          <p>Цветовая схема будет применена ко всем разделам</p>
+
+          <div class="dc-card-grid">
+            <div class="dc-section-card sel">
+              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#1e3a8a,#3b82f6);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🔵</div>
+              <div class="name">Синяя (текущая)</div>
+              <div class="desc">Стандартная корпоративная</div>
+            </div>
+            <div class="dc-section-card">
+              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#14532d,#16a34a);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🟢</div>
+              <div class="name">Зелёная</div>
+              <div class="desc">Природная, экологичная</div>
+            </div>
+            <div class="dc-section-card">
+              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#1e293b,#475569);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">⚫</div>
+              <div class="name">Монохром</div>
+              <div class="desc">Деловая, минималистичная</div>
+            </div>
+            <div class="dc-section-card">
+              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#7c2d12,#ea580c);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🔴</div>
+              <div class="name">Красная</div>
+              <div class="desc">Акцент на риски</div>
+            </div>
+            <div class="dc-section-card">
+              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#4c1d95,#7c3aed);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🟣</div>
+              <div class="name">Фиолетовая</div>
+              <div class="desc">Премиум-стиль</div>
+            </div>
+            <div class="dc-section-card" style="border-style:dashed">
+              <div class="ico">✏️</div>
+              <div class="name">Свои цвета</div>
+              <div class="desc">Выбрать вручную</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary sidebar -->
+        <div class="dc-right">
+          <div class="dc-summary-title">Ваш отчёт</div>
+          <div class="dc-summary-list">
+            <div class="dc-summary-item"><div class="dot"></div>28.04 – 05.05.2025</div>
+            <div class="dc-summary-item"><div class="dot"></div>Режим: сравнение</div>
+            <div class="dc-summary-item"><div class="dot"></div>Карта ✓</div>
+            <div class="dc-summary-item"><div class="dot"></div>Домены ✓</div>
+            <div class="dc-summary-item"><div class="dot"></div>Водоотлив ✓</div>
+            <div class="dc-summary-item"><div class="dot"></div>Дренажи ✓</div>
+            <div class="dc-summary-item"><div class="dot"></div>Фото ✓</div>
+            <div class="dc-summary-item"><div class="dot off"></div>ИИ-анализ —</div>
+            <div class="dc-summary-item" style="color:#60a5fa;margin-top:8px"><div class="dot" style="background:#60a5fa"></div>Стиль: Синяя</div>
+          </div>
+          <div style="background:#0f1117;border-radius:8px;padding:12px;font-size:12px;color:#64748b;line-height:1.6">
+            💡 Можно вернуться к любому шагу, нажав на кружок сверху
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer nav -->
+      <div class="dc-footer">
+        <div class="dc-step-info">Шаг 3 из 5 — Стиль</div>
+        <div class="dc-footer-btns">
+          <button class="dc-btn dc-btn-back">← Назад</button>
+          <button class="dc-btn dc-btn-next">Далее →</button>
+          <button class="dc-btn dc-btn-gen">⚡ Сгенерировать сейчас</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#1a2035;border:1px solid #1e3a5f;border-radius:8px;padding:16px">
+    <div style="color:#60a5fa;font-weight:700;margin-bottom:6px">✅ Преимущества варианта C</div>
+    <div style="color:#94a3b8;font-size:13px;line-height:1.7">
+      • Самый чистый и понятный интерфейс<br>
+      • Прогресс-бар сверху — всегда видно «где ты»<br>
+      • Можно перепрыгнуть на любой шаг кликом на кружок<br>
+      • «Сгенерировать сейчас» доступен на любом шаге<br>
+      • Сводка справа — всё важное на виду
+    </div>
+    <div style="color:#f87171;font-size:13px;margin-top:8px">
+      ⚠ Минус: нет live-предпросмотра; занимает всю высоту вкладки
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- ARCHITECTURE -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-architecture">
+  <div class="section-title">Архитектура нового модуля</div>
+  <div class="section-desc">Предлагаемая структура кода и разделение ответственности</div>
+
+  <div class="arch-grid">
+
+    <div class="arch-card">
+      <h3>📁 Структура файлов</h3>
+      <div class="arch-list">
+        <div class="arch-item accent"><b>ui-report.js</b>Главный файл — UI, шаги, события</div>
+        <div class="arch-item green"><b>report-builder.js</b>buildReportHTML() и все buildXxxSection()</div>
+        <div class="arch-item purple"><b>report-ai.js</b>callClaudeAPI(), buildAIContext(), промпты</div>
+        <div class="arch-item yellow"><b>report-export.js</b>Генерация HTML, PDF-печать, архив</div>
+        <div class="arch-item"><b>report-styles.js</b>getReportCSS() — цветовые темы</div>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <h3>🗃 ReportState (расширенный)</h3>
+      <div class="arch-list">
+        <div class="arch-item accent"><b>settings</b>author, position, quarryName, objectName, apiKey</div>
+        <div class="arch-item accent"><b>sections[]</b>{ id, label, enabled, order } — drag-drop порядок</div>
+        <div class="arch-item green"><b>filters</b>{ horizons[], domains[], excludePoints[] }</div>
+        <div class="arch-item green"><b>style</b>{ theme, logoUrl, watermark }</div>
+        <div class="arch-item purple"><b>aiSettings</b>{ model, tone, customPrompt, cachedResults }</div>
+        <div class="arch-item yellow"><b>history[]</b>Список сгенерированных отчётов</div>
+        <div class="arch-item"><b>templates[]</b>Сохранённые наборы настроек</div>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <h3>📦 Разделы отчёта (сортируемые)</h3>
+      <div class="arch-list">
+        <div class="arch-item accent"><b>cover</b>Титульная страница — всегда первая</div>
+        <div class="arch-item accent"><b>summary</b>KPI-сводка — всегда вторая</div>
+        <div class="arch-item green"><b>map</b>Схема карьера (captureMapCanvas)</div>
+        <div class="arch-item green"><b>domains</b>Домены и горизонты</div>
+        <div class="arch-item green"><b>dewatering</b>Водоотлив (DewateringState) ← новое</div>
+        <div class="arch-item green"><b>ditches</b>Дренажные канавы</div>
+        <div class="arch-item green"><b>photos</b>Фото точек наблюдения</div>
+        <div class="arch-item green"><b>history</b>История наблюдений</div>
+        <div class="arch-item green"><b>compare</b>Сравнительный анализ</div>
+        <div class="arch-item purple"><b>ai</b>ИИ-заключение (Claude)</div>
+        <div class="arch-item"><b>conclusions</b>Ручные выводы — всегда последний</div>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <h3>💾 Хранение настроек</h3>
+      <div class="arch-list">
+        <div class="arch-item accent"><b>localStorage['report-settings']</b>Всё кроме AI ключа и истории</div>
+        <div class="arch-item accent"><b>localStorage['report-sections-order']</b>Порядок и enabled для разделов</div>
+        <div class="arch-item green"><b>localStorage['report-templates']</b>JSON массив именованных шаблонов</div>
+        <div class="arch-item green"><b>localStorage['report-history']</b>Список последних 10 отчётов</div>
+        <div class="arch-item purple"><b>localStorage['report-ai-cache']</b>Кэш AI ответов по хешу данных</div>
+        <div class="arch-item"><b>sessionStorage['report-preview']</b>HTML превью — не переживает закрытие</div>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <h3>🔄 Поток генерации</h3>
+      <div class="arch-list">
+        <div class="arch-item accent"><b>1. collectSettings()</b>Собрать все настройки из UI в объект s</div>
+        <div class="arch-item accent"><b>2. loadData(s)</b>Загрузить точки, дренажи, уровни за период</div>
+        <div class="arch-item green"><b>3. captureAssets(s)</b>Захват карты + схемы водоотлива параллельно</div>
+        <div class="arch-item green"><b>4. preloadPhotos(s)</b>Загрузить фото из Google Drive</div>
+        <div class="arch-item purple"><b>5. generateAI(s)</b>Вызов Claude API (если enabled + ключ)</div>
+        <div class="arch-item"><b>6. buildHTML(s)</b>Сборка HTML по порядку sections[]</div>
+        <div class="arch-item"><b>7. openOrDownload(html)</b>Открыть в окне или скачать файл</div>
+        <div class="arch-item yellow"><b>8. saveToHistory(s)</b>Записать в историю отчётов</div>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <h3>🎨 Цветовые темы</h3>
+      <div class="arch-list">
+        <div class="arch-item accent"><b>blue</b>Текущая синяя — #1e3a8a, #3b82f6</div>
+        <div class="arch-item green"><b>green</b>Зелёная — #14532d, #16a34a</div>
+        <div class="arch-item"><b>mono</b>Монохром — #1e293b, #475569</div>
+        <div class="arch-item yellow"><b>red</b>Красная — #7c2d12, #ea580c</div>
+        <div class="arch-item purple"><b>violet</b>Фиолетовая — #4c1d95, #7c3aed</div>
+        <div class="arch-item"><b>custom</b>Произвольные цвета via color picker</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- COMPARISON -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-comparison">
+  <div class="section-title">Сравнение вариантов дизайна</div>
+  <div class="section-desc">Итоговая таблица для принятия решения</div>
+
+  <table class="cmp-table">
+    <thead>
+      <tr>
+        <th>Критерий</th>
+        <th>Текущий</th>
+        <th>A — Конструктор</th>
+        <th>B — Дашборд</th>
+        <th>C — Мастер</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Порог входа (новый пользователь)</td><td class="partial">Средний</td><td class="tick">Низкий ✓</td><td class="partial">Средний</td><td class="tick">Низкий ✓</td></tr>
+      <tr><td>Скорость для опытного пользователя</td><td class="partial">Средняя</td><td class="partial">Средняя</td><td class="tick">Высокая ✓</td><td class="partial">Средняя</td></tr>
+      <tr><td>Drag-and-drop порядок разделов</td><td class="cross">✗</td><td class="tick">✓</td><td class="cross">✗</td><td class="partial">Частично</td></tr>
+      <tr><td>Live-предпросмотр</td><td class="cross">✗</td><td class="partial">Мини</td><td class="tick">Полный ✓</td><td class="cross">✗</td></tr>
+      <tr><td>Шаблоны отчётов</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+      <tr><td>История отчётов</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+      <tr><td>Фильтрация по домену/горизонту</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+      <tr><td>Выбор цветовой темы</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+      <tr><td>Редактирование AI-текста</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="partial">Частично</td></tr>
+      <tr><td>Нумерация страниц при печати</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+      <tr><td>Снимок схемы водоотлива</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+      <tr><td>Сложность реализации</td><td>—</td><td class="partial">Высокая</td><td class="tick">Средняя</td><td class="partial">Высокая</td></tr>
+    </tbody>
+  </table>
+
+  <div style="background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:24px;margin-bottom:24px">
+    <div style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:12px">🏆 Рекомендация</div>
+    <div style="font-size:14px;color:#94a3b8;line-height:1.8">
+      Оптимальный вариант — <strong style="color:#60a5fa">Вариант A «Конструктор»</strong> с элементами Варианта B:<br>
+      <br>
+      • Левая панель с шагами (как в A) — понятная навигация<br>
+      • Мини-превью справа (как в A) — всегда видна структура<br>
+      • Аккордеон внутри каждого шага (как в B) — компактность<br>
+      • Drag-and-drop порядок разделов — ключевая «фишка»<br>
+      • Шаблоны + история в отдельной вкладке<br>
+      <br>
+      <strong style="color:#f1f5f9">Это «гибридный» подход</strong>: структурированный мастер + гибкость дашборда.
+    </div>
+  </div>
+
+  <div style="background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:24px">
+    <div style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:16px">📝 Предлагаемая поэтапная реализация</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px">
+      <div>
+        <div style="color:#4ade80;font-weight:700;margin-bottom:8px">🟢 Этап 1 — Основа (2–3 дня)</div>
+        <div style="color:#94a3b8;line-height:1.8">
+          ✓ Новый layout: шаги + мини-превью<br>
+          ✓ Drag-and-drop для разделов<br>
+          ✓ Шаблоны (сохранить / загрузить)<br>
+          ✓ История отчётов (localStorage)
+        </div>
+      </div>
+      <div>
+        <div style="color:#60a5fa;font-weight:700;margin-bottom:8px">🔵 Этап 2 — Данные (1–2 дня)</div>
+        <div style="color:#94a3b8;line-height:1.8">
+          ✓ Фильтры по домену/горизонту<br>
+          ✓ Снимок схемы водоотлива<br>
+          ✓ Нумерация страниц при печати<br>
+          ✓ Редактирование AI-текста
+        </div>
+      </div>
+      <div>
+        <div style="color:#c084fc;font-weight:700;margin-bottom:8px">🟣 Этап 3 — Стиль (1 день)</div>
+        <div style="color:#94a3b8;line-height:1.8">
+          ✓ 5 цветовых тем<br>
+          ✓ Загрузка логотипа<br>
+          ✓ Водяной знак / гриф<br>
+          ✓ Блок подписи на титуле
+        </div>
+      </div>
+      <div>
+        <div style="color:#fbbf24;font-weight:700;margin-bottom:8px">🟡 Этап 4 — ИИ (1 день)</div>
+        <div style="color:#94a3b8;line-height:1.8">
+          ✓ Выбор модели (Sonnet/Opus/Haiku)<br>
+          ✓ Тон ответа (пресеты)<br>
+          ✓ Кэш AI-результатов<br>
+          ✓ Категории промптов
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('s-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
