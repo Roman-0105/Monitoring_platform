@@ -1145,6 +1145,13 @@ function initEditModal() {
 
   Photos.initPreview('e-photo-cam', 'e-new-photo-preview');
   Photos.initPreview('e-photo-gal', 'e-new-photo-preview');
+
+  var eCamBtn = document.getElementById('e-photo-cam-btn');
+  if (eCamBtn) {
+    eCamBtn.addEventListener('click', function() {
+      Photos.openCamera('e-new-photo-preview', 'e-photo-cam');
+    });
+  }
 }
 
 function openEditModal(id) {
@@ -1205,7 +1212,7 @@ function openEditModal(id) {
   var hasPhoto = !!(p.photoUrls && p.photoUrls[0]);
   if (delBtn2) delBtn2.style.display = hasPhoto ? 'inline-flex' : 'none';
 
-  var ePhotoBtn = document.getElementById('e-photo-btn');
+  var ePhotoBtn = document.getElementById('e-photo-cam-btn');
   if (ePhotoBtn) {
     ePhotoBtn.textContent = hasPhoto ? '📷 Заменить фото' : '📷 Загрузить фото';
   }
@@ -1213,6 +1220,7 @@ function openEditModal(id) {
   ['e-photo-cam', 'e-photo-gal'].forEach(function(id) {
     var inp = document.getElementById(id); if (inp) inp.value = '';
   });
+  Photos.clearCaptured();
   var eNewPrev = document.getElementById('e-new-photo-preview');
   if (eNewPrev) eNewPrev.innerHTML = '';
   document.getElementById('edit-modal').style.display = 'flex';
@@ -1222,6 +1230,7 @@ function openEditModal(id) {
 
 function closeEditModal() {
   _editSnap = {};
+  Photos.clearCaptured();
   document.getElementById('edit-modal').style.display = 'none';
   document.body.style.overflow = '';
   AppState.editingPointId = null;
@@ -1259,6 +1268,7 @@ function saveEditedPoint() {
   var chain;
 
   var ePhotoFile = Photos.getFileAny(['e-photo-cam', 'e-photo-gal']);
+  Photos.clearCaptured();
 
   if (isMapAdd) {
     chain = Points.create(data).then(function(savedPoint) {
