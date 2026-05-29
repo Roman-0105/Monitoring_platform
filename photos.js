@@ -127,15 +127,6 @@ var Photos = (function() {
     overlay.appendChild(video);
     overlay.appendChild(btnRow);
     document.body.appendChild(overlay);
-
-    // Check camera count — hide flip button if only one camera available
-    if (navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then(function(devices) {
-        var videoInputs = devices.filter(function(d) { return d.kind === 'videoinput'; });
-        if (videoInputs.length < 2) flipBtn.style.display = 'none';
-      }).catch(function() {});
-    }
-
     startStream(currentFacing);
   }
 
