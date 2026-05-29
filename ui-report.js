@@ -31,6 +31,7 @@ var ReportState = {
     reportLayout: 'a',
     filterDomains:  [],   // [] = all domains
     filterHorizons: [],   // [] = all horizons
+    includeWells: false,
   },
   currentStep: 1,
 };
@@ -41,6 +42,7 @@ var RP_SECTIONS = [
   { id: 'map',        chk: 'rp-inc-map',        label: 'Схема карьера',      icon: '🗺',  defOn: true  },
   { id: 'domens',     chk: 'rp-inc-domens',      label: 'Домены / горизонты', icon: '📊',  defOn: true  },
   { id: 'dewatering', chk: 'rp-inc-dewatering',  label: 'Водоотлив',          icon: '💧',  defOn: false },
+  { id: 'wells',      chk: 'rp-inc-wells',       label: 'Гор. скважины',      icon: '⊛',  defOn: false },
   { id: 'ditches',    chk: 'rp-inc-ditches',     label: 'Дренажные канавы',   icon: '🏗',  defOn: true  },
   { id: 'photos',     chk: 'rp-inc-photos',      label: 'Фото точек',         icon: '📷',  defOn: true  },
   { id: 'history',    chk: 'rp-inc-history',     label: 'История (графики)',  icon: '📈',  defOn: true  },
@@ -142,6 +144,7 @@ function restoreSettings() {
   restoreChk('rp-inc-compare',    s.incCompare);
   restoreChk('rp-inc-ai',         s.incAI);
   restoreChk('rp-inc-dewatering', s.incDewatering);
+  restoreChk('rp-inc-wells',      s.incWells);
   // Sync the AI toggle and collapse body if disabled
   var aiCb = document.getElementById('rp-inc-ai-cb');
   if (aiCb && s.incAI !== undefined) {
@@ -237,6 +240,7 @@ function saveReportSettings() {
       incCompare:    getChk('rp-inc-compare'),
       incAI:         getChk('rp-inc-ai'),
       incDewatering: getChk('rp-inc-dewatering'),
+      incWells:      getChk('rp-inc-wells'),
       reportTheme:   ReportState.settings.reportTheme || 'blue',
       reportLayout:  ReportState.settings.reportLayout || 'a',
       watermark:    (function(){ var v=getField('rp-watermark'); return v==='custom'?getField('rp-watermark-custom'):v; })(),
@@ -1284,7 +1288,7 @@ function loadReportData() {
 
     Toast.show('Данные загружены: ' + allDates.length + ' дат мониторинга', 'success');
     renderRpFilters();
-    return loadDitchesHistory();
+    return loadDitchesHistory().then(function() { return loadWellsForReport(); });
   }).catch(function(err) {
     Toast.show('Ошибка загрузки: ' + err.message, 'error');
   }).finally(function() {
@@ -1319,10 +1323,23 @@ function loadDitchesHistory() {
   return Promise.all(ditchTasks.concat(ptTasks));
 }
 
-
-
-
-
+function loadWellsForReport() {
+  return Api.getWells().then(function(wells) {
+    ReportState.allWells = wells;
+    if (typeof WellsState !== 'undefined') WellsState.list = wells;
+    var meas = (typeof WellsState !== 'undefined') ? WellsState.measurements : {};
+    return Promise.all(wells.map(function(w) {
+      if (meas[w.id]) return Promise.resolve(); // already cached
+      return Api.getWellMeasurements(w.id).then(function(ms) {
+        if (typeof WellsState !== 'undefined') WellsState.measurements[w.id] = ms;
+      }).catch(function() {
+        if (typeof WellsState !== 'undefined') WellsState.measurements[w.id] = [];
+      });
+    }));
+  }).catch(function() {
+    ReportState.allWells = [];
+  });
+}
 // ── AI-кэш ───────────────────────────────────────────────
 function getAICacheKey(s) {
   var prompt = (s.customPrompt || '').slice(0, 80);
@@ -1845,6 +1862,7 @@ function generateReport() {
   s.includeCompare = !!(document.getElementById('rp-inc-compare') || {checked:true}).checked;
   s.includeAI      = !!(document.getElementById('rp-inc-ai')      || {checked:true}).checked;
   s.includeDewatering = !!(document.getElementById('rp-inc-dewatering') || {checked:false}).checked;
+  s.includeWells      = !!(document.getElementById('rp-inc-wells')      || {checked:false}).checked;
   s.quarryName     = getField('rp-quarry-name') || 'ЮРГ';
   s.objectName     = getField('rp-object-name') || 'Пулково-42';
   s.reportTheme = ReportState.settings.reportTheme || 'blue';
@@ -2745,6 +2763,94 @@ function buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB) {
   '</div>';
 }
 
+// ── Секция горизонтальных скважин ────────────────────────
+function buildWellsSection(s, isSingle, secNum) {
+  var wells = ReportState.allWells || (typeof WellsState !== 'undefined' ? WellsState.list : []);
+  if (!wells.length) return '';
+  var measMap = (typeof WellsState !== 'undefined') ? WellsState.measurements : {};
+
+  // Последний замер на дату ≤ date
+  function getMeasForDate(wellId, date) {
+    var ms = (measMap[wellId] || []).filter(function(m) {
+      return (m.measurementDate || '').slice(0, 10) <= date;
+    });
+    if (!ms.length) return null;
+    ms.sort(function(a, b) {
+      var da = (a.measurementDate || '').slice(0, 10);
+      var db = (b.measurementDate || '').slice(0, 10);
+      return da < db ? 1 : da > db ? -1 : 0;
+    });
+    return ms[0];
+  }
+
+  var wellData = wells.map(function(w) {
+    return { w: w, mB: getMeasForDate(w.id, s.dateB), mA: isSingle ? null : getMeasForDate(w.id, s.dateA) };
+  }).filter(function(d) { return d.mB !== null; });
+
+  if (!wellData.length) return '';
+
+  wellData.sort(function(a, b) {
+    return (parseFloat((b.mB||{}).flowRate)||0) - (parseFloat((a.mB||{}).flowRate)||0);
+  });
+
+  var totalQB = wellData.reduce(function(acc,d){ return acc+(parseFloat((d.mB||{}).flowRate)||0); }, 0);
+  var totalQA = isSingle ? 0 : wellData.reduce(function(acc,d){ return acc+(parseFloat((d.mA||{}).flowRate)||0); }, 0);
+  var dQ = totalQB - totalQA;
+  var activeCount = wellData.filter(function(d){ return d.w.status === 'Активная'; }).length;
+
+  var kpiHtml = '<div class="rp-kpi-grid" style="margin-bottom:14px">' +
+    '<div class="rp-kpi"><div class="rp-kpi-val">' + wellData.length + '</div><div class="rp-kpi-label">Скважин с данными</div></div>' +
+    '<div class="rp-kpi"><div class="rp-kpi-val">' + activeCount + '</div><div class="rp-kpi-label">Активных</div></div>' +
+    '<div class="rp-kpi"><div class="rp-kpi-val">' + totalQB.toFixed(2) + ' <span style="font-size:12px">м³/ч</span></div>' +
+      '<div class="rp-kpi-label">Σ Q' + (isSingle ? '' : ' нед. Б') + '</div></div>' +
+    '<div class="rp-kpi"><div class="rp-kpi-val">' + (totalQB/3.6).toFixed(2) + ' <span style="font-size:12px">л/с</span></div>' +
+      '<div class="rp-kpi-label">Σ Q, л/с</div></div>' +
+    (!isSingle
+      ? '<div class="rp-kpi ' + (dQ>=0?'rp-kpi--up':'rp-kpi--down') + '">' +
+          '<div class="rp-kpi-val">' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(2) + '</div>' +
+          '<div class="rp-kpi-label">Δ Q, м³/ч</div></div>'
+      : '') +
+  '</div>';
+
+  var WELL_ST_CLR = { 'Активная':'#188038', 'Иссякает':'#f9ab00', 'Сухая':'#d93025' };
+  var rows = wellData.map(function(d) {
+    var w = d.w;
+    var qb = parseFloat((d.mB||{}).flowRate) || 0;
+    var qa = (!isSingle && d.mA) ? parseFloat(d.mA.flowRate) || 0 : null;
+    var delta = qa !== null ? qb - qa : null;
+    var measDate = ((d.mB||{}).measurementDate || '').slice(0, 10);
+    var isExact = measDate === s.dateB;
+    return '<tr>' +
+      '<td><b>' + escAttr(w.name || '—') + '</b></td>' +
+      '<td>' + escAttr(w.domain || '—') + '</td>' +
+      '<td>' + escAttr(w.quarrySection || '—') + '</td>' +
+      '<td style="color:' + (WELL_ST_CLR[w.status]||'#888') + ';font-weight:600">' + escAttr(w.status||'—') + '</td>' +
+      '<td style="text-align:right">' + (w.depth != null ? w.depth.toFixed(1) + ' м' : '—') + '</td>' +
+      (!isSingle ? '<td style="text-align:right">' + (qa !== null ? qa.toFixed(2) : '—') + '</td>' : '') +
+      '<td style="text-align:right;font-weight:700;color:#1a73e8">' + qb.toFixed(2) + '</td>' +
+      (!isSingle
+        ? '<td class="' + (delta!==null?(delta>=0?'rp-up':'rp-down'):'') + '">' +
+            (delta!==null ? (delta>=0?'▲+':'▼') + Math.abs(delta).toFixed(2) : '—') + '</td>'
+        : '') +
+      '<td style="text-align:right;color:' + (isExact?'#555':'#f9ab00') + ';font-size:10px">' +
+        fmtDate(measDate) + (isExact ? '' : ' ↑') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<section class="rp-section"><h2>' + secNum + '. Горизонтальные скважины</h2>' +
+    kpiHtml +
+    '<table class="rp-table"><thead><tr>' +
+      '<th>Скважина</th><th>Домен</th><th>Участок</th><th>Статус</th>' +
+      '<th style="text-align:right">Глубина</th>' +
+      (!isSingle ? '<th style="text-align:right">Q нед. А, м³/ч</th>' : '') +
+      '<th style="text-align:right">Q' + (isSingle ? '' : ' нед. Б') + ', м³/ч</th>' +
+      (!isSingle ? '<th>Δ, м³/ч</th>' : '') +
+      '<th style="text-align:right">Дата замера</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div style="font-size:10px;color:#aaa;margin-top:6px">↑ — ближайший замер до выбранной даты</div>' +
+  '</section>';
+}
+
 // ── Горизонтальный бар-чарт по доменам ───────────────────
 function buildDomainBarsChart(ptsA, ptsB, isSingle) {
   var domenSet = {}, domenKeys = [];
@@ -3275,11 +3381,13 @@ function buildReportHTML(s) {
     (function() {
       var dewateringSection = s.includeDewatering ? buildDewateringSection(s) : '';
       var secCount = 1 +
-        (mapSection      ? 1 : 0) +
-        (domensSection   ? 1 : 0) +
-        (ditchesSection  ? 1 : 0) +
+        (mapSection        ? 1 : 0) +
+        (domensSection     ? 1 : 0) +
+        (ditchesSection    ? 1 : 0) +
         (dewateringSection ? 1 : 0) +
-        (compareSection  ? 1 : 0);
+        (compareSection    ? 1 : 0);
+      var wellsSection = s.includeWells ? buildWellsSection(s, isSingle, secCount + 1) : '';
+      secCount += wellsSection ? 1 : 0;
       var analyticsSection = buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secCount + 1);
       var conclNum = analyticsSection ? secCount + 2 : secCount + 1;
       var concl = '<section class="rp-section"><h2>' + conclNum + '. Заключение и рекомендации</h2>' +
@@ -3287,7 +3395,7 @@ function buildReportHTML(s) {
           ? '<div class="rp-conclusion-text">' + escAttr(s.conclusions).replace(/\n/g,'<br>') + '</div>'
           : '<div class="rp-conclusion-text rp-conclusion-text--empty">Заключение не заполнено</div>') +
       '</section>';
-      return '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + dewateringSection + compareSection + analyticsSection + concl + '</div>';
+      return '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + dewateringSection + compareSection + wellsSection + analyticsSection + concl + '</div>';
     })() +
     '<div class="rp-footer">' +
   '<div>Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</div>' +
