@@ -442,38 +442,26 @@ var Api = (function() {
       throw new Error('Файл схемы пустой (' + blob.size + ' байт) — проверьте исходный файл');
     }
 
-    // Ищем существующую запись для этой недели
+    // Получаем текущий storage_path чтобы удалить старый файл
     var { data: existing } = await client()
-      .from('schemes').select('id, storage_path').eq('week_key', params.weekKey).maybeSingle();
+      .from('schemes').select('storage_path').eq('week_key', params.weekKey).maybeSingle();
 
-    // Удаляем старый файл из Storage (лучший вариант — не блокируем upload при ошибке)
     if (existing && existing.storage_path && existing.storage_path !== path) {
       await client().storage.from('schemes').remove([existing.storage_path]).catch(function() {});
     }
 
-    // Загружаем новый файл
     var { error: uploadError } = await client().storage
       .from('schemes').upload(path, blob, { upsert: false, contentType: params.mimeType });
     if (uploadError) throw new Error('Storage: ' + uploadError.message + ' (status ' + (uploadError.statusCode || uploadError.status || '?') + ')');
 
-    // Обновляем или создаём запись в БД
-    var now = new Date().toISOString();
-    if (existing) {
-      var { error: updErr } = await client().from('schemes').update({
-        storage_path: path,
-        uploaded_at:  now,
-        uploaded_by:  params.uploadedBy || '',
-      }).eq('week_key', params.weekKey);
-      if (updErr) throw new Error(updErr.message);
-    } else {
-      var { error: insErr } = await client().from('schemes').insert({
-        week_key:     params.weekKey,
-        storage_path: path,
-        uploaded_at:  now,
-        uploaded_by:  params.uploadedBy || '',
-      });
-      if (insErr) throw new Error(insErr.message);
-    }
+    // week_key — первичный ключ таблицы, upsert корректно обновляет существующую строку
+    var { error: dbError } = await client().from('schemes').upsert({
+      week_key:     params.weekKey,
+      storage_path: path,
+      uploaded_at:  new Date().toISOString(),
+      uploaded_by:  params.uploadedBy || '',
+    });
+    if (dbError) throw new Error(dbError.message);
   }
 
   // ── Photos (Supabase Storage) ─────────────────────────────
