@@ -45,14 +45,14 @@ var Schemes = (function() {
           pdfjsLib.getDocument({ data: typedArr }).promise.then(function(pdf) {
             return pdf.getPage(1);
           }).then(function(page) {
-            // scale=3 → ~2481px for A4 landscape, plenty of detail
-            var vp = page.getViewport({ scale: 3 });
+            // scale=5 → ~4134px for A4 landscape, sharp at max zoom
+            var vp = page.getViewport({ scale: 5 });
             var canvas = document.createElement('canvas');
             canvas.width  = vp.width;
             canvas.height = vp.height;
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function() {
-              var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-              resolve({ base64: dataUrl.split(',')[1], mime: 'image/jpeg' });
+              var dataUrl = canvas.toDataURL('image/png');
+              resolve({ base64: dataUrl.split(',')[1], mime: 'image/png' });
             });
           }).catch(function(err) {
             reject(new Error('Ошибка рендеринга PDF: ' + err.message));
