@@ -32,7 +32,7 @@ var Schemes = (function() {
     var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
     var isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
 
-    // PDF: render via PDF.js to high-res JPEG (Supabase Storage doesn't accept application/pdf)
+    // PDF: render via PDF.js to PNG
     if (isPdf) {
       return new Promise(function(resolve, reject) {
         var reader = new FileReader();
@@ -45,12 +45,28 @@ var Schemes = (function() {
           pdfjsLib.getDocument({ data: typedArr }).promise.then(function(pdf) {
             return pdf.getPage(1);
           }).then(function(page) {
-            // scale=4 → ~3364px for A4 landscape — баланс качества и памяти
-            var vp = page.getViewport({ scale: 4 });
+            // Адаптивный масштаб: длинная сторона не более 4096px
+            var vp0 = page.getViewport({ scale: 1 });
+            if (!vp0 || vp0.width <= 0 || vp0.height <= 0) {
+              reject(new Error('PDF страница имеет нулевые размеры'));
+              return;
+            }
+            var MAX_DIM = 4096;
+            var scale = Math.min(4, MAX_DIM / Math.max(vp0.width, vp0.height));
+            scale = Math.max(0.5, scale);
+
+            var vp = page.getViewport({ scale: scale });
             var canvas = document.createElement('canvas');
-            canvas.width  = vp.width;
-            canvas.height = vp.height;
-            return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function() {
+            canvas.width  = Math.round(vp.width);
+            canvas.height = Math.round(vp.height);
+
+            var ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Не удалось создать canvas контекст (недостаточно памяти)'));
+              return;
+            }
+
+            return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function() {
               var dataUrl = canvas.toDataURL('image/png');
               var b64 = dataUrl.split(',')[1] || '';
               if (b64.length < 100) {
