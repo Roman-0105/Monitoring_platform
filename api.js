@@ -402,9 +402,20 @@ var Api = (function() {
 
   async function getSchemes() {
     var { data, error } = await client()
-      .from('schemes').select('*').order('week_key', { ascending: false });
+      .from('schemes').select('*')
+      .order('week_key',    { ascending: false })
+      .order('uploaded_at', { ascending: false });
     if (error) throw new Error(error.message);
-    return (data || []).map(function(r) {
+
+    // Deduplicate: keep only the newest entry per week_key
+    var seen = {};
+    var rows  = (data || []).filter(function(r) {
+      if (seen[r.week_key]) return false;
+      seen[r.week_key] = true;
+      return true;
+    });
+
+    return rows.map(function(r) {
       var urlResult = client().storage.from('schemes').getPublicUrl(r.storage_path);
       var publicUrl = urlResult.data ? urlResult.data.publicUrl : '';
       return {
@@ -418,22 +429,51 @@ var Api = (function() {
   }
 
   async function uploadScheme(params) {
+    if (!params.base64 || params.base64.length < 100) {
+      throw new Error('Схема не сжалась корректно — пустые данные изображения');
+    }
+
     var _mime = params.mimeType || 'image/jpeg';
     var ext  = _mime === 'image/svg+xml' ? 'svg' : (_mime.split('/')[1] || 'jpg');
     var path = params.weekKey + '_' + Date.now() + '.' + ext;
     var blob = base64ToBlob(params.base64, params.mimeType);
 
+    if (blob.size < 512) {
+      throw new Error('Файл схемы пустой (' + blob.size + ' байт) — проверьте исходный файл');
+    }
+
+    // Ищем существующую запись для этой недели
+    var { data: existing } = await client()
+      .from('schemes').select('id, storage_path').eq('week_key', params.weekKey).maybeSingle();
+
+    // Удаляем старый файл из Storage (лучший вариант — не блокируем upload при ошибке)
+    if (existing && existing.storage_path && existing.storage_path !== path) {
+      await client().storage.from('schemes').remove([existing.storage_path]).catch(function() {});
+    }
+
+    // Загружаем новый файл
     var { error: uploadError } = await client().storage
-      .from('schemes').upload(path, blob, { upsert: true, contentType: params.mimeType });
+      .from('schemes').upload(path, blob, { upsert: false, contentType: params.mimeType });
     if (uploadError) throw new Error('Storage: ' + uploadError.message + ' (status ' + (uploadError.statusCode || uploadError.status || '?') + ')');
 
-    var { error: dbError } = await client().from('schemes').upsert({
-      week_key:     params.weekKey,
-      storage_path: path,
-      uploaded_at:  new Date().toISOString(),
-      uploaded_by:  params.uploadedBy || '',
-    });
-    if (dbError) throw new Error(dbError.message);
+    // Обновляем или создаём запись в БД
+    var now = new Date().toISOString();
+    if (existing) {
+      var { error: updErr } = await client().from('schemes').update({
+        storage_path: path,
+        uploaded_at:  now,
+        uploaded_by:  params.uploadedBy || '',
+      }).eq('week_key', params.weekKey);
+      if (updErr) throw new Error(updErr.message);
+    } else {
+      var { error: insErr } = await client().from('schemes').insert({
+        week_key:     params.weekKey,
+        storage_path: path,
+        uploaded_at:  now,
+        uploaded_by:  params.uploadedBy || '',
+      });
+      if (insErr) throw new Error(insErr.message);
+    }
   }
 
   // ── Photos (Supabase Storage) ─────────────────────────────

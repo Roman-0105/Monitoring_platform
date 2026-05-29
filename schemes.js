@@ -45,14 +45,19 @@ var Schemes = (function() {
           pdfjsLib.getDocument({ data: typedArr }).promise.then(function(pdf) {
             return pdf.getPage(1);
           }).then(function(page) {
-            // scale=5 → ~4134px for A4 landscape, sharp at max zoom
-            var vp = page.getViewport({ scale: 5 });
+            // scale=4 → ~3364px for A4 landscape — баланс качества и памяти
+            var vp = page.getViewport({ scale: 4 });
             var canvas = document.createElement('canvas');
             canvas.width  = vp.width;
             canvas.height = vp.height;
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function() {
               var dataUrl = canvas.toDataURL('image/png');
-              resolve({ base64: dataUrl.split(',')[1], mime: 'image/png' });
+              var b64 = dataUrl.split(',')[1] || '';
+              if (b64.length < 100) {
+                reject(new Error('PDF отрендерился как пустой холст — проверьте файл'));
+                return;
+              }
+              resolve({ base64: b64, mime: 'image/png' });
             });
           }).catch(function(err) {
             reject(new Error('Ошибка рендеринга PDF: ' + err.message));
@@ -187,6 +192,9 @@ var Schemes = (function() {
     });
 
     var uploadP = compressScheme(file).then(function(data) {
+      if (!data || !data.base64 || data.base64.length < 100) {
+        throw new Error('Сжатие схемы вернуло пустой результат — попробуйте другой файл');
+      }
       return Api.uploadScheme({
         weekKey:    weekKey,
         fileName:   'scheme_' + weekKey + '_' + Date.now() + '.png',
