@@ -12,6 +12,88 @@
 
 var Photos = (function() {
 
+  var _capturedFile = null;  // file from getUserMedia camera capture
+
+  // ── Камера (getUserMedia) ────────────────────────────────
+
+  function openCamera(previewId, inputId) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      var inp = document.getElementById(inputId);
+      if (inp) inp.click();
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } },
+      audio: false
+    }).then(function(stream) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
+
+      var video = document.createElement('video');
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      video.style.cssText = 'max-width:100%;max-height:calc(100dvh - 100px);border-radius:8px;object-fit:contain';
+      video.srcObject = stream;
+
+      var btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;gap:16px;margin-top:16px';
+
+      var captureBtn = document.createElement('button');
+      captureBtn.type = 'button';
+      captureBtn.style.cssText = 'flex:1;max-width:200px;padding:14px 24px;font-size:16px;background:#1a73e8;color:#fff;border:none;border-radius:12px;cursor:pointer;font-weight:600';
+      captureBtn.textContent = '📷 Снять';
+
+      var cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.style.cssText = 'padding:14px 24px;font-size:14px;background:rgba(255,255,255,.1);color:#ccc;border:1px solid rgba(255,255,255,.2);border-radius:12px;cursor:pointer';
+      cancelBtn.textContent = 'Отмена';
+
+      function stopStream() {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        overlay.remove();
+      }
+
+      captureBtn.addEventListener('click', function() {
+        var canvas = document.createElement('canvas');
+        canvas.width  = video.videoWidth  || 1280;
+        canvas.height = video.videoHeight || 720;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        stopStream();
+        canvas.toBlob(function(blob) {
+          var file = new File([blob], 'photo_' + Date.now() + '.jpg', { type: 'image/jpeg' });
+          var stored = false;
+          var inp = document.getElementById(inputId);
+          if (inp && typeof DataTransfer !== 'undefined') {
+            try {
+              var dt = new DataTransfer();
+              dt.items.add(file);
+              inp.files = dt.files;
+              inp.dispatchEvent(new Event('change', { bubbles: true }));
+              stored = true;
+            } catch(e) {}
+          }
+          if (!stored) {
+            _capturedFile = file;
+            _showPreview(previewId, file);
+          }
+        }, 'image/jpeg', 0.92);
+      });
+
+      cancelBtn.addEventListener('click', stopStream);
+      btnRow.appendChild(captureBtn);
+      btnRow.appendChild(cancelBtn);
+      overlay.appendChild(video);
+      overlay.appendChild(btnRow);
+      document.body.appendChild(overlay);
+    }).catch(function() {
+      var inp = document.getElementById(inputId);
+      if (inp) inp.click();
+    });
+  }
+
+  function clearCaptured() { _capturedFile = null; }
+
   // ── Сжатие ───────────────────────────────────────────────
 
   function compress(file, maxSize, quality) {
@@ -142,6 +224,7 @@ var Photos = (function() {
     var input = document.getElementById(inputId);
     if (!input) return;
     input.addEventListener('change', function() {
+      if (input.files && input.files[0]) _capturedFile = null;
       _showPreview(previewId, input.files && input.files[0]);
     });
   }
@@ -163,6 +246,7 @@ var Photos = (function() {
   }
 
   function getFileAny(ids) {
+    if (_capturedFile) return _capturedFile;
     for (var i = 0; i < ids.length; i++) {
       var f = getFile(ids[i]);
       if (f) return f;
@@ -181,6 +265,8 @@ var Photos = (function() {
     clearInput:     clearInput,
     getFile:        getFile,
     clearCache:     clearCache,
+    openCamera:     openCamera,
+    clearCaptured:  clearCaptured,
   };
 })();
 
@@ -298,11 +384,14 @@ function triggerPhotoInput(inputId, previewId, capture, onFileSelected) {
     preview.appendChild(hint);
   });
 
-  // Сбрасываем значение чтобы исключить автозаполнение из буфера
   newInp.value = '';
-  // Запрещаем вставку из буфера обмена
   newInp.addEventListener('paste', function(e) { e.preventDefault(); });
-  newInp.click();
+
+  if (capture === 'environment' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    Photos.openCamera(previewId, inputId);
+  } else {
+    newInp.click();
+  }
 }
 
 /**

@@ -1731,11 +1731,11 @@ function openAddFormFromPoi(p) {
       '</div>',
 
       // Кнопка-ярлык: камера
-      '<label for="pm-photo-cam" class="photo-pick-btn btn btn-sm btn-outline"',
+      '<button type="button" id="pm-photo-cam-btn" class="photo-pick-btn btn btn-sm btn-outline"',
         ' style="justify-content:center;width:100%;box-sizing:border-box">',
         '📷 Сделать фото',
-      '</label>',
-      '<input type="file" id="pm-photo-cam" accept="image/*" capture="environment" class="photo-file-input">',
+      '</button>',
+      '<input type="file" id="pm-photo-cam" accept="image/*" class="photo-file-input">',
 
       // Кнопка-ярлык: галерея
       '<label for="pm-photo-gal" class="photo-pick-btn btn btn-sm btn-outline"',
@@ -1772,9 +1772,14 @@ function openAddFormFromPoi(p) {
   Photos.initPreview('pm-photo-cam', 'pm-photo-preview');
   Photos.initPreview('pm-photo-gal', 'pm-photo-preview');
 
+  // Камера — открываем через getUserMedia (работает на Windows-планшетах)
+  document.getElementById('pm-photo-cam-btn').addEventListener('click', function() {
+    Photos.openCamera('pm-photo-preview', 'pm-photo-cam');
+  });
+
   // Закрытие
-  document.getElementById('pam-close').addEventListener('click', function() { modal.remove(); });
-  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  document.getElementById('pam-close').addEventListener('click', function() { Photos.clearCaptured(); modal.remove(); });
+  modal.addEventListener('click', function(e) { if (e.target === modal) { Photos.clearCaptured(); modal.remove(); } });
 
   // Сохранение
   document.getElementById('pam-save').addEventListener('click', function() {
@@ -1806,6 +1811,7 @@ function openAddFormFromPoi(p) {
         Toast.show('Замер сохранён, фото не загрузилось', 'warning');
       });
     }).then(function() {
+      Photos.clearCaptured();
       modal.remove();
       return Points.load();
     }).then(function() {
