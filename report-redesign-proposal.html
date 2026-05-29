@@ -3,1093 +3,1111 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Предложения по редизайну вкладки «Отчёт»</title>
+<title>Отчёт по мониторингу водопроявлений карьера — Неделя 22, 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;font-size:14px}
-a{color:#60a5fa;text-decoration:none}
+:root{
+  --bg:#0f1319;
+  --card:#1e2530;
+  --card2:#242d3a;
+  --border:rgba(255,255,255,0.08);
+  --accent:#1a73e8;
+  --accent2:#0d47a1;
+  --text:#e8eaf0;
+  --text2:#8a9bb0;
+  --green:#34a853;
+  --orange:#f9ab00;
+  --red:#ea4335;
+  --cyan:#00acc1;
+  --gray:#888;
+  --toc-w:220px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
 
-/* ── Nav ── */
-.top-nav{background:#1a1f2e;border-bottom:1px solid #2d3748;padding:0 24px;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:100}
-.top-nav h1{font-size:15px;font-weight:700;color:#f1f5f9;padding:14px 0;margin-right:32px;white-space:nowrap}
-.nav-tabs{display:flex;gap:0}
-.nav-tab{padding:14px 20px;cursor:pointer;color:#94a3b8;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
-.nav-tab:hover{color:#e2e8f0}
-.nav-tab.active{color:#60a5fa;border-bottom-color:#60a5fa}
+/* TOC */
+#toc{position:fixed;left:0;top:0;width:var(--toc-w);height:100vh;background:#141920;border-right:1px solid var(--border);overflow-y:auto;z-index:200;padding:24px 0}
+#toc h2{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:0 20px 12px}
+#toc a{display:block;padding:6px 20px;font-size:12.5px;color:var(--text2);text-decoration:none;border-left:2px solid transparent;transition:.15s;line-height:1.4}
+#toc a:hover{color:var(--text);background:rgba(255,255,255,0.04)}
+#toc a.active{color:#60a5fa;border-left-color:#1a73e8;background:rgba(26,115,232,0.08)}
+#toc .toc-logo{padding:0 20px 20px;display:flex;align-items:center;gap:10px}
+#toc .logo-circle{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1a73e8,#0d47a1);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
+#toc .logo-text{font-size:12px;font-weight:600;color:var(--text);line-height:1.3}
+#toc .logo-sub{font-size:10px;color:var(--text2)}
+#toc hr{border:none;border-top:1px solid var(--border);margin:8px 0}
 
-/* ── Content ── */
-.section{display:none;padding:32px 40px;max-width:1400px;margin:0 auto}
-.section.active{display:block}
-.section-title{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px}
-.section-desc{color:#94a3b8;font-size:14px;margin-bottom:32px;line-height:1.6}
+/* Main content */
+#main{margin-left:var(--toc-w);padding:0 48px 80px;max-width:1100px}
 
-/* ── Feature list ── */
-.feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:32px}
-.feature-card{background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:20px}
-.feature-card h3{font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.feature-card h3 .badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600}
-.badge-new{background:#1e3a5f;color:#60a5fa}
-.badge-upgrade{background:#1c3a2a;color:#4ade80}
-.badge-ai{background:#3b1f5e;color:#c084fc}
-.feature-item{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid #1e2535}
-.feature-item:last-child{border-bottom:none}
-.feature-item .check{width:18px;height:18px;border-radius:4px;border:1px solid #374151;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;cursor:pointer;transition:.2s}
-.feature-item .check.on{background:#2563eb;border-color:#2563eb;color:#fff}
-.feature-item .check.on::after{content:'✓';font-size:11px}
-.feature-item p{font-size:13px;color:#cbd5e1;line-height:1.5}
-.feature-item p strong{color:#f1f5f9}
-.feature-item p em{color:#94a3b8;font-size:12px;font-style:normal;display:block;margin-top:2px}
+/* Sections */
+.report-section{padding:40px 0;border-bottom:1px solid var(--border)}
+.report-section:last-child{border-bottom:none}
 
-/* ── Designs ── */
-.design-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
-.design-tab{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;border:1px solid #2d3748;color:#94a3b8;transition:.2s;background:#1a1f2e}
-.design-tab:hover{border-color:#4b5563;color:#e2e8f0}
-.design-tab.active{background:#1e3a5f;border-color:#2563eb;color:#60a5fa}
-.design-panel{display:none}
-.design-panel.active{display:block}
+.sec-label{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.sec-num{width:28px;height:28px;border-radius:6px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.sec-title{font-size:18px;font-weight:700;color:var(--text)}
+.sec-sub{font-size:13px;color:var(--text2);margin-top:2px}
+.section-border{border-left:3px solid var(--accent);padding-left:16px}
 
-/* ── Mockup ── */
-.mockup-wrap{background:#0d1117;border:1px solid #2d3748;border-radius:16px;overflow:hidden;margin-bottom:24px}
-.mockup-bar{background:#161b27;padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #2d3748}
-.mockup-dot{width:10px;height:10px;border-radius:50%}
-.mockup-url{flex:1;background:#0d1117;border-radius:6px;padding:4px 12px;font-size:11px;color:#4b5563;margin:0 12px}
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card2{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:16px}
 
-/* DESIGN A – Конструктор с шагами */
-.da-layout{display:grid;grid-template-columns:220px 1fr 280px;height:580px}
-.da-steps{background:#111827;border-right:1px solid #1e2535;padding:16px 0}
-.da-step{padding:12px 20px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:.15s;position:relative}
-.da-step:hover{background:#1a2035}
-.da-step.active{background:#1e2d4a}
-.da-step.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#2563eb;border-radius:0 2px 2px 0}
-.da-step.done .da-step-num{background:#16a34a;color:#fff}
-.da-step-num{width:28px;height:28px;border-radius:50%;background:#1e2535;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#64748b;flex-shrink:0}
-.da-step.active .da-step-num{background:#2563eb;color:#fff}
-.da-step-label{font-size:12px;font-weight:600;color:#94a3b8}
-.da-step.active .da-step-label{color:#f1f5f9}
-.da-step-sub{font-size:11px;color:#4b5563;margin-top:2px}
+/* KPI row */
+.kpi-row{display:grid;gap:16px;margin-bottom:24px}
+.kpi-row.cols4{grid-template-columns:repeat(4,1fr)}
+.kpi-row.cols3{grid-template-columns:repeat(3,1fr)}
+.kpi-row.cols2{grid-template-columns:repeat(2,1fr)}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)}
+.kpi-card.green::before{background:var(--green)}
+.kpi-card.orange::before{background:var(--orange)}
+.kpi-card.cyan::before{background:var(--cyan)}
+.kpi-card.red::before{background:var(--red)}
+.kpi-label{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.kpi-val{font-size:28px;font-weight:700;color:var(--text);line-height:1}
+.kpi-unit{font-size:14px;font-weight:400;color:var(--text2);margin-left:4px}
+.kpi-delta{font-size:12px;margin-top:6px;display:flex;align-items:center;gap:4px}
+.kpi-delta.up{color:var(--green)}
+.kpi-delta.down{color:var(--red)}
+.kpi-delta.neutral{color:var(--text2)}
 
-.da-main{padding:24px;overflow-y:auto;background:#0f1117}
-.da-h{font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
-.da-sub{font-size:12px;color:#64748b;margin-bottom:20px}
-.da-row{display:flex;gap:12px;margin-bottom:14px}
-.da-field{flex:1}
-.da-field label{display:block;font-size:11px;color:#64748b;margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.da-input{width:100%;background:#1a1f2e;border:1px solid #2d3748;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px}
-.da-mode-row{display:flex;gap:10px;margin-bottom:16px}
-.da-mode{flex:1;border:2px solid #2d3748;border-radius:10px;padding:12px;cursor:pointer;transition:.2s;text-align:center}
-.da-mode.sel{border-color:#2563eb;background:#1e3a5f}
-.da-mode-ico{font-size:22px;margin-bottom:6px}
-.da-mode-name{font-size:12px;font-weight:700;color:#f1f5f9}
-.da-mode-desc{font-size:11px;color:#64748b;margin-top:3px}
+/* Tables */
+.tbl-wrap{border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:#1a2235;padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+tbody tr{border-top:1px solid var(--border)}
+tbody tr:nth-child(odd){background:var(--card)}
+tbody tr:nth-child(even){background:rgba(30,37,48,0.6)}
+tbody tr:hover{background:rgba(26,115,232,0.08)}
+tbody td{padding:9px 14px;color:var(--text);vertical-align:middle}
 
-.da-sidebar{background:#111827;border-left:1px solid #1e2535;padding:16px;display:flex;flex-direction:column;gap:12px}
-.da-preview-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.da-mini-report{background:#1a1f2e;border-radius:8px;flex:1;padding:12px;overflow:hidden;position:relative}
-.da-mini-page{background:#fff;border-radius:4px;padding:8px;height:160px;overflow:hidden}
-.da-mini-hdr{background:#1e3a8a;height:20px;border-radius:3px;margin-bottom:6px}
-.da-mini-kpi{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:6px}
-.da-mini-kpi div{background:#eff6ff;height:24px;border-radius:3px}
-.da-mini-line{height:6px;background:#e2e8f0;border-radius:3px;margin-bottom:4px}
-.da-mini-line.w60{width:60%}
-.da-mini-line.w80{width:80%}
-.da-mini-line.w40{width:40%}
-.da-section-list{display:flex;flex-direction:column;gap:6px}
-.da-section-item{background:#1e2535;border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;color:#cbd5e1;cursor:grab}
-.da-section-item .grip{color:#374151;font-size:14px}
-.da-section-item.off{opacity:.4}
-.da-toggle{margin-left:auto;width:28px;height:16px;background:#374151;border-radius:8px;position:relative;cursor:pointer;flex-shrink:0}
-.da-toggle.on{background:#2563eb}
-.da-toggle::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:.2s}
-.da-toggle.on::after{left:14px}
-.da-nav-btns{display:flex;gap:8px}
-.da-btn{flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;transition:.2s}
-.da-btn-back{background:#1e2535;color:#94a3b8}
-.da-btn-next{background:#2563eb;color:#fff}
-.da-btn-gen{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;padding:12px;border-radius:10px;font-size:14px;font-weight:700;border:none;cursor:pointer;width:100%}
+/* Status chips */
+.chip{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-active{background:rgba(26,115,232,0.2);color:#60a5fa}
+.chip-dry{background:rgba(136,136,136,0.2);color:#aaa}
+.chip-fade{background:rgba(249,171,0,0.2);color:#f9ab00}
+.chip-flood{background:rgba(0,172,193,0.2);color:#00acc1}
+.chip-new{background:rgba(52,168,83,0.2);color:#34a853}
 
-/* DESIGN B – Сплит-дашборд */
-.db-layout{display:grid;grid-template-columns:360px 1fr;height:620px}
-.db-left{background:#111827;border-right:1px solid #1e2535;overflow-y:auto;padding:0}
-.db-section-hdr{padding:12px 20px;background:#0d1117;border-bottom:1px solid #1e2535;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
-.db-section-hdr span{transition:.2s}
-.db-section-body{padding:16px 20px;border-bottom:1px solid #0f1117}
-.db-field{margin-bottom:12px}
-.db-field label{display:block;font-size:11px;color:#64748b;margin-bottom:5px;font-weight:600}
-.db-input{width:100%;background:#0f1117;border:1px solid #2d3748;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px}
-.db-chk-list{display:flex;flex-direction:column;gap:8px}
-.db-chk-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#0f1117;border-radius:8px}
-.db-chk-label{font-size:12px;color:#cbd5e1;display:flex;align-items:center;gap:8px}
-.db-chk-label .ico{font-size:15px}
-.db-toggle{width:32px;height:18px;background:#374151;border-radius:9px;position:relative;cursor:pointer;flex-shrink:0}
-.db-toggle.on{background:#2563eb}
-.db-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.2s}
-.db-toggle.on::after{left:16px}
-.db-gen-btn{margin:16px 20px;width:calc(100% - 40px);padding:12px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
-.db-right{background:#0f1117;display:flex;flex-direction:column}
-.db-preview-toolbar{padding:12px 20px;background:#111827;border-bottom:1px solid #1e2535;display:flex;align-items:center;gap:12px}
-.db-preview-toolbar span{font-size:12px;color:#64748b;font-weight:600}
-.db-preview-btn{padding:5px 12px;border-radius:6px;font-size:12px;background:#1e2535;border:1px solid #2d3748;color:#94a3b8;cursor:pointer}
-.db-preview-btn.active{background:#1e3a5f;border-color:#2563eb;color:#60a5fa}
-.db-iframe-wrap{flex:1;padding:16px;overflow:auto}
-.db-iframe{width:100%;height:100%;border-radius:8px;background:#fff;border:none;position:relative;overflow:hidden}
-.db-iframe-inner{padding:20px;color:#1e293b}
-.db-iframe-hdr{background:#1e3a8a;color:#fff;padding:20px;border-radius:6px;margin-bottom:16px}
-.db-iframe-hdr h2{font-size:18px;margin-bottom:4px}
-.db-iframe-hdr p{font-size:11px;opacity:.8}
-.db-kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
-.db-kpi{background:#f8fafc;border-radius:8px;padding:12px;text-align:center}
-.db-kpi-val{font-size:20px;font-weight:800;color:#1e3a8a}
-.db-kpi-lbl{font-size:10px;color:#64748b;margin-top:2px}
-.db-section-block{background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:12px}
-.db-section-block h3{font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #e2e8f0}
-.db-section-block p{font-size:11px;color:#475569;line-height:1.5}
+/* Domain badges */
+.dbadge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(26,115,232,0.15);color:#60a5fa}
 
-/* DESIGN C – Wizard полноэкранный */
-.dc-layout{height:580px;display:flex;flex-direction:column;background:#0f1117}
-.dc-progress{background:#111827;padding:20px 40px;border-bottom:1px solid #1e2535}
-.dc-steps-row{display:flex;align-items:center;gap:0;margin-bottom:12px}
-.dc-step-dot{width:32px;height:32px;border-radius:50%;background:#1e2535;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#4b5563;flex-shrink:0;transition:.3s}
-.dc-step-dot.done{background:#16a34a;color:#fff}
-.dc-step-dot.active{background:#2563eb;color:#fff;box-shadow:0 0 0 4px rgba(37,99,235,.25)}
-.dc-step-line{flex:1;height:2px;background:#1e2535}
-.dc-step-line.done{background:#16a34a}
-.dc-steps-labels{display:flex;justify-content:space-between;padding:0 4px}
-.dc-step-lbl{font-size:11px;color:#4b5563;text-align:center;width:80px;font-weight:600}
-.dc-step-lbl.active{color:#60a5fa}
-.dc-body{flex:1;display:grid;grid-template-columns:1fr 320px;overflow:hidden}
-.dc-content{padding:32px 40px;overflow-y:auto}
-.dc-content h2{font-size:20px;font-weight:800;color:#f1f5f9;margin-bottom:4px}
-.dc-content p{font-size:13px;color:#64748b;margin-bottom:24px}
-.dc-card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.dc-section-card{border:2px solid #2d3748;border-radius:12px;padding:16px;cursor:pointer;transition:.2s;background:#111827;text-align:center}
-.dc-section-card:hover{border-color:#4b5563}
-.dc-section-card.sel{border-color:#2563eb;background:#1e3a5f}
-.dc-section-card .ico{font-size:28px;margin-bottom:8px}
-.dc-section-card .name{font-size:12px;font-weight:700;color:#f1f5f9}
-.dc-section-card .desc{font-size:11px;color:#64748b;margin-top:4px;line-height:1.4}
-.dc-right{background:#111827;border-left:1px solid #1e2535;padding:20px;display:flex;flex-direction:column;gap:12px}
-.dc-summary-title{font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.5px}
-.dc-summary-list{display:flex;flex-direction:column;gap:6px;flex:1}
-.dc-summary-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#cbd5e1}
-.dc-summary-item .dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0}
-.dc-summary-item .dot.off{background:#374151}
-.dc-footer{background:#111827;border-top:1px solid #1e2535;padding:16px 40px;display:flex;justify-content:space-between;align-items:center}
-.dc-footer-btns{display:flex;gap:10px}
-.dc-btn{padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer}
-.dc-btn-back{background:#1e2535;color:#94a3b8}
-.dc-btn-next{background:#2563eb;color:#fff}
-.dc-btn-gen{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;padding:10px 28px}
-.dc-step-info{font-size:12px;color:#4b5563}
+/* Delta cells */
+.delta-up{color:var(--red)}
+.delta-down{color:var(--green)}
+.delta-neu{color:var(--text2)}
 
-/* ── Architecture ── */
-.arch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-.arch-card{background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:20px}
-.arch-card h3{font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.arch-list{display:flex;flex-direction:column;gap:6px}
-.arch-item{font-size:12px;color:#94a3b8;padding:6px 10px;background:#0f1117;border-radius:6px;border-left:3px solid #2d3748;line-height:1.4}
-.arch-item b{color:#e2e8f0;display:block;margin-bottom:2px}
-.arch-item.accent{border-left-color:#2563eb}
-.arch-item.green{border-left-color:#16a34a}
-.arch-item.purple{border-left-color:#7c3aed}
-.arch-item.yellow{border-left-color:#ca8a04}
+/* Grids */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
 
-/* ── Comparison table ── */
-.cmp-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:32px}
-.cmp-table th{padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;background:#111827;border-bottom:1px solid #2d3748}
-.cmp-table td{padding:10px 16px;border-bottom:1px solid #1e2535;vertical-align:top;color:#cbd5e1}
-.cmp-table tr:hover td{background:#111827}
-.cmp-table td:first-child{color:#f1f5f9;font-weight:600}
-.cmp-table .tick{color:#4ade80;font-weight:700}
-.cmp-table .cross{color:#f87171}
-.cmp-table .partial{color:#fbbf24}
+/* Chart wrappers */
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.chart-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:16px}
+.chart-sub{font-size:11px;color:var(--text2);margin-bottom:12px}
 
-/* ── Priority tags ── */
-.pri{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-left:6px}
-.pri-must{background:#1c3a2a;color:#4ade80}
-.pri-should{background:#1e3a5f;color:#60a5fa}
-.pri-could{background:#2d1f3a;color:#c084fc}
-.pri-future{background:#1e2535;color:#64748b}
+/* Horizontal bar */
+.hbar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.hbar-label{width:70px;font-size:12px;color:var(--text2);text-align:right;flex-shrink:0}
+.hbar-track{flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;position:relative}
+.hbar-fill{height:100%;border-radius:4px}
+.hbar-prev{height:100%;border-radius:4px;opacity:.4;position:absolute;top:0;left:0}
+.hbar-val{font-size:12px;color:var(--text);width:52px;flex-shrink:0}
 
-/* AI block */
-.ai-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
-.ai-field{background:#0f1117;border-radius:8px;padding:12px;border:1px solid #1e2535}
-.ai-field label{font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:6px}
-.ai-field select,.ai-field input{width:100%;background:#111827;border:1px solid #2d3748;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px}
-.ai-prompts{background:#0f1117;border-radius:8px;padding:12px;border:1px solid #1e2535;margin-bottom:16px}
-.ai-prompts label{font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:8px}
-.ai-prompt-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-.ai-tag{padding:4px 12px;background:#1e3a5f;border-radius:20px;font-size:11px;color:#93c5fd;cursor:pointer;border:1px solid #2563eb;transition:.2s}
-.ai-tag:hover{background:#1e40af}
-.ai-textarea{width:100%;background:#111827;border:1px solid #2d3748;border-radius:8px;padding:10px;color:#e2e8f0;font-size:12px;resize:vertical;min-height:80px;font-family:inherit;line-height:1.5}
+/* Cover */
+.cover{text-align:center;padding:60px 40px;background:linear-gradient(135deg,#141c2e 0%,#0f1319 100%);border-radius:16px;border:1px solid var(--border);position:relative;overflow:hidden}
+.cover::before{content:'';position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:500px;background:radial-gradient(circle,rgba(26,115,232,0.12) 0%,transparent 70%);pointer-events:none}
+.cover-logo{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#1a73e8,#0d47a1);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;margin:0 auto 24px}
+.cover-title{font-size:26px;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3}
+.cover-subtitle{font-size:16px;color:var(--text2);margin-bottom:32px}
+.cover-badge{display:inline-block;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;letter-spacing:.04em}
+.cover-meta{display:flex;justify-content:center;gap:40px;margin-top:32px;padding-top:24px;border-top:1px solid var(--border)}
+.cover-meta-item{text-align:center}
+.cover-meta-label{font-size:11px;color:var(--text2);margin-bottom:4px}
+.cover-meta-val{font-size:14px;font-weight:600;color:var(--text)}
+
+/* Risk */
+.risk-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:8px;background:var(--card2);margin-bottom:8px;border:1px solid var(--border)}
+.risk-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.risk-text{font-size:13px;color:var(--text);flex:1}
+.risk-level{font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px}
+
+/* Action table priority */
+.pri-high{color:var(--red);font-weight:600}
+.pri-med{color:var(--orange);font-weight:600}
+.pri-low{color:var(--green);font-weight:600}
+
+/* Signature blocks */
+.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}
+.sig-block{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:20px}
+.sig-role{font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
+.sig-name{font-size:15px;font-weight:600;color:var(--text);margin-bottom:16px}
+.sig-line{border-top:1px dashed rgba(255,255,255,0.15);padding-top:8px;font-size:11px;color:var(--text2)}
+
+/* Photo grid */
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.photo-card{background:var(--card2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.photo-placeholder{height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a2235,#1e2530);gap:8px}
+.photo-placeholder svg{opacity:.3}
+.photo-meta{padding:10px 12px}
+.photo-point{font-size:13px;font-weight:600;color:var(--text)}
+.photo-date{font-size:11px;color:var(--text2)}
+
+/* Point detail cards */
+.point-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;border-top:3px solid var(--accent)}
+.point-card.fade{border-top-color:var(--orange)}
+.point-card.dry{border-top-color:var(--gray)}
+.point-card.flood{border-top-color:var(--cyan)}
+.point-card.new-pt{border-top-color:var(--green)}
+.point-num{font-size:22px;font-weight:700;color:var(--text)}
+.point-q{font-size:20px;font-weight:700;color:var(--accent)}
+.point-q-prev{font-size:12px;color:var(--text2)}
+.point-worker{font-size:11px;color:var(--text2);margin-top:8px}
+
+/* Anomaly bars */
+.anom-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.anom-name{font-size:12px;color:var(--text);width:60px;flex-shrink:0}
+.anom-track{flex:1;height:18px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden}
+.anom-fill-up{height:100%;background:linear-gradient(90deg,rgba(234,67,53,0.6),rgba(234,67,53,0.3));border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;font-weight:600;color:#fff;white-space:nowrap}
+.anom-fill-dn{height:100%;background:linear-gradient(90deg,rgba(52,168,83,0.6),rgba(52,168,83,0.3));border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;font-weight:600;color:#fff;white-space:nowrap}
+
+/* Coverage matrix */
+.cov-matrix{display:grid;gap:2px}
+.cov-row{display:flex;gap:2px;align-items:center}
+.cov-cell{width:28px;height:20px;border-radius:3px;font-size:9px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4)}
+.cov-cell.has{background:rgba(26,115,232,0.6)}
+.cov-cell.no{background:rgba(255,255,255,0.05)}
+.cov-pt-label{width:52px;font-size:11px;color:var(--text2);text-align:right;margin-right:4px;flex-shrink:0}
+.cov-hdr-row{display:flex;gap:2px;margin-bottom:4px;padding-left:56px}
+.cov-hdr{width:28px;font-size:9px;color:var(--text2);text-align:center}
+
+@media print{
+  #toc{display:none}
+  #main{margin-left:0}
+  .report-section{page-break-inside:avoid}
+}
 </style>
 </head>
 <body>
 
-<div class="top-nav">
-  <h1>🗂 Редизайн вкладки «Отчёт»</h1>
-  <div class="nav-tabs">
-    <div class="nav-tab active" onclick="showSection('overview')">Обзор функций</div>
-    <div class="nav-tab" onclick="showSection('design-a')">Вариант A — Конструктор</div>
-    <div class="nav-tab" onclick="showSection('design-b')">Вариант B — Дашборд</div>
-    <div class="nav-tab" onclick="showSection('design-c')">Вариант C — Мастер</div>
-    <div class="nav-tab" onclick="showSection('architecture')">Архитектура</div>
-    <div class="nav-tab" onclick="showSection('comparison')">Сравнение</div>
+<!-- TOC Sidebar -->
+<nav id="toc">
+  <div class="toc-logo">
+    <div class="logo-circle">ГМ</div>
+    <div class="logo-text">ГеоМониторинг<div class="logo-sub">Карьер, 2026</div></div>
   </div>
-</div>
+  <hr>
+  <h2>Содержание</h2>
+  <a href="#s0">Титульный лист</a>
+  <a href="#s1">1. Сводка (Dashboard)</a>
+  <a href="#s2">2. Статусы и интенсивность</a>
+  <a href="#s3">3. Схема карьера</a>
+  <a href="#s4">4. Детализация по доменам</a>
+  <a href="#s5">5. Аномалии и изменения</a>
+  <a href="#s6">6. Карточки точек</a>
+  <a href="#s7">7. Канавы</a>
+  <a href="#s8">8. Скважины</a>
+  <a href="#s9">9. Аналитика</a>
+  <a href="#s10">10. Фотоматериалы</a>
+  <a href="#s11">11. Заключение</a>
+  <hr>
+  <a href="#" style="color:var(--text2);font-size:11px;padding:6px 20px;">Неделя 22 / 26.05.2026</a>
+</nav>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- OVERVIEW -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div class="section active" id="s-overview">
-  <div class="section-title">Полный список предлагаемых улучшений</div>
-  <div class="section-desc">
-    Ниже — все функции, сгруппированные по категориям. Пометки:
-    <span class="pri pri-must">ОБЯЗАТЕЛЬНО</span> — без этого не обойтись,
-    <span class="pri pri-should">ВАЖНО</span> — значительно улучшит UX,
-    <span class="pri pri-could">ЖЕЛАТЕЛЬНО</span> — приятный бонус,
-    <span class="pri pri-future">ПОТОМ</span> — на будущее.
-  </div>
+<!-- Main Content -->
+<div id="main">
 
-  <div class="feature-grid">
-
-    <div class="feature-card">
-      <h3><span>📐</span> Конструктор разделов <span class="badge badge-new">НОВОЕ</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Drag-and-drop порядок разделов</strong><span class="pri pri-should">ВАЖНО</span><em>Пользователь сам определяет, в каком порядке идут разделы в отчёте</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Включение/выключение каждого раздела</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Тоглы с сохранением состояния (уже частично реализовано)</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Свёртывание/раскрытие разделов</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Можно скрыть раздел полностью или показать только заголовок</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Шаблоны набора разделов</strong><span class="pri pri-should">ВАЖНО</span><em>«Краткий», «Полный», «Для инвестора» — сохранённые наборы настроек</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Числовой порядок страниц в навигации</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Оглавление автоматически нумерует разделы по выбранному порядку</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>📊</span> Данные и фильтрация <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Две модели: «Срез» и «Сравнение»</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает — оставить, улучшить UI переключения</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Фильтрация по горизонту</strong><span class="pri pri-should">ВАЖНО</span><em>Включить в отчёт только нужные горизонты (УВ-1, УВ-2, …)</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Фильтрация по домену</strong><span class="pri pri-should">ВАЖНО</span><em>Выбрать только «Северный», «Южный» борт и т.д.</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Пакетная генерация</strong><span class="pri pri-future">ПОТОМ</span><em>Сформировать отчёты за несколько недель сразу — архив ZIP</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Исключить конкретные точки</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Мультиселект точек/дренажей, которые не войдут в отчёт</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>🎨</span> Брендинг и стиль <span class="badge badge-new">НОВОЕ</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Название карьера и объекта из настроек</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже реализовано в последнем коммите</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Цветовая схема отчёта</strong><span class="pri pri-should">ВАЖНО</span><em>3–4 варианта: «Синяя» (текущая), «Зелёная», «Серая», «Корпоративная»</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Логотип компании</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Загрузить PNG/SVG — вставляется в шапку вместо текста «ЮРГ»</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Штамп / гриф секретности</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>«ДСП», «Внутренний», «Для заказчика» — ватермарк на страницах</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Шрифт и размер</strong><span class="pri pri-future">ПОТОМ</span><em>Выбор шрифта: Система, PT Serif, Roboto</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>🤖</span> ИИ-интеграция <span class="badge badge-ai">AI</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Claude API для заключений</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает — генерирует текстовые блоки анализа</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Банк промптов с категориями</strong><span class="pri pri-should">ВАЖНО</span><em>Промпты сгруппированы: «Водоотлив», «Дренажи», «Рекомендации»</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Выбор модели (Sonnet / Opus / Haiku)</strong><span class="pri pri-should">ВАЖНО</span><em>Haiku — быстро и дёшево, Opus — глубокий анализ</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Тон ответа</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>«Официальный», «Краткий», «С рекомендациями» — пресеты стиля</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Редактирование AI-текста прямо в UI</strong><span class="pri pri-should">ВАЖНО</span><em>После генерации можно поправить текст перед включением в отчёт</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Кэширование AI-результатов</strong><span class="pri pri-should">ВАЖНО</span><em>Не перегенерировать, если данные не изменились — экономит токены</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>👁</span> Предпросмотр <span class="badge badge-new">НОВОЕ</span></h3>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Live-превью прямо во вкладке</strong><span class="pri pri-should">ВАЖНО</span><em>iframe с live-обновлением по мере изменения настроек</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Мини-превью структуры</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Вертикальная «карта страниц» — видно какие разделы включены</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Переключение A4 / Экран</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Предпросмотр в разных форматах прямо в браузере</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Отметка «изменено» при несинхронизации</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Кнопка «Обновить превью» появляется, если настройки изменились</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>💾</span> Экспорт и архив <span class="badge badge-new">НОВОЕ</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Экспорт в HTML</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Экспорт в PDF через печать</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Кнопка «Печать / PDF» открывает диалог браузера — уже работает в отчёте</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>История сгенерированных отчётов</strong><span class="pri pri-should">ВАЖНО</span><em>Список последних 10 отчётов с датой, версией — можно открыть заново</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Сохранение конфигурации как «шаблон»</strong><span class="pri pri-should">ВАЖНО</span><em>Назвать и сохранить текущий набор настроек для повторного использования</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Копирование ссылки / шеринг</strong><span class="pri pri-future">ПОТОМ</span><em>Загрузить HTML в облако и поделиться ссылкой</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Версионирование отчётов (v1, v2…)</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Счётчик версии сохраняется — видно «это версия 3 для этого периода»</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>📷</span> Фото и медиа <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Фото из Google Drive</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Выбор количества колонок для галереи</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>1, 2 или 3 фото в ряд — настраивается для каждого вида точек</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Максимум фото на точку</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Ограничить 1–5 фото, чтобы отчёт не был слишком большим</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Подписи к фото</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Автоматически подставлять «Точка X, дата Y» под каждым фото</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>🗺</span> Карта и схемы <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Снимок карты в отчёт</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Уже работает</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Снимок схемы водоотлива в отчёт</strong><span class="pri pri-should">ВАЖНО</span><em>Захватить SVG-диаграмму как изображение через canvas</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Вставка схемы дренажей в раздел «Дренажи»</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>2D-профиль дренажа уже строится — добавить в раздел</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Масштаб и рамка карты</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Выбрать zoom карты перед захватом, добавить масштабную линейку</em></p>
-      </div>
-    </div>
-
-    <div class="feature-card">
-      <h3><span>📋</span> Текст и структура <span class="badge badge-upgrade">УЛУЧШЕНИЕ</span></h3>
-      <div class="feature-item">
-        <div class="check on"></div>
-        <p><strong>Оглавление</strong><span class="pri pri-must">ОБЯЗАТЕЛЬНО</span><em>Автогенерация с якорными ссылками — уже есть, улучшить нумерацию</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Аннотации к разделам</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>Ввести кастомный текст-вставку перед каждым разделом</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Подпись и печать на титуле</strong><span class="pri pri-could">ЖЕЛАТЕЛЬНО</span><em>«Блок подписи»: ФИО, должность, дата, строчка для подписи</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Нумерация страниц A4</strong><span class="pri pri-should">ВАЖНО</span><em>CSS @page counter — «Стр. 3 из 12» в нижнем колонтитуле при печати</em></p>
-      </div>
-      <div class="feature-item">
-        <div class="check"></div>
-        <p><strong>Динамические итоги</strong><span class="pri pri-should">ВАЖНО</span><em>Раздел «Итого по карьеру»: сводная таблица всех KPI за период</em></p>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- DESIGN A -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div class="section" id="s-design-a">
-  <div class="section-title">Вариант A — «Конструктор с шагами»</div>
-  <div class="section-desc">
-    Левая панель — 5 шагов-этапов (Период → Содержание → Стиль → ИИ → Генерация).
-    По центру — настройки текущего шага. Справа — живая миниатюра отчёта и список активных разделов.
-    <br><strong>Лучше всего подходит:</strong> для создания «взвешенных» отчётов, когда пользователь хочет контролировать каждый шаг.
-  </div>
-
-  <div class="mockup-wrap">
-    <div class="mockup-bar">
-      <div class="mockup-dot" style="background:#ff5f57"></div>
-      <div class="mockup-dot" style="background:#febc2e"></div>
-      <div class="mockup-dot" style="background:#28c840"></div>
-      <div class="mockup-url">Мониторинг карьера — Отчёт</div>
-    </div>
-    <div class="da-layout">
-      <!-- Steps sidebar -->
-      <div class="da-steps">
-        <div style="padding:14px 20px 10px;font-size:10px;font-weight:700;color:#374151;letter-spacing:1px;text-transform:uppercase">ЭТАПЫ</div>
-        <div class="da-step done">
-          <div class="da-step-num">✓</div>
-          <div><div class="da-step-label">1. Период</div><div class="da-step-sub">28.04 – 05.05.2025</div></div>
-        </div>
-        <div class="da-step active">
-          <div class="da-step-num">2</div>
-          <div><div class="da-step-label">2. Содержание</div><div class="da-step-sub">6 / 8 разделов</div></div>
-        </div>
-        <div class="da-step">
-          <div class="da-step-num">3</div>
-          <div><div class="da-step-label">3. Стиль</div><div class="da-step-sub">Не настроен</div></div>
-        </div>
-        <div class="da-step">
-          <div class="da-step-num">4</div>
-          <div><div class="da-step-label">4. ИИ-анализ</div><div class="da-step-sub">Не настроен</div></div>
-        </div>
-        <div class="da-step">
-          <div class="da-step-num">5</div>
-          <div><div class="da-step-label">5. Генерация</div><div class="da-step-sub">Готов к запуску</div></div>
-        </div>
-        <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 20px;border-top:1px solid #1e2535;background:#111827">
-          <div style="font-size:11px;color:#4b5563;margin-bottom:8px">Составитель: Иванов А.В.</div>
-          <div style="font-size:11px;color:#4b5563">Версия отчёта: v3</div>
-        </div>
-      </div>
-
-      <!-- Main content: step 2 - Contents -->
-      <div class="da-main">
-        <div class="da-h">Содержание отчёта</div>
-        <div class="da-sub">Включите нужные разделы и перетащите для изменения порядка</div>
-
-        <div class="da-section-list">
-          <div class="da-section-item">
-            <span class="grip">⠿</span>
-            <span>🗺</span>
-            <span style="flex:1">Схема карьера (карта)</span>
-            <div class="da-toggle on"></div>
-          </div>
-          <div class="da-section-item">
-            <span class="grip">⠿</span>
-            <span>📊</span>
-            <span style="flex:1">Домены и горизонты</span>
-            <div class="da-toggle on"></div>
-          </div>
-          <div class="da-section-item">
-            <span class="grip">⠿</span>
-            <span>💧</span>
-            <span style="flex:1">Водоотлив (насосы, объёмы)</span>
-            <div class="da-toggle on"></div>
-          </div>
-          <div class="da-section-item">
-            <span class="grip">⠿</span>
-            <span>🏗</span>
-            <span style="flex:1">Дренажные канавы</span>
-            <div class="da-toggle on"></div>
-          </div>
-          <div class="da-section-item">
-            <span class="grip">⠿</span>
-            <span>📷</span>
-            <span style="flex:1">Фото точек наблюдения</span>
-            <div class="da-toggle on"></div>
-          </div>
-          <div class="da-section-item">
-            <span class="grip">⠿</span>
-            <span>📈</span>
-            <span style="flex:1">История наблюдений (графики)</span>
-            <div class="da-toggle on"></div>
-          </div>
-          <div class="da-section-item off">
-            <span class="grip">⠿</span>
-            <span>🔄</span>
-            <span style="flex:1">Сравнительный анализ</span>
-            <div class="da-toggle"></div>
-          </div>
-          <div class="da-section-item off">
-            <span class="grip">⠿</span>
-            <span>🤖</span>
-            <span style="flex:1">ИИ-заключение (Claude)</span>
-            <div class="da-toggle"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right: preview + controls -->
-      <div class="da-sidebar">
-        <div class="da-preview-title">Мини-превью</div>
-        <div class="da-mini-report">
-          <div class="da-mini-page">
-            <div class="da-mini-hdr"></div>
-            <div class="da-mini-kpi"><div></div><div></div><div></div></div>
-            <div class="da-mini-line w80"></div>
-            <div class="da-mini-line w60"></div>
-            <div class="da-mini-line w80"></div>
-            <div style="background:#e2e8f0;height:40px;border-radius:3px;margin-bottom:6px"></div>
-            <div class="da-mini-line w40"></div>
-            <div class="da-mini-line w80"></div>
-            <div class="da-mini-line w60"></div>
-          </div>
-          <div style="margin-top:8px;font-size:11px;color:#4b5563;text-align:center">6 разделов · ~12 стр.</div>
-        </div>
-
-        <div style="font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;letter-spacing:.5px">Активные разделы</div>
-        <div style="font-size:11px;color:#94a3b8;display:flex;flex-direction:column;gap:4px">
-          <div style="color:#4ade80">✓ 1. Схема карьера</div>
-          <div style="color:#4ade80">✓ 2. Домены</div>
-          <div style="color:#4ade80">✓ 3. Водоотлив</div>
-          <div style="color:#4ade80">✓ 4. Дренажи</div>
-          <div style="color:#4ade80">✓ 5. Фото</div>
-          <div style="color:#4ade80">✓ 6. История</div>
-          <div style="color:#374151">✗ Сравнение</div>
-          <div style="color:#374151">✗ ИИ-анализ</div>
-        </div>
-
-        <div class="da-nav-btns">
-          <button class="da-btn da-btn-back">← Назад</button>
-          <button class="da-btn da-btn-next">Далее →</button>
-        </div>
-        <button class="da-btn-gen">⚡ Сгенерировать</button>
-      </div>
-    </div>
-  </div>
-
-  <div style="background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:20px;margin-bottom:20px">
-    <h3 style="color:#f1f5f9;margin-bottom:12px;font-size:14px">📋 Шаг 4 — ИИ-анализ (пример экрана)</h3>
-    <div class="ai-settings">
-      <div class="ai-field">
-        <label>Модель</label>
-        <select><option>claude-sonnet-4-6 (рекомендуется)</option><option>claude-opus-4-7 (детально)</option><option>claude-haiku-4-5 (быстро)</option></select>
-      </div>
-      <div class="ai-field">
-        <label>Тон анализа</label>
-        <select><option>Официальный технический</option><option>Краткий выводы</option><option>Детальный с рекомендациями</option></select>
-      </div>
-    </div>
-    <div class="ai-prompts">
-      <label>Быстрые промпты</label>
-      <div class="ai-prompt-tags">
-        <div class="ai-tag">📊 Тренд уровней</div>
-        <div class="ai-tag">💧 Водоотлив</div>
-        <div class="ai-tag">⚠️ Риски</div>
-        <div class="ai-tag">🔧 Рекомендации</div>
-        <div class="ai-tag">📈 Динамика</div>
-        <div class="ai-tag">+ Добавить</div>
-      </div>
-      <textarea class="ai-textarea" rows="3">Проанализируй изменения уровня подземных вод за указанный период. Выяви тренды, аномалии и потенциальные риски для добычи. Дай конкретные технические рекомендации.</textarea>
-    </div>
-    <div style="display:flex;gap:10px">
-      <div style="flex:1;background:#0f1117;border-radius:8px;padding:12px;border:1px solid #1e2535">
-        <div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:6px">Сгенерированный текст</div>
-        <div style="font-size:12px;color:#94a3b8;line-height:1.6">За отчётный период (28.04–05.05) зафиксировано снижение уровня на 1.2–3.4 м по западному борту. Насос П-3 обеспечил откачку 24 800 м³…<br><span style="color:#4b5563">← Редактируемый блок</span></div>
-      </div>
-    </div>
-  </div>
-
-  <div style="background:#1a2035;border:1px solid #1e3a5f;border-radius:8px;padding:16px">
-    <div style="color:#60a5fa;font-weight:700;margin-bottom:6px">✅ Преимущества варианта A</div>
-    <div style="color:#94a3b8;font-size:13px;line-height:1.7">
-      • Пользователь чётко понимает, на каком этапе находится<br>
-      • Шаги можно делать поэтапно, возвращаться назад<br>
-      • Правая панель всегда показывает актуальное состояние<br>
-      • Drag-and-drop порядок разделов — наглядно и удобно<br>
-      • Идеально для новых пользователей — «нельзя ничего пропустить»
-    </div>
-    <div style="color:#f87171;font-size:13px;margin-top:8px">
-      ⚠ Минус: требует больше кликов для опытных пользователей (можно решить кнопкой «Пропустить всё → Генерация»)
+<!-- SECTION 0: Cover -->
+<div class="report-section" id="s0">
+  <div class="cover">
+    <div class="cover-logo">ГМ</div>
+    <div class="cover-title">Отчёт по мониторингу водопроявлений карьера</div>
+    <div class="cover-subtitle">Еженедельный отчёт по состоянию системы водоотведения</div>
+    <div class="cover-badge">Неделя 22 · 2026 · 26.05.2026</div>
+    <div class="cover-meta">
+      <div class="cover-meta-item"><div class="cover-meta-label">Составил</div><div class="cover-meta-val">Иванов А.В.</div></div>
+      <div class="cover-meta-item"><div class="cover-meta-label">Проверил</div><div class="cover-meta-val">Петров С.Н.</div></div>
+      <div class="cover-meta-item"><div class="cover-meta-label">Дата</div><div class="cover-meta-val">26.05.2026</div></div>
+      <div class="cover-meta-item"><div class="cover-meta-label">Точек наблюдения</div><div class="cover-meta-val">18</div></div>
+      <div class="cover-meta-item"><div class="cover-meta-label">Доменов</div><div class="cover-meta-val">5</div></div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- DESIGN B -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div class="section" id="s-design-b">
-  <div class="section-title">Вариант B — «Сплит-дашборд»</div>
-  <div class="section-desc">
-    Левая панель — аккордеон-настройки (всё сразу, без шагов). Правая — живой предпросмотр отчёта в iframe, обновляется по кнопке.
-    <br><strong>Лучше всего подходит:</strong> для опытных пользователей, которые знают что хотят и хотят сразу видеть результат.
+<!-- SECTION 1: Executive Dashboard -->
+<div class="report-section" id="s1">
+  <div class="sec-label">
+    <div class="sec-num">1</div>
+    <div><div class="sec-title section-border">Сводка — Неделя 22 (26.05.2026)</div><div class="sec-sub">Ключевые показатели относительно предыдущей недели (19.05.2026)</div></div>
   </div>
 
-  <div class="mockup-wrap">
-    <div class="mockup-bar">
-      <div class="mockup-dot" style="background:#ff5f57"></div>
-      <div class="mockup-dot" style="background:#febc2e"></div>
-      <div class="mockup-dot" style="background:#28c840"></div>
-      <div class="mockup-url">Мониторинг карьера — Отчёт</div>
+  <div class="kpi-row cols4">
+    <div class="kpi-card">
+      <div class="kpi-label">Суммарный дебит</div>
+      <div class="kpi-val">42.7<span class="kpi-unit">л/с</span></div>
+      <div class="kpi-delta up">▲ +3.2 л/с vs нед. 21</div>
     </div>
-    <div class="db-layout">
-      <div class="db-left">
-        <!-- Период -->
-        <div class="db-section-hdr">📅 ПЕРИОД И РЕЖИМ <span>▾</span></div>
-        <div class="db-section-body">
-          <div class="db-field">
-            <label>Режим</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div style="background:#1e3a5f;border:1px solid #2563eb;border-radius:8px;padding:8px;text-align:center;font-size:12px;color:#60a5fa;cursor:pointer;font-weight:600">📊 Сравнение</div>
-              <div style="background:#0f1117;border:1px solid #2d3748;border-radius:8px;padding:8px;text-align:center;font-size:12px;color:#64748b;cursor:pointer">📋 Срез</div>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div class="db-field"><label>Период A</label><input class="db-input" value="28.04.2025" type="text"></div>
-            <div class="db-field"><label>Период B</label><input class="db-input" value="05.05.2025" type="text"></div>
-          </div>
-        </div>
-
-        <!-- Разделы -->
-        <div class="db-section-hdr">📋 СОДЕРЖАНИЕ <span>▾</span></div>
-        <div class="db-section-body">
-          <div class="db-chk-list">
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🗺</span>Карта</div><div class="db-toggle on"></div></div>
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">📊</span>Домены</div><div class="db-toggle on"></div></div>
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">💧</span>Водоотлив</div><div class="db-toggle on"></div></div>
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🏗</span>Дренажи</div><div class="db-toggle on"></div></div>
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">📷</span>Фото</div><div class="db-toggle on"></div></div>
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">📈</span>История</div><div class="db-toggle on"></div></div>
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🔄</span>Сравнение</div><div class="db-toggle on"></div></div>
-            <div class="db-chk-item"><div class="db-chk-label"><span class="ico">🤖</span>ИИ-анализ</div><div class="db-toggle"></div></div>
-          </div>
-        </div>
-
-        <!-- Автор -->
-        <div class="db-section-hdr">👤 АВТОР И ОБЪЕКТ <span>▸</span></div>
-
-        <!-- ИИ -->
-        <div class="db-section-hdr">🤖 ИИ-АНАЛИЗ <span>▸</span></div>
-
-        <!-- Стиль -->
-        <div class="db-section-hdr">🎨 СТИЛЬ <span>▸</span></div>
-
-        <button class="db-gen-btn">⚡ Сгенерировать отчёт</button>
-      </div>
-
-      <!-- Preview -->
-      <div class="db-right">
-        <div class="db-preview-toolbar">
-          <span>ПРЕДПРОСМОТР</span>
-          <button class="db-preview-btn active">🖥 Экран</button>
-          <button class="db-preview-btn">📄 A4</button>
-          <div style="flex:1"></div>
-          <button class="db-preview-btn" style="background:#1c3a2a;border-color:#16a34a;color:#4ade80">🔄 Обновить</button>
-        </div>
-        <div class="db-iframe-wrap">
-          <div class="db-iframe">
-            <div class="db-iframe-inner">
-              <div class="db-iframe-hdr">
-                <h2>Карьер ЮРГ · Пулково-42</h2>
-                <p>Отчёт о состоянии подземных вод · 28.04 – 05.05.2025 · Гидрогеолог Иванов А.В. · v3</p>
-              </div>
-              <div class="db-kpi-row">
-                <div class="db-kpi"><div class="db-kpi-val">42</div><div class="db-kpi-lbl">Точек наблюдения</div></div>
-                <div class="db-kpi"><div class="db-kpi-val">128.4</div><div class="db-kpi-lbl">Ср. уровень, м</div></div>
-                <div class="db-kpi"><div class="db-kpi-val">−2.1</div><div class="db-kpi-lbl">Δ за период, м</div></div>
-              </div>
-              <div class="db-section-block">
-                <h3>1. Схема карьера</h3>
-                <div style="background:#e2e8f0;height:80px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px">[ Карта карьера ]</div>
-              </div>
-              <div class="db-section-block">
-                <h3>2. Домены и горизонты</h3>
-                <p>Анализ по 4 доменам: Северный борт, Южный борт, Центральная зона, Западный склон...</p>
-              </div>
-              <div class="db-section-block">
-                <h3>3. Водоотлив</h3>
-                <p>Активных насосов: 7. Суммарный объём откачки за период: 48 200 м³...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Активных точек</div>
+      <div class="kpi-val">14<span class="kpi-unit">из 18</span></div>
+      <div class="kpi-delta neutral">— без изменений</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Аномалий (Δ ≥ 30%)</div>
+      <div class="kpi-val">3<span class="kpi-unit">точки</span></div>
+      <div class="kpi-delta down">▲ +1 vs нед. 21</div>
+    </div>
+    <div class="kpi-card cyan">
+      <div class="kpi-label">Канавы Σ Q</div>
+      <div class="kpi-val">28.1<span class="kpi-unit">м³/ч</span></div>
+      <div class="kpi-delta up">▲ +1.4 м³/ч vs нед. 21</div>
     </div>
   </div>
 
-  <div style="background:#1a2035;border:1px solid #1e3a5f;border-radius:8px;padding:16px">
-    <div style="color:#60a5fa;font-weight:700;margin-bottom:6px">✅ Преимущества варианта B</div>
-    <div style="color:#94a3b8;font-size:13px;line-height:1.7">
-      • Всё настраивается в одном месте — нет необходимости переключать шаги<br>
-      • Живой предпросмотр — сразу видишь что получишь<br>
-      • Аккордеон скрывает редко меняемые настройки (автор, стиль)<br>
-      • Привычный UX — похож на настройки в других инструментах
+  <!-- Timeline SVG chart -->
+  <div class="chart-wrap">
+    <div class="chart-title">Динамика суммарного дебита Σ Q (нед. 11–22, 2026)</div>
+    <svg viewBox="0 0 680 140" width="100%" style="display:block">
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1a73e8" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#1a73e8" stop-opacity="0.03"/>
+        </linearGradient>
+      </defs>
+      <!-- Grid lines -->
+      <line x1="40" y1="15" x2="40" y2="115" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      <line x1="40" y1="115" x2="650" y2="115" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <line x1="40" y1="82" x2="650" y2="82" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="40" y1="49" x2="650" y2="49" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="40" y1="15" x2="650" y2="15" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4,4"/>
+      <!-- Y labels -->
+      <text x="32" y="119" fill="#8a9bb0" font-size="9" text-anchor="end">20</text>
+      <text x="32" y="86" fill="#8a9bb0" font-size="9" text-anchor="end">35</text>
+      <text x="32" y="53" fill="#8a9bb0" font-size="9" text-anchor="end">50</text>
+      <text x="32" y="19" fill="#8a9bb0" font-size="9" text-anchor="end">65</text>
+      <!-- Data: weeks 11-22, Q values -->
+      <!-- Map Q to Y: min=20, max=65, range=45, height=100px (y 15-115), y=115-(q-20)/45*100 -->
+      <!-- W11:28.4 W12:30.1 W13:29.8 W14:32.5 W15:35.2 W16:33.8 W17:36.4 W18:38.1 W19:37.6 W20:40.2 W21:39.5 W22:42.7 -->
+      <!-- x positions: 40 + i*55.5 for i=0..11 -->
+      <polygon points="40,95 95,91 150,92 205,87 260,81 315,83 370,79 425,74 480,76 535,70 590,71 645,63 645,115 40,115" fill="url(#areaGrad)"/>
+      <polyline points="40,95 95,91 150,92 205,87 260,81 315,83 370,79 425,74 480,76 535,70 590,71 645,63" fill="none" stroke="#1a73e8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <!-- Dots -->
+      <circle cx="40" cy="95" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="95" cy="91" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="150" cy="92" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="205" cy="87" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="260" cy="81" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="315" cy="83" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="370" cy="79" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="425" cy="74" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="480" cy="76" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="535" cy="70" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <circle cx="590" cy="71" r="3.5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <!-- Current week marker -->
+      <line x1="645" y1="15" x2="645" y2="115" stroke="rgba(26,115,232,0.4)" stroke-width="1.5" stroke-dasharray="3,3"/>
+      <circle cx="645" cy="63" r="5" fill="#1a73e8" stroke="#0f1319" stroke-width="2"/>
+      <rect x="614" y="43" width="46" height="16" rx="4" fill="#1a73e8"/>
+      <text x="637" y="55" fill="#fff" font-size="9" text-anchor="middle" font-weight="600">42.7</text>
+      <!-- X labels -->
+      <text x="40" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н11</text>
+      <text x="95" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н12</text>
+      <text x="150" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н13</text>
+      <text x="205" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н14</text>
+      <text x="260" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н15</text>
+      <text x="315" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н16</text>
+      <text x="370" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н17</text>
+      <text x="425" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н18</text>
+      <text x="480" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н19</text>
+      <text x="535" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н20</text>
+      <text x="590" y="128" fill="#8a9bb0" font-size="9" text-anchor="middle">Н21</text>
+      <text x="645" y="128" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="700">Н22</text>
+    </svg>
+  </div>
+</div>
+
+<!-- SECTION 2: Status Overview -->
+<div class="report-section" id="s2">
+  <div class="sec-label">
+    <div class="sec-num">2</div>
+    <div><div class="sec-title section-border">Статусы и интенсивность</div><div class="sec-sub">Распределение 18 точек наблюдения по статусу и интенсивности дебита</div></div>
+  </div>
+
+  <div class="grid2" style="margin-bottom:20px">
+    <!-- Donut 1: Status -->
+    <div class="chart-wrap">
+      <div class="chart-title">Распределение по статусу</div>
+      <div style="display:flex;align-items:center;gap:20px">
+        <svg viewBox="0 0 120 120" width="120" height="120" style="flex-shrink:0">
+          <!-- Активная:9/18=50% → 180° ; Иссякает:4=22.2% ; Пересохла:2=11.1% ; Паводковая:2=11.1% ; Новая:1=5.6% -->
+          <!-- stroke-dasharray = pct*2π*40 ; offset = prev sum -->
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#1a73e8" stroke-width="18"
+            stroke-dasharray="125.7 125.7" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#f9ab00" stroke-width="18"
+            stroke-dasharray="55.8 195.6" stroke-dashoffset="-125.7" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#888" stroke-width="18"
+            stroke-dasharray="27.9 223.5" stroke-dashoffset="-181.5" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#00acc1" stroke-width="18"
+            stroke-dasharray="27.9 223.5" stroke-dashoffset="-209.4" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#34a853" stroke-width="18"
+            stroke-dasharray="14.0 237.3" stroke-dashoffset="-237.3" transform="rotate(-90 60 60)"/>
+          <text x="60" y="55" text-anchor="middle" fill="#e8eaf0" font-size="16" font-weight="700">18</text>
+          <text x="60" y="68" text-anchor="middle" fill="#8a9bb0" font-size="8">точек</text>
+        </svg>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:2px;background:#1a73e8;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Активная</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">9</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:2px;background:#f9ab00;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Иссякает</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">4</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:2px;background:#888;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Пересохла</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:2px;background:#00acc1;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Паводковая</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">2</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:2px;background:#34a853;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Новая</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">1</span></div>
+        </div>
+      </div>
     </div>
-    <div style="color:#f87171;font-size:13px;margin-top:8px">
-      ⚠ Минус: нет drag-and-drop порядка разделов; превью требует постоянного обновления
+
+    <!-- Donut 2: Intensity -->
+    <div class="chart-wrap">
+      <div class="chart-title">Распределение по интенсивности</div>
+      <div style="display:flex;align-items:center;gap:20px">
+        <svg viewBox="0 0 120 120" width="120" height="120" style="flex-shrink:0">
+          <!-- Слабая:5 Умеренная:6 Сильная:4 Очень сильная:3 total=18 -->
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#4fc3f7" stroke-width="18"
+            stroke-dasharray="69.8 181.5" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#1a73e8" stroke-width="18"
+            stroke-dasharray="83.8 167.6" stroke-dashoffset="-69.8" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#f9ab00" stroke-width="18"
+            stroke-dasharray="55.9 195.5" stroke-dashoffset="-153.5" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#ea4335" stroke-width="18"
+            stroke-dasharray="41.9 209.5" stroke-dashoffset="-209.4" transform="rotate(-90 60 60)"/>
+          <text x="60" y="55" text-anchor="middle" fill="#e8eaf0" font-size="16" font-weight="700">18</text>
+          <text x="60" y="68" text-anchor="middle" fill="#8a9bb0" font-size="8">точек</text>
+        </svg>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:2px;background:#4fc3f7;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Слабая (&lt;1 л/с)</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">5</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:2px;background:#1a73e8;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Умеренная (1–3)</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">6</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:2px;background:#f9ab00;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Сильная (3–6)</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">4</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:2px;background:#ea4335;flex-shrink:0;display:inline-block"></span><span style="font-size:12px;color:var(--text)">Очень сильная (&gt;6)</span><span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--text)">3</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Domain bar chart -->
+  <div class="chart-wrap">
+    <div class="chart-title">Дебит по доменам (л/с) — текущая и предыдущая недели</div>
+    <div style="max-width:520px">
+      <!-- Domen-1: 12.4 (prev 10.8) max=14 -->
+      <div class="hbar-row">
+        <div class="hbar-label">Домен-1</div>
+        <div class="hbar-track" style="height:16px;position:relative">
+          <div class="hbar-prev" style="width:77%;background:#1a73e8;opacity:.25;position:absolute;top:0;left:0;height:100%;border-radius:4px"></div>
+          <div class="hbar-fill" style="width:88.6%;background:linear-gradient(90deg,#1a73e8,#4fc3f7);height:100%;border-radius:4px;position:relative;z-index:1"></div>
+        </div>
+        <div class="hbar-val">12.4 <span style="color:var(--text2);font-size:10px">(10.8)</span></div>
+      </div>
+      <div class="hbar-row">
+        <div class="hbar-label">Домен-2</div>
+        <div class="hbar-track" style="height:16px;position:relative">
+          <div class="hbar-prev" style="width:57%;background:#1a73e8;opacity:.25;position:absolute;top:0;left:0;height:100%;border-radius:4px"></div>
+          <div class="hbar-fill" style="width:63.6%;background:linear-gradient(90deg,#1a73e8,#4fc3f7);height:100%;border-radius:4px;position:relative;z-index:1"></div>
+        </div>
+        <div class="hbar-val">8.9 <span style="color:var(--text2);font-size:10px">(8.0)</span></div>
+      </div>
+      <div class="hbar-row">
+        <div class="hbar-label">Домен-3</div>
+        <div class="hbar-track" style="height:16px;position:relative">
+          <div class="hbar-prev" style="width:46%;background:#1a73e8;opacity:.25;position:absolute;top:0;left:0;height:100%;border-radius:4px"></div>
+          <div class="hbar-fill" style="width:51.4%;background:linear-gradient(90deg,#1a73e8,#4fc3f7);height:100%;border-radius:4px;position:relative;z-index:1"></div>
+        </div>
+        <div class="hbar-val">7.2 <span style="color:var(--text2);font-size:10px">(6.4)</span></div>
+      </div>
+      <div class="hbar-row">
+        <div class="hbar-label">Домен-4</div>
+        <div class="hbar-track" style="height:16px;position:relative">
+          <div class="hbar-prev" style="width:57%;background:#1a73e8;opacity:.25;position:absolute;top:0;left:0;height:100%;border-radius:4px"></div>
+          <div class="hbar-fill" style="width:65%;background:linear-gradient(90deg,#1a73e8,#4fc3f7);height:100%;border-radius:4px;position:relative;z-index:1"></div>
+        </div>
+        <div class="hbar-val">9.1 <span style="color:var(--text2);font-size:10px">(8.0)</span></div>
+      </div>
+      <div class="hbar-row">
+        <div class="hbar-label">Домен-5</div>
+        <div class="hbar-track" style="height:16px;position:relative">
+          <div class="hbar-prev" style="width:32%;background:#1a73e8;opacity:.25;position:absolute;top:0;left:0;height:100%;border-radius:4px"></div>
+          <div class="hbar-fill" style="width:36.4%;background:linear-gradient(90deg,#1a73e8,#4fc3f7);height:100%;border-radius:4px;position:relative;z-index:1"></div>
+        </div>
+        <div class="hbar-val">5.1 <span style="color:var(--text2);font-size:10px">(6.3)</span></div>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:20px">
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:20px;height:6px;background:linear-gradient(90deg,#1a73e8,#4fc3f7);border-radius:3px;display:inline-block"></span><span style="font-size:11px;color:var(--text2)">Нед. 22 (текущая)</span></div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:20px;height:6px;background:#1a73e8;opacity:.4;border-radius:3px;display:inline-block"></span><span style="font-size:11px;color:var(--text2)">Нед. 21 (предыдущая)</span></div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- DESIGN C -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div class="section" id="s-design-c">
-  <div class="section-title">Вариант C — «Полноэкранный мастер»</div>
-  <div class="section-desc">
-    Прогресс-бар сверху, каждый экран — одна задача. Максимально чистый и понятный интерфейс.
-    <br><strong>Лучше всего подходит:</strong> когда нужно сделать отчёт быстро, не отвлекаясь.
+<!-- SECTION 3: Map Placeholder -->
+<div class="report-section" id="s3">
+  <div class="sec-label">
+    <div class="sec-num">3</div>
+    <div><div class="sec-title section-border">Схема карьера</div><div class="sec-sub">Пространственное расположение точек наблюдения по доменам</div></div>
+  </div>
+  <div class="chart-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="chart-title" style="margin:0">Карта водопроявлений — Карьер, нед. 22</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(26,115,232,0.2);color:#60a5fa">Д1</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(52,168,83,0.2);color:#34a853">Д2</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(249,171,0,0.2);color:#f9ab00">Д3</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(234,67,53,0.2);color:#ea4335">Д4</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,172,193,0.2);color:#00acc1">Д5</span>
+      </div>
+    </div>
+    <svg viewBox="0 0 700 320" width="100%" style="display:block;border-radius:8px;background:#141c2e">
+      <!-- Grid -->
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <rect width="700" height="320" fill="url(#grid)"/>
+      <!-- Domain zones -->
+      <ellipse cx="160" cy="120" rx="110" ry="70" fill="rgba(26,115,232,0.07)" stroke="rgba(26,115,232,0.2)" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <ellipse cx="380" cy="90" rx="90" ry="55" fill="rgba(52,168,83,0.07)" stroke="rgba(52,168,83,0.2)" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <ellipse cx="560" cy="140" rx="100" ry="65" fill="rgba(249,171,0,0.07)" stroke="rgba(249,171,0,0.2)" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <ellipse cx="200" cy="240" rx="120" ry="55" fill="rgba(234,67,53,0.07)" stroke="rgba(234,67,53,0.2)" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <ellipse cx="500" cy="250" rx="130" ry="50" fill="rgba(0,172,193,0.07)" stroke="rgba(0,172,193,0.2)" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <!-- Domain labels -->
+      <text x="100" y="68" fill="rgba(26,115,232,0.7)" font-size="11" font-weight="700">Домен-1</text>
+      <text x="330" y="48" fill="rgba(52,168,83,0.7)" font-size="11" font-weight="700">Домен-2</text>
+      <text x="500" y="85" fill="rgba(249,171,0,0.7)" font-size="11" font-weight="700">Домен-3</text>
+      <text x="110" y="195" fill="rgba(234,67,53,0.7)" font-size="11" font-weight="700">Домен-4</text>
+      <text x="420" y="205" fill="rgba(0,172,193,0.7)" font-size="11" font-weight="700">Домен-5</text>
+      <!-- Points Д1 (blue) -->
+      <circle cx="120" cy="105" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="120" y="109" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П1</text>
+      <circle cx="155" cy="130" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="155" y="134" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П2</text>
+      <circle cx="190" cy="108" r="7" fill="#f9ab00" stroke="#fff" stroke-width="1.5"/><text x="190" y="112" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П3</text>
+      <circle cx="170" cy="148" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="170" y="152" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П4</text>
+      <!-- Points Д2 (green) -->
+      <circle cx="345" cy="80" r="7" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="345" y="84" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П5</text>
+      <circle cx="385" cy="100" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="385" y="104" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П6</text>
+      <circle cx="415" cy="78" r="7" fill="#888" stroke="#fff" stroke-width="1.5"/><text x="415" y="82" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П7</text>
+      <!-- Points Д3 (orange) -->
+      <circle cx="520" cy="125" r="7" fill="#f9ab00" stroke="#fff" stroke-width="1.5"/><text x="520" y="129" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П8</text>
+      <circle cx="565" cy="108" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="565" y="112" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П9</text>
+      <circle cx="595" cy="150" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="595" y="154" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П10</text>
+      <circle cx="548" cy="163" r="7" fill="#00acc1" stroke="#fff" stroke-width="1.5"/><text x="548" y="167" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П11</text>
+      <!-- Points Д4 (red) -->
+      <circle cx="140" cy="235" r="7" fill="#888" stroke="#fff" stroke-width="1.5"/><text x="140" y="239" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П12</text>
+      <circle cx="185" cy="252" r="7" fill="#f9ab00" stroke="#fff" stroke-width="1.5"/><text x="185" y="256" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П13</text>
+      <circle cx="240" cy="238" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="240" y="242" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П14</text>
+      <!-- Points Д5 (cyan) -->
+      <circle cx="430" cy="245" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="430" y="249" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П15</text>
+      <circle cx="480" cy="260" r="7" fill="#f9ab00" stroke="#fff" stroke-width="1.5"/><text x="480" y="264" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П16</text>
+      <circle cx="530" cy="245" r="7" fill="#00acc1" stroke="#fff" stroke-width="1.5"/><text x="530" y="249" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П17</text>
+      <circle cx="570" cy="263" r="7" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/><text x="570" y="267" text-anchor="middle" fill="#fff" font-size="7" font-weight="700">П18</text>
+      <!-- Legend -->
+      <rect x="10" y="280" width="680" height="34" fill="rgba(0,0,0,0.3)" rx="4"/>
+      <circle cx="28" cy="297" r="5" fill="#1a73e8"/><text x="37" y="301" fill="#8a9bb0" font-size="9">Активная</text>
+      <circle cx="100" cy="297" r="5" fill="#f9ab00"/><text x="109" y="301" fill="#8a9bb0" font-size="9">Иссякает</text>
+      <circle cx="172" cy="297" r="5" fill="#888"/><text x="181" y="301" fill="#8a9bb0" font-size="9">Пересохла</text>
+      <circle cx="250" cy="297" r="5" fill="#00acc1"/><text x="259" y="301" fill="#8a9bb0" font-size="9">Паводковая</text>
+      <circle cx="330" cy="297" r="5" fill="#34a853"/><text x="339" y="301" fill="#8a9bb0" font-size="9">Новая</text>
+    </svg>
+  </div>
+</div>
+
+<!-- SECTION 4: By Domain -->
+<div class="report-section" id="s4">
+  <div class="sec-label">
+    <div class="sec-num">4</div>
+    <div><div class="sec-title section-border">Детализация по доменам</div><div class="sec-sub">Данные по замерам за нед. 22 (26.05.2026) с сравнением с нед. 21</div></div>
   </div>
 
-  <div class="mockup-wrap">
-    <div class="mockup-bar">
-      <div class="mockup-dot" style="background:#ff5f57"></div>
-      <div class="mockup-dot" style="background:#febc2e"></div>
-      <div class="mockup-dot" style="background:#28c840"></div>
-      <div class="mockup-url">Мониторинг карьера — Отчёт</div>
+  <!-- Domain 1 -->
+  <div class="card" style="margin-bottom:16px;border-left:4px solid #1a73e8">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:15px;font-weight:700;color:var(--text)">Домен-1</span>
+        <span class="dbadge">4 точки</span>
+        <span style="font-size:13px;color:var(--green);font-weight:600">&#9650; +1.6 л/с</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="font-size:13px;color:var(--text2)">Σ Q:</div>
+        <div style="font-size:20px;font-weight:700;color:#1a73e8">12.4 <span style="font-size:12px;color:var(--text2)">л/с</span></div>
+        <svg viewBox="0 0 100 30" width="100" height="30" style="flex-shrink:0">
+          <polyline points="0,22 14,20 28,23 42,18 56,14 70,16 84,13 100,11" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="100" cy="11" r="3" fill="#1a73e8"/>
+        </svg>
+      </div>
     </div>
-    <div class="dc-layout">
-      <!-- Progress -->
-      <div class="dc-progress">
-        <div class="dc-steps-row">
-          <div class="dc-step-dot done">✓</div>
-          <div class="dc-step-line done"></div>
-          <div class="dc-step-dot done">✓</div>
-          <div class="dc-step-line done"></div>
-          <div class="dc-step-dot active">3</div>
-          <div class="dc-step-line"></div>
-          <div class="dc-step-dot">4</div>
-          <div class="dc-step-line"></div>
-          <div class="dc-step-dot">5</div>
-        </div>
-        <div class="dc-steps-labels">
-          <div class="dc-step-lbl">Период</div>
-          <div class="dc-step-lbl">Разделы</div>
-          <div class="dc-step-lbl active">Стиль</div>
-          <div class="dc-step-lbl">ИИ</div>
-          <div class="dc-step-lbl">Готово</div>
-        </div>
-      </div>
-
-      <!-- Body -->
-      <div class="dc-body">
-        <div class="dc-content">
-          <h2>Выберите стиль отчёта</h2>
-          <p>Цветовая схема будет применена ко всем разделам</p>
-
-          <div class="dc-card-grid">
-            <div class="dc-section-card sel">
-              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#1e3a8a,#3b82f6);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🔵</div>
-              <div class="name">Синяя (текущая)</div>
-              <div class="desc">Стандартная корпоративная</div>
-            </div>
-            <div class="dc-section-card">
-              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#14532d,#16a34a);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🟢</div>
-              <div class="name">Зелёная</div>
-              <div class="desc">Природная, экологичная</div>
-            </div>
-            <div class="dc-section-card">
-              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#1e293b,#475569);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">⚫</div>
-              <div class="name">Монохром</div>
-              <div class="desc">Деловая, минималистичная</div>
-            </div>
-            <div class="dc-section-card">
-              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#7c2d12,#ea580c);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🔴</div>
-              <div class="name">Красная</div>
-              <div class="desc">Акцент на риски</div>
-            </div>
-            <div class="dc-section-card">
-              <div class="ico" style="width:48px;height:32px;background:linear-gradient(135deg,#4c1d95,#7c3aed);border-radius:6px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px">🟣</div>
-              <div class="name">Фиолетовая</div>
-              <div class="desc">Премиум-стиль</div>
-            </div>
-            <div class="dc-section-card" style="border-style:dashed">
-              <div class="ico">✏️</div>
-              <div class="name">Свои цвета</div>
-              <div class="desc">Выбрать вручную</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Summary sidebar -->
-        <div class="dc-right">
-          <div class="dc-summary-title">Ваш отчёт</div>
-          <div class="dc-summary-list">
-            <div class="dc-summary-item"><div class="dot"></div>28.04 – 05.05.2025</div>
-            <div class="dc-summary-item"><div class="dot"></div>Режим: сравнение</div>
-            <div class="dc-summary-item"><div class="dot"></div>Карта ✓</div>
-            <div class="dc-summary-item"><div class="dot"></div>Домены ✓</div>
-            <div class="dc-summary-item"><div class="dot"></div>Водоотлив ✓</div>
-            <div class="dc-summary-item"><div class="dot"></div>Дренажи ✓</div>
-            <div class="dc-summary-item"><div class="dot"></div>Фото ✓</div>
-            <div class="dc-summary-item"><div class="dot off"></div>ИИ-анализ —</div>
-            <div class="dc-summary-item" style="color:#60a5fa;margin-top:8px"><div class="dot" style="background:#60a5fa"></div>Стиль: Синяя</div>
-          </div>
-          <div style="background:#0f1117;border-radius:8px;padding:12px;font-size:12px;color:#64748b;line-height:1.6">
-            💡 Можно вернуться к любому шагу, нажав на кружок сверху
-          </div>
-        </div>
-      </div>
-
-      <!-- Footer nav -->
-      <div class="dc-footer">
-        <div class="dc-step-info">Шаг 3 из 5 — Стиль</div>
-        <div class="dc-footer-btns">
-          <button class="dc-btn dc-btn-back">← Назад</button>
-          <button class="dc-btn dc-btn-next">Далее →</button>
-          <button class="dc-btn dc-btn-gen">⚡ Сгенерировать сейчас</button>
-        </div>
-      </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>№</th><th>Статус</th><th>Дебит (л/с)</th><th>Δ л/с</th><th>Δ%</th><th>Интенсивность</th><th>Горизонт</th></tr></thead>
+        <tbody>
+          <tr><td><strong>П-1</strong></td><td><span class="chip chip-active">Активная</span></td><td><strong>4.2</strong></td><td class="delta-up">+0.8</td><td class="delta-up">+23.5%</td><td>Сильная</td><td>+120 м</td></tr>
+          <tr><td><strong>П-2</strong></td><td><span class="chip chip-active">Активная</span></td><td><strong>3.8</strong></td><td class="delta-up">+0.4</td><td class="delta-up">+11.8%</td><td>Сильная</td><td>+110 м</td></tr>
+          <tr><td><strong>П-3</strong></td><td><span class="chip chip-fade">Иссякает</span></td><td><strong>2.1</strong></td><td class="delta-down">-0.3</td><td class="delta-down">-12.5%</td><td>Умеренная</td><td>+95 м</td></tr>
+          <tr><td><strong>П-4</strong></td><td><span class="chip chip-active">Активная</span></td><td><strong>2.3</strong></td><td class="delta-up">+0.7</td><td class="delta-up">+43.8%</td><td>Умеренная</td><td>+100 м</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
-  <div style="background:#1a2035;border:1px solid #1e3a5f;border-radius:8px;padding:16px">
-    <div style="color:#60a5fa;font-weight:700;margin-bottom:6px">✅ Преимущества варианта C</div>
-    <div style="color:#94a3b8;font-size:13px;line-height:1.7">
-      • Самый чистый и понятный интерфейс<br>
-      • Прогресс-бар сверху — всегда видно «где ты»<br>
-      • Можно перепрыгнуть на любой шаг кликом на кружок<br>
-      • «Сгенерировать сейчас» доступен на любом шаге<br>
-      • Сводка справа — всё важное на виду
+  <!-- Domain 2 -->
+  <div class="card" style="margin-bottom:16px;border-left:4px solid #34a853">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:15px;font-weight:700;color:var(--text)">Домен-2</span>
+        <span class="dbadge">3 точки</span>
+        <span style="font-size:13px;color:var(--green);font-weight:600">&#9650; +0.9 л/с</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="font-size:13px;color:var(--text2)">Σ Q:</div>
+        <div style="font-size:20px;font-weight:700;color:#34a853">8.9 <span style="font-size:12px;color:var(--text2)">л/с</span></div>
+        <svg viewBox="0 0 100 30" width="100" height="30" style="flex-shrink:0">
+          <polyline points="0,20 14,18 28,16 42,19 56,15 70,12 84,14 100,11" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="100" cy="11" r="3" fill="#34a853"/>
+        </svg>
+      </div>
     </div>
-    <div style="color:#f87171;font-size:13px;margin-top:8px">
-      ⚠ Минус: нет live-предпросмотра; занимает всю высоту вкладки
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>№</th><th>Статус</th><th>Дебит (л/с)</th><th>Δ л/с</th><th>Δ%</th><th>Интенсивность</th><th>Горизонт</th></tr></thead>
+        <tbody>
+          <tr><td><strong>П-5</strong></td><td><span class="chip chip-new">Новая</span></td><td><strong>1.2</strong></td><td class="delta-up">+1.2</td><td class="delta-up">Новая</td><td>Слабая</td><td>+85 м</td></tr>
+          <tr><td><strong>П-6</strong></td><td><span class="chip chip-active">Активная</span></td><td><strong>8.5</strong></td><td class="delta-up">+0.5</td><td class="delta-up">+6.3%</td><td>Очень сильная</td><td>+75 м</td></tr>
+          <tr><td><strong>П-7</strong></td><td><span class="chip chip-dry">Пересохла</span></td><td><strong>0.0</strong></td><td class="delta-neu">0.0</td><td class="delta-neu">—</td><td>—</td><td>+90 м</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Domain 3 -->
+  <div class="card" style="border-left:4px solid #f9ab00">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:15px;font-weight:700;color:var(--text)">Домен-3</span>
+        <span class="dbadge">4 точки</span>
+        <span style="font-size:13px;color:var(--green);font-weight:600">&#9650; +0.8 л/с</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="font-size:13px;color:var(--text2)">Σ Q:</div>
+        <div style="font-size:20px;font-weight:700;color:#f9ab00">7.2 <span style="font-size:12px;color:var(--text2)">л/с</span></div>
+        <svg viewBox="0 0 100 30" width="100" height="30" style="flex-shrink:0">
+          <polyline points="0,24 14,22 28,20 42,21 56,18 70,20 84,17 100,15" fill="none" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="100" cy="15" r="3" fill="#f9ab00"/>
+        </svg>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>№</th><th>Статус</th><th>Дебит (л/с)</th><th>Δ л/с</th><th>Δ%</th><th>Интенсивность</th><th>Горизонт</th></tr></thead>
+        <tbody>
+          <tr><td><strong>П-8</strong></td><td><span class="chip chip-fade">Иссякает</span></td><td><strong>1.8</strong></td><td class="delta-down">-0.6</td><td class="delta-down">-25.0%</td><td>Умеренная</td><td>+60 м</td></tr>
+          <tr><td><strong>П-9</strong></td><td><span class="chip chip-active">Активная</span></td><td><strong>3.1</strong></td><td class="delta-up">+0.9</td><td class="delta-up">+40.9%</td><td>Сильная</td><td>+55 м</td></tr>
+          <tr><td><strong>П-10</strong></td><td><span class="chip chip-active">Активная</span></td><td><strong>1.6</strong></td><td class="delta-up">+0.3</td><td class="delta-up">+23.1%</td><td>Умеренная</td><td>+65 м</td></tr>
+          <tr><td><strong>П-11</strong></td><td><span class="chip chip-flood">Паводковая</span></td><td><strong>0.7</strong></td><td class="delta-up">+0.2</td><td class="delta-up">+40.0%</td><td>Слабая</td><td>+50 м</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- ARCHITECTURE -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div class="section" id="s-architecture">
-  <div class="section-title">Архитектура нового модуля</div>
-  <div class="section-desc">Предлагаемая структура кода и разделение ответственности</div>
-
-  <div class="arch-grid">
-
-    <div class="arch-card">
-      <h3>📁 Структура файлов</h3>
-      <div class="arch-list">
-        <div class="arch-item accent"><b>ui-report.js</b>Главный файл — UI, шаги, события</div>
-        <div class="arch-item green"><b>report-builder.js</b>buildReportHTML() и все buildXxxSection()</div>
-        <div class="arch-item purple"><b>report-ai.js</b>callClaudeAPI(), buildAIContext(), промпты</div>
-        <div class="arch-item yellow"><b>report-export.js</b>Генерация HTML, PDF-печать, архив</div>
-        <div class="arch-item"><b>report-styles.js</b>getReportCSS() — цветовые темы</div>
-      </div>
-    </div>
-
-    <div class="arch-card">
-      <h3>🗃 ReportState (расширенный)</h3>
-      <div class="arch-list">
-        <div class="arch-item accent"><b>settings</b>author, position, quarryName, objectName, apiKey</div>
-        <div class="arch-item accent"><b>sections[]</b>{ id, label, enabled, order } — drag-drop порядок</div>
-        <div class="arch-item green"><b>filters</b>{ horizons[], domains[], excludePoints[] }</div>
-        <div class="arch-item green"><b>style</b>{ theme, logoUrl, watermark }</div>
-        <div class="arch-item purple"><b>aiSettings</b>{ model, tone, customPrompt, cachedResults }</div>
-        <div class="arch-item yellow"><b>history[]</b>Список сгенерированных отчётов</div>
-        <div class="arch-item"><b>templates[]</b>Сохранённые наборы настроек</div>
-      </div>
-    </div>
-
-    <div class="arch-card">
-      <h3>📦 Разделы отчёта (сортируемые)</h3>
-      <div class="arch-list">
-        <div class="arch-item accent"><b>cover</b>Титульная страница — всегда первая</div>
-        <div class="arch-item accent"><b>summary</b>KPI-сводка — всегда вторая</div>
-        <div class="arch-item green"><b>map</b>Схема карьера (captureMapCanvas)</div>
-        <div class="arch-item green"><b>domains</b>Домены и горизонты</div>
-        <div class="arch-item green"><b>dewatering</b>Водоотлив (DewateringState) ← новое</div>
-        <div class="arch-item green"><b>ditches</b>Дренажные канавы</div>
-        <div class="arch-item green"><b>photos</b>Фото точек наблюдения</div>
-        <div class="arch-item green"><b>history</b>История наблюдений</div>
-        <div class="arch-item green"><b>compare</b>Сравнительный анализ</div>
-        <div class="arch-item purple"><b>ai</b>ИИ-заключение (Claude)</div>
-        <div class="arch-item"><b>conclusions</b>Ручные выводы — всегда последний</div>
-      </div>
-    </div>
-
-    <div class="arch-card">
-      <h3>💾 Хранение настроек</h3>
-      <div class="arch-list">
-        <div class="arch-item accent"><b>localStorage['report-settings']</b>Всё кроме AI ключа и истории</div>
-        <div class="arch-item accent"><b>localStorage['report-sections-order']</b>Порядок и enabled для разделов</div>
-        <div class="arch-item green"><b>localStorage['report-templates']</b>JSON массив именованных шаблонов</div>
-        <div class="arch-item green"><b>localStorage['report-history']</b>Список последних 10 отчётов</div>
-        <div class="arch-item purple"><b>localStorage['report-ai-cache']</b>Кэш AI ответов по хешу данных</div>
-        <div class="arch-item"><b>sessionStorage['report-preview']</b>HTML превью — не переживает закрытие</div>
-      </div>
-    </div>
-
-    <div class="arch-card">
-      <h3>🔄 Поток генерации</h3>
-      <div class="arch-list">
-        <div class="arch-item accent"><b>1. collectSettings()</b>Собрать все настройки из UI в объект s</div>
-        <div class="arch-item accent"><b>2. loadData(s)</b>Загрузить точки, дренажи, уровни за период</div>
-        <div class="arch-item green"><b>3. captureAssets(s)</b>Захват карты + схемы водоотлива параллельно</div>
-        <div class="arch-item green"><b>4. preloadPhotos(s)</b>Загрузить фото из Google Drive</div>
-        <div class="arch-item purple"><b>5. generateAI(s)</b>Вызов Claude API (если enabled + ключ)</div>
-        <div class="arch-item"><b>6. buildHTML(s)</b>Сборка HTML по порядку sections[]</div>
-        <div class="arch-item"><b>7. openOrDownload(html)</b>Открыть в окне или скачать файл</div>
-        <div class="arch-item yellow"><b>8. saveToHistory(s)</b>Записать в историю отчётов</div>
-      </div>
-    </div>
-
-    <div class="arch-card">
-      <h3>🎨 Цветовые темы</h3>
-      <div class="arch-list">
-        <div class="arch-item accent"><b>blue</b>Текущая синяя — #1e3a8a, #3b82f6</div>
-        <div class="arch-item green"><b>green</b>Зелёная — #14532d, #16a34a</div>
-        <div class="arch-item"><b>mono</b>Монохром — #1e293b, #475569</div>
-        <div class="arch-item yellow"><b>red</b>Красная — #7c2d12, #ea580c</div>
-        <div class="arch-item purple"><b>violet</b>Фиолетовая — #4c1d95, #7c3aed</div>
-        <div class="arch-item"><b>custom</b>Произвольные цвета via color picker</div>
-      </div>
-    </div>
-
+<!-- SECTION 5: Anomalies -->
+<div class="report-section" id="s5">
+  <div class="sec-label">
+    <div class="sec-num">5</div>
+    <div><div class="sec-title section-border">Аномалии и изменения</div><div class="sec-sub">Точки с наибольшими отклонениями дебита (Δ ≥ 30%) за неделю</div></div>
   </div>
-</div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- COMPARISON -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div class="section" id="s-comparison">
-  <div class="section-title">Сравнение вариантов дизайна</div>
-  <div class="section-desc">Итоговая таблица для принятия решения</div>
-
-  <table class="cmp-table">
-    <thead>
-      <tr>
-        <th>Критерий</th>
-        <th>Текущий</th>
-        <th>A — Конструктор</th>
-        <th>B — Дашборд</th>
-        <th>C — Мастер</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td>Порог входа (новый пользователь)</td><td class="partial">Средний</td><td class="tick">Низкий ✓</td><td class="partial">Средний</td><td class="tick">Низкий ✓</td></tr>
-      <tr><td>Скорость для опытного пользователя</td><td class="partial">Средняя</td><td class="partial">Средняя</td><td class="tick">Высокая ✓</td><td class="partial">Средняя</td></tr>
-      <tr><td>Drag-and-drop порядок разделов</td><td class="cross">✗</td><td class="tick">✓</td><td class="cross">✗</td><td class="partial">Частично</td></tr>
-      <tr><td>Live-предпросмотр</td><td class="cross">✗</td><td class="partial">Мини</td><td class="tick">Полный ✓</td><td class="cross">✗</td></tr>
-      <tr><td>Шаблоны отчётов</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
-      <tr><td>История отчётов</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
-      <tr><td>Фильтрация по домену/горизонту</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
-      <tr><td>Выбор цветовой темы</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
-      <tr><td>Редактирование AI-текста</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="partial">Частично</td></tr>
-      <tr><td>Нумерация страниц при печати</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
-      <tr><td>Снимок схемы водоотлива</td><td class="cross">✗</td><td class="tick">✓</td><td class="tick">✓</td><td class="tick">✓</td></tr>
-      <tr><td>Сложность реализации</td><td>—</td><td class="partial">Высокая</td><td class="tick">Средняя</td><td class="partial">Высокая</td></tr>
-    </tbody>
-  </table>
-
-  <div style="background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:24px;margin-bottom:24px">
-    <div style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:12px">🏆 Рекомендация</div>
-    <div style="font-size:14px;color:#94a3b8;line-height:1.8">
-      Оптимальный вариант — <strong style="color:#60a5fa">Вариант A «Конструктор»</strong> с элементами Варианта B:<br>
-      <br>
-      • Левая панель с шагами (как в A) — понятная навигация<br>
-      • Мини-превью справа (как в A) — всегда видна структура<br>
-      • Аккордеон внутри каждого шага (как в B) — компактность<br>
-      • Drag-and-drop порядок разделов — ключевая «фишка»<br>
-      • Шаблоны + история в отдельной вкладке<br>
-      <br>
-      <strong style="color:#f1f5f9">Это «гибридный» подход</strong>: структурированный мастер + гибкость дашборда.
+  <div class="grid2" style="margin-bottom:20px">
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:14px">&#9650; Наибольший рост дебита</div>
+      <div class="anom-bar-row">
+        <div class="anom-name">П-4 (Д1)</div>
+        <div class="anom-track"><div class="anom-fill-up" style="width:80%">+43.8%</div></div>
+      </div>
+      <div class="anom-bar-row">
+        <div class="anom-name">П-9 (Д3)</div>
+        <div class="anom-track"><div class="anom-fill-up" style="width:75%">+40.9%</div></div>
+      </div>
+      <div class="anom-bar-row">
+        <div class="anom-name">П-11 (Д3)</div>
+        <div class="anom-track"><div class="anom-fill-up" style="width:73%">+40.0%</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:var(--text2)">Возможная причина: усиление паводковой нагрузки в Д3</div>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:14px">&#9660; Наибольший спад дебита</div>
+      <div class="anom-bar-row">
+        <div class="anom-name">П-16 (Д5)</div>
+        <div class="anom-track"><div class="anom-fill-dn" style="width:60%">-31.2%</div></div>
+      </div>
+      <div class="anom-bar-row">
+        <div class="anom-name">П-8 (Д3)</div>
+        <div class="anom-track"><div class="anom-fill-dn" style="width:46%">-25.0%</div></div>
+      </div>
+      <div class="anom-bar-row">
+        <div class="anom-name">П-3 (Д1)</div>
+        <div class="anom-track"><div class="anom-fill-dn" style="width:23%">-12.5%</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:var(--text2)">Снижение в Д5 связано с изменением дренажного контура</div>
     </div>
   </div>
 
-  <div style="background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;padding:24px">
-    <div style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:16px">📝 Предлагаемая поэтапная реализация</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px">
-      <div>
-        <div style="color:#4ade80;font-weight:700;margin-bottom:8px">🟢 Этап 1 — Основа (2–3 дня)</div>
-        <div style="color:#94a3b8;line-height:1.8">
-          ✓ Новый layout: шаги + мини-превью<br>
-          ✓ Drag-and-drop для разделов<br>
-          ✓ Шаблоны (сохранить / загрузить)<br>
-          ✓ История отчётов (localStorage)
-        </div>
+  <div class="grid2">
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">Пересохшие точки (нед. 22)</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Точка</th><th>Домен</th><th>Q пред.</th><th>Дата</th></tr></thead>
+          <tbody>
+            <tr><td><strong>П-7</strong></td><td><span class="dbadge">Д2</span></td><td>0.4 л/с</td><td>26.05.2026</td></tr>
+            <tr><td><strong>П-12</strong></td><td><span class="dbadge">Д4</span></td><td>0.2 л/с</td><td>26.05.2026</td></tr>
+          </tbody>
+        </table>
       </div>
-      <div>
-        <div style="color:#60a5fa;font-weight:700;margin-bottom:8px">🔵 Этап 2 — Данные (1–2 дня)</div>
-        <div style="color:#94a3b8;line-height:1.8">
-          ✓ Фильтры по домену/горизонту<br>
-          ✓ Снимок схемы водоотлива<br>
-          ✓ Нумерация страниц при печати<br>
-          ✓ Редактирование AI-текста
-        </div>
-      </div>
-      <div>
-        <div style="color:#c084fc;font-weight:700;margin-bottom:8px">🟣 Этап 3 — Стиль (1 день)</div>
-        <div style="color:#94a3b8;line-height:1.8">
-          ✓ 5 цветовых тем<br>
-          ✓ Загрузка логотипа<br>
-          ✓ Водяной знак / гриф<br>
-          ✓ Блок подписи на титуле
-        </div>
-      </div>
-      <div>
-        <div style="color:#fbbf24;font-weight:700;margin-bottom:8px">🟡 Этап 4 — ИИ (1 день)</div>
-        <div style="color:#94a3b8;line-height:1.8">
-          ✓ Выбор модели (Sonnet/Opus/Haiku)<br>
-          ✓ Тон ответа (пресеты)<br>
-          ✓ Кэш AI-результатов<br>
-          ✓ Категории промптов
-        </div>
+    </div>
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">Новые точки (нед. 22)</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Точка</th><th>Домен</th><th>Q нач.</th><th>Горизонт</th></tr></thead>
+          <tbody>
+            <tr><td><strong>П-5</strong></td><td><span class="dbadge">Д2</span></td><td>1.2 л/с</td><td>+85 м</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
 </div>
+
+<!-- SECTION 6: Point Detail Cards -->
+<div class="report-section" id="s6">
+  <div class="sec-label">
+    <div class="sec-num">6</div>
+    <div><div class="sec-title section-border">Карточки точек наблюдения</div><div class="sec-sub">Детальные данные по 6 ключевым точкам (выборка)</div></div>
+  </div>
+  <div class="grid3">
+    <div class="point-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="point-num">#П-1</div>
+        <span class="chip chip-active">Активная</span>
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0"><span class="dbadge">Домен-1</span><span style="font-size:11px;color:var(--text2);padding:2px 6px;background:rgba(255,255,255,0.05);border-radius:4px">+120 м</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+        <span class="point-q">4.2</span><span style="font-size:12px;color:var(--text2)">л/с</span>
+      </div>
+      <div class="point-q-prev">Пред.: 3.4 л/с · <span style="color:var(--green)">&#9650; +0.8 (+23.5%)</span></div>
+      <svg viewBox="0 0 80 24" width="80" height="24" style="display:block;margin:10px 0">
+        <polyline points="0,18 11,16 22,19 33,14 44,11 55,13 66,10 80,8" fill="none" stroke="#1a73e8" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="80" cy="8" r="2.5" fill="#1a73e8"/>
+      </svg>
+      <div class="point-worker">Замерил: Сидоров В.П. · 26.05.2026</div>
+    </div>
+    <div class="point-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="point-num">#П-4</div>
+        <span class="chip chip-active">Активная</span>
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0"><span class="dbadge">Домен-1</span><span style="font-size:11px;color:var(--text2);padding:2px 6px;background:rgba(255,255,255,0.05);border-radius:4px">+100 м</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+        <span class="point-q">2.3</span><span style="font-size:12px;color:var(--text2)">л/с</span>
+      </div>
+      <div class="point-q-prev">Пред.: 1.6 л/с · <span style="color:var(--red)">&#9650; +0.7 (+43.8%) !</span></div>
+      <svg viewBox="0 0 80 24" width="80" height="24" style="display:block;margin:10px 0">
+        <polyline points="0,20 11,19 22,18 33,17 44,16 55,18 66,15 80,10" fill="none" stroke="#1a73e8" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="80" cy="10" r="2.5" fill="#1a73e8"/>
+      </svg>
+      <div class="point-worker">Замерил: Козлов И.А. · 26.05.2026</div>
+    </div>
+    <div class="point-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="point-num">#П-6</div>
+        <span class="chip chip-active">Активная</span>
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0"><span class="dbadge">Домен-2</span><span style="font-size:11px;color:var(--text2);padding:2px 6px;background:rgba(255,255,255,0.05);border-radius:4px">+75 м</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+        <span class="point-q" style="color:#34a853">8.5</span><span style="font-size:12px;color:var(--text2)">л/с</span>
+      </div>
+      <div class="point-q-prev">Пред.: 8.0 л/с · <span style="color:var(--green)">&#9650; +0.5 (+6.3%)</span></div>
+      <svg viewBox="0 0 80 24" width="80" height="24" style="display:block;margin:10px 0">
+        <polyline points="0,14 11,12 22,13 33,10 44,9 55,11 66,8 80,7" fill="none" stroke="#34a853" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="80" cy="7" r="2.5" fill="#34a853"/>
+      </svg>
+      <div class="point-worker">Замерил: Иванов А.В. · 26.05.2026</div>
+    </div>
+    <div class="point-card dry">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="point-num">#П-7</div>
+        <span class="chip chip-dry">Пересохла</span>
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0"><span class="dbadge">Домен-2</span><span style="font-size:11px;color:var(--text2);padding:2px 6px;background:rgba(255,255,255,0.05);border-radius:4px">+90 м</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+        <span class="point-q" style="color:#888">0.0</span><span style="font-size:12px;color:var(--text2)">л/с</span>
+      </div>
+      <div class="point-q-prev">Пред.: 0.4 л/с · <span style="color:var(--gray)">&#9660; -0.4 (—)</span></div>
+      <svg viewBox="0 0 80 24" width="80" height="24" style="display:block;margin:10px 0">
+        <polyline points="0,10 11,12 22,14 33,16 44,18 55,20 66,21 80,22" fill="none" stroke="#888" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="80" cy="22" r="2.5" fill="#888"/>
+      </svg>
+      <div class="point-worker">Замерил: Петров С.Н. · 26.05.2026</div>
+    </div>
+    <div class="point-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="point-num">#П-9</div>
+        <span class="chip chip-active">Активная</span>
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0"><span class="dbadge">Домен-3</span><span style="font-size:11px;color:var(--text2);padding:2px 6px;background:rgba(255,255,255,0.05);border-radius:4px">+55 м</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+        <span class="point-q">3.1</span><span style="font-size:12px;color:var(--text2)">л/с</span>
+      </div>
+      <div class="point-q-prev">Пред.: 2.2 л/с · <span style="color:var(--red)">&#9650; +0.9 (+40.9%) !</span></div>
+      <svg viewBox="0 0 80 24" width="80" height="24" style="display:block;margin:10px 0">
+        <polyline points="0,16 11,15 22,14 33,16 44,14 55,12 66,14 80,9" fill="none" stroke="#1a73e8" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="80" cy="9" r="2.5" fill="#1a73e8"/>
+      </svg>
+      <div class="point-worker">Замерил: Козлов И.А. · 26.05.2026</div>
+    </div>
+    <div class="point-card flood">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="point-num">#П-11</div>
+        <span class="chip chip-flood">Паводковая</span>
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0"><span class="dbadge">Домен-3</span><span style="font-size:11px;color:var(--text2);padding:2px 6px;background:rgba(255,255,255,0.05);border-radius:4px">+50 м</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0 4px">
+        <span class="point-q" style="color:#00acc1">0.7</span><span style="font-size:12px;color:var(--text2)">л/с</span>
+      </div>
+      <div class="point-q-prev">Пред.: 0.5 л/с · <span style="color:var(--red)">&#9650; +0.2 (+40.0%) !</span></div>
+      <svg viewBox="0 0 80 24" width="80" height="24" style="display:block;margin:10px 0">
+        <polyline points="0,20 11,21 22,19 33,22 44,18 55,15 66,16 80,13" fill="none" stroke="#00acc1" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="80" cy="13" r="2.5" fill="#00acc1"/>
+      </svg>
+      <div class="point-worker">Замерил: Сидоров В.П. · 26.05.2026</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 7: Drainage Ditches -->
+<div class="report-section" id="s7">
+  <div class="sec-label">
+    <div class="sec-num">7</div>
+    <div><div class="sec-title section-border">Канавы (водоотводные)</div><div class="sec-sub">Замеры расходов в дренажных канавах за нед. 22</div></div>
+  </div>
+  <div class="kpi-row cols3" style="margin-bottom:20px">
+    <div class="kpi-card cyan">
+      <div class="kpi-label">Кол-во канав</div>
+      <div class="kpi-val">4</div>
+      <div class="kpi-delta neutral">— без изменений</div>
+    </div>
+    <div class="kpi-card cyan">
+      <div class="kpi-label">Σ Q канав</div>
+      <div class="kpi-val">28.1<span class="kpi-unit">м³/ч</span></div>
+      <div class="kpi-delta up">&#9650; +1.4 м³/ч</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Средняя глубина</div>
+      <div class="kpi-val">1.8<span class="kpi-unit">м</span></div>
+      <div class="kpi-delta neutral">— без изменений</div>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Название</th><th>Домен</th><th>Q (м³/ч)</th><th>Q пред.</th><th>Δ</th><th>Статус</th><th>Дата замера</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Канава К-1</strong></td><td><span class="dbadge">Д1</span></td><td><strong>9.4</strong></td><td>8.6</td><td class="delta-up">+0.8</td><td><span class="chip chip-active">Рабочая</span></td><td>26.05.2026</td></tr>
+        <tr><td><strong>Канава К-2</strong></td><td><span class="dbadge">Д2</span></td><td><strong>7.8</strong></td><td>7.5</td><td class="delta-up">+0.3</td><td><span class="chip chip-active">Рабочая</span></td><td>26.05.2026</td></tr>
+        <tr><td><strong>Канава К-3</strong></td><td><span class="dbadge">Д3</span></td><td><strong>6.2</strong></td><td>5.8</td><td class="delta-up">+0.4</td><td><span class="chip chip-active">Рабочая</span></td><td>26.05.2026</td></tr>
+        <tr><td><strong>Канава К-4</strong></td><td><span class="dbadge">Д4-5</span></td><td><strong>4.7</strong></td><td>4.8</td><td class="delta-down">-0.1</td><td><span class="chip chip-fade">Требует чистки</span></td><td>26.05.2026</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SECTION 8: Horizontal Wells -->
+<div class="report-section" id="s8">
+  <div class="sec-label">
+    <div class="sec-num">8</div>
+    <div><div class="sec-title section-border">Горизонтальные скважины</div><div class="sec-sub">Состояние и показатели 6 горизонтальных дренажных скважин</div></div>
+  </div>
+  <div class="kpi-row cols3" style="margin-bottom:20px">
+    <div class="kpi-card">
+      <div class="kpi-label">Всего скважин</div>
+      <div class="kpi-val">6</div>
+      <div class="kpi-delta neutral">— без изменений</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Активных</div>
+      <div class="kpi-val">5</div>
+      <div class="kpi-delta neutral">— без изменений</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Σ Q скважин</div>
+      <div class="kpi-val">18.4<span class="kpi-unit">м³/ч</span></div>
+      <div class="kpi-delta up">&#9650; +0.9 м³/ч</div>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Скважина</th><th>Домен</th><th>Статус</th><th>Глубина</th><th>Q м³/ч</th><th>Q пред.</th><th>Δ</th><th>Дата</th></tr></thead>
+      <tbody>
+        <tr><td><strong>С-1</strong></td><td><span class="dbadge">Д1</span></td><td><span class="chip chip-active">Активная</span></td><td>85 м</td><td><strong>4.2</strong></td><td>3.9</td><td class="delta-up">+0.3</td><td>26.05.2026</td></tr>
+        <tr><td><strong>С-2</strong></td><td><span class="dbadge">Д1</span></td><td><span class="chip chip-active">Активная</span></td><td>92 м</td><td><strong>3.8</strong></td><td>3.6</td><td class="delta-up">+0.2</td><td>26.05.2026</td></tr>
+        <tr><td><strong>С-3</strong></td><td><span class="dbadge">Д2</span></td><td><span class="chip chip-active">Активная</span></td><td>78 м</td><td><strong>3.5</strong></td><td>3.4</td><td class="delta-up">+0.1</td><td>26.05.2026</td></tr>
+        <tr><td><strong>С-4</strong></td><td><span class="dbadge">Д3</span></td><td><span class="chip chip-active">Активная</span></td><td>110 м</td><td><strong>4.1</strong></td><td>3.9</td><td class="delta-up">+0.2</td><td>26.05.2026</td></tr>
+        <tr><td><strong>С-5</strong></td><td><span class="dbadge">Д4</span></td><td><span class="chip chip-active">Активная</span></td><td>95 м</td><td><strong>2.8</strong></td><td>2.7</td><td class="delta-up">+0.1</td><td>26.05.2026</td></tr>
+        <tr><td><strong>С-6</strong></td><td><span class="dbadge">Д5</span></td><td><span class="chip chip-dry">Неактивна</span></td><td>68 м</td><td><strong>0.0</strong></td><td>1.2</td><td class="delta-down">-1.2</td><td>26.05.2026</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SECTION 9: Analytics -->
+<div class="report-section" id="s9">
+  <div class="sec-label">
+    <div class="sec-num">9</div>
+    <div><div class="sec-title section-border">Аналитика</div><div class="sec-sub">Матрица охвата, гистограмма Q, динамика статусов</div></div>
+  </div>
+
+  <!-- 9a: Coverage matrix -->
+  <div class="chart-wrap" style="margin-bottom:20px">
+    <div class="chart-title">9a · Матрица охвата замерами (нед. 15–22)</div>
+    <div class="chart-sub">Синий = замер выполнен, тёмный = нет данных</div>
+    <div class="cov-hdr-row">
+      <span class="cov-hdr">Н15</span><span class="cov-hdr">Н16</span><span class="cov-hdr">Н17</span><span class="cov-hdr">Н18</span><span class="cov-hdr">Н19</span><span class="cov-hdr">Н20</span><span class="cov-hdr">Н21</span><span class="cov-hdr" style="color:#60a5fa">Н22</span>
+    </div>
+    <div class="cov-row"><span class="cov-pt-label">П-1</span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has" style="background:rgba(26,115,232,0.9)"></span></div>
+    <div class="cov-row"><span class="cov-pt-label">П-2</span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell no"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has" style="background:rgba(26,115,232,0.9)"></span></div>
+    <div class="cov-row"><span class="cov-pt-label">П-3</span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell no"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has" style="background:rgba(26,115,232,0.9)"></span></div>
+    <div class="cov-row"><span class="cov-pt-label">П-6</span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has" style="background:rgba(26,115,232,0.9)"></span></div>
+    <div class="cov-row"><span class="cov-pt-label">П-7</span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell no"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell no"></span></div>
+    <div class="cov-row"><span class="cov-pt-label">П-9</span><span class="cov-cell no"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has" style="background:rgba(26,115,232,0.9)"></span></div>
+    <div class="cov-row"><span class="cov-pt-label">П-14</span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell no"></span><span class="cov-cell has"></span><span class="cov-cell has" style="background:rgba(26,115,232,0.9)"></span></div>
+    <div class="cov-row"><span class="cov-pt-label">П-16</span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has"></span><span class="cov-cell has" style="background:rgba(26,115,232,0.9)"></span></div>
+    <div style="margin-top:10px;font-size:11px;color:var(--text2)">Охват нед. 22: 16/18 точек (88.9%) · Пропущено: П-5 (новая, без сравнения), П-7 (пересохла)</div>
+  </div>
+
+  <div class="grid2">
+    <!-- 9b: Histogram -->
+    <div class="chart-wrap">
+      <div class="chart-title">9b · Распределение дебитов Q (л/с)</div>
+      <svg viewBox="0 0 280 130" width="100%" style="display:block">
+        <!-- Axes -->
+        <line x1="30" y1="10" x2="30" y2="100" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+        <line x1="30" y1="100" x2="270" y2="100" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+        <!-- Bars: 0-1:5pts, 1-2:3pts, 2-3:4pts, 3-4:2pts, 4-5:2pts, 5+:2pts; max=5 -->
+        <!-- bar w=30, gap=8, x0=35 -->
+        <rect x="35" y="60" width="30" height="40" rx="3" fill="#1a73e8" opacity=".85"/>
+        <rect x="73" y="76" width="30" height="24" rx="3" fill="#1a73e8" opacity=".7"/>
+        <rect x="111" y="68" width="30" height="32" rx="3" fill="#1a73e8" opacity=".75"/>
+        <rect x="149" y="84" width="30" height="16" rx="3" fill="#1a73e8" opacity=".6"/>
+        <rect x="187" y="84" width="30" height="16" rx="3" fill="#f9ab00" opacity=".8"/>
+        <rect x="225" y="84" width="30" height="16" rx="3" fill="#ea4335" opacity=".8"/>
+        <!-- Count labels -->
+        <text x="50" y="56" text-anchor="middle" fill="#e8eaf0" font-size="10" font-weight="600">5</text>
+        <text x="88" y="72" text-anchor="middle" fill="#e8eaf0" font-size="10" font-weight="600">3</text>
+        <text x="126" y="64" text-anchor="middle" fill="#e8eaf0" font-size="10" font-weight="600">4</text>
+        <text x="164" y="80" text-anchor="middle" fill="#e8eaf0" font-size="10" font-weight="600">2</text>
+        <text x="202" y="80" text-anchor="middle" fill="#e8eaf0" font-size="10" font-weight="600">2</text>
+        <text x="240" y="80" text-anchor="middle" fill="#e8eaf0" font-size="10" font-weight="600">2</text>
+        <!-- X labels -->
+        <text x="50" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">0–1</text>
+        <text x="88" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">1–2</text>
+        <text x="126" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">2–3</text>
+        <text x="164" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">3–4</text>
+        <text x="202" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">4–5</text>
+        <text x="240" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">5+</text>
+        <text x="155" y="125" text-anchor="middle" fill="#8a9bb0" font-size="8">Диапазон Q, л/с</text>
+        <!-- Y labels -->
+        <text x="26" y="103" text-anchor="end" fill="#8a9bb0" font-size="8">0</text>
+        <text x="26" y="83" text-anchor="end" fill="#8a9bb0" font-size="8">2</text>
+        <text x="26" y="63" text-anchor="end" fill="#8a9bb0" font-size="8">4</text>
+        <line x1="30" y1="60" x2="270" y2="60" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="30" y1="80" x2="270" y2="80" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="4,3"/>
+      </svg>
+    </div>
+
+    <!-- 9c: Status dynamics stacked area -->
+    <div class="chart-wrap">
+      <div class="chart-title">9c · Динамика статусов (нед. 17–22)</div>
+      <svg viewBox="0 0 280 130" width="100%" style="display:block">
+        <defs>
+          <linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a73e8" stop-opacity=".5"/><stop offset="100%" stop-color="#1a73e8" stop-opacity=".1"/></linearGradient>
+          <linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f9ab00" stop-opacity=".5"/><stop offset="100%" stop-color="#f9ab00" stop-opacity=".1"/></linearGradient>
+          <linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#888" stop-opacity=".5"/><stop offset="100%" stop-color="#888" stop-opacity=".1"/></linearGradient>
+        </defs>
+        <!-- X axis -->
+        <line x1="30" y1="100" x2="270" y2="100" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+        <!-- Активная: 8,9,8,9,8,9 mapped -->
+        <!-- Scale: 0-12 -> 0-90px, y=100-val*7.5 -->
+        <!-- Week positions: 30,78,126,174,222,270 -->
+        <polygon points="30,40 78,33 126,40 174,33 222,40 270,33 270,100 30,100" fill="url(#ga)"/>
+        <polyline points="30,40 78,33 126,40 174,33 222,40 270,33" fill="none" stroke="#1a73e8" stroke-width="2"/>
+        <!-- Иссякает: 4,3,4,4,4,4 -->
+        <polygon points="30,70 78,78 126,70 174,70 222,70 270,70 270,100 30,100" fill="url(#gb)" opacity=".7"/>
+        <polyline points="30,70 78,78 126,70 174,70 222,70 270,70" fill="none" stroke="#f9ab00" stroke-width="2"/>
+        <!-- Пересохла: 2,2,2,2,2,2 -->
+        <polygon points="30,85 78,85 126,85 174,85 222,85 270,85 270,100 30,100" fill="url(#gc)" opacity=".6"/>
+        <polyline points="30,85 78,85 126,85 174,85 222,85 270,85" fill="none" stroke="#888" stroke-width="2"/>
+        <!-- X labels -->
+        <text x="30" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">Н17</text>
+        <text x="78" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">Н18</text>
+        <text x="126" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">Н19</text>
+        <text x="174" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">Н20</text>
+        <text x="222" y="113" text-anchor="middle" fill="#8a9bb0" font-size="8">Н21</text>
+        <text x="270" y="113" text-anchor="middle" fill="#60a5fa" font-size="8" font-weight="700">Н22</text>
+        <!-- Legend -->
+        <rect x="30" y="120" width="8" height="6" rx="1" fill="#1a73e8"/>
+        <text x="42" y="126" fill="#8a9bb0" font-size="7">Активная</text>
+        <rect x="95" y="120" width="8" height="6" rx="1" fill="#f9ab00"/>
+        <text x="107" y="126" fill="#8a9bb0" font-size="7">Иссякает</text>
+        <rect x="160" y="120" width="8" height="6" rx="1" fill="#888"/>
+        <text x="172" y="126" fill="#8a9bb0" font-size="7">Пересохла</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 10: Photos -->
+<div class="report-section" id="s10">
+  <div class="sec-label">
+    <div class="sec-num">10</div>
+    <div><div class="sec-title section-border">Фотоматериалы</div><div class="sec-sub">Документация состояния водопроявлений (нед. 22)</div></div>
+  </div>
+  <div class="photo-grid">
+    <div class="photo-card">
+      <div class="photo-placeholder">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8a9bb0" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span style="font-size:11px;color:var(--text2)">Фото не загружено</span>
+      </div>
+      <div class="photo-meta"><div class="photo-point">П-1 · Водопроявление</div><div class="photo-date">26.05.2026 · <span class="dbadge">Д1</span></div></div>
+    </div>
+    <div class="photo-card">
+      <div class="photo-placeholder">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8a9bb0" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span style="font-size:11px;color:var(--text2)">Фото не загружено</span>
+      </div>
+      <div class="photo-meta"><div class="photo-point">П-6 · Основное русло</div><div class="photo-date">26.05.2026 · <span class="dbadge">Д2</span></div></div>
+    </div>
+    <div class="photo-card">
+      <div class="photo-placeholder">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8a9bb0" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span style="font-size:11px;color:var(--text2)">Фото не загружено</span>
+      </div>
+      <div class="photo-meta"><div class="photo-point">П-9 · Аномальный рост</div><div class="photo-date">26.05.2026 · <span class="dbadge">Д3</span></div></div>
+    </div>
+    <div class="photo-card">
+      <div class="photo-placeholder">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8a9bb0" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span style="font-size:11px;color:var(--text2)">Фото не загружено</span>
+      </div>
+      <div class="photo-meta"><div class="photo-point">Канава К-4 · Засор</div><div class="photo-date">26.05.2026 · <span class="dbadge">Д4-5</span></div></div>
+    </div>
+    <div class="photo-card">
+      <div class="photo-placeholder">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8a9bb0" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span style="font-size:11px;color:var(--text2)">Фото не загружено</span>
+      </div>
+      <div class="photo-meta"><div class="photo-point">П-11 · Паводковая зона</div><div class="photo-date">26.05.2026 · <span class="dbadge">Д3</span></div></div>
+    </div>
+    <div class="photo-card">
+      <div class="photo-placeholder">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8a9bb0" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span style="font-size:11px;color:var(--text2)">Фото не загружено</span>
+      </div>
+      <div class="photo-meta"><div class="photo-point">Скважина С-6 · Простой</div><div class="photo-date">26.05.2026 · <span class="dbadge">Д5</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 11: Conclusions -->
+<div class="report-section" id="s11">
+  <div class="sec-label">
+    <div class="sec-num">11</div>
+    <div><div class="sec-title section-border">Заключение и рекомендации</div><div class="sec-sub">Аналитические выводы, оценка рисков, план действий</div></div>
+  </div>
+
+  <!-- AI analysis block -->
+  <div class="card" style="margin-bottom:20px;border-left:3px solid #7c4dff">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:11px;font-weight:700;color:#b39ddb;text-transform:uppercase;letter-spacing:.08em">AI-анализ · авт. генерация</span>
+      <span style="font-size:10px;padding:2px 8px;background:rgba(124,77,255,0.15);color:#b39ddb;border-radius:20px">нед. 22</span>
+    </div>
+    <p style="font-size:13px;color:var(--text);line-height:1.7;margin-bottom:10px">По результатам замеров недели 22 зафиксировано устойчивое увеличение суммарного водопритока в карьере на 8.1% относительно предыдущей недели (с 39.5 до 42.7 л/с). Наиболее значительный прирост наблюдается в зоне Домена-3, что коррелирует с активизацией паводковых процессов в период весенне-летнего снеготаяния.</p>
+    <p style="font-size:13px;color:var(--text);line-height:1.7;margin-bottom:10px">Три точки наблюдения демонстрируют аномальный рост дебита (Δ ≥ 30%): П-4 (+43.8%), П-9 (+40.9%) и П-11 (+40.0%). Данные точки требуют усиленного мониторинга и анализа возможного изменения гидрогеологического режима на соответствующих горизонтах.</p>
+    <p style="font-size:13px;color:var(--text);line-height:1.7">Фиксируется иссякание точки П-7 (Домен-2, гор. +90 м) и снижение активности в Домене-5 (П-16, -31.2%). Рекомендуется проверить состояние дренажной инфраструктуры в данных зонах, а также провести дополнительное обследование скважины С-6, перешедшей в неактивный статус.</p>
+  </div>
+
+  <!-- Risk assessment -->
+  <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">Оценка рисков</div>
+  <div style="margin-bottom:20px">
+    <div class="risk-row">
+      <div class="risk-dot" style="background:#ea4335"></div>
+      <div class="risk-text"><strong>Высокий:</strong> Аномальный рост дебита в Домене-3 (П-9, П-11) — возможное усиление паводковой нагрузки, риск подтопления рабочих горизонтов</div>
+      <span class="risk-level" style="background:rgba(234,67,53,0.15);color:#ea4335">Высокий</span>
+    </div>
+    <div class="risk-row">
+      <div class="risk-dot" style="background:#f9ab00"></div>
+      <div class="risk-text"><strong>Средний:</strong> Канава К-4 требует очистки — снижение пропускной способности может привести к переполнению при пиковых притоках</div>
+      <span class="risk-level" style="background:rgba(249,171,0,0.15);color:#f9ab00">Средний</span>
+    </div>
+    <div class="risk-row">
+      <div class="risk-dot" style="background:#34a853"></div>
+      <div class="risk-text"><strong>Низкий:</strong> Иссякание П-7 соответствует прогнозной динамике снижения водоносного горизонта — плановое событие</div>
+      <span class="risk-level" style="background:rgba(52,168,83,0.15);color:#34a853">Низкий</span>
+    </div>
+  </div>
+
+  <!-- Action items -->
+  <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">План действий</div>
+  <div class="tbl-wrap" style="margin-bottom:24px">
+    <table>
+      <thead><tr><th>#</th><th>Мероприятие</th><th>Приоритет</th><th>Ответственный</th><th>Срок</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Внеплановый замер П-9 и П-11 · Домен-3</td><td class="pri-high">Высокий</td><td>Козлов И.А.</td><td>28.05.2026</td></tr>
+        <tr><td>2</td><td>Очистка канавы К-4 от отложений</td><td class="pri-med">Средний</td><td>Тех. служба</td><td>30.05.2026</td></tr>
+        <tr><td>3</td><td>Обследование скважины С-6 · Домен-5</td><td class="pri-med">Средний</td><td>Иванов А.В.</td><td>31.05.2026</td></tr>
+        <tr><td>4</td><td>Установка нового репера в зоне П-11</td><td class="pri-low">Низкий</td><td>Петров С.Н.</td><td>05.06.2026</td></tr>
+        <tr><td>5</td><td>Актуализация схемы доменного зонирования</td><td class="pri-low">Низкий</td><td>Иванов А.В.</td><td>09.06.2026</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Signatures -->
+  <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">Подписи</div>
+  <div class="sig-grid">
+    <div class="sig-block">
+      <div class="sig-role">Составил отчёт</div>
+      <div class="sig-name">Иванов Андрей Васильевич</div>
+      <div style="height:32px;border-bottom:1px dashed rgba(255,255,255,0.15);margin-bottom:8px"></div>
+      <div class="sig-line">Гидрогеолог · 26.05.2026</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-role">Проверил и утвердил</div>
+      <div class="sig-name">Петров Сергей Николаевич</div>
+      <div style="height:32px;border-bottom:1px dashed rgba(255,255,255,0.15);margin-bottom:8px"></div>
+      <div class="sig-line">Гл. инженер карьера · 26.05.2026</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
 
 <script>
-function showSection(id) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('s-' + id).classList.add('active');
-  event.target.classList.add('active');
-}
+// TOC active highlight on scroll
+const sections = document.querySelectorAll('.report-section');
+const tocLinks = document.querySelectorAll('#toc a');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      tocLinks.forEach(l => {
+        l.classList.toggle('active', l.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
 </script>
 </body>
 </html>
