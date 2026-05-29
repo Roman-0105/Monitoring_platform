@@ -119,6 +119,7 @@ var Schemes = (function() {
     }
     return Api.getSchemes().then(function(schemes) {
       _list = (schemes || []).map(normalizeScheme);
+      _imgCache = {};  // сбрасываем кэш URL: список обновился, старые URL невалидны
       Storage.cacheSchemes(_list);
       Diagnostics.set('schemeStatus', _list.length ? 'loaded' : 'none');
       return _list;
