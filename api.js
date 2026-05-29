@@ -420,7 +420,7 @@ var Api = (function() {
   async function uploadScheme(params) {
     var _mime = params.mimeType || 'image/jpeg';
     var ext  = _mime === 'image/svg+xml' ? 'svg' : (_mime.split('/')[1] || 'jpg');
-    var path = params.weekKey + '.' + ext;
+    var path = params.weekKey + '_' + Date.now() + '.' + ext;
     var blob = base64ToBlob(params.base64, params.mimeType);
 
     var { error: uploadError } = await client().storage
