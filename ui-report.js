@@ -29,6 +29,7 @@ var ReportState = {
     objectName: 'Пулково-42',
     reportTheme: 'blue',
     reportLayout: 'a',
+    orientation: 'portrait',
     filterDomains:  [],   // [] = all domains
     filterHorizons: [],   // [] = all horizons
     includeWells: false,
@@ -164,6 +165,9 @@ function restoreSettings() {
       c.classList.toggle('rp-layout-card--active', c.dataset.layout === s.reportLayout);
     });
   }
+  if (s.orientation) {
+    rpSetOrientation(s.orientation);
+  }
   // Restore logo preview
   var savedLogo = localStorage.getItem('rp-logo-base64');
   if (savedLogo) rpLogoUpdatePreview(savedLogo);
@@ -243,6 +247,7 @@ function saveReportSettings() {
       incWells:      getChk('rp-inc-wells'),
       reportTheme:   ReportState.settings.reportTheme || 'blue',
       reportLayout:  ReportState.settings.reportLayout || 'a',
+      orientation:   ReportState.settings.orientation  || 'portrait',
       watermark:    (function(){ var v=getField('rp-watermark'); return v==='custom'?getField('rp-watermark-custom'):v; })(),
       approverName: getField('rp-approver-name'),
       incSignature: getChk('rp-inc-signature'),
@@ -928,6 +933,13 @@ function buildSettingsUI() {
       _rpThemeCard('red',    '🔴', 'Красная',   '#7c2d12,#ea580c', false) +
       _rpThemeCard('violet', '🟣', 'Фиолетовая','#4c1d95,#7c3aed', false) +
     '</div>' +
+    '<div style="margin-top:18px">' +
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Ориентация страницы</div>' +
+      '<div style="display:flex;gap:10px">' +
+        '<button id="rp-orient-portrait"  onclick="rpSetOrientation(\'portrait\')"  class="btn btn-sm" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">📄 Книжная</button>' +
+        '<button id="rp-orient-landscape" onclick="rpSetOrientation(\'landscape\')" class="btn btn-sm" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🖼 Альбомная</button>' +
+      '</div>' +
+    '</div>' +
     '<div style="margin-top:20px">' +
       '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:10px">Логотип на титульной странице</div>' +
       '<div class="card" style="margin-bottom:14px">' +
@@ -1208,6 +1220,16 @@ function rpAIToggle(cb) {
   if (body) body.style.display = cb.checked ? '' : 'none';
   var hidden = document.getElementById('rp-inc-ai');
   if (hidden) hidden.checked = cb.checked;
+  saveReportSettings();
+}
+
+function rpSetOrientation(orient) {
+  ReportState.settings.orientation = orient;
+  var isLandscape = orient === 'landscape';
+  var pb = document.getElementById('rp-orient-portrait');
+  var lb = document.getElementById('rp-orient-landscape');
+  if (pb) { pb.classList.toggle('btn-primary', !isLandscape); pb.classList.toggle('btn-outline', isLandscape); }
+  if (lb) { lb.classList.toggle('btn-primary',  isLandscape); lb.classList.toggle('btn-outline', !isLandscape); }
   saveReportSettings();
 }
 
@@ -1863,6 +1885,7 @@ function generateReport() {
   s.includeAI      = !!(document.getElementById('rp-inc-ai')      || {checked:true}).checked;
   s.includeDewatering = !!(document.getElementById('rp-inc-dewatering') || {checked:false}).checked;
   s.includeWells      = !!(document.getElementById('rp-inc-wells')      || {checked:false}).checked;
+  s.orientation       = ReportState.settings.orientation || 'portrait';
   s.quarryName     = getField('rp-quarry-name') || 'ЮРГ';
   s.objectName     = getField('rp-object-name') || 'Пулково-42';
   s.reportTheme = ReportState.settings.reportTheme || 'blue';
@@ -3585,7 +3608,7 @@ function getReportCSS(theme, layout) {
     : ''),
 
   '@media print {',
-  '  @page { margin:15mm 18mm; size:A4 portrait; }',
+  '  @page { margin:15mm 18mm; size:A4 ' + (s.orientation === 'landscape' ? 'landscape' : 'portrait') + '; }',
   '  @page { @bottom-right { content: "Стр. " counter(page); font-size:9pt; color:#aaa; font-family:sans-serif; } }',
   '  body { counter-reset: page; }',
   '  .rp-section { counter-increment: page; }',
