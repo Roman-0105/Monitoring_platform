@@ -1689,23 +1689,24 @@ function openAddFormFromPoi(p) {
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Статус</label>',
-        '<select id="pm-status" class="form-control" style="' + CS + '">' + cloneOpts('f-status') + '</select></div>',
+        '<select id="pm-status" class="form-control" style="' + CS + '">' + cloneOpts('e-status') + '</select></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Интенсивность</label>',
-        '<select id="pm-intensity" class="form-control" style="' + CS + '">' + cloneOpts('f-intensity') + '</select></div>',
+        '<select id="pm-intensity" class="form-control" style="' + CS + '">' + cloneOpts('e-intensity') + '</select></div>',
     '</div>',
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Дебит, л/с</label>',
-        '<input id="pm-flowrate" type="number" step="any" min="0" class="form-control" placeholder="0.00" style="' + CS + '"></div>',
+        '<input id="pm-flowrate" type="number" step="any" min="0" class="form-control" placeholder="0.00"' +
+          (p.flowRate != null ? ' value="' + escAttr(String(p.flowRate)) + '"' : '') + ' style="' + CS + '"></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Метод замера</label>',
-        '<select id="pm-measure" class="form-control" style="' + CS + '">' + cloneOpts('f-measure') + '</select></div>',
+        '<select id="pm-measure" class="form-control" style="' + CS + '">' + cloneOpts('e-measure') + '</select></div>',
     '</div>',
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Домен</label>',
-        '<select id="pm-domain" class="form-control" style="' + CS + '">' + cloneOpts('f-domain') + '</select></div>',
+        '<select id="pm-domain" class="form-control" style="' + CS + '">' + cloneOpts('e-domain') + '</select></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Борт</label>',
-        '<select id="pm-wall" class="form-control" style="' + CS + '">' + cloneOpts('f-wall') + '</select></div>',
+        '<select id="pm-wall" class="form-control" style="' + CS + '">' + cloneOpts('e-wall') + '</select></div>',
     '</div>',
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
@@ -1713,7 +1714,7 @@ function openAddFormFromPoi(p) {
         '<input id="pm-horizon" type="text" class="form-control" value="' + escAttr(p.horizon || '') + '"',
           ' list="horizons-datalist" style="' + CS + '"></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Цвет воды</label>',
-        '<select id="pm-color" class="form-control" style="' + CS + '">' + cloneOpts('f-color') + '</select></div>',
+        '<select id="pm-color" class="form-control" style="' + CS + '">' + cloneOpts('e-color') + '</select></div>',
     '</div>',
 
     '<div class="form-group" style="margin-bottom:0"><label class="form-label">Комментарий</label>',
@@ -1763,10 +1764,14 @@ function openAddFormFromPoi(p) {
 
   document.body.appendChild(modal);
 
-  // Восстанавливаем select-значения из точки (после innerHTML)
-  var domSel = document.getElementById('pm-domain');   if (domSel && p.domain)     domSel.value = p.domain;
-  var wallSel = document.getElementById('pm-wall');    if (wallSel && p.wall)      wallSel.value = p.wall;
-  var colorSel = document.getElementById('pm-color');  if (colorSel && p.waterColor) colorSel.value = p.waterColor;
+  // Заполняем все поля последними данными точки (после вставки в DOM)
+  var domSel    = document.getElementById('pm-domain');    if (domSel    && p.domain)        domSel.value    = p.domain;
+  var wallSel   = document.getElementById('pm-wall');      if (wallSel   && p.wall)          wallSel.value   = p.wall;
+  var colorSel  = document.getElementById('pm-color');     if (colorSel  && p.waterColor)    colorSel.value  = p.waterColor;
+  var statusSel = document.getElementById('pm-status');    if (statusSel && p.status)        statusSel.value = p.status;
+  var intensSel = document.getElementById('pm-intensity'); if (intensSel && p.intensity)     intensSel.value = p.intensity;
+  var measSel   = document.getElementById('pm-measure');   if (measSel   && p.measureMethod) measSel.value   = p.measureMethod;
+  var commentEl = document.getElementById('pm-comment');   if (commentEl && p.comment)       commentEl.value = p.comment;
 
   // Превью при выборе фото (оба input-а обновляют одну область)
   Photos.initPreview('pm-photo-cam', 'pm-photo-preview');
