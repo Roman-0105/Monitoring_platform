@@ -43,7 +43,7 @@ var RP_SECTIONS = [
   { id: 'map',        chk: 'rp-inc-map',        label: 'Схема карьера',      icon: '🗺',  defOn: true  },
   { id: 'domens',     chk: 'rp-inc-domens',      label: 'Домены / горизонты', icon: '📊',  defOn: true  },
   { id: 'dewatering', chk: 'rp-inc-dewatering',  label: 'Водоотлив',          icon: '💧',  defOn: false },
-  { id: 'wells',      chk: 'rp-inc-wells',       label: 'Гор. скважины',      icon: '⊛',  defOn: false },
+  { id: 'wells',      chk: 'rp-inc-wells',       label: 'Гор. скважины',      icon: '⊛',  defOn: true  },
   { id: 'ditches',    chk: 'rp-inc-ditches',     label: 'Дренажные канавы',   icon: '🏗',  defOn: true  },
   { id: 'photos',     chk: 'rp-inc-photos',      label: 'Фото точек',         icon: '📷',  defOn: true  },
   { id: 'history',    chk: 'rp-inc-history',     label: 'История (графики)',  icon: '📈',  defOn: true  },
@@ -2774,6 +2774,58 @@ function buildWellsSection(s, isSingle, secNum) {
     '</tr>';
   }).join('');
 
+  // Q bar chart per well
+  var maxQbar = wellData.reduce(function(m,d){ return Math.max(m, parseFloat((d.mB||{}).flowRate)||0); }, 0) || 1;
+  var WELL_STATUS_CLR = { 'Активная':'#188038','Иссякает':'#f9ab00','Сухая':'#d93025' };
+  var wellBarsHtml = '<div class="sec-sub" style="margin-top:14px">Q скважин — визуализация</div>' +
+    '<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">' +
+    wellData.slice(0, 12).map(function(d) {
+      var w = d.w;
+      var qb = parseFloat((d.mB||{}).flowRate) || 0;
+      var qa = (!isSingle && d.mA) ? parseFloat(d.mA.flowRate) || 0 : null;
+      var delta = qa !== null ? qb - qa : null;
+      var bw = Math.round(qb / maxQbar * 100);
+      var clr = WELL_STATUS_CLR[w.status] || '#888';
+      var dTxt = delta !== null
+        ? ' <span style="font-size:9px;color:' + (delta>=0?'#d93025':'#188038') + ';font-weight:600">' +
+            (delta>=0?'▲+':'▼') + Math.abs(delta).toFixed(2) + '</span>'
+        : '';
+      return '<div style="display:grid;grid-template-columns:120px 1fr 80px;gap:8px;align-items:center">' +
+        '<div style="font-size:11px;font-weight:600;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escAttr(w.name) + '">' +
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + clr + ';margin-right:4px;vertical-align:middle"></span>' +
+          escAttr(w.name) + '</div>' +
+        '<div style="background:#f0f0f0;height:14px;border-radius:3px;overflow:hidden">' +
+          '<div style="width:' + bw + '%;height:100%;background:' + clr + ';border-radius:3px"></div></div>' +
+        '<div style="font-size:11px;font-weight:700;text-align:right;white-space:nowrap">' +
+          qb.toFixed(2) + ' м³/ч' + dTxt + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+
+  // Domain breakdown for wells
+  var domainMap = {};
+  wellData.forEach(function(d) {
+    var dom = d.w.domain || '—';
+    if (!domainMap[dom]) domainMap[dom] = { count:0, q:0 };
+    domainMap[dom].count++;
+    domainMap[dom].q += parseFloat((d.mB||{}).flowRate) || 0;
+  });
+  var domKeys = Object.keys(domainMap).sort(function(a,b){ return domainMap[b].q - domainMap[a].q; });
+  var domainHtml = '';
+  if (domKeys.length > 1) {
+    var domRows = domKeys.map(function(dom) {
+      var d = domainMap[dom];
+      var pct = totalQB > 0 ? (d.q / totalQB * 100).toFixed(1) : '0.0';
+      return '<tr><td><b>' + escAttr(dom) + '</b></td><td style="text-align:center">' + d.count + '</td>' +
+        '<td style="text-align:right;font-weight:700;color:#1a73e8">' + d.q.toFixed(2) + '</td>' +
+        '<td style="text-align:right">' + pct + '%</td></tr>';
+    }).join('');
+    domainHtml = '<div class="sec-sub">По доменам</div>' +
+      '<table style="font-size:11px;margin-bottom:14px"><thead><tr>' +
+        '<th>Домен</th><th style="text-align:center">Скважин</th>' +
+        '<th style="text-align:right">Q, м³/ч</th><th style="text-align:right">%</th>' +
+      '</tr></thead><tbody>' + domRows + '</tbody></table>';
+  }
+
   return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Горизонтальные скважины</div>' +
     kpiHtml +
     '<table><thead><tr>' +
@@ -2784,7 +2836,8 @@ function buildWellsSection(s, isSingle, secNum) {
       (!isSingle ? '<th>Δ, м³/ч</th>' : '') +
       '<th style="text-align:right">Дата замера</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
-    '<div style="font-size:10px;color:#aaa;margin-top:6px">↑ — ближайший замер до выбранной даты</div>';
+    '<div style="font-size:10px;color:#aaa;margin-top:2px;margin-bottom:14px">↑ — ближайший замер до выбранной даты</div>' +
+    wellBarsHtml + domainHtml;
 }
 
 // ── Горизонтальный бар-чарт по доменам ───────────────────
@@ -2966,6 +3019,233 @@ function buildSummaryTimeline(s) {
 }
 
 // ── Аналитика и оценка рисков ─────────────────────────────
+// ── Матрица Домен × Статус ────────────────────────────────
+function buildDomainStatusMatrix(pts) {
+  if (!pts.length) return '';
+  var STATUSES_SHOW = ['Активная','Паводковая','Иссякает','Пересохла','Новая','Перелив'];
+  var sClrs = { 'Активная':'#34a853','Паводковая':'#4285f4','Иссякает':'#f9ab00','Пересохла':'#ea4335','Новая':'#9e9e9e','Перелив':'#00bcd4' };
+
+  var domains = [], domSet = {};
+  pts.forEach(function(p) {
+    var d = p.domain || p.domen || '—';
+    if (!domSet[d]) { domSet[d] = 1; domains.push(d); }
+  });
+  domains.sort();
+
+  var mx = {}, dQ = {}, dTotal = {}, sTot = {};
+  domains.forEach(function(d) { mx[d] = {}; dQ[d] = 0; dTotal[d] = 0; });
+  pts.forEach(function(p) {
+    var d = p.domain || p.domen || '—', st = p.status || '—';
+    mx[d][st] = (mx[d][st] || 0) + 1; dTotal[d]++;
+    var q = parseFloat(p.flowRate); if (!isNaN(q) && q > 0) dQ[d] += q;
+    sTot[st] = (sTot[st] || 0) + 1;
+  });
+
+  var maxCell = 0;
+  domains.forEach(function(d) {
+    STATUSES_SHOW.forEach(function(st) { if ((mx[d][st]||0) > maxCell) maxCell = mx[d][st]; });
+  });
+
+  function cellStyle(v) {
+    if (!v) return '';
+    var a = Math.round(v / (maxCell||1) * 70) / 100;
+    return 'background:rgba(26,115,232,' + a + ');color:' + (a > 0.38 ? '#fff' : '#1a1a2e') + ';font-weight:700;text-align:center';
+  }
+
+  var hdr = '<tr><th>Домен</th>' +
+    STATUSES_SHOW.map(function(st) {
+      return '<th style="color:' + (sClrs[st]||'#555') + ';text-align:center">' + escHTML(st.slice(0,4)) + '.</th>';
+    }).join('') + '<th style="text-align:center">∑</th><th style="text-align:right">Q л/с</th></tr>';
+
+  var rows = domains.map(function(d) {
+    return '<tr><td><b>' + escAttr(d) + '</b></td>' +
+      STATUSES_SHOW.map(function(st) {
+        var v = mx[d][st] || 0;
+        return '<td style="' + cellStyle(v) + '">' + (v || '—') + '</td>';
+      }).join('') +
+      '<td style="text-align:center;font-weight:700">' + dTotal[d] + '</td>' +
+      '<td style="text-align:right;color:#1a73e8;font-weight:700">' + dQ[d].toFixed(2) + '</td></tr>';
+  }).join('');
+
+  var totalQ = pts.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); }, 0);
+  var foot = '<tr style="background:#f1f3f4"><td><b>∑</b></td>' +
+    STATUSES_SHOW.map(function(st) {
+      return '<td style="text-align:center"><b>' + (sTot[st]||0) + '</b></td>';
+    }).join('') +
+    '<td style="text-align:center"><b>' + pts.length + '</b></td>' +
+    '<td style="text-align:right"><b>' + totalQ.toFixed(2) + '</b></td></tr>';
+
+  return '<div class="sec-sub">Матрица: Домен × Статус</div>' +
+    '<div style="overflow-x:auto;margin-bottom:16px"><table style="font-size:11px"><thead>' +
+    hdr + '</thead><tbody>' + rows + foot + '</tbody></table></div>';
+}
+
+// ── Распределение по бортам ───────────────────────────────
+function buildWallDistribution(pts) {
+  var WALL_DEFS = [
+    { key:'Северный',         clr:'#22d3ee' }, { key:'Северо-восточный', clr:'#7ecfff' },
+    { key:'Восточный',        clr:'#ea4335' }, { key:'Юго-восточный',    clr:'#ff7961' },
+    { key:'Южный',            clr:'#f9ab00' }, { key:'Юго-западный',     clr:'#ffcc57' },
+    { key:'Западный',         clr:'#34a853' }, { key:'Северо-западный',  clr:'#85e89d' },
+  ];
+  var wStats = {}, totalQ = 0, other = { count:0, q:0 };
+  WALL_DEFS.forEach(function(w) { wStats[w.key] = { count:0, q:0 }; });
+  pts.forEach(function(p) {
+    var q = parseFloat(p.flowRate) || 0; totalQ += q;
+    var wd = WALL_DEFS.find(function(w) { return w.key === p.wall; });
+    if (wd) { wStats[p.wall].count++; wStats[p.wall].q += q; }
+    else     { other.count++; other.q += q; }
+  });
+
+  var withData = WALL_DEFS.filter(function(w) { return wStats[w.key].count > 0; });
+  if (!withData.length) return '';
+  withData.sort(function(a,b) { return wStats[b.key].q - wStats[a.key].q; });
+  var maxQ = wStats[withData[0].key].q || 1;
+
+  function barRow(label, clr, st, isOther) {
+    var pct = totalQ > 0 ? (st.q / totalQ * 100).toFixed(1) : '0.0';
+    var bw = Math.round(st.q / maxQ * 100);
+    return '<tr' + (isOther ? ' style="color:#aaa"' : '') + '>' +
+      '<td>' +
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + clr + ';margin-right:6px;vertical-align:middle"></span>' +
+        '<b>' + escAttr(label) + '</b></td>' +
+      '<td style="text-align:center">' + st.count + '</td>' +
+      '<td style="text-align:right;font-weight:700;color:' + (isOther ? '#aaa' : '#1a73e8') + '">' + st.q.toFixed(2) + '</td>' +
+      '<td style="text-align:right">' + pct + '%</td>' +
+      '<td style="min-width:80px">' +
+        '<div style="height:12px;background:#f0f0f0;border-radius:3px;overflow:hidden">' +
+          '<div style="width:' + bw + '%;height:100%;background:' + clr + ';border-radius:3px"></div>' +
+        '</div></td></tr>';
+  }
+
+  var rows = withData.map(function(w) { return barRow(w.key, w.clr, wStats[w.key], false); }).join('');
+  if (other.q > 0) rows += barRow('Прочие / не указан', '#ccc', other, true);
+
+  return '<div class="sec-sub">Распределение по бортам</div>' +
+    '<table style="font-size:11px;margin-bottom:16px"><thead><tr>' +
+      '<th>Борт</th><th style="text-align:center">Точек</th>' +
+      '<th style="text-align:right">Q, л/с</th><th style="text-align:right">%</th><th>Диаграмма</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// ── Дебиты по горизонтам (с барами) ──────────────────────
+function buildHorizonQBars(pts, ptsA, isSingle) {
+  var byH = {}, totalQ = 0;
+  pts.forEach(function(p) {
+    var h = (p.horizon && String(p.horizon).trim()) ? String(p.horizon).trim() : '—';
+    if (!byH[h]) byH[h] = { count:0, q:0 };
+    byH[h].count++;
+    var q = parseFloat(p.flowRate);
+    if (!isNaN(q) && q > 0) { byH[h].q += q; totalQ += q; }
+  });
+  var horizKeys = Object.keys(byH).sort(function(a,b) { return byH[b].q - byH[a].q; });
+  if (!horizKeys.length) return '';
+  var maxQ = byH[horizKeys[0]].q || 1;
+
+  var byHA = {};
+  if (!isSingle && ptsA && ptsA.length) {
+    ptsA.forEach(function(p) {
+      var h = (p.horizon && String(p.horizon).trim()) ? String(p.horizon).trim() : '—';
+      if (!byHA[h]) byHA[h] = { q:0 };
+      var q = parseFloat(p.flowRate);
+      if (!isNaN(q) && q > 0) byHA[h].q += q;
+    });
+  }
+
+  var rows = horizKeys.map(function(h) {
+    var d = byH[h];
+    var pct = totalQ > 0 ? (d.q / totalQ * 100).toFixed(1) : '0.0';
+    var bw = Math.round(d.q / maxQ * 100);
+    var prevQ = (byHA[h]||{}).q || 0;
+    var diff = (!isSingle && prevQ > 0) ? (d.q - prevQ) / prevQ * 100 : null;
+    var dClr = diff !== null ? (diff > 5 ? '#d93025' : diff < -5 ? '#188038' : '#888') : '';
+    var dTxt = diff !== null
+      ? '<span style="color:' + dClr + ';font-weight:700">' + (diff>5?'▲+':diff<-5?'▼':'→') + Math.abs(diff).toFixed(0) + '%</span>'
+      : '';
+    return '<tr><td><b>' + escAttr(h) + '</b></td>' +
+      '<td style="text-align:center">' + d.count + '</td>' +
+      '<td style="min-width:100px">' +
+        '<div style="height:12px;background:#e8f0fe;border-radius:3px;overflow:hidden">' +
+          '<div style="width:' + bw + '%;height:100%;background:#1a73e8;border-radius:3px"></div>' +
+        '</div></td>' +
+      '<td style="text-align:right;font-weight:700;color:#1a73e8">' + d.q.toFixed(2) + '</td>' +
+      '<td style="text-align:right">' + pct + '%</td>' +
+      (!isSingle ? '<td style="text-align:right">' + dTxt + '</td>' : '') +
+    '</tr>';
+  }).join('');
+
+  return '<div class="sec-sub">Дебиты по горизонтам</div>' +
+    '<table style="font-size:11px;margin-bottom:16px"><thead><tr>' +
+      '<th>Горизонт</th><th style="text-align:center">Точек</th><th>Диаграмма Q</th>' +
+      '<th style="text-align:right">Q, л/с</th><th style="text-align:right">%</th>' +
+      (!isSingle ? '<th style="text-align:right">Δ к нед. А</th>' : '') +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// ── Анализ скважин (блок для аналитики) ──────────────────
+function buildWellAnalysisBlock(s, isSingle) {
+  var wells = ReportState.allWells || (typeof WellsState !== 'undefined' ? WellsState.list : []);
+  if (!wells.length) return '';
+  var measMap = (typeof WellsState !== 'undefined') ? WellsState.measurements : {};
+
+  function latestOnDate(wellId, date) {
+    var ms = (measMap[wellId]||[]).filter(function(m){ return (m.measurementDate||'').slice(0,10) <= date; });
+    if (!ms.length) return null;
+    return ms.reduce(function(a,b){ return (a.measurementDate||'') > (b.measurementDate||'') ? a : b; });
+  }
+
+  var wd = wells.map(function(w) {
+    var mB = latestOnDate(w.id, s.dateB);
+    var mA = isSingle ? null : latestOnDate(w.id, s.dateA);
+    return { w:w, mB:mB, mA:mA, qB:parseFloat((mB||{}).flowRate)||0, qA:mA?parseFloat(mA.flowRate)||0:0 };
+  }).filter(function(d){ return d.mB !== null; });
+  if (!wd.length) return '';
+
+  var activeCount = wells.filter(function(w){ return w.status==='Активная'; }).length;
+  var dryCount    = wells.filter(function(w){ return w.status==='Сухая'; }).length;
+  var totalQB     = wd.reduce(function(a,d){ return a+d.qB; }, 0);
+  var totalQA     = wd.reduce(function(a,d){ return a+d.qA; }, 0);
+  var dQ          = totalQB - totalQA;
+
+  var kpiHtml = '<div class="kpi-grid" style="margin-bottom:12px">' +
+    '<div class="kpi-card"><div class="kpi-val">' + wells.length + '</div>' +
+      '<div class="kpi-lbl">Скважин всего</div>' +
+      '<div class="kpi-sub">' + activeCount + ' акт. · ' + dryCount + ' сухих</div></div>' +
+    '<div class="kpi-card"><div class="kpi-val">' + totalQB.toFixed(2) + '<span style="font-size:12px"> м³/ч</span></div>' +
+      '<div class="kpi-lbl">Σ Q скважин</div><div class="kpi-sub">' + (totalQB/3.6).toFixed(2) + ' л/с</div></div>' +
+    (!isSingle && totalQA > 0
+      ? '<div class="kpi-card" style="' + (dQ>=0?'border-top:3px solid #d93025':'border-top:3px solid #188038') + '">' +
+          '<div class="kpi-val" style="color:' + (dQ>=0?'#d93025':'#188038') + '">' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(2) + '</div>' +
+          '<div class="kpi-lbl">Δ Q нед. А→Б, м³/ч</div></div>'
+      : '') +
+  '</div>';
+
+  wd.sort(function(a,b){ return b.qB - a.qB; });
+  var maxWQ = wd[0].qB || 1;
+  var WELL_ST_CLR = { 'Активная':'#188038','Иссякает':'#f9ab00','Сухая':'#d93025' };
+
+  var barsHtml = wd.slice(0, 8).map(function(d) {
+    var w = d.w, bw = Math.round(d.qB / maxWQ * 100);
+    var clr = WELL_ST_CLR[w.status] || '#888';
+    var delta = !isSingle && d.mA ? d.qB - d.qA : null;
+    var dTxt = delta !== null
+      ? ' <span style="font-size:10px;color:' + (delta>=0?'#d93025':'#188038') + ';font-weight:600">' +
+          (delta>=0?'▲+':'▼') + Math.abs(delta).toFixed(2) + '</span>'
+      : '';
+    return '<div style="display:grid;grid-template-columns:110px 1fr 72px;gap:8px;align-items:center;margin-bottom:5px">' +
+      '<div style="font-size:11px;font-weight:600;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escAttr(w.name) + '">' +
+        escAttr(w.name) + '</div>' +
+      '<div style="background:#f0f0f0;height:16px;border-radius:3px;overflow:hidden">' +
+        '<div style="width:' + bw + '%;height:100%;background:' + clr + ';border-radius:3px"></div></div>' +
+      '<div style="font-size:11px;text-align:right;font-weight:700;white-space:nowrap">' +
+        d.qB.toFixed(2) + ' м³/ч' + dTxt + '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="sec-sub">Анализ скважин</div>' + kpiHtml + barsHtml +
+    (wd.length > 8 ? '<div style="font-size:10px;color:#aaa;margin-top:6px">Показаны топ-8 из ' + wd.length + ' скважин с данными</div>' : '');
+}
+
 function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) {
   var STATUS_COLORS = { 'Новая':'#4f8dff','Активная':'#39d98a','Иссякает':'#f3bf4a','Пересохла':'#ff6b6b','Паводковая':'#a78bfa','Перелив':'#38bdf8' };
 
@@ -3040,9 +3320,16 @@ function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) 
     ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.recommendations) + '</div>'
     : '';
 
-  if (!anomaliesHtml && !statsHtml && !aiBlock) return '';
+  // Domain analysis blocks
+  var matrixHtml    = buildDomainStatusMatrix(ptsB);
+  var wallHtml      = buildWallDistribution(ptsB);
+  var horizBarsHtml = buildHorizonQBars(ptsB, ptsA, isSingle);
+  var wellAnalHtml  = buildWellAnalysisBlock(s, isSingle);
+
+  if (!matrixHtml && !wallHtml && !horizBarsHtml && !wellAnalHtml && !anomaliesHtml && !statsHtml && !aiBlock) return '';
 
   return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика</div>' +
+    matrixHtml + wallHtml + horizBarsHtml + wellAnalHtml +
     anomaliesHtml + statsHtml + aiBlock;
 }
 
