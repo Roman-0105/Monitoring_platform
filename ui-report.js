@@ -3320,16 +3320,9 @@ function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) 
     ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.recommendations) + '</div>'
     : '';
 
-  // Domain analysis blocks
-  var matrixHtml    = buildDomainStatusMatrix(ptsB);
-  var wallHtml      = buildWallDistribution(ptsB);
-  var horizBarsHtml = buildHorizonQBars(ptsB, ptsA, isSingle);
-  var wellAnalHtml  = buildWellAnalysisBlock(s, isSingle);
+  if (!anomaliesHtml && !statsHtml && !aiBlock) return '';
 
-  if (!matrixHtml && !wallHtml && !horizBarsHtml && !wellAnalHtml && !anomaliesHtml && !statsHtml && !aiBlock) return '';
-
-  return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика</div>' +
-    matrixHtml + wallHtml + horizBarsHtml + wellAnalHtml +
+  return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика — Статистика</div>' +
     anomaliesHtml + statsHtml + aiBlock;
 }
 
@@ -3480,17 +3473,17 @@ function buildReportHTML(s) {
 
   // ── DOMAIN DETAILS ──
   if (s.includeDomens) {
-    var domPageContent = '<div class="page">' +
-      '<div class="sec-head"><span class="sec-num">' + secNum + '</span> По доменам</div>';
+    var isLandscape = s.orientation === 'landscape';
 
+    // Page A: overview table for all domains (no cards)
+    var domOverviewContent = '<div class="sec-head"><span class="sec-num">' + secNum + '</span> По доменам</div>';
     domenKeys.forEach(function(dom) {
       var dA = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
       var dB = ptsB.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
       if (!dA.length && !dB.length) return;
       var qDA = dA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
       var qDB = dB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
-      var dd = qDB - qDA;
-
+      var dd  = qDB - qDA;
       var tableRows = dB.map(function(pb) {
         var pa = dA.find(function(p){ return p.pointNumber===pb.pointNumber; });
         var qa = pa ? parseFloat(pa.flowRate)||0 : null;
@@ -3508,8 +3501,7 @@ function buildReportHTML(s) {
           '<td>' + escAttr(pb.measureMethod||'—') + '</td>' +
         '</tr>';
       }).join('');
-
-      domPageContent += '<div class="domen-block">' +
+      domOverviewContent += '<div class="domen-block">' +
         '<div class="domen-hdr">' +
           '<div class="domen-hdr-name">' + escAttr(dom) + '</div>' +
           '<span class="domen-hdr-badge">' + (isSingle?dB.length:dA.length+'→'+dB.length) + ' точек</span>' +
@@ -3522,20 +3514,42 @@ function buildReportHTML(s) {
           '<th>Q нед. Б</th>' +
           (isSingle ? '' : '<th>Δ</th>') +
           '<th>Цвет</th><th>Метод</th>' +
-        '</tr></thead><tbody>' + tableRows + '</tbody></table>';
+        '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
+      '</div>';
+    });
+    pages.push('<div class="page">' + domOverviewContent + footer() + '</div>');
+    secNum++;
 
-      if ((s.includePhotos || s.includeHistory) && dB.length) {
-        var pointCards = dB.map(function(pb) {
-          var pa = dA.find(function(p){ return p.pointNumber===pb.pointNumber; });
+    // Pages B+: one page per domain with point cards (1 or 2 col)
+    if (s.includePhotos || s.includeHistory) {
+      domenKeys.forEach(function(dom) {
+        var dA2 = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
+        var dB2 = ptsB.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
+        if (!dB2.length) return;
+        var hasAnyCard = dB2.some(function(pb) {
+          var cache = ReportState.photoCache || {};
+          var hasPhoto = cache['pt_' + pb.pointNumber + '_0_b'] || cache['pt_' + pb.pointNumber + '_0_a'];
+          var hasHist  = ((ReportState.ptHistory||{})[String(pb.pointNumber)]||[]).length > 0;
+          return (s.includePhotos && hasPhoto) || (s.includeHistory && hasHist);
+        });
+        if (!hasAnyCard) return;
+        var qDB2 = dB2.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
+        var pointCards = dB2.map(function(pb) {
+          var pa = dA2.find(function(p){ return p.pointNumber===pb.pointNumber; });
           return buildPointCard(pb, pa||null, s);
         }).join('');
-        domPageContent += '<div style="padding:10px 14px;border-top:1px solid #e0e0e0;background:#fafbfc">' + pointCards + '</div>';
-      }
-      domPageContent += '</div>';
-    });
-    domPageContent += footer() + '</div>';
-    pages.push(domPageContent);
-    secNum++;
+        pages.push(
+          '<div class="page">' +
+            '<div class="sec-head"><span class="sec-num" style="font-size:9px">Д</span> ' + escAttr(dom) +
+              ' <span style="font-size:10px;font-weight:500;color:#555">· Q = ' + qDB2.toFixed(2) + ' л/с · ' + dB2.length + ' точек</span></div>' +
+            '<div style="' + (isLandscape ? 'display:grid;grid-template-columns:1fr 1fr;gap:14px;' : '') + 'padding:0">' +
+              pointCards +
+            '</div>' +
+            footer() +
+          '</div>'
+        );
+      });
+    }
   }
 
   // ── DITCHES ──
@@ -3637,7 +3651,23 @@ function buildReportHTML(s) {
     }
   }
 
-  // ── ANALYTICS ──
+  // ── ANALYTICS PAGE 1: Domain / wall / horizon / wells ──
+  var anlDomainHtml =
+    buildDomainStatusMatrix(ptsB) +
+    buildWallDistribution(ptsB) +
+    buildHorizonQBars(ptsB, ptsA, isSingle) +
+    buildWellAnalysisBlock(s, isSingle);
+  if (anlDomainHtml) {
+    pages.push(
+      '<div class="page">' +
+        '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика</div>' +
+        anlDomainHtml + footer() +
+      '</div>'
+    );
+    secNum++;
+  }
+
+  // ── ANALYTICS PAGE 2: Anomalies / Q-stats / AI ──
   var analyticsContent = buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum);
   if (analyticsContent) {
     pages.push('<div class="page">' + analyticsContent + footer() + '</div>');
@@ -3685,7 +3715,7 @@ function getReportCSS(theme, orientation) {
 
   /* PAGE LAYOUT */
   '.pages-wrap { padding: 32px 0 64px; display: flex; flex-direction: column; align-items: center; gap: 32px; }',
-  '.page { background: #fff; width: 794px; min-height: 1123px; box-shadow: 0 4px 24px rgba(0,0,0,.18); position: relative; overflow: hidden; padding: 48px 52px 60px; font-size: 13px; color: #1a1a2e; }',
+  '.page { background: #fff; width: ' + (orientation==='landscape'?'1123px':'794px') + '; min-height: ' + (orientation==='landscape'?'794px':'1123px') + '; box-shadow: 0 4px 24px rgba(0,0,0,.18); position: relative; overflow: hidden; padding: ' + (orientation==='landscape'?'36px 52px 48px':'48px 52px 60px') + '; font-size: 13px; color: #1a1a2e; }',
 
   /* WATERMARK */
   '.page::before { content: \'ВНУТРЕННИЙ\'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-45deg); font-size: 72px; font-weight: 800; color: rgba(220,53,69,.07); white-space: nowrap; pointer-events: none; z-index: 0; letter-spacing: .1em; }',
@@ -3701,7 +3731,7 @@ function getReportCSS(theme, orientation) {
   '.sec-sub { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #555; margin: 14px 0 8px; }',
 
   /* KPI CARDS */
-  '.kpi-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; margin-bottom: 20px; }',
+  '.kpi-grid { display: grid; grid-template-columns: repeat(' + (orientation==='landscape'?'4':'2') + ',1fr); gap: 12px; margin-bottom: 20px; }',
   '.kpi-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }',
   '.kpi-val { font-size: 26px; font-weight: 800; color: #1a73e8; line-height: 1; margin-bottom: 3px; }',
   '.kpi-lbl { font-size: 10px; color: #555; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }',
