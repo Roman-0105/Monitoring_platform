@@ -2068,7 +2068,7 @@ function buildHorizonTable(pts, label, color) {
 
   return '<div style="margin-top:10px">' +
     (label ? '<div style="font-size:11px;font-weight:600;color:' + (color||'#1a73e8') + ';margin-bottom:5px">' + escAttr(label) + '</div>' : '') +
-    '<table class="rp-table" style="width:100%">' +
+    '<table style="width:100%">' +
       '<thead><tr><th>Горизонт</th><th style="text-align:center">Точек</th>' +
         '<th style="text-align:right">Σ л/с</th><th style="text-align:right">Σ м³/ч</th>' +
         '<th style="text-align:right">Ср. л/с</th><th></th></tr></thead>' +
@@ -2384,33 +2384,6 @@ function buildPointCard(pb, pa, s) {
   '</div>';
 }
 
-// Фото точек (старый метод — оставляем для совместимости)
-function buildPhotosBlock(points) {
-  var cache = ReportState.photoCache || {};
-  var html = '';
-  (points || []).forEach(function(p) {
-    var b64 = cache['pt_' + p.pointNumber + '_0'];
-    if (!b64) { var raw = (p.photoUrls && p.photoUrls[0]) || p.photoUrl || ''; if (raw) b64 = raw; }
-    if (!b64) return;
-    html += '<div class="rp-photo-row">' +
-      '<div class="rp-photo-img-wrap"><img src="' + b64 + '" alt="Точка #' + escAttr(String(p.pointNumber)) + '" class="rp-photo-img">' +
-        '<div class="rp-photo-label">Точка #' + escAttr(String(p.pointNumber)) + '</div></div>' +
-      '<div class="rp-photo-info">' +
-        '<div class="rp-photo-info-title">Точка #' + escAttr(String(p.pointNumber)) + '</div>' +
-        '<table class="rp-photo-meta">' +
-          (p.status    ? '<tr><td>Статус</td><td>'       + escAttr(p.status)    + '</td></tr>' : '') +
-          (p.intensity ? '<tr><td>Интенсивность</td><td>'+ escAttr(p.intensity) + '</td></tr>' : '') +
-          '<tr><td>Q</td><td>' + (parseFloat(p.flowRate)||0).toFixed(2) + ' л/с</td></tr>' +
-          (p.waterColor ? '<tr><td>Цвет воды</td><td>'  + escAttr(p.waterColor) + '</td></tr>' : '') +
-        '</table>' +
-        (p.comment
-          ? '<div class="rp-photo-comment"><b>Комментарий:</b> ' + escAttr(p.comment) + '</div>'
-          : '<div class="rp-photo-comment rp-photo-comment--empty">Комментарий отсутствует</div>') +
-      '</div></div>';
-  });
-  return html ? '<div class="rp-photos-block">' + html + '</div>' : '';
-}
-
 // Фото канавы
 function buildDitchPhotos(d) {
   var cache = ReportState.photoCache || {};
@@ -2419,20 +2392,20 @@ function buildDitchPhotos(d) {
   urls.forEach(function(url, i) {
     var b64 = cache['dt_' + (d.id || d.ditchName) + '_' + i] || url;
     if (!b64) return;
-    html += '<div class="rp-photo-row">' +
-      '<div class="rp-photo-img-wrap"><img src="' + b64 + '" alt="' + escAttr(d.ditchName) + '" class="rp-photo-img">' +
-        '<div class="rp-photo-label">' + escAttr(d.ditchName) + ' · фото ' + (i+1) + '</div></div>' +
-      '<div class="rp-photo-info">' +
-        '<div class="rp-photo-info-title">' + escAttr(d.ditchName) + '</div>' +
-        '<table class="rp-photo-meta">' +
-          '<tr><td>Дата</td><td>' + fmtDate(d.monitoringDate) + '</td></tr>' +
-          '<tr><td>Статус</td><td>' + escAttr(d.status||'—') + '</td></tr>' +
-          '<tr><td>Q</td><td>' + (d.flowM3h!=null?d.flowM3h.toFixed(3)+' м³/ч':'—') + '</td></tr>' +
+    html += '<div class="photo-row">' +
+      '<div class="photo-img-wrap"><img src="' + b64 + '" alt="' + escAttr(d.ditchName) + '" class="photo-img">' +
+        '<div class="photo-img-lbl">' + escAttr(d.ditchName) + ' · фото ' + (i+1) + '</div></div>' +
+      '<div class="photo-info">' +
+        '<div class="photo-info-title">' + escAttr(d.ditchName) + '</div>' +
+        '<table style="font-size:11px;margin-bottom:8px;width:auto">' +
+          '<tr><td style="color:#888;width:90px;font-size:10px;text-transform:uppercase;padding:2px 6px 2px 0">Дата</td><td>' + fmtDate(d.monitoringDate) + '</td></tr>' +
+          '<tr><td style="color:#888;font-size:10px;text-transform:uppercase;padding:2px 6px 2px 0">Статус</td><td>' + escAttr(d.status||'—') + '</td></tr>' +
+          '<tr><td style="color:#888;font-size:10px;text-transform:uppercase;padding:2px 6px 2px 0">Q</td><td>' + (d.flowM3h!=null?d.flowM3h.toFixed(3)+' м³/ч':'—') + '</td></tr>' +
         '</table>' +
-        (d.comment ? '<div class="rp-photo-comment"><b>Комментарий:</b> ' + escAttr(d.comment) + '</div>' : '') +
+        (d.comment ? '<div class="photo-comment"><b>Комментарий:</b> ' + escAttr(d.comment) + '</div>' : '') +
       '</div></div>';
   });
-  return html ? '<div class="rp-photos-block">' + html + '</div>' : '';
+  return html ? '<div style="padding:10px 12px;border-top:1px solid #e0e0e0;display:flex;flex-direction:column;gap:10px">' + html + '</div>' : '';
 }
 
 // 2D профиль канавы
@@ -2486,8 +2459,8 @@ function buildDitch2DSVG(ditch) {
   var footer = '<text x="'+W/2+'" y="'+(H-2)+'" text-anchor="middle" font-size="9" fill="#666">'+
     'S='+S+' м²  Q='+Q+' м³/ч  v='+v+' м/с  hmax='+(maxH*100).toFixed(1)+' см  B='+B.toFixed(2)+' м</text>';
 
-  return '<div class="rp-ditch-svg-wrap">' +
-    '<div class="rp-ditch-svg-title">Профиль поперечного сечения</div>' +
+  return '<div style="padding:8px 12px;border-top:1px solid #e0e0e0">' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:6px;text-align:center">Профиль поперечного сечения</div>' +
     '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:'+W+'px;display:block;margin:0 auto">' +
       '<polygon points="'+groundPoly+'" fill="#d4a574" opacity=".25"/>' +
       '<polygon points="'+waterPoly+'" fill="#e8f4fd"/>' +
@@ -2514,8 +2487,8 @@ function buildDitchHistTable(name, hist) {
       '<td>' + (h.velocity!=null?h.velocity.toFixed(3):'—') + '</td>' +
       '<td>' + escAttr(h.worker||'—') + '</td></tr>';
   }).join('');
-  return '<div class="rp-ditch-hist"><div class="rp-section-sub">История замеров</div>' +
-    '<table class="rp-table"><thead><tr><th>Дата</th><th>S, м²</th><th>Q, м³/ч</th><th>v, м/с</th><th>Сотрудник</th></tr></thead>' +
+  return '<div style="padding:0 14px 14px"><div class="sec-sub">История замеров</div>' +
+    '<table><thead><tr><th>Дата</th><th>S, м²</th><th>Q, м³/ч</th><th>v, м/с</th><th>Сотрудник</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table></div>';
 }
 
@@ -2561,11 +2534,11 @@ function buildDewateringSection(s) {
 
   // KPI row
   var kpiHtml =
-    '<div class="rp-kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + sumps.length + '</div><div class="rp-kpi-label">Зумпфов</div></div>' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + activePumps.length + '</div><div class="rp-kpi-label">Работающих насосов</div></div>' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + Math.round(totalVol).toLocaleString('ru-RU') + '</div><div class="rp-kpi-label">Объём откачки, м³</div></div>' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + Object.keys(latestLevel).length + '</div><div class="rp-kpi-label">Зумпфов с замерами уровня</div></div>' +
+    '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">' +
+      '<div class="kpi-card"><div class="kpi-val">' + sumps.length + '</div><div class="kpi-lbl">Зумпфов</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val">' + activePumps.length + '</div><div class="kpi-lbl">Работающих насосов</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val">' + Math.round(totalVol).toLocaleString('ru-RU') + '</div><div class="kpi-lbl">Объём откачки, м³</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val">' + Object.keys(latestLevel).length + '</div><div class="kpi-lbl">Зумпфов с замерами уровня</div></div>' +
     '</div>';
 
   // Pumps table
@@ -2585,8 +2558,8 @@ function buildDewateringSection(s) {
   }).join('');
 
   var pumpsTable = pumpRows
-    ? '<div class="rp-section-sub">Насосы</div>' +
-      '<table class="rp-table"><thead><tr>' +
+    ? '<div class="sec-sub">Насосы</div>' +
+      '<table><thead><tr>' +
         '<th>Насос</th><th>Зумпф</th><th>Статус</th><th>Модель</th><th style="text-align:right">Объём, м³</th>' +
       '</tr></thead><tbody>' + pumpRows + '</tbody></table>'
     : '';
@@ -2606,8 +2579,8 @@ function buildDewateringSection(s) {
   }).join('');
 
   var wlTable = wlRows
-    ? '<div class="rp-section-sub" style="margin-top:14px">Отметки уровня воды в зумпфах</div>' +
-      '<table class="rp-table"><thead><tr>' +
+    ? '<div class="sec-sub" style="margin-top:14px">Отметки уровня воды в зумпфах</div>' +
+      '<table><thead><tr>' +
         '<th>Зумпф</th><th>Карьер</th><th>Дата замера</th>' +
         '<th style="text-align:right">Уровень</th><th style="text-align:right">Глубина</th>' +
       '</tr></thead><tbody>' + wlRows + '</tbody></table>'
@@ -2615,177 +2588,115 @@ function buildDewateringSection(s) {
 
   if (!kpiHtml && !pumpsTable && !wlTable) return '';
 
-  return '<section class="rp-section">' +
-    '<h2>Водоотлив: насосы и уровни воды</h2>' +
-    (s.dewDiagImg ? '<div style="margin-bottom:16px;text-align:center"><img src="' + s.dewDiagImg + '" style="max-width:100%;border-radius:8px;border:1px solid #dee2e6" alt="Схема водоотлива"></div>' : '') +
+  return (s.dewDiagImg ? '<div style="margin-bottom:16px;text-align:center"><img src="' + s.dewDiagImg + '" style="max-width:100%;border-radius:8px;border:1px solid #e0e0e0" alt="Схема водоотлива"></div>' : '') +
     '<div style="font-size:11px;color:#888;margin-bottom:10px">Период: ' +
       escHTML(dateFrom) + (dateFrom !== dateTo ? ' — ' + escHTML(dateTo) : '') +
     '</div>' +
-    kpiHtml + pumpsTable + wlTable +
-  '</section>';
+    kpiHtml + pumpsTable + wlTable;
 }
 
-// ── Титульная страница (зависит от макета) ────────────────
-function buildTitleHTML(s, isSingle) {
-  var layout = s.reportLayout || 'a';
-  var c = getThemeColors(s.reportTheme);
-
-  // Логотип
-  var logoHtml = s.logoBase64
-    ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" alt="logo">'
-    : '<div class="rp-title-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>';
-
-  var signatureHtml = s.includeSignature
-    ? '<div class="rp-signature-block">' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;text-align:left">' +
-          '<div><div class="rp-sig-line">________________________</div>' +
-            '<div class="rp-sig-label">Составил: ' + escHTML(s.author || '') + '</div>' +
-            '<div class="rp-sig-role">' + escHTML(s.position || '') + '</div></div>' +
-          '<div><div class="rp-sig-line">________________________</div>' +
-            '<div class="rp-sig-label">Утвердил: ' + escHTML(s.approverName || '') + '</div></div>' +
-        '</div></div>'
-    : '';
-
+// ── Титульная страница ────────────────────────────────────
+function buildTitleHTML(s, isSingle, footerHtml) {
   var periodText = isSingle
     ? 'Дата: ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escHTML(s.weekB) + ')' : '')
     : fmtDate(s.dateA) + ' (' + escHTML(s.weekA) + ') → ' + fmtDate(s.dateB) + ' (' + escHTML(s.weekB) + ')';
 
-  // ── Вариант C: бланк ГОСТ ──
-  if (layout === 'c') {
-    return '<div class="rp-title-page rp-title-c">' +
-      '<div class="rp-lh-top">' +
-        '<div class="rp-lh-logo">' + (s.logoBase64 ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" alt="logo">' : '<div class="rp-lh-logo-box">' + escHTML(s.quarryName || 'ЮРГ') + '</div>') + '</div>' +
-        '<div class="rp-lh-org">' +
-          '<div class="rp-lh-org-name">' + escHTML(s.quarryName || 'ЮРГ') + ' · Гидрогеологический мониторинг</div>' +
-          '<div class="rp-lh-org-sub">Объект ' + escHTML(s.objectName || '') + '</div>' +
-        '</div>' +
-        '<div class="rp-lh-docnum">' +
-          '<div class="rp-lh-label">Документ</div>' +
-          '<div class="rp-lh-num">№ v' + (s.reportVersion || 1) + '</div>' +
-          '<div class="rp-lh-date">' + fmtDate(s.dateReport) + '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="rp-lh-title-block">' +
-        '<div class="rp-lh-doctype">Технический отчёт</div>' +
-        '<div class="rp-lh-main">Отчёт по мониторингу подземных вод<br>' + escHTML(s.quarryName || 'ЮРГ') + ' · ' + escHTML(s.objectName || '') + '</div>' +
-        '<div class="rp-lh-period-box">' + periodText + '</div>' +
-      '</div>' +
-      '<div class="rp-lh-signers">' +
-        '<div><div class="rp-lh-role">Составил</div><div class="rp-lh-line"></div><div class="rp-lh-name">' + escHTML(s.author || '—') + ' · ' + escHTML(s.position || '') + '</div></div>' +
-        '<div><div class="rp-lh-role">Утвердил</div><div class="rp-lh-line"></div><div class="rp-lh-name">' + escHTML(s.approverName || '—') + '</div></div>' +
-      '</div>' +
-    '</div>';
-  }
+  var logoHtml = s.logoBase64
+    ? '<img src="' + s.logoBase64 + '" style="width:52px;height:52px;border-radius:10px;object-fit:cover;border:1px solid #e0e0e0" alt="logo">'
+    : '<div class="logo-box">' + escHTML((s.quarryName || 'ЮРГ').slice(0, 3).toUpperCase()) + '</div>';
 
-  // ── Вариант B: дашборд ──
-  if (layout === 'b') {
-    return '<div class="rp-title-page rp-title-b">' +
-      '<div class="rp-title-b-topbar">' +
-        (s.logoBase64
-          ? '<img src="' + s.logoBase64 + '" class="rp-title-logo-img" style="max-height:36px;border-radius:4px" alt="logo">'
-          : '<div class="rp-title-b-logo">' + escHTML(s.quarryName || 'ЮРГ') + '</div>') +
-        '<div><div class="rp-title-b-org-label">' + escHTML(s.quarryName || 'ЮРГ') + ' · Гидрогеологический мониторинг</div>' +
-          '<div class="rp-title-b-org-name">Объект ' + escHTML(s.objectName || '') + '</div></div>' +
-        '<div style="margin-left:auto;text-align:right">' +
-          '<div class="rp-title-b-vnum-label">Версия</div>' +
-          '<div class="rp-title-b-vnum">v' + (s.reportVersion || 1) + '</div>' +
+  var sigHtml = s.includeSignature
+    ? '<div class="sig-row">' +
+        '<div class="sig-block">' +
+          '<div class="sig-role">Составил</div>' +
+          '<div class="sig-name">' + escHTML(s.author || '—') + '</div>' +
+          '<div class="sig-title-sub">' + escHTML(s.position || '') + '</div>' +
+          '<div style="margin-top:16px;border-top:1px solid #ccc;width:160px;padding-top:4px;font-size:10px;color:#888">Подпись</div>' +
         '</div>' +
-      '</div>' +
-      '<div class="rp-title-b-bottom">' +
-        '<h1 class="rp-title-b-h1">Отчёт по мониторингу подземных вод</h1>' +
-        '<div class="rp-title-b-chips">' +
-          '<span class="rp-title-b-chip rp-title-b-chip--blue">📅 ' + periodText + '</span>' +
-          '<span class="rp-title-b-chip">👤 ' + escHTML(s.author || '—') + ' · ' + fmtDate(s.dateReport) + '</span>' +
+        '<div class="sig-block">' +
+          '<div class="sig-role">Утвердил</div>' +
+          '<div class="sig-name">' + escHTML(s.approverName || '—') + '</div>' +
+          '<div style="margin-top:16px;border-top:1px solid #ccc;width:160px;padding-top:4px;font-size:10px;color:#888">Подпись</div>' +
         '</div>' +
-      '</div>' +
-      signatureHtml +
-    '</div>';
-  }
+      '</div>'
+    : '';
 
-  // ── Варианты A и A+B: тёмная gradient-шапка ──
-  return '<div class="rp-title-page rp-title-a">' +
-    '<div class="rp-title-a-content">' +
+  var ptsB = ReportState.ptsB || [];
+  var qB = ptsB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); }, 0);
+  var weekLabel = s.weekB || getWeekNumber(s.dateB) || '';
+
+  return '<div class="page" id="page-title">' +
+    '<div class="title-header">' +
       logoHtml +
-      '<div class="rp-title-body">' +
-        '<div class="rp-title-org">Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Отдел гидрогеологии</div>' +
-        '<h1 class="rp-title-main">Отчёт по мониторингу<br>подземных вод</h1>' +
-        '<div class="rp-title-sub">Объект ' + escHTML(s.objectName || '') + '</div>' +
-        '<div class="rp-title-period">' + periodText + '</div>' +
-        '<div class="rp-title-meta">' +
-          '<div>Составил: <b>' + escHTML(s.author || '—') + '</b> · ' + escHTML(s.position || '') + '</div>' +
-          '<div>Дата: <b>' + fmtDate(s.dateReport) + '</b> · v' + (s.reportVersion || 1) + '</div>' +
-          (s.approverName ? '<div>Утверждает: <b>' + escHTML(s.approverName) + '</b></div>' : '') +
-        '</div>' +
+      '<div class="title-company">' +
+        '<div class="title-company-name">' + escHTML(s.quarryName || 'ЮРГ') + ' · ГИДРОГЕОЛОГИЧЕСКИЙ МОНИТОРИНГ</div>' +
+        '<div class="title-company-sub">' + escHTML(s.objectName || '') + ' · Подземные воды</div>' +
+      '</div>' +
+      '<div class="title-doc-meta">' +
+        '<strong>Документ №v' + (s.reportVersion || 1) + '</strong>' +
+        fmtDate(s.dateReport) +
       '</div>' +
     '</div>' +
-    signatureHtml +
+    '<div class="title-hr"></div>' +
+    '<div class="title-label">Технический отчёт</div>' +
+    '<div class="title-main">Отчёт по мониторингу подземных вод<br>' + escHTML(s.quarryName || 'ЮРГ') + (s.objectName ? ' · ' + escHTML(s.objectName) : '') + '</div>' +
+    '<div style="display:flex;justify-content:center">' +
+      '<div class="title-date-badge">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="#1a73e8" stroke-width="2"/><line x1="3" y1="9" x2="21" y2="9" stroke="#1a73e8" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke="#1a73e8" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="#1a73e8" stroke-width="2"/></svg>' +
+        periodText +
+      '</div>' +
+    '</div>' +
+    '<div style="margin:24px auto;max-width:500px;padding:20px 28px;border:1px solid #e0e0e0;border-radius:12px;text-align:center;background:#f8faff">' +
+      '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#888;margin-bottom:10px">Период отчёта</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">' +
+        '<div><div style="font-size:20px;font-weight:800;color:#1a73e8">' + ptsB.length + '</div><div style="font-size:10px;color:#555">Точек</div></div>' +
+        '<div><div style="font-size:20px;font-weight:800;color:#1a73e8">' + qB.toFixed(1) + '</div><div style="font-size:10px;color:#555">л/с суммарно</div></div>' +
+        '<div><div style="font-size:20px;font-weight:800;color:#1a73e8">' + escHTML(String(weekLabel)) + '</div><div style="font-size:10px;color:#555">Неделя</div></div>' +
+      '</div>' +
+    '</div>' +
+    sigHtml +
+    '<div class="title-blue-bar"></div>' +
+    (footerHtml || '') +
   '</div>';
 }
 
-// ── KPI-блок (зависит от макета) ──────────────────────────
+// ── KPI-блок ──────────────────────────────────────────────
 function buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB) {
-  var layout = s.reportLayout || 'a';
-  var dtQA = dtsA.reduce(function(a,d){ return a+(d.flowM3h||0); },0);
   var dtQB = dtsB.reduce(function(a,d){ return a+(d.flowM3h||0); },0);
-  var floodB = ptsB.filter(function(p){ return p.status==='Паводковая'||p.status==='Перелив'; }).length;
-  var floodA = ptsA.filter(function(p){ return p.status==='Паводковая'||p.status==='Перелив'; }).length;
-  var dFlood = floodB - floodA;
+  var qVals = ptsB.map(function(p){ return parseFloat(p.flowRate)||0; }).filter(function(q){ return q>0; });
+  var qMin = qVals.length ? Math.min.apply(null,qVals).toFixed(2) : '—';
+  var qMax = qVals.length ? Math.max.apply(null,qVals).toFixed(2) : '—';
+  var qSum = qVals.reduce(function(a,b){return a+b;},0);
+  var qAvg = qVals.length ? (qSum/qVals.length).toFixed(2) : '—';
+  var qStd = qVals.length >= 2
+    ? Math.sqrt(qVals.reduce(function(a,q){ return a+Math.pow(q-qSum/qVals.length,2); },0)/qVals.length).toFixed(2)
+    : '—';
+  var activeB = ptsB.filter(function(p){ return p.status==='Активная'||p.status==='Паводковая'||p.status==='Перелив'; }).length;
+  var newB    = ptsB.filter(function(p){ return p.status==='Новая'; }).length;
+  var dryB    = ptsB.filter(function(p){ return p.status==='Пересохла'; }).length;
+  var sub2 = !isSingle ? ((dQ>=0?'+':'')+dQ.toFixed(1)+' л/с к нед. А') : '';
 
-  if (layout === 'b' || layout === 'ab') {
-    // Цветные KPI-карточки
-    var cards = [
-      { icon:'💧', cls:'blue',  val: qB.toFixed(1) + ' л/с',        lbl:'Σ Q нед. Б',          sub: isSingle ? '' : 'нед. А: ' + qA.toFixed(1) },
-      { icon:'📈', cls: dQ>=0 ? 'red':'green',
-                               val: (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(1), lbl:'Изменение Δ л/с',   sub: (dQ>=0?'+':'')+((qA>0?(dQ/qA*100):0).toFixed(1))+'%' },
-      { icon:'⚠️', cls:'amber', val: String(floodB),                 lbl:'Паводковых точек',     sub: dFlood!==0?(dFlood>0?'▲+'+dFlood:'▼'+dFlood)+' vs нед.А':'' },
-      { icon:'✅', cls:'green2',val: String(ptsB.length),             lbl:'Точек замерено',       sub: '' },
-      { icon:'🏗',  cls:'purple',val: dtsB.length + ' / ' + dtQB.toFixed(0)+' м³/ч', lbl:'Канав / Σ Q канав', sub: '' },
-    ];
-    return '<div class="rp-kpi-cards">' +
-      cards.map(function(k){
-        return '<div class="rp-kpi-card rp-kpi-card--' + k.cls + '">' +
-          '<div class="rp-kpi-card-icon">' + k.icon + '</div>' +
-          '<div class="rp-kpi-card-val">' + k.val + '</div>' +
-          '<div class="rp-kpi-card-lbl">' + k.lbl + '</div>' +
-          (k.sub ? '<div class="rp-kpi-card-sub">' + k.sub + '</div>' : '') +
-        '</div>';
-      }).join('') +
-    '</div>';
-  }
-
-  // Вариант A и C: горизонтальный KPI-бар
-  if (isSingle) {
-    return '<div class="rp-kpi-grid">' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsB.length + '</div><div class="rp-kpi-label">Точек мониторинга</div></div>' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + qB.toFixed(1) + ' <span style="font-size:13px">л/с</span></div><div class="rp-kpi-label">Суммарный водоприток</div></div>' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + floodB + '</div><div class="rp-kpi-label">Активных/паводковых</div></div>' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsB.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
-      '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQB.toFixed(1) + ' <span style="font-size:13px">м³/ч</span></div><div class="rp-kpi-label">ΣQ канав</div></div>' +
-    '</div>';
-  }
-  var trend = dQ >= 0 ? 'rp-kpi--up' : 'rp-kpi--down';
-  return '<div class="rp-kpi-compare">' +
-    '<div class="rp-kpi-compare-week rp-kpi-compare-week--a">' +
-      '<div class="rp-kpi-compare-label">Нед. А · ' + fmtDate(s.dateA) + '</div>' +
-      '<div class="rp-kpi-grid2">' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsA.length + '</div><div class="rp-kpi-label">Точек</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + qA.toFixed(1) + '</div><div class="rp-kpi-label">Q л/с</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsA.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQA.toFixed(1) + '</div><div class="rp-kpi-label">Q канав м³/ч</div></div>' +
-      '</div></div>' +
-    '<div class="rp-kpi-arrow">' +
-      '<div style="font-size:20px;color:#aaa">→</div>' +
-      '<div class="rp-kpi ' + trend + '" style="min-width:70px;text-align:center">' +
-        '<div class="rp-kpi-val" style="font-size:15px">' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(1) + '</div>' +
-        '<div class="rp-kpi-label">Δ л/с</div></div></div>' +
-    '<div class="rp-kpi-compare-week rp-kpi-compare-week--b">' +
-      '<div class="rp-kpi-compare-label" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + '</div>' +
-      '<div class="rp-kpi-grid2">' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + ptsB.length + '</div><div class="rp-kpi-label">Точек</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + qB.toFixed(1) + '</div><div class="rp-kpi-label">Q л/с</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtsB.length + '</div><div class="rp-kpi-label">Канав</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + dtQB.toFixed(1) + '</div><div class="rp-kpi-label">Q канав м³/ч</div></div>' +
-      '</div></div>' +
+  return '<div class="kpi-grid">' +
+    '<div class="kpi-card">' +
+      '<div class="kpi-val">' + ptsB.length + '</div>' +
+      '<div class="kpi-lbl">Точек мониторинга</div>' +
+      '<div class="kpi-sub">' + activeB + ' активных' + (newB?' · '+newB+' новых':'') + '</div>' +
+    '</div>' +
+    '<div class="kpi-card">' +
+      '<div class="kpi-val">' + qB.toFixed(1) + '</div>' +
+      '<div class="kpi-lbl">л/с Суммарный водоприток</div>' +
+      (sub2 ? '<div class="kpi-sub">' + sub2 + '</div>' : '') +
+    '</div>' +
+    '<div class="kpi-card">' +
+      '<div class="kpi-val">' + activeB + '</div>' +
+      '<div class="kpi-lbl">Активных точек</div>' +
+      '<div class="kpi-sub">' + (newB?newB+' Новая':'') + (dryB?(newB?' · ':'')+dryB+' Пересохла':'') + '</div>' +
+    '</div>' +
+    '<div class="kpi-card">' +
+      '<div class="kpi-val" style="font-size:18px">' + qMin + ' / ' + qMax + '</div>' +
+      '<div class="kpi-lbl">Q min / max, л/с</div>' +
+      '<div class="kpi-sub">σ = ' + qStd + ' · avg = ' + qAvg + '</div>' +
+    '</div>' +
   '</div>';
 }
 
@@ -2824,17 +2735,17 @@ function buildWellsSection(s, isSingle, secNum) {
   var dQ = totalQB - totalQA;
   var activeCount = wellData.filter(function(d){ return d.w.status === 'Активная'; }).length;
 
-  var kpiHtml = '<div class="rp-kpi-grid" style="margin-bottom:14px">' +
-    '<div class="rp-kpi"><div class="rp-kpi-val">' + wellData.length + '</div><div class="rp-kpi-label">Скважин с данными</div></div>' +
-    '<div class="rp-kpi"><div class="rp-kpi-val">' + activeCount + '</div><div class="rp-kpi-label">Активных</div></div>' +
-    '<div class="rp-kpi"><div class="rp-kpi-val">' + totalQB.toFixed(2) + ' <span style="font-size:12px">м³/ч</span></div>' +
-      '<div class="rp-kpi-label">Σ Q' + (isSingle ? '' : ' нед. Б') + '</div></div>' +
-    '<div class="rp-kpi"><div class="rp-kpi-val">' + (totalQB/3.6).toFixed(2) + ' <span style="font-size:12px">л/с</span></div>' +
-      '<div class="rp-kpi-label">Σ Q, л/с</div></div>' +
+  var kpiHtml = '<div class="kpi-grid" style="margin-bottom:14px">' +
+    '<div class="kpi-card"><div class="kpi-val">' + wellData.length + '</div><div class="kpi-lbl">Скважин с данными</div></div>' +
+    '<div class="kpi-card"><div class="kpi-val">' + activeCount + '</div><div class="kpi-lbl">Активных</div></div>' +
+    '<div class="kpi-card"><div class="kpi-val">' + totalQB.toFixed(2) + ' <span style="font-size:12px">м³/ч</span></div>' +
+      '<div class="kpi-lbl">Σ Q' + (isSingle ? '' : ' нед. Б') + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-val">' + (totalQB/3.6).toFixed(2) + ' <span style="font-size:12px">л/с</span></div>' +
+      '<div class="kpi-lbl">Σ Q, л/с</div></div>' +
     (!isSingle
-      ? '<div class="rp-kpi ' + (dQ>=0?'rp-kpi--up':'rp-kpi--down') + '">' +
-          '<div class="rp-kpi-val">' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(2) + '</div>' +
-          '<div class="rp-kpi-label">Δ Q, м³/ч</div></div>'
+      ? '<div class="kpi-card" style="' + (dQ>=0?'border-top:3px solid #d93025':'border-top:3px solid #188038') + '">' +
+          '<div class="kpi-val" style="color:' + (dQ>=0?'#d93025':'#188038') + '">' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(2) + '</div>' +
+          '<div class="kpi-lbl">Δ Q, м³/ч</div></div>'
       : '') +
   '</div>';
 
@@ -2855,7 +2766,7 @@ function buildWellsSection(s, isSingle, secNum) {
       (!isSingle ? '<td style="text-align:right">' + (qa !== null ? qa.toFixed(2) : '—') + '</td>' : '') +
       '<td style="text-align:right;font-weight:700;color:#1a73e8">' + qb.toFixed(2) + '</td>' +
       (!isSingle
-        ? '<td class="' + (delta!==null?(delta>=0?'rp-up':'rp-down'):'') + '">' +
+        ? '<td style="color:' + (delta!==null?(delta>=0?'#d93025':'#188038'):'') + ';font-weight:600">' +
             (delta!==null ? (delta>=0?'▲+':'▼') + Math.abs(delta).toFixed(2) : '—') + '</td>'
         : '') +
       '<td style="text-align:right;color:' + (isExact?'#555':'#f9ab00') + ';font-size:10px">' +
@@ -2863,9 +2774,9 @@ function buildWellsSection(s, isSingle, secNum) {
     '</tr>';
   }).join('');
 
-  return '<section class="rp-section"><h2>' + secNum + '. Горизонтальные скважины</h2>' +
+  return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Горизонтальные скважины</div>' +
     kpiHtml +
-    '<table class="rp-table"><thead><tr>' +
+    '<table><thead><tr>' +
       '<th>Скважина</th><th>Домен</th><th>Участок</th><th>Статус</th>' +
       '<th style="text-align:right">Глубина</th>' +
       (!isSingle ? '<th style="text-align:right">Q нед. А, м³/ч</th>' : '') +
@@ -2873,8 +2784,7 @@ function buildWellsSection(s, isSingle, secNum) {
       (!isSingle ? '<th>Δ, м³/ч</th>' : '') +
       '<th style="text-align:right">Дата замера</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
-    '<div style="font-size:10px;color:#aaa;margin-top:6px">↑ — ближайший замер до выбранной даты</div>' +
-  '</section>';
+    '<div style="font-size:10px;color:#aaa;margin-top:6px">↑ — ближайший замер до выбранной даты</div>';
 }
 
 // ── Горизонтальный бар-чарт по доменам ───────────────────
@@ -3090,8 +3000,8 @@ function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) 
           '<td>' + risk + '</td>' +
         '</tr>';
       }).join('');
-      anomaliesHtml = '<div class="rp-section-sub">Аномалии — изменение Q ≥ 30%</div>' +
-        '<table class="rp-table" style="margin-bottom:14px"><thead><tr>' +
+      anomaliesHtml = '<div class="sec-sub">Аномалии — изменение Q ≥ 30%</div>' +
+        '<table style="margin-bottom:14px"><thead><tr>' +
           '<th>№</th><th>Домен</th><th>Статус</th>' +
           '<th style="text-align:right">Q нед. А, л/с</th><th style="text-align:right">Q нед. Б, л/с</th>' +
           '<th style="text-align:right">Δ л/с</th><th style="text-align:right">Δ %</th><th>Оценка</th>' +
@@ -3115,12 +3025,12 @@ function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) 
         '<span style="width:8px;height:8px;border-radius:50%;background:' + (STATUS_COLORS[st]||'#888') + ';flex-shrink:0"></span>' +
         '<b>' + byStatus[st] + '</b> ' + escAttr(st) + '</span>';
     }).join('');
-    statsHtml = '<div class="rp-section-sub" style="margin-top:14px">Статистика Q ' + (isSingle ? '· ' + fmtDate(s.dateB) : '· нед. Б') + '</div>' +
-      '<div class="rp-kpi-grid" style="margin-bottom:10px">' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + qMin.toFixed(2) + '</div><div class="rp-kpi-label">Min Q, л/с</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + qMax.toFixed(2) + '</div><div class="rp-kpi-label">Max Q, л/с</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + qAvg.toFixed(2) + '</div><div class="rp-kpi-label">Ср. Q, л/с</div></div>' +
-        '<div class="rp-kpi"><div class="rp-kpi-val">' + qStd.toFixed(2) + '</div><div class="rp-kpi-label">Ст. откл. σ</div></div>' +
+    statsHtml = '<div class="sec-sub" style="margin-top:14px">Статистика Q ' + (isSingle ? '· ' + fmtDate(s.dateB) : '· нед. Б') + '</div>' +
+      '<div class="kpi-grid" style="margin-bottom:10px">' +
+        '<div class="kpi-card"><div class="kpi-val">' + qMin.toFixed(2) + '</div><div class="kpi-lbl">Min Q, л/с</div></div>' +
+        '<div class="kpi-card"><div class="kpi-val">' + qMax.toFixed(2) + '</div><div class="kpi-lbl">Max Q, л/с</div></div>' +
+        '<div class="kpi-card"><div class="kpi-val">' + qAvg.toFixed(2) + '</div><div class="kpi-lbl">Ср. Q, л/с</div></div>' +
+        '<div class="kpi-card"><div class="kpi-val">' + qStd.toFixed(2) + '</div><div class="kpi-lbl">Ст. откл. σ</div></div>' +
       '</div>' +
       '<div style="margin-bottom:12px">' + statusChips + '</div>';
   }
@@ -3132,10 +3042,8 @@ function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) 
 
   if (!anomaliesHtml && !statsHtml && !aiBlock) return '';
 
-  return '<section class="rp-section">' +
-    '<h2>' + secNum + '. Аналитика</h2>' +
-    anomaliesHtml + statsHtml + aiBlock +
-  '</section>';
+  return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика</div>' +
+    anomaliesHtml + statsHtml + aiBlock;
 }
 
 // ── Основной HTML отчёта ──────────────────────────────────
@@ -3148,12 +3056,10 @@ function buildReportHTML(s) {
 
   var qA = ptsA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
   var qB = ptsB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
-  var dtQA = dtsA.reduce(function(a,d){ return a+(d.flowM3h||0); },0);
-  var dtQB = dtsB.reduce(function(a,d){ return a+(d.flowM3h||0); },0);
   var dQ = qB - qA;
 
-  var STATUS_COLORS = { 'Новая':'#4f8dff','Активная':'#39d98a','Иссякает':'#f3bf4a','Пересохла':'#ff6b6b','Паводковая':'#a78bfa','Перелив':'#38bdf8' };
-  var INTENS_COLORS = { 'Слабая (капёж)':'#8bc8ff','Умеренная':'#39d98a','Сильная (поток)':'#f3bf4a','Очень сильная':'#ff8a4a' };
+  var STATUS_COLORS = { 'Новая':'#4285f4','Активная':'#34a853','Иссякает':'#f9ab00','Пересохла':'#ea4335','Паводковая':'#a78bfa','Перелив':'#38bdf8' };
+  var INTENS_COLORS = { 'Слабая (капёж)':'#93c5fd','Умеренная':'#34a853','Сильная (поток)':'#f9ab00','Очень сильная':'#ea4335' };
   var STATUSES  = ['Новая','Активная','Иссякает','Пересохла','Паводковая','Перелив'];
   var INTENSITIES = ['Слабая (капёж)','Умеренная','Сильная (поток)','Очень сильная'];
 
@@ -3163,468 +3069,457 @@ function buildReportHTML(s) {
     return r;
   }
 
-  // ── Титул
-  var title = buildTitleHTML(s, isSingle);
+  var pageNum = 0;
+  function footer() {
+    pageNum++;
+    return '<div class="page-footer">' +
+      '<span>' + escHTML(s.quarryName||'ЮРГ') + ' · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</span>' +
+      '<span>v' + (s.reportVersion||1) + ' | Стр. ' + pageNum + '</span>' +
+    '</div>';
+  }
 
-  // ── Сводка
-  var summaryAI = ai.error
-    ? '<div class="rp-ai-text" style="color:#d93025"><span class="rp-ai-badge" style="background:#d93025">AI</span>⚠ ' + escHTML(ai.error) + '</div>'
+  // ── PAGE 1: Title ──
+  var pages = [buildTitleHTML(s, isSingle, footer())];
+
+  // ── PAGE 2: Summary ──
+  var aiSummaryHtml = ai.error
+    ? '<div class="rp-ai-text" style="border-left-color:#d93025"><span class="rp-ai-badge" style="background:#d93025">AI</span>⚠ ' + escHTML(ai.error) + '</div>'
     : ai.summary ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.summary) + '</div>' : '';
 
-  var summaryContent = buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB);
-  // Сравнительные диаграммы (только для compare + layout не-B/AB)
-  var summaryCharts = '';
-  var layout = s.reportLayout || 'a';
-  if (!isSingle && layout !== 'b' && layout !== 'ab') {
-    summaryCharts =
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">' +
-        '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:12px">' +
-          '<div style="font-size:11px;font-weight:600;margin-bottom:8px">Статус — нед. А (' + ptsA.length + ')</div>' +
-          buildDonutSVG(countBy(ptsA,'status'), STATUSES, STATUS_COLORS, ptsA.length) + '</div>' +
-        '<div style="background:#f8f9fa;border:2px solid #1a73e8;border-radius:8px;padding:12px">' +
-          '<div style="font-size:11px;font-weight:600;color:#1a73e8;margin-bottom:8px">Статус — нед. Б (' + ptsB.length + ')</div>' +
-          buildDonutSVG(countBy(ptsB,'status'), STATUSES, STATUS_COLORS, ptsB.length) + '</div>' +
-        '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:12px">' +
-          '<div style="font-size:11px;font-weight:600;margin-bottom:8px">Интенсивность — нед. А</div>' +
-          buildDonutSVG(countBy(ptsA,'intensity'), INTENSITIES, INTENS_COLORS, ptsA.length) + '</div>' +
-        '<div style="background:#f8f9fa;border:2px solid #1a73e8;border-radius:8px;padding:12px">' +
-          '<div style="font-size:11px;font-weight:600;color:#1a73e8;margin-bottom:8px">Интенсивность — нед. Б</div>' +
-          buildDonutSVG(countBy(ptsB,'intensity'), INTENSITIES, INTENS_COLORS, ptsB.length) + '</div>' +
-      '</div>';
-  }
-
-  // Горизонты
-  var horizonContent = '';
-  if (isSingle) {
-    horizonContent = buildHorizonTable(ptsB, '', '#1a73e8');
-  } else {
-    horizonContent =
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-        buildHorizonTable(ptsA, 'Нед. А · ' + fmtDate(s.dateA), '#888') +
-        buildHorizonTable(ptsB, 'Нед. Б · ' + fmtDate(s.dateB), '#1a73e8') +
-      '</div>';
-  }
-
-  // Домены (таблица)
   var domenSet = {}, domenKeys = [];
   ptsA.concat(ptsB).forEach(function(p){ var d=p.domain||p.domen||'—'; if(!domenSet[d]){domenSet[d]=1;domenKeys.push(d);} });
   domenKeys.sort();
-  var domenRows = domenKeys.map(function(dom) {
-    var dA = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
-    var dB = ptsB.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
-    var qDA = dA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
-    var qDB = dB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
-    var dd  = qDB - qDA;
-    if (isSingle) {
-      return '<tr><td><b>' + escAttr(dom) + '</b></td>' +
-        '<td style="text-align:center">' + dB.length + '</td>' +
-        '<td style="text-align:right;color:#1a73e8;font-weight:600">' + qDB.toFixed(2) + '</td></tr>';
-    }
-    return '<tr><td><b>' + escAttr(dom) + '</b></td>' +
-      '<td style="text-align:center">' + dA.length + '</td>' +
-      '<td style="text-align:right">' + qDA.toFixed(2) + '</td>' +
-      '<td style="text-align:center">' + dB.length + '</td>' +
-      '<td style="text-align:right;color:#1a73e8;font-weight:600">' + qDB.toFixed(2) + '</td>' +
-      '<td class="' + (dd>=0?'rp-up':'rp-down') + '">' + (dd>=0?'+':'') + dd.toFixed(2) + '</td></tr>';
+
+  var donutsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">' +
+    '<div style="border:1px solid #e0e0e0;border-radius:8px;padding:14px">' +
+      '<div class="sec-sub" style="margin-top:0">Статус точек</div>' +
+      buildDonutSVG(countBy(ptsB,'status'), STATUSES, STATUS_COLORS, ptsB.length) +
+    '</div>' +
+    '<div style="border:1px solid #e0e0e0;border-radius:8px;padding:14px">' +
+      '<div class="sec-sub" style="margin-top:0">По горизонтам (Q, л/с)</div>' +
+      buildHorizonTable(ptsB, '', '#1a73e8') +
+    '</div>' +
+  '</div>';
+
+  var totalQ = ptsB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); }, 0);
+
+  var byH = {};
+  ptsB.forEach(function(p) {
+    var h = (p.horizon && String(p.horizon).trim()) ? String(p.horizon).trim() : '—';
+    if (!byH[h]) byH[h] = {count:0, total:0};
+    byH[h].count++;
+    var f = parseFloat(p.flowRate);
+    if (!isNaN(f)) byH[h].total += f;
+  });
+  var horizKeys = Object.keys(byH).sort(function(a,b){ return (byH[b]||{total:0}).total - (byH[a]||{total:0}).total; });
+  var horizRows = horizKeys.map(function(h) {
+    var d = byH[h];
+    var pct = totalQ > 0 ? (d.total/totalQ*100).toFixed(1) : '0.0';
+    return '<tr><td><strong>' + escAttr(h) + '</strong></td><td>' + d.count + '</td>' +
+      '<td><strong>' + d.total.toFixed(2) + '</strong></td><td>' + pct + '%</td></tr>';
   }).join('');
 
-  var domainBarsHtml = buildDomainBarsChart(ptsA, ptsB, isSingle);
-  var topChangesHtml = isSingle ? '' : buildTopChangesChart(ptsA, ptsB);
-  var timelineHtml   = buildSummaryTimeline(s);
+  var domenSummaryRows = domenKeys.map(function(dom) {
+    var dPts = ptsB.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
+    var dQdom = dPts.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); }, 0);
+    var pct = totalQ > 0 ? (dQdom/totalQ*100).toFixed(1) : '0.0';
+    return '<tr><td><strong>' + escAttr(dom) + '</strong></td><td>' + dPts.length + '</td>' +
+      '<td><strong>' + dQdom.toFixed(2) + '</strong></td><td>' + pct + '%</td></tr>';
+  }).join('');
 
-  var summary = '<section class="rp-section"><h2>1. Итоговая сводка</h2>' +
-    summaryAI + summaryContent + domainBarsHtml + topChangesHtml + summaryCharts + timelineHtml +
-    '<div class="rp-section-sub" style="margin-top:14px">Водоприток по горизонтам / уступам</div>' +
-    horizonContent +
-    (domenRows ? '<div class="rp-section-sub" style="margin-top:14px">Водоприток по доменам</div>' +
-      '<table class="rp-table"><thead><tr><th>Домен</th>' +
-        (isSingle ? '' : '<th>Точек А</th><th>Q нед. А, л/с</th>') +
-        '<th>Точек Б</th><th>Q нед. Б, л/с</th>' +
-        (isSingle ? '' : '<th>Δ, л/с</th>') + '</tr></thead><tbody>' +
-      domenRows + '</tbody></table>' : '') +
-  '</section>';
+  var summaryTablesHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+    '<div>' +
+      '<div class="sec-sub">Сводка по горизонтам</div>' +
+      '<table><thead><tr><th>Горизонт</th><th>Точек</th><th>Q, л/с</th><th>%</th></tr></thead><tbody>' +
+      horizRows +
+      '<tr style="background:#e8f0fe"><td><strong>Итого</strong></td><td><strong>' + ptsB.length + '</strong></td>' +
+        '<td><strong>' + qB.toFixed(2) + '</strong></td><td>100%</td></tr>' +
+      '</tbody></table>' +
+    '</div>' +
+    '<div>' +
+      '<div class="sec-sub">Сводка по доменам</div>' +
+      '<table><thead><tr><th>Домен</th><th>Точек</th><th>Q, л/с</th><th>%</th></tr></thead><tbody>' +
+      domenSummaryRows +
+      '<tr style="background:#e8f0fe"><td><strong>Итого</strong></td><td><strong>' + ptsB.length + '</strong></td>' +
+        '<td><strong>' + qB.toFixed(2) + '</strong></td><td>100%</td></tr>' +
+      '</tbody></table>' +
+    '</div>' +
+  '</div>';
 
-  // ── Схемы карьера
-  var mapSection = '';
+  pages.push(
+    '<div class="page">' +
+      '<div class="sec-head"><span class="sec-num">1</span> Итоговая сводка' +
+        (isSingle ? ' — ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escHTML(s.weekB) + ')' : '') :
+          ' — нед. А: ' + fmtDate(s.dateA) + ' / нед. Б: ' + fmtDate(s.dateB)) + '</div>' +
+      aiSummaryHtml +
+      buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB) +
+      donutsHtml +
+      buildDomainBarsChart(ptsA, ptsB, isSingle) +
+      (isSingle ? '' : buildTopChangesChart(ptsA, ptsB)) +
+      buildSummaryTimeline(s) +
+      summaryTablesHtml +
+      footer() +
+    '</div>'
+  );
+
+  // ── MAP PAGE ──
+  var secNum = 2;
   if (s.includeMap && (imgs.imgA || imgs.imgB)) {
     if (isSingle && imgs.imgB) {
-      mapSection = '<section class="rp-section"><h2>2. Схема карьера ' + escHTML(s.quarryName) + '</h2>' +
-        '<div class="rp-map-wrap"><img src="' + imgs.imgB + '" alt="Схема" style="width:100%;border:1px solid #dee2e6;border-radius:4px">' +
-        '<div class="rp-map-caption">Рис. 1. Схема карьера · ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')</div></div></section>';
+      pages.push(
+        '<div class="page">' +
+          '<div class="sec-head"><span class="sec-num" style="font-size:9px">M</span> Схема карьера — ' + escHTML(s.quarryName||'') + ' · ' + fmtDate(s.dateB) + '</div>' +
+          '<div class="map-wrap"><img src="' + imgs.imgB + '" alt="Схема" style="width:100%;border:1px solid #e0e0e0;border-radius:4px">' +
+            '<div class="map-caption">Рис. 1. Схема карьера · ' + fmtDate(s.dateB) + ' (' + escHTML(s.weekB) + ')</div></div>' +
+          footer() +
+        '</div>'
+      );
     } else {
-      mapSection = '<section class="rp-section"><h2>2. Схемы карьера ' + escHTML(s.quarryName) + ' — сравнение</h2>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          (imgs.imgA ? '<div class="rp-map-wrap"><img src="' + imgs.imgA + '" alt="Нед. А" style="width:100%;border:1px solid #dee2e6;border-radius:4px">' +
-            '<div class="rp-map-caption">Нед. А · ' + fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ')</div></div>'
-            : '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;padding:40px;text-align:center;color:#aaa;font-size:12px">Схема нед. А не загружена</div>') +
-          (imgs.imgB ? '<div class="rp-map-wrap"><img src="' + imgs.imgB + '" alt="Нед. Б" style="width:100%;border:2px solid #1a73e8;border-radius:4px">' +
-            '<div class="rp-map-caption" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')</div></div>'
-            : '<div style="background:#e8f0fe;border:2px solid #1a73e8;border-radius:4px;padding:40px;text-align:center;color:#1a73e8;font-size:12px">Схема нед. Б не загружена</div>') +
-        '</div></section>';
+      pages.push(
+        '<div class="page">' +
+          '<div class="sec-head"><span class="sec-num" style="font-size:9px">M</span> Схемы карьера — сравнение нед. А / нед. Б</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
+            (imgs.imgA ? '<div class="map-wrap"><img src="' + imgs.imgA + '" alt="Нед.А" style="width:100%;border:1px solid #e0e0e0;border-radius:4px"><div class="map-caption">Нед. А · ' + fmtDate(s.dateA) + ' (' + escHTML(s.weekA) + ')</div></div>'
+              : '<div style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;padding:40px;text-align:center;color:#aaa;font-size:12px">Схема нед. А не загружена</div>') +
+            (imgs.imgB ? '<div class="map-wrap"><img src="' + imgs.imgB + '" alt="Нед.Б" style="width:100%;border:2px solid #1a73e8;border-radius:4px"><div class="map-caption" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + ' (' + escHTML(s.weekB) + ')</div></div>'
+              : '<div style="background:#e8f0fe;border:2px solid #1a73e8;border-radius:4px;padding:40px;text-align:center;color:#1a73e8;font-size:12px">Схема нед. Б не загружена</div>') +
+          '</div>' +
+          footer() +
+        '</div>'
+      );
     }
+    secNum++;
   }
 
-  // ── По доменам (детально)
-  var domensSection = '';
+  // ── DOMAIN DETAILS ──
   if (s.includeDomens) {
-    var n = mapSection ? 3 : 2;
-    domensSection = '<section class="rp-section"><h2>' + n + '. По доменам</h2>';
+    var domPageContent = '<div class="page">' +
+      '<div class="sec-head"><span class="sec-num">' + secNum + '</span> По доменам</div>';
+
     domenKeys.forEach(function(dom) {
       var dA = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
       var dB = ptsB.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
       if (!dA.length && !dB.length) return;
       var qDA = dA.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
       var qDB = dB.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
-      var dd  = qDB - qDA;
-      // Сводная строка домена
-      var domHeader = '<div class="rp-domen-block">' +
-        '<div class="rp-domen-header">' +
-          '<span class="rp-domen-name">' + escAttr(dom) + '</span>' +
-          '<span class="rp-domen-badge">' + (isSingle?dB.length:dA.length+'→'+dB.length) + ' точек</span>' +
-          '<span class="rp-domen-q">Q = ' + qDB.toFixed(2) + ' л/с</span>' +
-          (!isSingle && qDA>0 ? '<span class="rp-delta ' + (dd>=0?'up':'down') + '">' + (dd>=0?'▲+':'▼') + dd.toFixed(2) + ' л/с</span>' : '') +
-        '</div>';
+      var dd = qDB - qDA;
 
-      // Сводная таблица точек домена
       var tableRows = dB.map(function(pb) {
         var pa = dA.find(function(p){ return p.pointNumber===pb.pointNumber; });
         var qa = pa ? parseFloat(pa.flowRate)||0 : null;
         var qb = parseFloat(pb.flowRate)||0;
-        var delta = qa!==null ? qb-qa : null;
+        var delta = qa !== null ? qb - qa : null;
         return '<tr>' +
           '<td><b>' + escAttr(String(pb.pointNumber)) + '</b></td>' +
           '<td>' + escAttr(pb.status||'—') + '</td>' +
           '<td>' + escAttr(pb.intensity||'—') + '</td>' +
           (isSingle ? '' : '<td>' + (qa!==null?qa.toFixed(2):'—') + '</td>') +
           '<td><b>' + qb.toFixed(2) + '</b></td>' +
-          (isSingle ? '' : '<td class="' + (delta!==null?(delta>=0?'rp-up':'rp-down'):'') + '">' + (delta!==null?(delta>=0?'+':'')+delta.toFixed(2):'—') + '</td>') +
+          (isSingle ? '' : '<td style="color:' + (delta!==null?(delta>=0?'#d93025':'#188038'):'') + ';font-weight:600">' +
+            (delta!==null?(delta>=0?'▲+':'▼')+Math.abs(delta).toFixed(2):'—') + '</td>') +
           '<td>' + escAttr(pb.waterColor||'—') + '</td>' +
           '<td>' + escAttr(pb.measureMethod||'—') + '</td>' +
         '</tr>';
       }).join('');
 
-      var domTable = '<table class="rp-table"><thead><tr>' +
-        '<th>№</th><th>Статус</th><th>Интенсивность</th>' +
-        (isSingle ? '' : '<th>Q нед. А</th>') +
-        '<th>Q нед. Б</th>' +
-        (isSingle ? '' : '<th>Δ</th>') +
-        '<th>Цвет</th><th>Метод</th>' +
-      '</tr></thead><tbody>' + tableRows + '</tbody></table>';
+      domPageContent += '<div class="domen-block">' +
+        '<div class="domen-hdr">' +
+          '<div class="domen-hdr-name">' + escAttr(dom) + '</div>' +
+          '<span class="domen-hdr-badge">' + (isSingle?dB.length:dA.length+'→'+dB.length) + ' точек</span>' +
+          '<span class="domen-hdr-q">Q = ' + qDB.toFixed(2) + ' л/с</span>' +
+          (!isSingle && qDA > 0 ? '<span class="domen-hdr-delta ' + (dd>=0?'delta-up':'delta-down') + '">' + (dd>=0?'▲+':'▼') + Math.abs(dd).toFixed(2) + ' л/с</span>' : '') +
+        '</div>' +
+        '<table><thead><tr>' +
+          '<th>№</th><th>Статус</th><th>Интенсивность</th>' +
+          (isSingle ? '' : '<th>Q нед. А</th>') +
+          '<th>Q нед. Б</th>' +
+          (isSingle ? '' : '<th>Δ</th>') +
+          '<th>Цвет</th><th>Метод</th>' +
+        '</tr></thead><tbody>' + tableRows + '</tbody></table>';
 
-      // Карточки точек (фото + график)
-      var pointCards = '';
-      if (s.includePhotos || s.includeHistory) {
-        pointCards = dB.map(function(pb) {
+      if ((s.includePhotos || s.includeHistory) && dB.length) {
+        var pointCards = dB.map(function(pb) {
           var pa = dA.find(function(p){ return p.pointNumber===pb.pointNumber; });
           return buildPointCard(pb, pa||null, s);
         }).join('');
+        domPageContent += '<div style="padding:10px 14px;border-top:1px solid #e0e0e0;background:#fafbfc">' + pointCards + '</div>';
       }
-
-      domensSection += domHeader + domTable +
-        (pointCards ? '<div style="padding:10px 12px;border-top:1px solid #e9ecef;background:#fafbfc">' + pointCards + '</div>' : '') +
-        '</div>';
+      domPageContent += '</div>';
     });
-    domensSection += '</section>';
+    domPageContent += footer() + '</div>';
+    pages.push(domPageContent);
+    secNum++;
   }
 
-  // ── Канавы
-  var ditchesSection = '';
+  // ── DITCHES ──
   if (s.includeDitches) {
     var dToShow = dtsB.length ? dtsB : dtsA;
     if (dToShow.length) {
-      var dn = (mapSection ? 1 : 0) + (domensSection ? 1 : 0) + 3;
-      ditchesSection = '<section class="rp-section"><h2>' + dn + '. Канавы — детальные данные</h2>';
+      var ditchPage = '<div class="page">' +
+        '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Канавы — детальные данные</div>';
       dToShow.forEach(function(d) {
         var hist = ReportState.history[d.ditchName] || [];
-        ditchesSection +=
-          '<div class="rp-ditch-block">' +
-            '<div class="rp-ditch-header">' +
-              '<span class="rp-ditch-icon">≈</span>' +
-              '<span class="rp-ditch-name">' + escAttr(d.ditchName) + '</span>' +
-              '<span class="rp-ditch-status">' + escAttr(d.status||'Активная') + '</span>' +
+        ditchPage +=
+          '<div class="ditch-block">' +
+            '<div class="ditch-hdr">' +
+              '<span class="ditch-icon">≈</span>' +
+              '<span class="ditch-name">' + escAttr(d.ditchName) + '</span>' +
+              '<span class="ditch-status">' + escAttr(d.status||'Активная') + '</span>' +
             '</div>' +
-            '<div class="rp-ditch-grid">' +
-              '<div class="rp-param"><span class="rp-param-l">Дата</span><span class="rp-param-v">' + fmtDate(d.monitoringDate) + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">Сотрудник</span><span class="rp-param-v">' + escAttr(d.worker||'—') + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">Ширина B</span><span class="rp-param-v">' + (d.width!=null?d.width.toFixed(2)+' м':'—') + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">Метод v</span><span class="rp-param-v">' + escAttr(d.velMethod==='float'?'Поплавок':d.velMethod==='multi'?'По точкам':'Одна v') + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">v, м/с</span><span class="rp-param-v">' + (d.velocity!=null?d.velocity.toFixed(3):'—') + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">S, м²</span><span class="rp-param-v">' + (d.area!=null?d.area.toFixed(4):'—') + '</span></div>' +
-              '<div class="rp-param rp-param--accent"><span class="rp-param-l">Q, м³/ч</span><span class="rp-param-v">' + (d.flowM3h!=null?d.flowM3h.toFixed(3):'—') + '</span></div>' +
-              '<div class="rp-param"><span class="rp-param-l">Глубины</span><span class="rp-param-v">' + (Array.isArray(d.depths)?d.depths.map(function(h){return (h*100).toFixed(1)+'см';}).join(', '):'—') + '</span></div>' +
+            '<div class="ditch-grid">' +
+              '<div class="dp"><span class="dp-l">Дата</span><span class="dp-v">' + fmtDate(d.monitoringDate) + '</span></div>' +
+              '<div class="dp"><span class="dp-l">Сотрудник</span><span class="dp-v">' + escAttr(d.worker||'—') + '</span></div>' +
+              '<div class="dp"><span class="dp-l">Ширина B</span><span class="dp-v">' + (d.width!=null?d.width.toFixed(2)+' м':'—') + '</span></div>' +
+              '<div class="dp"><span class="dp-l">Метод v</span><span class="dp-v">' + escAttr(d.velMethod==='float'?'Поплавок':d.velMethod==='multi'?'По точкам':'Одна v') + '</span></div>' +
+              '<div class="dp"><span class="dp-l">v, м/с</span><span class="dp-v">' + (d.velocity!=null?d.velocity.toFixed(3):'—') + '</span></div>' +
+              '<div class="dp"><span class="dp-l">S, м²</span><span class="dp-v">' + (d.area!=null?d.area.toFixed(4):'—') + '</span></div>' +
+              '<div class="dp dp--accent"><span class="dp-l">Q, м³/ч</span><span class="dp-v">' + (d.flowM3h!=null?d.flowM3h.toFixed(3):'—') + '</span></div>' +
+              '<div class="dp"><span class="dp-l">Глубины</span><span class="dp-v">' + (Array.isArray(d.depths)?d.depths.map(function(h){return (h*100).toFixed(1)+'см';}).join(', '):'—') + '</span></div>' +
             '</div>' +
-            (d.comment ? '<div class="rp-comment"><b>Комментарий:</b> ' + escAttr(d.comment) + '</div>' : '') +
+            (d.comment ? '<div style="padding:6px 10px;font-size:11px;color:#555;background:#fffde7;border-top:1px solid #ffe082"><b>Комментарий:</b> ' + escAttr(d.comment) + '</div>' : '') +
             buildDitch2DSVG(d) +
             buildDitchHistTable(d.ditchName, hist) +
             (s.includePhotos ? buildDitchPhotos(d) : '') +
           '</div>';
       });
-      ditchesSection += '</section>';
+      ditchPage += footer() + '</div>';
+      pages.push(ditchPage);
+      secNum++;
     }
   }
 
-  // ── Сравнение А vs Б
-  var compareSection = '';
+  // ── DEWATERING ──
+  if (s.includeDewatering) {
+    var dewContent = buildDewateringSection(s);
+    if (dewContent) {
+      pages.push(
+        '<div class="page">' +
+          '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Водоотлив</div>' +
+          dewContent +
+          footer() +
+        '</div>'
+      );
+      secNum++;
+    }
+  }
+
+  // ── COMPARE ──
   if (!isSingle && s.includeCompare && ptsA.length && ptsB.length) {
     var cmpAI = ai.compare ? '<div class="rp-ai-text"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.compare) + '</div>' : '';
     var cmpRows = ptsB.map(function(pb) {
       var pa = ptsA.find(function(p){ return p.pointNumber===pb.pointNumber; });
       var qa = pa ? parseFloat(pa.flowRate)||0 : null;
       var qb = parseFloat(pb.flowRate)||0;
-      var delta = qa!==null ? qb-qa : null;
-      var pct   = (qa&&qa>0) ? (qb-qa)/qa*100 : null;
-      var alert = delta!==null&&Math.abs(pct)>=30 ? (delta>0?'⚠ рост':'✓ снижение') : '';
-      return '<tr class="' + (alert?'rp-row--alert':'') + '">' +
+      var delta = qa !== null ? qb - qa : null;
+      var pct = (qa&&qa>0) ? (qb-qa)/qa*100 : null;
+      var alert = delta!==null&&pct!==null&&Math.abs(pct)>=30 ? (delta>0?'⚠ рост':'✓ снижение') : '';
+      return '<tr' + (alert?' style="background:#fff8e1"':'') + '>' +
         '<td><b>' + escAttr(String(pb.pointNumber)) + '</b></td>' +
         '<td>' + escAttr(pb.domain||pb.domen||'—') + '</td>' +
         '<td>' + escAttr(pb.status||'—') + '</td>' +
         '<td>' + (qa!==null?qa.toFixed(2):'—') + '</td>' +
         '<td><b>' + qb.toFixed(2) + '</b></td>' +
-        '<td class="' + (delta!==null?(delta>=0?'rp-up':'rp-down'):'') + '">' + (delta!==null?(delta>=0?'+':'')+delta.toFixed(2):'—') + '</td>' +
-        '<td class="' + (pct!==null?(pct>=0?'rp-up':'rp-down'):'') + '">' + (pct!==null?(pct>=0?'+':'')+pct.toFixed(0)+'%':'—') + '</td>' +
+        '<td style="color:' + (delta!==null?(delta>=0?'#d93025':'#188038'):'') + ';font-weight:600">' + (delta!==null?(delta>=0?'▲+':'▼')+Math.abs(delta).toFixed(2):'—') + '</td>' +
+        '<td style="color:' + (pct!==null?(pct>=0?'#d93025':'#188038'):'') + '">' + (pct!==null?(pct>=0?'+':'')+pct.toFixed(0)+'%':'—') + '</td>' +
         '<td>' + escAttr(alert) + '</td></tr>';
     }).join('');
-    var cnSec = 5;
-    compareSection = '<section class="rp-section"><h2>' + cnSec + '. Сравнение: ' + fmtDate(s.dateA) + ' (' + escAttr(s.weekA) + ') vs ' + fmtDate(s.dateB) + ' (' + escAttr(s.weekB) + ')</h2>' +
-      cmpAI +
-      '<table class="rp-table"><thead><tr><th>№</th><th>Домен</th><th>Статус</th>' +
-        '<th>Q нед. А, л/с</th><th>Q нед. Б, л/с</th><th>Δ, л/с</th><th>Δ, %</th><th>Оценка</th></tr></thead><tbody>' +
-      cmpRows +
-      '<tr class="rp-row--total"><td colspan="3"><b>Итого</b></td>' +
-        '<td><b>' + qA.toFixed(2) + '</b></td><td><b>' + qB.toFixed(2) + '</b></td>' +
-        '<td class="' + (dQ>=0?'rp-up':'rp-down') + '"><b>' + (dQ>=0?'+':'') + dQ.toFixed(2) + '</b></td>' +
-        '<td class="' + (dQ>=0?'rp-up':'rp-down') + '"><b>' + (qA>0?(dQ>=0?'+':'')+( dQ/qA*100).toFixed(0)+'%':'—') + '</b></td><td></td></tr>' +
-      '</tbody></table></section>';
+    pages.push(
+      '<div class="page">' +
+        '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Сравнение: ' + fmtDate(s.dateA) + ' vs ' + fmtDate(s.dateB) + '</div>' +
+        cmpAI +
+        '<table><thead><tr><th>№</th><th>Домен</th><th>Статус</th>' +
+          '<th>Q нед. А, л/с</th><th>Q нед. Б, л/с</th><th>Δ, л/с</th><th>Δ, %</th><th>Оценка</th></tr></thead><tbody>' +
+        cmpRows +
+        '<tr style="background:#f1f3f4;font-weight:600;border-top:2px solid #e0e0e0"><td colspan="3"><b>Итого</b></td>' +
+          '<td><b>' + qA.toFixed(2) + '</b></td><td><b>' + qB.toFixed(2) + '</b></td>' +
+          '<td style="color:' + (dQ>=0?'#d93025':'#188038') + ';font-weight:700"><b>' + (dQ>=0?'▲+':'▼') + Math.abs(dQ).toFixed(2) + '</b></td>' +
+          '<td style="color:' + (dQ>=0?'#d93025':'#188038') + '"><b>' + (qA>0?(dQ>=0?'+':'')+(dQ/qA*100).toFixed(0)+'%':'—') + '</b></td><td></td></tr>' +
+        '</tbody></table>' +
+        footer() +
+      '</div>'
+    );
+    secNum++;
   }
+
+  // ── WELLS ──
+  if (s.includeWells) {
+    var wellsContent = buildWellsSection(s, isSingle, secNum);
+    if (wellsContent) {
+      pages.push('<div class="page">' + wellsContent + footer() + '</div>');
+      secNum++;
+    }
+  }
+
+  // ── ANALYTICS ──
+  var analyticsContent = buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum);
+  if (analyticsContent) {
+    pages.push('<div class="page">' + analyticsContent + footer() + '</div>');
+    secNum++;
+  }
+
+  // ── CONCLUSION ──
+  var conclAI = ai.recommendations
+    ? '<div class="rp-ai-text" style="margin-bottom:16px"><span class="rp-ai-badge">AI</span>' + renderAIText(ai.recommendations) + '</div>'
+    : '';
+  pages.push(
+    '<div class="page">' +
+      '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Заключение и рекомендации</div>' +
+      conclAI +
+      '<div class="conclusion-text">' +
+        (s.conclusions
+          ? escAttr(s.conclusions).replace(/\n/g,'<br>')
+          : '<span style="color:#aaa;font-style:italic">Заключение не заполнено</span>') +
+      '</div>' +
+      footer() +
+    '</div>'
+  );
 
   return '<!DOCTYPE html><html lang="ru"><head>' +
     '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>Отчёт — Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' — ' + fmtDate(s.dateB) + '</title>' +
-    '<style>' + getReportCSS(s.reportTheme, s.reportLayout, s.orientation) + '</style>' +
-    (s.watermark ? '<style>body::before{content:"' + (s.watermark||'').replace(/"/g,'') + '";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:80px;font-weight:900;color:rgba(150,0,0,0.06);pointer-events:none;z-index:9999;letter-spacing:8px;white-space:nowrap;}</style>' : '') +
+    '<style>' + getReportCSS(s.reportTheme, s.orientation) + '</style>' +
+    (s.watermark ? '<style>.page::before{content:"' + (s.watermark||'').replace(/"/g,'') + '";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:72px;font-weight:800;color:rgba(220,53,69,.07);white-space:nowrap;pointer-events:none;z-index:0;letter-spacing:.1em}</style>' : '') +
     '</head><body>' +
-    title +
-    (function() {
-      var dewateringSection = s.includeDewatering ? buildDewateringSection(s) : '';
-      var secCount = 1 +
-        (mapSection        ? 1 : 0) +
-        (domensSection     ? 1 : 0) +
-        (ditchesSection    ? 1 : 0) +
-        (dewateringSection ? 1 : 0) +
-        (compareSection    ? 1 : 0);
-      var wellsSection = s.includeWells ? buildWellsSection(s, isSingle, secCount + 1) : '';
-      secCount += wellsSection ? 1 : 0;
-      var analyticsSection = buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secCount + 1);
-      var conclNum = analyticsSection ? secCount + 2 : secCount + 1;
-      var concl = '<section class="rp-section"><h2>' + conclNum + '. Заключение и рекомендации</h2>' +
-        (s.conclusions
-          ? '<div class="rp-conclusion-text">' + escAttr(s.conclusions).replace(/\n/g,'<br>') + '</div>'
-          : '<div class="rp-conclusion-text rp-conclusion-text--empty">Заключение не заполнено</div>') +
-      '</section>';
-      return '<div class="rp-body">' + summary + mapSection + domensSection + ditchesSection + dewateringSection + compareSection + wellsSection + analyticsSection + concl + '</div>';
-    })() +
-    '<div class="rp-footer">' +
-  '<div>Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' · Мониторинг подземных вод · ' + fmtDate(s.dateReport) + '</div>' +
-  '<div style="text-align:center;color:#aaa">v' + s.reportVersion + '</div>' +
-  '<div style="text-align:right">Стр. <span class="rp-page-counter"></span></div>' +
-'</div>' +
-    '<div class="rp-print-btn no-print">' +
+    '<div class="pages-wrap">' + pages.join('') + '</div>' +
+    '<div class="no-print">' +
       '<button onclick="window.print()">🖨 Печать / PDF</button>' +
       '<button onclick="window.close()" style="margin-left:8px">✕ Закрыть</button>' +
-    '</div></body></html>';
+    '</div>' +
+    '</body></html>';
 }
 
 // ── CSS отчёта ─────────────────────────────────────────────
-function getThemeColors(theme) {
-  var t = {
-    blue:   { primary:'#1a73e8', dark:'#1a1a2e', light:'#e8f0fe', mid:'#1967d2', border:'#c8d8f5' },
-    green:  { primary:'#16a34a', dark:'#14532d', light:'#dcfce7', mid:'#15803d', border:'#a7d7b5' },
-    mono:   { primary:'#475569', dark:'#1e293b', light:'#f1f5f9', mid:'#334155', border:'#cbd5e1' },
-    red:    { primary:'#ea580c', dark:'#7c2d12', light:'#ffedd5', mid:'#c2410c', border:'#fcc49a' },
-    violet: { primary:'#7c3aed', dark:'#4c1d95', light:'#ede9fe', mid:'#6d28d9', border:'#c4b5fd' },
-  };
-  return t[theme] || t.blue;
-}
 
-function getReportCSS(theme, layout, orientation) {
-  var c = getThemeColors(theme);
+function getReportCSS(theme, orientation) {
   return [
+  '@import url(\'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap\');',
   '* { box-sizing: border-box; margin: 0; padding: 0; }',
-  'body { font-family: Arial, sans-serif; font-size: 12px; color: #222; background: #fff; line-height: 1.5; }',
-  '.rp-title-page { display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;border-bottom:3px solid ' + c.primary + ';page-break-after:always; }',
-  '.rp-title-logo { width:56px;height:56px;border-radius:50%;background:' + c.primary + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;margin:0 auto 14px; }',
-  '.rp-title-logo-img { width:64px;height:64px;border-radius:50%;object-fit:cover;margin:0 auto 14px;display:block;border:2px solid ' + c.border + '; }',
-  '.rp-title-main { font-size:22px;font-weight:700;color:' + c.dark + ';margin-bottom:8px; }',
-  '.rp-title-sub  { font-size:13px;color:#555;margin-bottom:14px; }',
-  '.rp-title-period { background:' + c.light + ';border-radius:6px;padding:8px 20px;font-size:13px;color:' + c.primary + ';font-weight:500;margin-bottom:18px; }',
-  '.rp-title-meta { font-size:12px;color:#444;line-height:1.8; }',
-  '.rp-signature-block { margin-top:24px;padding-top:20px;border-top:1px dashed #dee2e6;width:100%; }',
-  '.rp-sig-line { font-size:13px;color:#222;margin-bottom:4px; }',
-  '.rp-sig-label { font-size:11px;color:#555;font-weight:600; }',
-  '.rp-sig-role { font-size:10px;color:#888; }',
-  '.rp-body { max-width:860px;margin:0 auto;padding:20px 30px; }',
-  '.rp-section { margin-bottom:24px; }',
-  '.rp-section h2 { font-size:14px;font-weight:700;color:' + c.dark + ';padding:5px 0;border-bottom:2px solid ' + c.primary + ';margin-bottom:12px; }',
-  '.rp-section-sub { font-size:12px;font-weight:600;color:#444;margin:12px 0 6px; }',
-  '.rp-kpi-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px; }',
-  '.rp-kpi { background:#f8f9fa;border-radius:6px;padding:10px 12px;border:1px solid #e9ecef; }',
-  '.rp-kpi-val { font-size:20px;font-weight:700;color:' + c.primary + ';line-height:1.2; }',
-  '.rp-kpi-label { font-size:10px;color:#666;margin-top:2px; }',
-  '.rp-kpi--up .rp-kpi-val { color:#d93025; }',
-  '.rp-kpi--down .rp-kpi-val { color:#188038; }',
-  '.rp-table { width:100%;border-collapse:collapse;font-size:11px; }',
-  '.rp-table th { background:#f8f9fa;font-weight:600;padding:5px 8px;text-align:left;border-bottom:1px solid #dee2e6;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:.04em; }',
-  '.rp-table td { padding:5px 8px;border-bottom:1px solid #f0f0f0; }',
-  '.rp-table tr:last-child td { border-bottom:none; }',
-  '.rp-row--alert td { background:#fff8e1; }',
-  '.rp-row--total td { background:#f1f3f4;font-weight:600;border-top:1px solid #dee2e6; }',
-  '.rp-up { color:#d93025; } .rp-down { color:#188038; }',
-  '.rp-domen-block { border:1px solid #dee2e6;border-radius:6px;margin-bottom:12px;overflow:hidden; }',
-  '.rp-domen-header { display:flex;align-items:center;gap:10px;background:#f1f3f4;padding:7px 12px;border-bottom:1px solid #dee2e6;flex-wrap:wrap; }',
-  '.rp-domen-name { font-weight:700;font-size:13px;color:' + c.dark + '; }',
-  '.rp-domen-badge { background:' + c.light + ';color:' + c.mid + ';font-size:10px;padding:1px 7px;border-radius:10px;font-weight:500; }',
-  '.rp-domen-q { font-size:12px;color:#444;margin-left:auto; }',
-  '.rp-delta { font-size:11px;font-weight:600;padding:1px 6px;border-radius:3px; }',
-  '.rp-delta.up { color:#d93025;background:#fce8e6; } .rp-delta.down { color:#188038;background:#e6f4ea; }',
-  '.rp-ditch-block { border:1px solid #dee2e6;border-radius:6px;margin-bottom:16px;overflow:hidden; }',
-  '.rp-ditch-header { display:flex;align-items:center;gap:8px;background:' + c.light + ';padding:7px 12px;border-bottom:1px solid ' + c.border + '; }',
-  '.rp-ditch-icon { font-size:16px;color:' + c.primary + '; }',
-  '.rp-ditch-name { font-weight:700;font-size:13px;color:' + c.dark + '; }',
-  '.rp-ditch-status { background:' + c.primary + ';color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:auto; }',
-  '.rp-ditch-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#dee2e6;border-bottom:1px solid #dee2e6; }',
-  '.rp-param { background:#fff;padding:6px 10px; } .rp-param--accent { background:#f8fff8; }',
-  '.rp-param-l { display:block;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.04em;margin-bottom:1px; }',
-  '.rp-param-v { font-size:12px;font-weight:600;color:#222; }',
-  '.rp-param--accent .rp-param-v { color:#188038; }',
-  '.rp-comment { padding:6px 10px;font-size:11px;color:#555;background:#fffde7;border-top:1px solid #ffe082; }',
-  '.rp-ditch-svg-wrap { padding:8px 12px;border-top:1px solid #f0f0f0; }',
-  '.rp-ditch-svg-title { font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:6px;text-align:center; }',
-  '.rp-ditch-hist { padding:0 12px 10px; }',
-  '.rp-photos-block { padding:10px 12px;border-top:1px solid #f0f0f0;display:flex;flex-direction:column;gap:12px; }',
-  '.rp-photo-row { display:flex;gap:12px;align-items:flex-start;border:1px solid #e9ecef;border-radius:6px;overflow:hidden; }',
-  '.rp-photo-img-wrap { flex:0 0 280px;background:#f8f9fa; }',
-  '.rp-photo-img { width:280px;height:210px;object-fit:cover;display:block; }',
-  '.rp-photo-label { font-size:9px;color:#888;text-align:center;padding:3px;background:#f1f3f4; }',
-  '.rp-photo-info { flex:1;padding:10px 12px;min-width:0; }',
-  '.rp-photo-info-title { font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px; }',
-  '.rp-photo-meta { width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px; }',
-  '.rp-photo-meta td { padding:3px 0;vertical-align:top; }',
-  '.rp-photo-meta td:first-child { color:#888;width:110px;font-size:10px;text-transform:uppercase;letter-spacing:.04em; }',
-  '.rp-photo-meta td:last-child { color:#222;font-weight:500; }',
-  '.rp-photo-comment { font-size:11px;color:#444;background:#f8f9fa;border-left:3px solid ' + c.primary + ';border-radius:0 4px 4px 0;padding:6px 8px;line-height:1.5; }',
-  '.rp-photo-comment--empty { color:#aaa;font-style:italic;border-left-color:#dee2e6; }',
-  '.rp-ai-text { background:#f3f0ff;border-left:3px solid #7f77dd;border-radius:0 5px 5px 0;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#333;line-height:1.6; }',
-  '.rp-ai-badge { display:inline-block;background:#7f77dd;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;margin-right:6px;letter-spacing:.05em; }',
-  '.rp-map-wrap { margin-top:10px; }',
-  '.rp-map-caption { font-size:10px;color:#888;text-align:center;margin-top:4px;font-style:italic; }',
-  '.rp-conclusion-text { background:#f8f9fa;border-radius:5px;padding:10px 14px;font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap; }',
-  '.rp-conclusion-text--empty { color:#aaa;font-style:italic; }',
-  '.rp-footer { display:flex;justify-content:space-between;max-width:860px;margin:20px auto 0;padding:12px 30px;font-size:10px;color:#aaa;border-top:1px solid #e9ecef; }',
-  '.rp-section { counter-increment: section; }',
-  '.rp-print-btn { position:fixed;bottom:20px;right:20px;z-index:100; }',
-  '.rp-print-btn button { padding:10px 20px;font-size:13px;cursor:pointer;background:' + c.primary + ';color:#fff;border:none;border-radius:6px;font-weight:500; }',
-  // ── Layout B: Dashboard body ──
-  (layout === 'b' || layout === 'ab'
-    ? 'body { background: #f1f5f9; }'
-    : ''),
+  'body { font-family: \'Inter\', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: #e8e8e8; line-height: 1.5; }',
 
-  // ── Title page: Variant A (default) ──
-  '.rp-title-logo-img { max-width:200px;max-height:80px;width:auto;height:auto;border-radius:8px;object-fit:contain;margin:0 auto 16px;display:block; }',
+  /* PAGE LAYOUT */
+  '.pages-wrap { padding: 32px 0 64px; display: flex; flex-direction: column; align-items: center; gap: 32px; }',
+  '.page { background: #fff; width: 794px; min-height: 1123px; box-shadow: 0 4px 24px rgba(0,0,0,.18); position: relative; overflow: hidden; padding: 48px 52px 60px; font-size: 13px; color: #1a1a2e; }',
 
-  // ── Title A/AB ──
-  '.rp-title-a { background:linear-gradient(135deg,#0d2137 0%,#1a3a5c 60%,#0f4c81 100%);color:#fff;padding:0;page-break-after:always; }',
-  '.rp-title-a-content { display:flex;gap:28px;align-items:flex-start;padding:40px 48px 32px; }',
-  '.rp-title-body { flex:1; }',
-  '.rp-title-org { font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.5);margin-bottom:10px; }',
-  '.rp-title-main { font-size:24px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:6px; }',
-  '.rp-title-sub { font-size:13px;color:rgba(255,255,255,.65);margin-bottom:16px; }',
-  '.rp-title-period { display:inline-block;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:7px 16px;font-size:12px;color:#fff;margin-bottom:14px; }',
-  '.rp-title-meta { font-size:11px;color:rgba(255,255,255,.6);line-height:1.9; }',
-  '.rp-title-meta b { color:#fff; }',
-  '.rp-title-logo { width:64px;height:64px;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0; }',
+  /* WATERMARK */
+  '.page::before { content: \'ВНУТРЕННИЙ\'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-45deg); font-size: 72px; font-weight: 800; color: rgba(220,53,69,.07); white-space: nowrap; pointer-events: none; z-index: 0; letter-spacing: .1em; }',
+  '.page > * { position: relative; z-index: 1; }',
 
-  // ── Title B ──
-  '.rp-title-b { page-break-after:always; }',
-  '.rp-title-b-topbar { background:#0f172a;padding:16px 32px;display:flex;align-items:center;gap:18px; }',
-  '.rp-title-b-logo { background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:6px 14px;border-radius:6px;font-size:15px;font-weight:900;color:#fff; }',
-  '.rp-title-b-org-label { font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.06em; }',
-  '.rp-title-b-org-name { font-size:14px;font-weight:600;color:#fff; }',
-  '.rp-title-b-vnum-label { font-size:9px;color:rgba(255,255,255,.3);text-transform:uppercase; }',
-  '.rp-title-b-vnum { font-size:16px;font-weight:700;color:#60a5fa; }',
-  '.rp-title-b-bottom { padding:20px 32px;background:#fff;border-bottom:1px solid #e2e8f0; }',
-  '.rp-title-b-h1 { font-size:20px;font-weight:700;color:#0f172a;margin-bottom:10px; }',
-  '.rp-title-b-chips { display:flex;gap:10px;flex-wrap:wrap; }',
-  '.rp-title-b-chip { background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;font-size:12px;color:#475569; }',
-  '.rp-title-b-chip--blue { background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8; }',
+  /* PAGE FOOTER */
+  '.page-footer { position: absolute; bottom: 0; left: 0; right: 0; height: 36px; background: #1a73e8; display: flex; align-items: center; padding: 0 52px; justify-content: space-between; }',
+  '.page-footer span { font-size: 10px; color: rgba(255,255,255,.9); font-weight: 500; letter-spacing: .02em; }',
 
-  // ── Title C ──
-  '.rp-title-c { page-break-after:always;font-family:\'Times New Roman\',Georgia,serif; }',
-  '.rp-lh-top { display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;padding:20px 40px;border-bottom:3px double #8b1a1a; }',
-  '.rp-lh-logo-box { width:64px;height:64px;border:2px solid #8b1a1a;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:Arial,sans-serif;color:#8b1a1a; }',
-  '.rp-lh-org { text-align:center; }',
-  '.rp-lh-org-name { font-size:14px;font-weight:700;color:#8b1a1a;text-transform:uppercase;letter-spacing:.04em; }',
-  '.rp-lh-org-sub { font-size:11px;color:#555;margin-top:4px; }',
-  '.rp-lh-docnum { text-align:right;font-size:11px;color:#555; }',
-  '.rp-lh-num { font-size:16px;font-weight:700;color:#8b1a1a;font-family:Arial,sans-serif; }',
-  '.rp-lh-date { font-size:10px;color:#888;margin-top:4px; }',
-  '.rp-lh-title-block { padding:28px 40px;text-align:center;border-bottom:1px solid #ccc; }',
-  '.rp-lh-doctype { font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#888;margin-bottom:8px; }',
-  '.rp-lh-main { font-size:20px;font-weight:700;color:#1c1c1c;line-height:1.35;margin-bottom:10px; }',
-  '.rp-lh-period-box { display:inline-block;border:1px solid #8b1a1a;padding:6px 18px;font-size:12px;color:#8b1a1a; }',
-  '.rp-lh-signers { display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:16px 40px;border-bottom:2px solid #1c1c1c; }',
-  '.rp-lh-role { font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px; }',
-  '.rp-lh-line { border-bottom:1px solid #1c1c1c;min-height:22px;margin-bottom:3px; }',
-  '.rp-lh-name { font-size:11px;color:#555; }',
+  /* SECTION HEADERS */
+  '.sec-head { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #1a1a2e; padding-bottom: 7px; border-bottom: 2px solid #1a73e8; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }',
+  '.sec-head .sec-num { width: 22px; height: 22px; background: #1a73e8; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }',
+  '.sec-sub { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #555; margin: 14px 0 8px; }',
 
-  // ── KPI-cards (layout B and AB) ──
-  '.rp-kpi-cards { display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px; }',
-  '.rp-kpi-card { border-radius:10px;padding:14px 14px;border:1px solid #e2e8f0;background:#fff;position:relative;overflow:hidden; }',
-  '.rp-kpi-card::before { content:"";position:absolute;top:0;left:0;right:0;height:3px; }',
-  '.rp-kpi-card--blue::before   { background:#3b82f6; }',
-  '.rp-kpi-card--red::before    { background:#ef4444; }',
-  '.rp-kpi-card--green::before  { background:#22c55e; }',
-  '.rp-kpi-card--green2::before { background:#22c55e; }',
-  '.rp-kpi-card--amber::before  { background:#f59e0b; }',
-  '.rp-kpi-card--purple::before { background:#8b5cf6; }',
-  '.rp-kpi-card-icon { font-size:18px;margin-bottom:6px; }',
-  '.rp-kpi-card-val  { font-size:18px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:3px; }',
-  '.rp-kpi-card-lbl  { font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em; }',
-  '.rp-kpi-card-sub  { font-size:10px;color:#64748b;margin-top:4px;font-weight:500; }',
+  /* KPI CARDS */
+  '.kpi-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; margin-bottom: 20px; }',
+  '.kpi-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }',
+  '.kpi-val { font-size: 26px; font-weight: 800; color: #1a73e8; line-height: 1; margin-bottom: 3px; }',
+  '.kpi-lbl { font-size: 10px; color: #555; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }',
+  '.kpi-sub { font-size: 10px; color: #888; margin-top: 4px; }',
 
-  // ── KPI-compare (layout A and C) ──
-  '.rp-kpi-compare { display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:start;margin-bottom:16px; }',
-  '.rp-kpi-compare-week { background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:10px 12px; }',
-  '.rp-kpi-compare-week--b { border-color:#1a73e8;border-width:2px; }',
-  '.rp-kpi-compare-label { font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:8px; }',
-  '.rp-kpi-grid2 { display:grid;grid-template-columns:1fr 1fr;gap:6px; }',
-  '.rp-kpi-arrow { display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:20px; }',
+  /* TABLES */
+  'table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }',
+  'thead th { background: #f5f7fa; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #555; padding: 8px 10px; text-align: left; border: 1px solid #e0e0e0; }',
+  'tbody td { padding: 7px 10px; border: 1px solid #e0e0e0; color: #1a1a2e; vertical-align: middle; }',
+  'tbody tr:nth-child(even) { background: #f9fbff; }',
+  '.row-alert td { background: #fff8e1 !important; }',
+  '.row-total td { background: #f1f3f4 !important; font-weight: 700; border-top: 2px solid #e0e0e0; }',
 
-  // ── Layout C body overrides ──
-  (layout === 'c'
-    ? [
-      '.rp-body { font-family: \'Times New Roman\',Georgia,serif; }',
-      '.rp-section h2 { font-family: \'Times New Roman\',Georgia,serif; border-bottom: 1px solid #ccc; border-width: 1px; }',
-      '.rp-table th { background:#f4f4f4;border:1px solid #ccc; }',
-      '.rp-table td { border:1px solid #ccc; }',
-      '.rp-footer { border-top:2px solid #1c1c1c; }',
-    ].join('\n')
-    : ''),
+  /* STATUS BADGES */
+  '.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 600; }',
+  '.badge-green { background: #e6f4ea; color: #188038; }',
+  '.badge-blue  { background: #e8f0fe; color: #1557b0; }',
+  '.badge-red   { background: #fce8e6; color: #c5221f; }',
+  '.badge-amber { background: #fef7e0; color: #b45309; }',
+  '.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }',
+  '.dot-green  { background: #34a853; }',
+  '.dot-blue   { background: #1a73e8; }',
+  '.dot-red    { background: #ea4335; }',
+  '.dot-amber  { background: #f9ab00; }',
 
+  /* COLOR HELPERS */
+  '.c-up   { color: #ea4335; }',
+  '.c-down { color: #34a853; }',
+
+  /* TITLE PAGE */
+  '.title-header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }',
+  '.logo-box { width: 52px; height: 52px; border-radius: 10px; background: linear-gradient(135deg,#1a73e8,#0d47a1); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #fff; flex-shrink: 0; }',
+  '.title-company { flex: 1; }',
+  '.title-company-name { font-size: 14px; font-weight: 700; color: #1a1a2e; letter-spacing: .04em; }',
+  '.title-company-sub  { font-size: 11px; color: #555; margin-top: 2px; }',
+  '.title-doc-meta { text-align: right; font-size: 11px; color: #555; }',
+  '.title-doc-meta strong { display: block; font-size: 13px; color: #1a73e8; font-weight: 700; }',
+  '.title-hr { border: none; border-top: 2px solid #e0e0e0; margin: 20px 0; }',
+  '.title-label { text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: #888; margin-bottom: 12px; }',
+  '.title-main { text-align: center; font-size: 22px; font-weight: 800; color: #1a1a2e; line-height: 1.3; margin-bottom: 16px; }',
+  '.title-date-badge { display: inline-flex; align-items: center; gap: 8px; background: #e8f0fe; border: 1px solid #c5d9fb; border-radius: 8px; padding: 8px 20px; font-size: 13px; font-weight: 600; color: #1557b0; margin: 0 auto 40px; width: fit-content; }',
+  '.sig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 40px; }',
+  '.sig-block { border-top: 1.5px solid #e0e0e0; padding-top: 12px; }',
+  '.sig-role { font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #888; margin-bottom: 6px; }',
+  '.sig-name { font-size: 13px; font-weight: 600; color: #1a1a2e; }',
+  '.sig-title-sub { font-size: 11px; color: #555; margin-top: 2px; }',
+  '.title-blue-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg,#1a73e8,#0d47a1); }',
+
+  /* DOMAIN BLOCKS */
+  '.domen-block { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }',
+  '.domen-hdr { display: flex; align-items: center; gap: 10px; background: #f5f7fa; padding: 8px 14px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; }',
+  '.domen-hdr-name { font-weight: 700; font-size: 13px; color: #1a1a2e; }',
+  '.domen-hdr-badge { background: #e8f0fe; color: #1557b0; font-size: 10px; padding: 1px 8px; border-radius: 100px; font-weight: 600; }',
+  '.domen-hdr-q { font-size: 12px; color: #444; margin-left: auto; font-weight: 600; }',
+  '.domen-hdr-delta { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }',
+  '.delta-up   { color: #ea4335; background: #fce8e6; }',
+  '.delta-down { color: #34a853; background: #e6f4ea; }',
+
+  /* DITCH BLOCKS */
+  '.ditch-block { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }',
+  '.ditch-hdr { display: flex; align-items: center; gap: 8px; background: #e8f0fe; padding: 8px 14px; border-bottom: 1px solid #c5d9fb; }',
+  '.ditch-hdr-icon { font-size: 16px; color: #1a73e8; }',
+  '.ditch-hdr-name { font-weight: 700; font-size: 13px; color: #1a1a2e; }',
+  '.ditch-hdr-status { background: #1a73e8; color: #fff; font-size: 10px; padding: 1px 8px; border-radius: 100px; margin-left: auto; font-weight: 600; }',
+  '.ditch-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: #e0e0e0; border-bottom: 1px solid #e0e0e0; }',
+  '.dp { background: #fff; padding: 7px 10px; }',
+  '.dp--accent { background: #f0f9f0; }',
+  '.dp-l { display: block; font-size: 9px; color: #888; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }',
+  '.dp-v { font-size: 12px; font-weight: 600; color: #1a1a2e; }',
+  '.dp--accent .dp-v { color: #188038; }',
+
+  /* PHOTOS */
+  '.photo-row { display: flex; gap: 12px; align-items: flex-start; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; margin-bottom: 10px; }',
+  '.photo-img-wrap { flex: 0 0 260px; background: #f5f7fa; }',
+  '.photo-img { width: 260px; height: 195px; object-fit: cover; display: block; }',
+  '.photo-img-lbl { font-size: 9px; color: #888; text-align: center; padding: 3px; background: #f1f3f4; }',
+  '.photo-info { flex: 1; padding: 10px 12px; min-width: 0; }',
+  '.photo-info-title { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px; }',
+  '.photo-comment { font-size: 11px; color: #444; background: #f8f9fa; border-left: 3px solid #1a73e8; border-radius: 0 4px 4px 0; padding: 6px 8px; line-height: 1.5; margin-top: 8px; }',
+
+  /* AI BLOCKS */
+  '.rp-ai-text { background: #f3f0ff; border-left: 3px solid #7f77dd; border-radius: 0 5px 5px 0; padding: 8px 12px; margin-bottom: 10px; font-size: 12px; color: #333; line-height: 1.6; }',
+  '.rp-ai-badge { display: inline-block; background: #7f77dd; color: #fff; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px; margin-right: 6px; letter-spacing: .05em; }',
+
+  /* MAP & CONCLUSION */
+  '.map-wrap { margin: 10px 0 16px; }',
+  '.map-caption { font-size: 10px; color: #888; text-align: center; margin-top: 4px; font-style: italic; }',
+  '.conclusion-text { font-size: 13px; color: #1a1a2e; line-height: 1.7; padding: 16px; background: #f8faff; border-radius: 8px; border-left: 4px solid #1a73e8; white-space: pre-wrap; }',
+
+  /* PRINT BUTTON */
+  '.no-print { position: fixed; bottom: 20px; right: 20px; z-index: 100; }',
+  '.no-print button { padding: 10px 20px; font-size: 13px; cursor: pointer; background: #1a73e8; color: #fff; border: none; border-radius: 8px; font-weight: 600; box-shadow: 0 2px 8px rgba(26,115,232,.35); }',
+
+  /* PRINT */
   '@media print {',
-  '  @page { margin:15mm 18mm; size:A4 ' + (orientation === 'landscape' ? 'landscape' : 'portrait') + '; }',
-  '  @page { @bottom-right { content: "Стр. " counter(page); font-size:9pt; color:#aaa; font-family:sans-serif; } }',
-  '  body { counter-reset: page; }',
-  '  .rp-section { counter-increment: page; }',
-  '  .no-print { display:none !important; }',
-  '  body { font-size:11px; }',
-  '  * { -webkit-print-color-adjust:exact;print-color-adjust:exact; }',
-  '  .rp-title-page { page-break-after:always; }',
-  '  .rp-body { padding:0 !important;max-width:100% !important; }',
-  '  .rp-domen-block,.rp-ditch-block,.rp-photo-row,.rp-kpi-grid { page-break-inside:avoid;break-inside:avoid; }',
-  '  .rp-photo-img-wrap { flex:0 0 200px !important; }',
-  '  .rp-photo-img { width:200px !important;height:150px !important; }',
-  '  .rp-map-wrap img,.rp-ditch-block img { max-width:100% !important;height:auto !important;max-height:220px !important; }',
-  '  .rp-page-counter::before { content: counter(page); }',
+  '  body { background: white; }',
+  '  .pages-wrap { padding: 0; }',
+  '  .page { box-shadow: none; page-break-after: always; }',
+  '  @page { size: A4 ' + (orientation === 'landscape' ? 'landscape' : 'portrait') + '; margin: 0; }',
+  '  .no-print { display: none !important; }',
+  '  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+  '  .domen-block, .ditch-block, .photo-row, .kpi-grid { page-break-inside: avoid; break-inside: avoid; }',
+  '  .photo-img-wrap { flex: 0 0 200px !important; }',
+  '  .photo-img { width: 200px !important; height: 150px !important; }',
+  '  .map-wrap img, .ditch-block img { max-width: 100% !important; height: auto !important; max-height: 220px !important; }',
   '}'
   ].join('\n');
 }
