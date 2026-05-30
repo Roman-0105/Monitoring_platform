@@ -376,9 +376,13 @@
     <!-- Панель: реестр скважин -->
     <div id="wells-panel-registry" style="display:none">
       <div class="card" style="padding:16px">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <span>Реестр горизонтальных скважин</span>
-          <button id="btn-add-well" class="btn btn-sm btn-primary" style="display:none;padding:4px 12px">+ Добавить скважину</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="btn-wells-export-csv"  class="btn btn-sm btn-outline" style="display:none;white-space:nowrap">⬇ CSV</button>
+            <button id="btn-wells-export-xlsx" class="btn btn-sm btn-outline" style="display:none;white-space:nowrap;color:#217346;border-color:#217346">⬇ Excel</button>
+            <button id="btn-add-well" class="btn btn-sm btn-primary" style="display:none;padding:4px 12px">+ Добавить скважину</button>
+          </div>
         </div>
         <div id="wells-registry-full-table" style="margin-top:8px"></div>
       </div>
