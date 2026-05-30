@@ -164,6 +164,37 @@ body.landscape .domain-detail-wrap{grid-template-columns:220px 1fr}
 /* ── CONCLUSION ── */
 .conclusion-text{font-size:13px;color:#1a1a2e;line-height:1.7;margin-bottom:20px;padding:16px;background:#f8faff;border-radius:8px;border-left:4px solid #1a73e8}
 
+/* ── MODE TOGGLE ── */
+.mode-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;border:1.5px solid #d0d0d0;background:#fff;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:#555;cursor:pointer;transition:all .2s}
+.mode-btn.active{border-color:#0d6e3f;background:#e6f4ea;color:#0d6e3f}
+.mode-btn:hover:not(.active){border-color:#aaa;background:#f5f5f5}
+
+/* ── POINT CARDS ── */
+.pt-cards-strip{margin:8px 0 14px}
+.pt-cards-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:7px;display:flex;align-items:center;gap:8px}
+.pt-cards-label::after{content:'';flex:1;height:1px;background:#e8e8e8}
+.pt-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:7px}
+.pt-card{border:1px solid #e0e0e0;border-radius:7px;padding:7px 8px;background:#fff}
+.pt-card-id{font-weight:700;color:#1a1a2e;font-size:10.5px;margin-bottom:3px;display:flex;align-items:center;justify-content:space-between;gap:3px}
+.pt-card-photo{width:100%;height:50px;border-radius:4px;background:linear-gradient(135deg,#f0f2f5 0%,#e4e8ed 100%);display:flex;align-items:center;justify-content:center;margin-bottom:4px;font-size:17px;color:#bbb}
+.pt-card-q{font-size:11.5px;font-weight:700;color:#1a73e8;margin-top:2px}
+.pt-card-meta{font-size:9px;color:#999}
+.pt-card-cmp{border:1px solid #e0e0e0;border-radius:7px;padding:7px 8px;background:#fff}
+.pt-cmp-id{font-weight:700;color:#1a1a2e;font-size:10.5px;margin-bottom:5px}
+.pt-cmp-cols{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.pt-cmp-col{padding:4px 5px;border-radius:4px;background:#f8faff;border:1px solid #e8f0fe}
+.pt-cmp-col.col-b{background:#f0f8f2;border-color:#c8e6c9}
+.pt-cmp-wk{font-size:7.5px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:2px}
+.pt-cmp-col.col-b .pt-cmp-wk{color:#188038}
+.pt-cmp-q{font-size:11px;font-weight:700;color:#1a1a2e}
+.pt-cmp-col.col-b .pt-cmp-q{color:#1a73e8}
+.pt-cmp-delta{margin-top:4px;display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:700}
+.d-pos{color:#34a853}.d-neg{color:#ea4335}.d-zero{color:#888}.d-new{color:#1a73e8}
+.single-view{}
+.compare-view{display:none}
+body.compare-mode .single-view{display:none}
+body.compare-mode .compare-view{display:block}
+
 /* PRINT */
 @media print{
   #orient-bar{display:none}
@@ -181,6 +212,10 @@ body.landscape .domain-detail-wrap{grid-template-columns:220px 1fr}
   <button class="orient-btn active" data-orient="portrait">&#128196; Книжный (A4)</button>
   <div class="bar-sep"></div>
   <button class="orient-btn" data-orient="landscape">&#128444; Альбомный (A4)</button>
+  <div class="bar-sep"></div>
+  <span class="bar-title">Режим:</span>
+  <button class="mode-btn active" data-mode="single">&#128202; Нед. 22</button>
+  <button class="mode-btn" data-mode="compare">&#9889; Нед.21 vs 22</button>
   <span class="bar-info">Отчёт № v2 · Неделя 22 · 29.05.2026 · Карьер ЮРГ</span>
 </div>
 
@@ -454,6 +489,390 @@ body.landscape .domain-detail-wrap{grid-template-columns:220px 1fr}
 </div>
 
 <!-- ════════════════════════════════════════
+     PAGE MAP-1 — КАРТА: НЕДЕЛЯ 22
+════════════════════════════════════════ -->
+<div class="page" id="page-map1">
+  <div class="sec-head"><span class="sec-num" style="background:#0d6e3f;font-size:9px">M</span> Карта мониторинга — Неделя 22, 2026</div>
+
+  <!-- Single-week map (always visible) / В режиме сравнения подписи заменяются -->
+  <div class="single-view" style="font-size:11px;color:#555;margin-bottom:10px">
+    Расположение 27 точек наблюдения. Цвет — статус на дату 29.05.2026. Горизонты показаны метками ▲.
+  </div>
+  <div class="compare-view" style="font-size:11px;color:#555;margin-bottom:10px">
+    <strong>Неделя 22 (29.05.2026)</strong> — изменения статусов относительно Нед.21 отмечены стрелками ⬆⬇.
+  </div>
+
+  <!-- MAP SVG -->
+  <div style="border:1px solid #d0d8e0;border-radius:10px;overflow:hidden;background:#dde8cc;position:relative">
+    <svg viewBox="0 0 690 400" width="100%" style="display:block">
+
+      <!-- Terrain -->
+      <rect width="690" height="400" fill="#dde8cc"/>
+
+      <!-- Bench levels (outer→inner) -->
+      <polygon points="80,65 610,65 650,195 590,345 100,345 50,195" fill="#c8c4b0" stroke="#a0a090" stroke-width="1.5"/>
+      <polygon points="110,95 580,95 620,195 560,315 130,315 80,195"  fill="#bcb89e" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+      <polygon points="140,125 550,125 590,195 530,285 160,285 110,195" fill="#b0ac90" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+      <polygon points="170,155 520,155 560,195 500,255 190,255 140,195" fill="#a4a082" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+      <!-- Floor -->
+      <polygon points="200,178 490,178 530,200 470,228 220,228 180,200" fill="#7a7868" stroke="#5a5648" stroke-width="1.5"/>
+
+      <!-- Domain zones -->
+      <!-- Domen-5 (right + bottom) -->
+      <path d="M348,158 Q430,138 525,168 Q592,196 574,282 Q555,336 470,344 Q382,348 342,315 Q305,280 310,228 Q325,185 348,158Z"
+            fill="rgba(13,71,161,0.13)" stroke="rgba(13,71,161,0.32)" stroke-width="1.5"/>
+      <!-- Domen-3 (centre-left) -->
+      <path d="M178,158 Q235,135 315,158 Q356,178 350,248 Q338,302 274,316 Q200,318 174,272 Q158,232 178,158Z"
+            fill="rgba(66,133,244,0.11)" stroke="rgba(66,133,244,0.28)" stroke-width="1.5"/>
+      <!-- Domen-1 (top-left) -->
+      <ellipse cx="110" cy="168" rx="52" ry="38" fill="rgba(147,197,253,0.28)" stroke="rgba(59,130,246,0.38)" stroke-width="1.5"/>
+      <!-- Domen-2 (top-right) -->
+      <ellipse cx="568" cy="168" rx="52" ry="38" fill="rgba(191,219,254,0.24)" stroke="rgba(96,165,250,0.36)" stroke-width="1.5"/>
+
+      <!-- Domain labels -->
+      <text x="110"  y="172" text-anchor="middle" font-family="Inter,sans-serif" font-size="8.5" font-weight="700" fill="#1557b0" opacity=".85">D-1</text>
+      <text x="568"  y="172" text-anchor="middle" font-family="Inter,sans-serif" font-size="8.5" font-weight="700" fill="#1557b0" opacity=".85">D-2</text>
+      <text x="245"  y="215" text-anchor="middle" font-family="Inter,sans-serif" font-size="9"   font-weight="700" fill="#1557b0" opacity=".85">D-3</text>
+      <text x="460"  y="208" text-anchor="middle" font-family="Inter,sans-serif" font-size="9"   font-weight="700" fill="#0d47a1" opacity=".85">D-5</text>
+
+      <!-- ── OBSERVATION POINTS ── -->
+      <!-- color: green=#34a853 Активная | red=#ea4335 Пересохла | blue=#1a73e8 Новая -->
+
+      <!-- Domen-1 -->
+      <circle cx="110" cy="168" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="110" y="171.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">001</text>
+
+      <!-- Domen-2: Новая -->
+      <circle cx="568" cy="168" r="8" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/>
+      <text x="568" y="171.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">002</text>
+
+      <!-- Domen-3 -->
+      <circle cx="195" cy="192" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="195" y="195.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">011</text>
+
+      <circle cx="232" cy="210" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="232" y="213.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">012</text>
+
+      <circle cx="274" cy="192" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="274" y="195.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">013</text>
+
+      <circle cx="217" cy="242" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="217" y="245.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">014</text>
+
+      <!-- РГ-015: Пересохла -->
+      <circle cx="262" cy="264" r="8" fill="#ea4335" stroke="#fff" stroke-width="1.5"/>
+      <text x="262" y="267.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">015</text>
+
+      <circle cx="303" cy="218" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="303" y="221.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">016</text>
+
+      <circle cx="337" cy="238" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="337" y="241.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">017</text>
+
+      <circle cx="298" cy="262" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="298" y="265.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">018</text>
+
+      <circle cx="252" cy="288" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="252" y="291.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">019</text>
+
+      <!-- Domen-5 (15 pts) -->
+      <circle cx="378" cy="175" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="378" y="178.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">051</text>
+
+      <circle cx="418" cy="190" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="418" y="193.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">052</text>
+
+      <circle cx="455" cy="210" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="455" y="213.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">053</text>
+
+      <circle cx="394" cy="228" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="394" y="231.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">054</text>
+
+      <!-- РГ-055: Новая -->
+      <circle cx="358" cy="264" r="8" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/>
+      <text x="358" y="267.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">055</text>
+
+      <circle cx="438" cy="252" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="438" y="255.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">056</text>
+
+      <circle cx="474" cy="268" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="474" y="271.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">057</text>
+
+      <!-- РГ-058: Пересохла -->
+      <circle cx="413" cy="294" r="8" fill="#ea4335" stroke="#fff" stroke-width="1.5"/>
+      <text x="413" y="297.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">058</text>
+
+      <circle cx="458" cy="304" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="458" y="307.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">059</text>
+
+      <circle cx="382" cy="308" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="382" y="311.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">060</text>
+
+      <circle cx="350" cy="326" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="350" y="329.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">061</text>
+
+      <circle cx="416" cy="324" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="416" y="327.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">062</text>
+
+      <circle cx="456" cy="330" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="456" y="333.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">063</text>
+
+      <circle cx="496" cy="310" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="496" y="313.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">064</text>
+
+      <circle cx="326" cy="308" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+      <text x="326" y="311.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">065</text>
+
+      <!-- Change arrows (compare mode only) -->
+      <!-- РГ-015 пересохла: ↓ -->
+      <g class="compare-view">
+        <polygon points="262,250 258,243 266,243" fill="#ea4335"/>
+        <text x="272" y="249" font-family="Inter,sans-serif" font-size="8" fill="#ea4335" font-weight="700">↓</text>
+      </g>
+      <!-- РГ-058 пересохла: ↓ -->
+      <g class="compare-view">
+        <text x="423" y="292" font-family="Inter,sans-serif" font-size="8" fill="#ea4335" font-weight="700">↓</text>
+      </g>
+      <!-- РГ-002 новая: NEW -->
+      <g class="compare-view">
+        <rect x="540" y="155" width="20" height="9" rx="3" fill="#1a73e8"/>
+        <text x="550" y="162" text-anchor="middle" font-family="Inter,sans-serif" font-size="6" fill="#fff" font-weight="700">NEW</text>
+      </g>
+      <!-- РГ-055 новая: NEW -->
+      <g class="compare-view">
+        <rect x="330" y="255" width="20" height="9" rx="3" fill="#1a73e8"/>
+        <text x="340" y="262" text-anchor="middle" font-family="Inter,sans-serif" font-size="6" fill="#fff" font-weight="700">NEW</text>
+      </g>
+
+      <!-- Horizon labels -->
+      <text x="58" y="100" font-family="Inter,sans-serif" font-size="7.5" fill="#888">▲270</text>
+      <text x="58" y="130" font-family="Inter,sans-serif" font-size="7.5" fill="#888">▲195</text>
+      <text x="58" y="160" font-family="Inter,sans-serif" font-size="7.5" fill="#888">▲180</text>
+      <text x="58" y="190" font-family="Inter,sans-serif" font-size="7.5" fill="#888">▲200</text>
+
+      <!-- Compass -->
+      <g transform="translate(650,355)">
+        <text x="0" y="-2" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#555" font-weight="700">N</text>
+        <line x1="0" y1="1" x2="0" y2="14" stroke="#555" stroke-width="1.5"/>
+        <polygon points="0,-5 3,7 0,4 -3,7" fill="#ea4335" transform="translate(0,1)"/>
+      </g>
+
+      <!-- Scale bar -->
+      <g transform="translate(530,363)">
+        <line x1="0" y1="0" x2="70" y2="0" stroke="#555" stroke-width="2"/>
+        <line x1="0" y1="-3" x2="0" y2="3" stroke="#555" stroke-width="1.5"/>
+        <line x1="70" y1="-3" x2="70" y2="3" stroke="#555" stroke-width="1.5"/>
+        <text x="35" y="13" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="#555">200 м</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Legend -->
+  <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:11px;align-items:center">
+    <div style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:50%;background:#34a853;display:inline-block;border:1.5px solid rgba(0,0,0,.1)"></span>Активная (23 тч.)</div>
+    <div style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:50%;background:#ea4335;display:inline-block;border:1.5px solid rgba(0,0,0,.1)"></span>Пересохла (2 тч.)</div>
+    <div style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:50%;background:#1a73e8;display:inline-block;border:1.5px solid rgba(0,0,0,.1)"></span>Новая (2 тч.)</div>
+    <div style="margin-left:auto;display:flex;gap:14px;font-size:10px;color:#888">
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:8px;background:rgba(13,71,161,.2);border:1px solid rgba(13,71,161,.4);display:inline-block;border-radius:2px"></span>Domen-5</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:8px;background:rgba(66,133,244,.15);border:1px solid rgba(66,133,244,.3);display:inline-block;border-radius:2px"></span>Domen-3</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:8px;background:rgba(147,197,253,.35);border:1px solid rgba(59,130,246,.35);display:inline-block;border-radius:2px"></span>D-1/D-2</span>
+    </div>
+  </div>
+
+  <!-- Compare-mode summary bar -->
+  <div class="compare-view" style="margin-top:12px;padding:10px 14px;background:#fff8e1;border:1px solid #f9ab00;border-radius:8px;font-size:11px;display:flex;gap:20px;flex-wrap:wrap">
+    <span style="font-weight:700;color:#b45309">Изменения Нед.21→22:</span>
+    <span style="color:#ea4335;font-weight:600">&#8595; РГ-015 Активная→Пересохла</span>
+    <span style="color:#ea4335;font-weight:600">&#8595; РГ-058 Активная→Пересохла</span>
+    <span style="color:#1a73e8;font-weight:600">&#9670; РГ-002 новая точка</span>
+    <span style="color:#1a73e8;font-weight:600">&#9670; РГ-055 новая точка</span>
+  </div>
+
+  <div class="page-footer">
+    <span>Карьер ЮРГ · Мониторинг подземных вод · 29.05.2026</span>
+    <span>v2 | Стр. 3 — Карта</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     PAGE MAP-2 — СРАВНЕНИЕ: НЕД.21 vs НЕД.22
+════════════════════════════════════════ -->
+<div class="page" id="page-map2">
+  <div class="sec-head"><span class="sec-num" style="background:#b45309;font-size:9px">⚡</span> Сравнение карт — Неделя 21 vs Неделя 22</div>
+
+  <div style="font-size:11px;color:#555;margin-bottom:12px">
+    Визуальное сравнение расположения и статусов точек наблюдения на двух последовательных мониторингах. Выделены изменившиеся точки.
+  </div>
+
+  <!-- Two maps side by side -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- Week 21 map -->
+    <div>
+      <div style="text-align:center;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#555;background:#f5f5f5;border-radius:5px;padding:4px;margin-bottom:6px">Неделя 21 · 22.05.2026</div>
+      <div style="border:1px solid #d0d8e0;border-radius:8px;overflow:hidden;background:#dde8cc">
+        <svg viewBox="0 0 690 400" width="100%" style="display:block">
+          <rect width="690" height="400" fill="#dde8cc"/>
+          <polygon points="80,65 610,65 650,195 590,345 100,345 50,195" fill="#c8c4b0" stroke="#a0a090" stroke-width="1.5"/>
+          <polygon points="110,95 580,95 620,195 560,315 130,315 80,195"  fill="#bcb89e" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+          <polygon points="140,125 550,125 590,195 530,285 160,285 110,195" fill="#b0ac90" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+          <polygon points="170,155 520,155 560,195 500,255 190,255 140,195" fill="#a4a082" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+          <polygon points="200,178 490,178 530,200 470,228 220,228 180,200" fill="#7a7868" stroke="#5a5648" stroke-width="1.5"/>
+          <path d="M348,158 Q430,138 525,168 Q592,196 574,282 Q555,336 470,344 Q382,348 342,315 Q305,280 310,228 Q325,185 348,158Z" fill="rgba(13,71,161,0.13)" stroke="rgba(13,71,161,0.32)" stroke-width="1"/>
+          <path d="M178,158 Q235,135 315,158 Q356,178 350,248 Q338,302 274,316 Q200,318 174,272 Q158,232 178,158Z" fill="rgba(66,133,244,0.11)" stroke="rgba(66,133,244,0.28)" stroke-width="1"/>
+          <ellipse cx="110" cy="168" rx="52" ry="38" fill="rgba(147,197,253,0.28)" stroke="rgba(59,130,246,0.38)" stroke-width="1"/>
+          <!-- РГ-002: absent in W21 → gray placeholder -->
+          <circle cx="568" cy="168" r="8" fill="#ccc" stroke="#fff" stroke-width="1.5"/>
+          <text x="568" y="171.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#888" font-weight="700">002</text>
+          <!-- D-1 -->
+          <circle cx="110" cy="168" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+          <text x="110" y="171.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">001</text>
+          <!-- D-3 -->
+          <circle cx="195" cy="192" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="195" y="195.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">011</text>
+          <circle cx="232" cy="210" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="232" y="213.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">012</text>
+          <circle cx="274" cy="192" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="274" y="195.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">013</text>
+          <circle cx="217" cy="242" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="217" y="245.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">014</text>
+          <!-- РГ-015 was Активная in W21 -->
+          <circle cx="262" cy="264" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+          <text x="262" y="267.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">015</text>
+          <circle cx="303" cy="218" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="303" y="221.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">016</text>
+          <circle cx="337" cy="238" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="337" y="241.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">017</text>
+          <circle cx="298" cy="262" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="298" y="265.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">018</text>
+          <circle cx="252" cy="288" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="252" y="291.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">019</text>
+          <!-- D-5 -->
+          <circle cx="378" cy="175" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="378" y="178.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">051</text>
+          <circle cx="418" cy="190" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="418" y="193.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">052</text>
+          <circle cx="455" cy="210" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="455" y="213.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">053</text>
+          <circle cx="394" cy="228" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="394" y="231.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">054</text>
+          <!-- РГ-055: absent in W21 → gray placeholder -->
+          <circle cx="358" cy="264" r="8" fill="#ccc" stroke="#fff" stroke-width="1.5"/>
+          <text x="358" y="267.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#888" font-weight="700">055</text>
+          <circle cx="438" cy="252" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="438" y="255.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">056</text>
+          <circle cx="474" cy="268" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="474" y="271.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">057</text>
+          <!-- РГ-058 was Активная in W21 -->
+          <circle cx="413" cy="294" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/>
+          <text x="413" y="297.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">058</text>
+          <circle cx="458" cy="304" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="458" y="307.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">059</text>
+          <circle cx="382" cy="308" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="382" y="311.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">060</text>
+          <circle cx="350" cy="326" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="350" y="329.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">061</text>
+          <circle cx="416" cy="324" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="416" y="327.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">062</text>
+          <circle cx="456" cy="330" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="456" y="333.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">063</text>
+          <circle cx="496" cy="310" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="496" y="313.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">064</text>
+          <circle cx="326" cy="308" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="326" y="311.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">065</text>
+          <text x="345" y="388" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#888">25 точек · Q = 17.4 л/с</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Week 22 map -->
+    <div>
+      <div style="text-align:center;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1557b0;background:#e8f0fe;border-radius:5px;padding:4px;margin-bottom:6px">Неделя 22 · 29.05.2026</div>
+      <div style="border:1px solid #d0d8e0;border-radius:8px;overflow:hidden;background:#dde8cc">
+        <svg viewBox="0 0 690 400" width="100%" style="display:block">
+          <rect width="690" height="400" fill="#dde8cc"/>
+          <polygon points="80,65 610,65 650,195 590,345 100,345 50,195" fill="#c8c4b0" stroke="#a0a090" stroke-width="1.5"/>
+          <polygon points="110,95 580,95 620,195 560,315 130,315 80,195"  fill="#bcb89e" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+          <polygon points="140,125 550,125 590,195 530,285 160,285 110,195" fill="#b0ac90" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+          <polygon points="170,155 520,155 560,195 500,255 190,255 140,195" fill="#a4a082" stroke="#9a9888" stroke-width="1" stroke-dasharray="4,2"/>
+          <polygon points="200,178 490,178 530,200 470,228 220,228 180,200" fill="#7a7868" stroke="#5a5648" stroke-width="1.5"/>
+          <path d="M348,158 Q430,138 525,168 Q592,196 574,282 Q555,336 470,344 Q382,348 342,315 Q305,280 310,228 Q325,185 348,158Z" fill="rgba(13,71,161,0.13)" stroke="rgba(13,71,161,0.32)" stroke-width="1"/>
+          <path d="M178,158 Q235,135 315,158 Q356,178 350,248 Q338,302 274,316 Q200,318 174,272 Q158,232 178,158Z" fill="rgba(66,133,244,0.11)" stroke="rgba(66,133,244,0.28)" stroke-width="1"/>
+          <ellipse cx="110" cy="168" rx="52" ry="38" fill="rgba(147,197,253,0.28)" stroke="rgba(59,130,246,0.38)" stroke-width="1"/>
+          <!-- Full W22 set (same as map1) -->
+          <circle cx="110" cy="168" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="110" y="171.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">001</text>
+          <!-- РГ-002: Новая — highlight ring -->
+          <circle cx="568" cy="168" r="11" fill="none" stroke="#1a73e8" stroke-width="2" stroke-dasharray="3,2"/>
+          <circle cx="568" cy="168" r="8" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/>
+          <text x="568" y="171.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">002</text>
+          <circle cx="195" cy="192" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="195" y="195.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">011</text>
+          <circle cx="232" cy="210" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="232" y="213.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">012</text>
+          <circle cx="274" cy="192" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="274" y="195.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">013</text>
+          <circle cx="217" cy="242" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="217" y="245.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">014</text>
+          <!-- РГ-015: Пересохла — highlight ring -->
+          <circle cx="262" cy="264" r="11" fill="none" stroke="#ea4335" stroke-width="2" stroke-dasharray="3,2"/>
+          <circle cx="262" cy="264" r="8" fill="#ea4335" stroke="#fff" stroke-width="1.5"/>
+          <text x="262" y="267.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">015</text>
+          <circle cx="303" cy="218" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="303" y="221.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">016</text>
+          <circle cx="337" cy="238" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="337" y="241.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">017</text>
+          <circle cx="298" cy="262" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="298" y="265.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">018</text>
+          <circle cx="252" cy="288" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="252" y="291.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">019</text>
+          <circle cx="378" cy="175" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="378" y="178.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">051</text>
+          <circle cx="418" cy="190" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="418" y="193.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">052</text>
+          <circle cx="455" cy="210" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="455" y="213.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">053</text>
+          <circle cx="394" cy="228" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="394" y="231.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">054</text>
+          <!-- РГ-055: Новая — highlight -->
+          <circle cx="358" cy="264" r="11" fill="none" stroke="#1a73e8" stroke-width="2" stroke-dasharray="3,2"/>
+          <circle cx="358" cy="264" r="8" fill="#1a73e8" stroke="#fff" stroke-width="1.5"/>
+          <text x="358" y="267.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">055</text>
+          <circle cx="438" cy="252" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="438" y="255.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">056</text>
+          <circle cx="474" cy="268" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="474" y="271.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">057</text>
+          <!-- РГ-058: Пересохла — highlight -->
+          <circle cx="413" cy="294" r="11" fill="none" stroke="#ea4335" stroke-width="2" stroke-dasharray="3,2"/>
+          <circle cx="413" cy="294" r="8" fill="#ea4335" stroke="#fff" stroke-width="1.5"/>
+          <text x="413" y="297.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">058</text>
+          <circle cx="458" cy="304" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="458" y="307.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">059</text>
+          <circle cx="382" cy="308" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="382" y="311.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">060</text>
+          <circle cx="350" cy="326" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="350" y="329.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">061</text>
+          <circle cx="416" cy="324" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="416" y="327.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">062</text>
+          <circle cx="456" cy="330" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="456" y="333.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">063</text>
+          <circle cx="496" cy="310" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="496" y="313.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">064</text>
+          <circle cx="326" cy="308" r="8" fill="#34a853" stroke="#fff" stroke-width="1.5"/><text x="326" y="311.5" text-anchor="middle" font-family="Inter,sans-serif" font-size="5.5" fill="#fff" font-weight="700">065</text>
+          <text x="345" y="388" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#888">27 точек · Q = 18.2 л/с</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delta table -->
+  <div style="margin-top:16px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#555;margin-bottom:8px">Ключевые изменения статусов</div>
+    <table style="margin-bottom:0">
+      <thead><tr><th>Точка</th><th>Домен</th><th>Нед.21</th><th>Нед.22</th><th>Q нед.21</th><th>Q нед.22</th><th>Δ л/с</th><th>Горизонт</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>РГ-002</strong></td><td>Domen-2</td>
+          <td><span style="font-size:10px;color:#aaa">— не замерялась</span></td>
+          <td><span class="badge badge-blue"><span class="dot dot-blue"></span>Новая</span></td>
+          <td>—</td><td>0.05</td>
+          <td style="color:#1a73e8;font-weight:700">NEW</td><td>▲180</td>
+        </tr>
+        <tr>
+          <td><strong>РГ-015</strong></td><td>Domen-3</td>
+          <td><span class="badge badge-green"><span class="dot dot-green"></span>Активная</span></td>
+          <td><span class="badge badge-red"><span class="dot dot-red"></span>Пересохла</span></td>
+          <td>0.18</td><td>0.00</td>
+          <td style="color:#ea4335;font-weight:700">−0.18</td><td>▲270</td>
+        </tr>
+        <tr>
+          <td><strong>РГ-055</strong></td><td>Domen-5</td>
+          <td><span style="font-size:10px;color:#aaa">— не замерялась</span></td>
+          <td><span class="badge badge-blue"><span class="dot dot-blue"></span>Новая</span></td>
+          <td>—</td><td>0.67</td>
+          <td style="color:#1a73e8;font-weight:700">NEW</td><td>▲180</td>
+        </tr>
+        <tr>
+          <td><strong>РГ-058</strong></td><td>Domen-5</td>
+          <td><span class="badge badge-green"><span class="dot dot-green"></span>Активная</span></td>
+          <td><span class="badge badge-red"><span class="dot dot-red"></span>Пересохла</span></td>
+          <td>0.22</td><td>0.00</td>
+          <td style="color:#ea4335;font-weight:700">−0.22</td><td>▲180</td>
+        </tr>
+        <tr style="background:#e8f0fe">
+          <td colspan="4"><strong>Суммарный Q по всем точкам</strong></td>
+          <td><strong>17.40</strong></td><td><strong>18.20</strong></td>
+          <td style="color:#34a853;font-weight:700">+0.80</td><td>—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="page-footer">
+    <span>Карьер ЮРГ · Мониторинг подземных вод · 29.05.2026</span>
+    <span>v2 | Стр. 4 — Сравнение карт</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
      PAGE 3 — SECTION 2: ПО ДОМЕНАМ
 ════════════════════════════════════════ -->
 <div class="page" id="page3">
@@ -480,6 +899,46 @@ body.landscape .domain-detail-wrap{grid-template-columns:220px 1fr}
     </tbody>
   </table>
 
+  <!-- Domen-1 point cards -->
+  <div class="pt-cards-strip">
+    <div class="pt-cards-label">Фото и тренд — Domen-1</div>
+    <!-- Single mode -->
+    <div class="pt-cards-grid single-view">
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-001 <span class="badge badge-green" style="font-size:8.5px;padding:1px 5px">Активная</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="32" style="margin-bottom:3px">
+          <polyline points="5,28 23,26 41,24 59,26 77,24 95,22 113,20 130,17" fill="none" stroke="#e8e8e8" stroke-width="6" stroke-linejoin="round"/>
+          <polyline points="5,28 23,26 41,24 59,26 77,24 95,22 113,20 130,17" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="17" r="3" fill="#1a73e8"/>
+          <text x="5" y="34" font-family="Inter,sans-serif" font-size="7" fill="#aaa">нед.15</text>
+          <text x="110" y="34" font-family="Inter,sans-serif" font-size="7" fill="#aaa">нед.22</text>
+        </svg>
+        <div class="pt-card-q">0.05 л/с</div>
+        <div class="pt-card-meta">▲195 · Объёмный · 29.05</div>
+      </div>
+    </div>
+    <!-- Compare mode -->
+    <div class="pt-cards-grid compare-view" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+      <div class="pt-card-cmp">
+        <div class="pt-cmp-id">РГ-001 · Domen-1 · ▲195</div>
+        <div class="pt-cmp-cols">
+          <div class="pt-cmp-col">
+            <div class="pt-cmp-wk">Нед. 21 · 22.05</div>
+            <div class="pt-cmp-q">0.04 л/с</div>
+            <div style="font-size:9px;color:#888;margin-top:2px">Слабая · Объёмный</div>
+          </div>
+          <div class="pt-cmp-col col-b">
+            <div class="pt-cmp-wk">Нед. 22 · 29.05</div>
+            <div class="pt-cmp-q">0.05 л/с</div>
+            <div style="font-size:9px;color:#888;margin-top:2px">Слабая · Объёмный</div>
+          </div>
+        </div>
+        <div class="pt-cmp-delta"><span class="d-pos">+0.01 л/с</span><span style="font-size:9px;color:#888">+25%</span></div>
+      </div>
+    </div>
+  </div>
+
   <!-- DOMEN-2 -->
   <div class="domain-section-hdr" style="border-left-color:#bfdbfe">
     <div class="d-name">Domen-2</div>
@@ -492,6 +951,44 @@ body.landscape .domain-detail-wrap{grid-template-columns:220px 1fr}
       <tr><td><strong>РГ-002</strong></td><td><span class="badge badge-blue"><span class="dot dot-blue"></span>Новая</span></td><td>Слабая</td><td>0.05</td><td style="color:#1a73e8">NEW</td><td>▲180</td><td>Объёмный</td></tr>
     </tbody>
   </table>
+
+  <!-- Domen-2 point cards -->
+  <div class="pt-cards-strip">
+    <div class="pt-cards-label">Фото и тренд — Domen-2</div>
+    <div class="pt-cards-grid single-view">
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-002 <span class="badge badge-blue" style="font-size:8.5px;padding:1px 5px">Новая</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="32" style="margin-bottom:3px">
+          <line x1="5" y1="36" x2="110" y2="36" stroke="#f0f0f0" stroke-width="1"/>
+          <polyline points="110,22 130,19" fill="none" stroke="#e8e8e8" stroke-width="6" stroke-linejoin="round"/>
+          <polyline points="110,22 130,19" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="19" r="3" fill="#1a73e8"/>
+          <text x="5" y="15" font-family="Inter,sans-serif" font-size="7.5" fill="#aaa">— первый замер</text>
+          <text x="110" y="34" font-family="Inter,sans-serif" font-size="7" fill="#aaa">нед.22</text>
+        </svg>
+        <div class="pt-card-q">0.05 л/с</div>
+        <div class="pt-card-meta">▲180 · Объёмный · 29.05 · первый</div>
+      </div>
+    </div>
+    <div class="pt-cards-grid compare-view" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+      <div class="pt-card-cmp">
+        <div class="pt-cmp-id">РГ-002 · Domen-2 · ▲180</div>
+        <div class="pt-cmp-cols">
+          <div class="pt-cmp-col">
+            <div class="pt-cmp-wk">Нед. 21</div>
+            <div style="font-size:10.5px;color:#aaa;font-style:italic;margin-top:2px">не замерялась</div>
+          </div>
+          <div class="pt-cmp-col col-b">
+            <div class="pt-cmp-wk">Нед. 22 · 29.05</div>
+            <div class="pt-cmp-q">0.05 л/с</div>
+            <div style="font-size:9px;color:#888;margin-top:2px">Слабая · Объёмный</div>
+          </div>
+        </div>
+        <div class="pt-cmp-delta"><span class="d-new">&#9670; Новая точка</span></div>
+      </div>
+    </div>
+  </div>
 
   <!-- DOMEN-3 -->
   <div class="domain-section-hdr">
@@ -514,6 +1011,125 @@ body.landscape .domain-detail-wrap{grid-template-columns:220px 1fr}
     </tbody>
   </table>
 
+  <!-- Domen-3 point cards -->
+  <div class="pt-cards-strip">
+    <div class="pt-cards-label">Фото и тренды — Domen-3 (9 точек)</div>
+    <!-- Single mode: 9 cards -->
+    <div class="pt-cards-grid single-view">
+      <!-- РГ-011 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-011 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,30 23,27 41,25 59,24 77,22 95,19 113,17 130,14" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="14" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.42 л/с</div>
+        <div class="pt-card-meta">▲195 · +0.05</div>
+      </div>
+      <!-- РГ-012 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-012 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,18 23,16 41,20 59,18 77,19 95,17 113,19 130,22" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="22" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.38 л/с</div>
+        <div class="pt-card-meta">▲195 · −0.02</div>
+      </div>
+      <!-- РГ-013 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-013 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,28 23,25 41,22 59,20 77,18 95,15 113,13 130,8" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="8" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.71 л/с</div>
+        <div class="pt-card-meta">▲180 · +0.12</div>
+      </div>
+      <!-- РГ-014 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-014 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,20 23,21 41,20 59,20 77,21 95,20 113,20 130,20" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="20" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.31 л/с</div>
+        <div class="pt-card-meta">▲180 · 0.00</div>
+      </div>
+      <!-- РГ-015: Пересохла -->
+      <div class="pt-card" style="border-color:#fca5a5;background:#fff8f7">
+        <div class="pt-card-id">РГ-015 <span class="badge badge-red" style="font-size:8px;padding:1px 4px">Сух.</span></div>
+        <div class="pt-card-photo" style="background:linear-gradient(135deg,#fee2e2,#fca5a5)">🔴</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,8 23,10 41,14 59,18 77,22 95,28 113,33 130,36" fill="none" stroke="#ea4335" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="36" r="3" fill="#ea4335"/>
+        </svg>
+        <div class="pt-card-q" style="color:#ea4335">0.00 л/с</div>
+        <div class="pt-card-meta">▲270 · −0.18</div>
+      </div>
+      <!-- РГ-016 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-016 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,25 23,23 41,22 59,22 77,21 95,20 113,19 130,17" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="17" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.11 л/с</div>
+        <div class="pt-card-meta">▲270 · +0.03</div>
+      </div>
+      <!-- РГ-017 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-017 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,20 23,19 41,21 59,20 77,20 95,19 113,20 130,20" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="20" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.19 л/с</div>
+        <div class="pt-card-meta">▲270 · 0.00</div>
+      </div>
+      <!-- РГ-018 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-018 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,14 23,15 41,17 59,16 77,18 95,19 113,20 130,22" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="22" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.14 л/с</div>
+        <div class="pt-card-meta">▲270 · −0.04</div>
+      </div>
+      <!-- РГ-019 -->
+      <div class="pt-card">
+        <div class="pt-card-id">РГ-019 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div>
+        <div class="pt-card-photo">📷</div>
+        <svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px">
+          <polyline points="5,22 23,21 41,20 59,21 77,20 95,20 113,20 130,20" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="130" cy="20" r="3" fill="#34a853"/>
+        </svg>
+        <div class="pt-card-q">0.14 л/с</div>
+        <div class="pt-card-meta">▲180 · 0.00</div>
+      </div>
+    </div>
+    <!-- Compare mode: 9 compare cards -->
+    <div class="pt-cards-grid compare-view" style="grid-template-columns:repeat(auto-fill,minmax(195px,1fr))">
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-011 · ▲195</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.37 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.42 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-pos">+0.05</span><span style="font-size:9px;color:#888">+13%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-012 · ▲195</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.40 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.38 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-neg">−0.02</span><span style="font-size:9px;color:#888">−5%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-013 · ▲180</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.59 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.71 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-pos">+0.12</span><span style="font-size:9px;color:#888">+20%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-014 · ▲180</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.31 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.31 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-zero">0.00</span></div></div>
+      <div class="pt-card-cmp" style="border-color:#fca5a5"><div class="pt-cmp-id" style="color:#c5221f">РГ-015 · ▲270 &#8595;</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.18 л/с</div><div style="font-size:8.5px;color:#34a853">Активная</div></div><div class="pt-cmp-col" style="background:#fff0f0;border-color:#fca5a5"><div class="pt-cmp-wk" style="color:#c5221f">Нед.22</div><div class="pt-cmp-q" style="color:#ea4335">0.00 л/с</div><div style="font-size:8.5px;color:#ea4335">Пересохла</div></div></div><div class="pt-cmp-delta"><span class="d-neg">−0.18</span><span style="font-size:9px;color:#ea4335">−100%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-016 · ▲270</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.08 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.11 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-pos">+0.03</span><span style="font-size:9px;color:#888">+38%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-017 · ▲270</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.19 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.19 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-zero">0.00</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-018 · ▲270</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.18 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.14 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-neg">−0.04</span><span style="font-size:9px;color:#888">−22%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-019 · ▲180</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.14 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.14 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-zero">0.00</span></div></div>
+    </div>
+  </div>
+
   <!-- DOMEN-5 header + first rows -->
   <div class="domain-section-hdr" style="border-left-color:#0d47a1;background:#f0f4ff">
     <div class="d-name">Domen-5</div>
@@ -533,6 +1149,31 @@ body.landscape .domain-detail-wrap{grid-template-columns:220px 1fr}
       <tr><td><strong>РГ-058</strong></td><td><span class="badge badge-red"><span class="dot dot-red"></span>Пересохла</span></td><td>—</td><td>0.00</td><td style="color:#ea4335">−0.22</td><td>▲180</td><td>—</td></tr>
     </tbody>
   </table>
+
+  <!-- Domen-5 point cards (first 8 on this page) -->
+  <div class="pt-cards-strip" style="margin-top:8px">
+    <div class="pt-cards-label">Фото и тренды — Domen-5 (8 из 15, продолжение на след. стр.)</div>
+    <div class="pt-cards-grid single-view">
+      <div class="pt-card"><div class="pt-card-id">РГ-051 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div><div class="pt-card-photo">📷</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="5,28 23,24 41,21 59,19 77,16 95,13 113,11 130,6" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="6" r="3" fill="#34a853"/></svg><div class="pt-card-q">4.31 л/с</div><div class="pt-card-meta">▲195 · +0.44</div></div>
+      <div class="pt-card"><div class="pt-card-id">РГ-052 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div><div class="pt-card-photo">📷</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="5,24 23,21 41,19 59,17 77,15 95,13 113,11 130,9" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="9" r="3" fill="#34a853"/></svg><div class="pt-card-q">3.18 л/с</div><div class="pt-card-meta">▲195 · +0.21</div></div>
+      <div class="pt-card"><div class="pt-card-id">РГ-053 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div><div class="pt-card-photo">📷</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="5,22 23,20 41,19 59,18 77,17 95,16 113,15 130,14" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="14" r="3" fill="#34a853"/></svg><div class="pt-card-q">1.92 л/с</div><div class="pt-card-meta">▲200 · +0.08</div></div>
+      <div class="pt-card"><div class="pt-card-id">РГ-054 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div><div class="pt-card-photo">📷</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="5,14 23,16 41,17 59,18 77,20 95,19 113,21 130,23" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="23" r="3" fill="#34a853"/></svg><div class="pt-card-q">2.23 л/с</div><div class="pt-card-meta">▲200 · −0.15</div></div>
+      <div class="pt-card" style="border-color:#bfdbfe"><div class="pt-card-id">РГ-055 <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">NEW</span></div><div class="pt-card-photo" style="background:linear-gradient(135deg,#eff6ff,#bfdbfe)">📷</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="110,20 130,17" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="17" r="3" fill="#1a73e8"/><text x="5" y="18" font-family="Inter,sans-serif" font-size="7.5" fill="#aaa">— первый замер</text></svg><div class="pt-card-q" style="color:#1a73e8">0.67 л/с</div><div class="pt-card-meta">▲180 · NEW</div></div>
+      <div class="pt-card"><div class="pt-card-id">РГ-056 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div><div class="pt-card-photo">📷</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="5,26 23,23 41,21 59,19 77,17 95,15 113,13 130,11" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="11" r="3" fill="#34a853"/></svg><div class="pt-card-q">1.44 л/с</div><div class="pt-card-meta">▲195 · +0.19</div></div>
+      <div class="pt-card"><div class="pt-card-id">РГ-057 <span class="badge badge-green" style="font-size:8px;padding:1px 4px">Акт.</span></div><div class="pt-card-photo">📷</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="5,21 23,21 41,20 59,20 77,21 95,20 113,20 130,20" fill="none" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="20" r="3" fill="#34a853"/></svg><div class="pt-card-q">0.31 л/с</div><div class="pt-card-meta">▲180 · 0.00</div></div>
+      <div class="pt-card" style="border-color:#fca5a5;background:#fff8f7"><div class="pt-card-id">РГ-058 <span class="badge badge-red" style="font-size:8px;padding:1px 4px">Сух.</span></div><div class="pt-card-photo" style="background:linear-gradient(135deg,#fee2e2,#fca5a5)">🔴</div><svg viewBox="0 0 130 36" width="100%" height="28" style="margin-bottom:2px"><polyline points="5,10 23,13 41,17 59,21 77,26 95,30 113,34 130,36" fill="none" stroke="#ea4335" stroke-width="2" stroke-linejoin="round"/><circle cx="130" cy="36" r="3" fill="#ea4335"/></svg><div class="pt-card-q" style="color:#ea4335">0.00 л/с</div><div class="pt-card-meta">▲180 · −0.22</div></div>
+    </div>
+    <div class="pt-cards-grid compare-view" style="grid-template-columns:repeat(auto-fill,minmax(195px,1fr))">
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-051 · ▲195</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">3.87 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">4.31 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-pos">+0.44</span><span style="font-size:9px;color:#888">+11%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-052 · ▲195</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">2.97 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">3.18 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-pos">+0.21</span><span style="font-size:9px;color:#888">+7%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-053 · ▲200</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">1.84 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">1.92 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-pos">+0.08</span><span style="font-size:9px;color:#888">+4%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-054 · ▲200</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">2.38 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">2.23 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-neg">−0.15</span><span style="font-size:9px;color:#888">−6%</span></div></div>
+      <div class="pt-card-cmp" style="border-color:#bfdbfe"><div class="pt-cmp-id" style="color:#1557b0">РГ-055 · ▲180 &#9670;</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div style="font-size:10px;color:#aaa;font-style:italic;margin-top:2px">нет данных</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.67 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-new">&#9670; Новая</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-056 · ▲195</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">1.25 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">1.44 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-pos">+0.19</span><span style="font-size:9px;color:#888">+15%</span></div></div>
+      <div class="pt-card-cmp"><div class="pt-cmp-id">РГ-057 · ▲180</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.31 л/с</div></div><div class="pt-cmp-col col-b"><div class="pt-cmp-wk">Нед.22</div><div class="pt-cmp-q">0.31 л/с</div></div></div><div class="pt-cmp-delta"><span class="d-zero">0.00</span></div></div>
+      <div class="pt-card-cmp" style="border-color:#fca5a5"><div class="pt-cmp-id" style="color:#c5221f">РГ-058 · ▲180 &#8595;</div><div class="pt-cmp-cols"><div class="pt-cmp-col"><div class="pt-cmp-wk">Нед.21</div><div class="pt-cmp-q">0.22 л/с</div><div style="font-size:8.5px;color:#34a853">Активная</div></div><div class="pt-cmp-col" style="background:#fff0f0;border-color:#fca5a5"><div class="pt-cmp-wk" style="color:#c5221f">Нед.22</div><div class="pt-cmp-q" style="color:#ea4335">0.00 л/с</div><div style="font-size:8.5px;color:#ea4335">Пересохла</div></div></div><div class="pt-cmp-delta"><span class="d-neg">−0.22</span><span style="font-size:9px;color:#ea4335">−100%</span></div></div>
+    </div>
+  </div>
 
   <div style="font-size:10px;color:#888;margin-top:4px;font-style:italic">* Таблица Domen-5 продолжена — оставшиеся 7 точек на следующей странице</div>
 
@@ -1056,8 +1697,15 @@ document.querySelectorAll('.orient-btn').forEach(function(btn) {
   btn.addEventListener('click', function() {
     document.querySelectorAll('.orient-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
-    var isLandscape = btn.dataset.orient === 'landscape';
-    document.body.classList.toggle('landscape', isLandscape);
+    document.body.classList.toggle('landscape', btn.dataset.orient === 'landscape');
+  });
+});
+
+document.querySelectorAll('.mode-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.mode-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    document.body.classList.toggle('compare-mode', btn.dataset.mode === 'compare');
   });
 });
 </script>
