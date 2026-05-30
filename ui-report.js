@@ -1647,9 +1647,10 @@ function captureMapCanvas() {
   try {
     var canvas = document.getElementById('map-canvas');
     if (!canvas) return null;
-    var px = canvas.getContext('2d').getImageData(0, 0, 4, 4).data;
-    for (var i = 0; i < px.length; i++) { if (px[i] > 0) return canvas.toDataURL('image/jpeg', 0.85); }
-    return null;
+    // Используем toDataURL без getImageData чтобы не вызывать Canvas2D readback warning.
+    // Пустой canvas JPEG ≈ 600–2000 байт base64; реально отрисованная карта — значительно больше.
+    var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    return (dataUrl && dataUrl.length > 6000) ? dataUrl : null;
   } catch(e) { return null; }
 }
 
@@ -1971,7 +1972,9 @@ function generateReport() {
       a.click();
     }
   }).catch(function(err) {
-    Toast.fail('rp-gen', 'Ошибка: ' + (err && err.message ? err.message : String(err)));
+    var msg = err && err.message ? err.message : String(err);
+    console.error('[generateReport] ошибка:', msg, err);
+    Toast.fail('rp-gen', 'Ошибка генерации: ' + msg);
     restoreReportTab();
   }).finally(function() {
     ReportState.generating = false;
