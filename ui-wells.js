@@ -151,6 +151,20 @@ function renderWellsRegistryPanel() {
     addBtn.onclick = openAddWellForm;
   }
 
+  var n = WellsState.list.length;
+  var btnCsv = document.getElementById('btn-wells-export-csv');
+  if (btnCsv) {
+    btnCsv.textContent = '⬇ CSV' + (n ? ' (' + n + ' скв.)' : '');
+    btnCsv.onclick = exportWellsCSV;
+    btnCsv.style.display = n ? '' : 'none';
+  }
+  var btnXls = document.getElementById('btn-wells-export-xlsx');
+  if (btnXls) {
+    btnXls.textContent = '⬇ Excel' + (n ? ' (' + n + ' скв.)' : '');
+    btnXls.onclick = exportWellsXLSX;
+    btnXls.style.display = n ? '' : 'none';
+  }
+
   if (!WellsState.list.length) {
     wrap.innerHTML = '<p class="form-hint">Скважины не добавлены</p>';
     return;
@@ -1605,4 +1619,212 @@ function _getLastMeasurement(wellId) {
     return (m.measurementDate || '') > (best.measurementDate || '') ? m : best;
   });
   return latest.flowRate != null ? latest : null;
+}
+
+// ════════════════════════════════════════════════════════════
+// ЭКСПОРТ ДАННЫХ ПО СКВАЖИНАМ
+// ════════════════════════════════════════════════════════════
+
+function _csvEscape(val) {
+  var s = String(val == null ? '' : val);
+  if (s.indexOf('"') >= 0 || s.indexOf(';') >= 0 || s.indexOf('\n') >= 0) {
+    s = '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function _csvNum(val) {
+  return val != null ? String(val).replace('.', ',') : '';
+}
+
+function _tsNow() {
+  var d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+// ── CSV: плоская таблица (скважина × замер) ───────────────
+function exportWellsCSV() {
+  var wells = WellsState.list;
+  if (!wells.length) { Toast.show('Нет скважин для экспорта', 'error'); return; }
+
+  var hdrs = [
+    'Скважина', 'Карьер', 'Участок', 'Домен', 'Статус',
+    'Глубина, м', 'Азимут, °', 'Наклон, °', 'Диаметр, мм', 'Обсадка',
+    'Дата бурения', 'Q после бурения, м³/ч',
+    'X лок.', 'Y лок.', 'Z лок.', 'Широта', 'Долгота',
+    'Дата замера', 'Q замера, м³/ч', 'Сотрудник', 'Комментарий к замеру'
+  ];
+
+  function wellMeasRow(w, m) {
+    return [
+      w.name || '', w.quarry || '', w.quarrySection || '', w.domain || '', w.status || '',
+      _csvNum(w.depth), _csvNum(w.azimuth), _csvNum(w.inclination),
+      _csvNum(w.drillDiameter), w.casing || '',
+      w.drillDate ? formatDate(w.drillDate) : '', _csvNum(w.flowAfterDrill),
+      _csvNum(w.xLocal), _csvNum(w.yLocal), _csvNum(w.zLocal),
+      _csvNum(w.lat), _csvNum(w.lon),
+      m ? (m.measurementDate ? formatDate(m.measurementDate) : '') : '',
+      m ? _csvNum(m.flowRate) : '',
+      m ? (m.worker || '') : '',
+      m ? (m.comment || '') : ''
+    ];
+  }
+
+  var rows = [hdrs];
+  wells.forEach(function(w) {
+    var meas = (WellsState.measurements[w.id] || []).slice().sort(function(a, b) {
+      return (b.measurementDate||'') < (a.measurementDate||'') ? -1 : 1;
+    });
+    if (meas.length) {
+      meas.forEach(function(m) { rows.push(wellMeasRow(w, m)); });
+    } else {
+      rows.push(wellMeasRow(w, null));
+    }
+  });
+
+  var bom = '﻿';
+  var csv = rows.map(function(r) { return r.map(_csvEscape).join(';'); }).join('\r\n');
+  var blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url; a.download = 'skvazhiny-' + _tsNow() + '.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  Toast.show('CSV сохранён', 'success');
+}
+
+// ── Excel: три листа (Скважины / Замеры / Сводка) ─────────
+function exportWellsXLSX() {
+  var wells = WellsState.list;
+  if (!wells.length) { Toast.show('Нет скважин для экспорта', 'error'); return; }
+
+  function doExport() {
+    var XLSX = window.XLSX;
+    if (!XLSX) { Toast.show('Библиотека Excel не загрузилась', 'error'); return; }
+    var ts = _tsNow();
+
+    // ── Лист 1: Скважины (реестр) ──────────────────────────
+    var wHdrs = [
+      'Скважина', 'Карьер', 'Участок', 'Домен', 'Статус',
+      'Глубина, м', 'Азимут, °', 'Наклон, °', 'Диаметр, мм', 'Обсадка',
+      'Дата бурения', 'Q после бурения, м³/ч',
+      'X лок.', 'Y лок.', 'Z лок.', 'Широта', 'Долгота',
+      'Последний замер', 'Q посл. замер, м³/ч', 'Всего замеров'
+    ];
+    var wData = [wHdrs];
+    wells.forEach(function(w) {
+      var lastM  = _getLastMeasurement(w.id);
+      var measCnt = (WellsState.measurements[w.id] || []).length;
+      wData.push([
+        w.name || '', w.quarry || '', w.quarrySection || '', w.domain || '', w.status || '',
+        w.depth != null ? w.depth : '',
+        w.azimuth != null ? w.azimuth : '',
+        w.inclination != null ? w.inclination : '',
+        w.drillDiameter != null ? w.drillDiameter : '',
+        w.casing || '',
+        w.drillDate ? formatDate(w.drillDate) : '',
+        w.flowAfterDrill != null ? w.flowAfterDrill : '',
+        w.xLocal != null ? w.xLocal : '',
+        w.yLocal != null ? w.yLocal : '',
+        w.zLocal != null ? w.zLocal : '',
+        w.lat != null ? w.lat : '',
+        w.lon != null ? w.lon : '',
+        lastM ? formatDate(lastM.measurementDate) : '',
+        lastM ? (lastM.flowRate != null ? lastM.flowRate : '') : '',
+        measCnt
+      ]);
+    });
+    var ws1 = XLSX.utils.aoa_to_sheet(wData);
+    ws1['!cols'] = [
+      {wch:14},{wch:12},{wch:16},{wch:10},{wch:12},
+      {wch:10},{wch:10},{wch:10},{wch:10},{wch:14},
+      {wch:14},{wch:16},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12},
+      {wch:14},{wch:14},{wch:12}
+    ];
+    wHdrs.forEach(function(_, ci) {
+      var addr = XLSX.utils.encode_cell({r:0, c:ci});
+      if (ws1[addr]) ws1[addr].s = { font:{bold:true}, fill:{fgColor:{rgb:'D9E1F2'}} };
+    });
+
+    // ── Лист 2: Замеры (хронология) ────────────────────────
+    var mHdrs = ['Скважина','Домен','Участок','Статус','Дата замера','Q, м³/ч','Сотрудник','Комментарий'];
+    var mData = [mHdrs];
+    wells.forEach(function(w) {
+      var meas = (WellsState.measurements[w.id] || []).slice().sort(function(a,b) {
+        return (a.measurementDate||'') < (b.measurementDate||'') ? -1 : 1;
+      });
+      meas.forEach(function(m) {
+        mData.push([
+          w.name || '', w.domain || '', w.quarrySection || '', w.status || '',
+          m.measurementDate ? formatDate(m.measurementDate) : '',
+          m.flowRate != null ? m.flowRate : '',
+          m.worker || '', m.comment || ''
+        ]);
+      });
+    });
+    var ws2 = XLSX.utils.aoa_to_sheet(mData);
+    ws2['!cols'] = [{wch:14},{wch:10},{wch:16},{wch:12},{wch:14},{wch:10},{wch:20},{wch:36}];
+    mHdrs.forEach(function(_, ci) {
+      var addr = XLSX.utils.encode_cell({r:0, c:ci});
+      if (ws2[addr]) ws2[addr].s = { font:{bold:true}, fill:{fgColor:{rgb:'D9E1F2'}} };
+    });
+
+    // ── Лист 3: Сводка ─────────────────────────────────────
+    var activeN = 0, dryN = 0, dryingN = 0, totalQ = 0, measTotal = 0;
+    var byDomain = {}, bySection = {}, byStatus = {};
+    var depths = [];
+    wells.forEach(function(w) {
+      if (w.status === 'Активная') activeN++;
+      else if (w.status === 'Сухая') dryN++;
+      else if (w.status === 'Иссякает') dryingN++;
+      byStatus[w.status||'—'] = (byStatus[w.status||'—']||0) + 1;
+      byDomain[w.domain||'—']  = (byDomain[w.domain||'—']||0) + 1;
+      bySection[w.quarrySection||'—'] = (bySection[w.quarrySection||'—']||0) + 1;
+      if (w.depth > 0) depths.push(w.depth);
+      var lm = _getLastMeasurement(w.id);
+      if (lm && lm.flowRate != null) totalQ += parseFloat(lm.flowRate) || 0;
+      measTotal += (WellsState.measurements[w.id] || []).length;
+    });
+    var avgDepth = depths.length ? Math.round(depths.reduce(function(a,b){return a+b;},0)/depths.length*10)/10 : null;
+
+    var summary = [
+      ['Параметр', 'Значение'],
+      ['Дата выгрузки', ts],
+      ['Всего скважин', wells.length],
+      ['Активных', activeN],
+      ['Иссякает', dryingN],
+      ['Сухих', dryN],
+      ['Суммарный Q (посл. замеры), м³/ч', Math.round(totalQ*100)/100],
+      ['Средняя глубина, м', avgDepth != null ? avgDepth : '—'],
+      ['Всего замеров в БД', measTotal],
+      [],
+      ['Статус', 'Скважин']
+    ];
+    Object.keys(byStatus).sort().forEach(function(k){ summary.push([k, byStatus[k]]); });
+    summary.push([]);
+    summary.push(['Домен', 'Скважин']);
+    Object.keys(byDomain).sort().forEach(function(k){ summary.push([k, byDomain[k]]); });
+    summary.push([]);
+    summary.push(['Участок', 'Скважин']);
+    Object.keys(bySection).sort().forEach(function(k){ summary.push([k, bySection[k]]); });
+
+    var ws3 = XLSX.utils.aoa_to_sheet(summary);
+    ws3['!cols'] = [{wch:36},{wch:16}];
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, 'Скважины');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Замеры');
+    XLSX.utils.book_append_sheet(wb, ws3, 'Сводка');
+    XLSX.writeFile(wb, 'skvazhiny-' + ts + '.xlsx');
+    Toast.show('Excel сохранён', 'success');
+  }
+
+  if (window.XLSX) { doExport(); return; }
+  var script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  script.onload = doExport;
+  script.onerror = function() { Toast.show('Не удалось загрузить библиотеку Excel', 'error'); };
+  document.head.appendChild(script);
 }
