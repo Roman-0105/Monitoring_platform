@@ -3400,7 +3400,7 @@ function buildReportHTML(s) {
   return '<!DOCTYPE html><html lang="ru"><head>' +
     '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>Отчёт — Карьер ' + escHTML(s.quarryName || 'ЮРГ') + ' — ' + fmtDate(s.dateB) + '</title>' +
-    '<style>' + getReportCSS(s.reportTheme, s.reportLayout) + '</style>' +
+    '<style>' + getReportCSS(s.reportTheme, s.reportLayout, s.orientation) + '</style>' +
     (s.watermark ? '<style>body::before{content:"' + (s.watermark||'').replace(/"/g,'') + '";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:80px;font-weight:900;color:rgba(150,0,0,0.06);pointer-events:none;z-index:9999;letter-spacing:8px;white-space:nowrap;}</style>' : '') +
     '</head><body>' +
     title +
@@ -3446,7 +3446,7 @@ function getThemeColors(theme) {
   return t[theme] || t.blue;
 }
 
-function getReportCSS(theme, layout) {
+function getReportCSS(theme, layout, orientation) {
   var c = getThemeColors(theme);
   return [
   '* { box-sizing: border-box; margin: 0; padding: 0; }',
@@ -3611,7 +3611,7 @@ function getReportCSS(theme, layout) {
     : ''),
 
   '@media print {',
-  '  @page { margin:15mm 18mm; size:A4 ' + (s.orientation === 'landscape' ? 'landscape' : 'portrait') + '; }',
+  '  @page { margin:15mm 18mm; size:A4 ' + (orientation === 'landscape' ? 'landscape' : 'portrait') + '; }',
   '  @page { @bottom-right { content: "Стр. " counter(page); font-size:9pt; color:#aaa; font-family:sans-serif; } }',
   '  body { counter-reset: page; }',
   '  .rp-section { counter-increment: page; }',
