@@ -85,7 +85,7 @@ function switchSettingsTab(name) {
   });
 
   // Панели — сначала скрываем все, потом показываем нужную
-  ['settings-panel-main', 'settings-panel-legend', 'settings-panel-sync', 'settings-panel-users'].forEach(function(id) {
+  ['settings-panel-main', 'settings-panel-legend', 'settings-panel-sync', 'settings-panel-users', 'settings-panel-maps'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
@@ -95,6 +95,7 @@ function switchSettingsTab(name) {
   if (tabName === 'sync')      renderSettingsSync();
   if (tabName === 'theme')     renderSettingsTheme();
   if (tabName === 'users')     renderUsersPanel();
+  if (tabName === 'maps')      renderQuarryMapsPanel();
 }
 
 // ── Схемы ─────────────────────────────────────────────────
@@ -666,4 +667,280 @@ function renderSettingsTheme() {
       '</button>';
     }).join('') +
     '</div></div>';
+}
+
+// ── Карты карьеров ────────────────────────────────────────
+
+function renderQuarryMapsPanel() {
+  var panel = document.getElementById('settings-panel-maps');
+  if (!panel) return;
+
+  var quarries = (window.AppState && AppState.quarries) || [];
+  if (!quarries.length) {
+    panel.innerHTML = '<div class="card"><p class="form-hint" style="margin:0">Карьеры не загружены. Обновите страницу.</p></div>';
+    return;
+  }
+
+  var html = '<p class="form-hint" style="margin-bottom:16px">Задайте реальные координаты углов карты для каждого карьера. ' +
+    'Используйте ручной ввод или откалибруйте по двум точкам на схеме.</p>';
+
+  quarries.forEach(function(q) {
+    var ok = q.xMin != null && q.xMax != null;
+    html += '<div class="card" style="margin-bottom:12px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+        '<div class="card-title" style="margin:0">' + escHTML(q.name) + '</div>' +
+        '<span style="font-size:11px;color:' + (ok ? '#4caf7d' : '#f9ab00') + '">' + (ok ? '✓ Настроена' : '⚠ Не настроена') + '</span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' +
+        '<div><label class="form-label">X min (Запад)</label>' +
+          '<input type="number" id="qmap-xmin-' + q.id + '" class="form-control" value="' + (q.xMin != null ? q.xMin : '') + '" placeholder="45850"></div>' +
+        '<div><label class="form-label">X max (Восток)</label>' +
+          '<input type="number" id="qmap-xmax-' + q.id + '" class="form-control" value="' + (q.xMax != null ? q.xMax : '') + '" placeholder="47350"></div>' +
+        '<div><label class="form-label">Y min (Юг)</label>' +
+          '<input type="number" id="qmap-ymin-' + q.id + '" class="form-control" value="' + (q.yMin != null ? q.yMin : '') + '" placeholder="15800"></div>' +
+        '<div><label class="form-label">Y max (Север)</label>' +
+          '<input type="number" id="qmap-ymax-' + q.id + '" class="form-control" value="' + (q.yMax != null ? q.yMax : '') + '" placeholder="17350"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="btn btn-sm btn-primary qmap-save-btn" data-qid="' + q.id + '">Сохранить</button>' +
+        '<button class="btn btn-sm btn-outline qmap-cal-btn" data-qid="' + q.id + '" data-qname="' + escHTML(q.name) + '">📐 Откалибровать по карте</button>' +
+      '</div>' +
+    '</div>';
+  });
+
+  panel.innerHTML = html;
+
+  panel.addEventListener('click', function(e) {
+    var s = e.target.closest('.qmap-save-btn');
+    if (s) { _saveQuarryBoundsFromForm(s.dataset.qid); return; }
+    var c = e.target.closest('.qmap-cal-btn');
+    if (c) _openCalibrationTool(c.dataset.qid, c.dataset.qname);
+  });
+}
+
+function _saveQuarryBoundsFromForm(qid) {
+  var q = AppState.quarries && AppState.quarries.find(function(q) { return q.id === qid; });
+  if (!q) return;
+  var xMin = parseFloat(document.getElementById('qmap-xmin-' + qid).value);
+  var xMax = parseFloat(document.getElementById('qmap-xmax-' + qid).value);
+  var yMin = parseFloat(document.getElementById('qmap-ymin-' + qid).value);
+  var yMax = parseFloat(document.getElementById('qmap-ymax-' + qid).value);
+  if ([xMin, xMax, yMin, yMax].some(isNaN)) {
+    Toast.fail('qmap', 'Введите все четыре значения координат');
+    return;
+  }
+  if (xMin >= xMax || yMin >= yMax) {
+    Toast.fail('qmap', 'X min должен быть меньше X max, Y min — меньше Y max');
+    return;
+  }
+  Api.saveQuarryBounds(qid, { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax })
+    .then(function() {
+      q.xMin = xMin; q.xMax = xMax; q.yMin = yMin; q.yMax = yMax;
+      Toast.show('Границы карьера «' + q.name + '» сохранены', 'success');
+      renderQuarryMapsPanel();
+    })
+    .catch(function(err) { Toast.fail('qmap', 'Ошибка: ' + err.message); });
+}
+
+function _computeBoundsFromCalibration(p1, p2, imgW, imgH) {
+  // p1, p2: {px, py, rx, ry} — pixel (natural) and real-world coordinates
+  // Returns {xMin, xMax, yMin, yMax}
+  if (Math.abs(p2.px - p1.px) < 1 || Math.abs(p2.py - p1.py) < 1) {
+    throw new Error('Точки слишком близко. Выберите точки подальше друг от друга.');
+  }
+  var scaleX = (p2.rx - p1.rx) / (p2.px - p1.px);
+  var xMin   = p1.rx - p1.px * scaleX;
+  var xMax   = xMin + imgW * scaleX;
+  // Image Y grows down, real Y grows up → inverted
+  var scaleY = (p1.ry - p2.ry) / (p2.py - p1.py);
+  var yMax   = p1.ry + p1.py * scaleY;
+  var yMin   = yMax - imgH * scaleY;
+  return { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax };
+}
+
+function _loadSchemeUrlForQuarry(quarryName) {
+  return Api.client().from('schemes')
+    .select('storage_path').eq('quarry', quarryName)
+    .order('uploaded_at', { ascending: false }).limit(1).maybeSingle()
+    .then(function(res) {
+      if (res.error || !res.data || !res.data.storage_path) return null;
+      var r = Api.client().storage.from('schemes').getPublicUrl(res.data.storage_path);
+      return r.data ? r.data.publicUrl : null;
+    }).catch(function() { return null; });
+}
+
+function _openCalibrationTool(qid, qname) {
+  var ex = document.getElementById('quarry-cal-modal');
+  if (ex) ex.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'quarry-cal-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9500;' +
+    'display:flex;align-items:center;justify-content:center;padding:16px';
+
+  modal.innerHTML =
+    '<div style="background:var(--surface);border-radius:12px;padding:20px;max-width:920px;width:100%;' +
+      'max-height:94vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px">' +
+
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">' +
+        '<div style="font-size:15px;font-weight:600">📐 Калибровка карты — ' + escHTML(qname) + '</div>' +
+        '<button id="cal-close" style="background:none;border:none;color:var(--txt-1);font-size:20px;cursor:pointer;padding:0 4px">✕</button>' +
+      '</div>' +
+
+      '<div id="cal-hint" style="font-size:13px;padding:8px 12px;border-radius:6px;background:rgba(26,115,232,.12);color:#7ab4f5">' +
+        'Шаг 1: Нажмите на первую опорную точку на карте (точку с известными координатами X, Y)' +
+      '</div>' +
+
+      '<div id="cal-wrap" style="position:relative;overflow:auto;border:1px solid var(--line);border-radius:8px;' +
+        'max-height:440px;cursor:crosshair;flex-shrink:0;min-height:120px">' +
+        '<div id="cal-loading" style="padding:24px;text-align:center;color:var(--txt-3)">Загрузка схемы...</div>' +
+        '<img id="cal-img" style="display:none;max-width:100%;user-select:none" draggable="false">' +
+        '<div id="cal-dots" style="position:absolute;inset:0;pointer-events:none"></div>' +
+      '</div>' +
+
+      '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+        '<div id="cal-p1" style="display:none;flex:1;min-width:180px;padding:10px;border-radius:8px;border:2px solid #ea4335">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:#ea4335">● Точка 1</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+            '<div><label class="form-label">X (Восток)</label><input type="number" id="cal-x1" class="form-control" placeholder="46200"></div>' +
+            '<div><label class="form-label">Y (Север)</label><input type="number" id="cal-y1" class="form-control" placeholder="16500"></div>' +
+          '</div>' +
+        '</div>' +
+        '<div id="cal-p2" style="display:none;flex:1;min-width:180px;padding:10px;border-radius:8px;border:2px solid #7ab4f5">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:#7ab4f5">● Точка 2</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+            '<div><label class="form-label">X (Восток)</label><input type="number" id="cal-x2" class="form-control" placeholder="47000"></div>' +
+            '<div><label class="form-label">Y (Север)</label><input type="number" id="cal-y2" class="form-control" placeholder="17000"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div id="cal-result" style="display:none;padding:10px 14px;border-radius:8px;' +
+        'background:rgba(76,175,125,.1);border:1px solid rgba(76,175,125,.3);font-size:13px"></div>' +
+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">' +
+        '<button id="cal-btn-cancel" class="btn btn-sm btn-outline">Отмена</button>' +
+        '<button id="cal-btn-compute" class="btn btn-sm btn-outline" style="display:none">Вычислить границы</button>' +
+        '<button id="cal-btn-save" class="btn btn-sm btn-primary" style="display:none">Сохранить</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  var img       = document.getElementById('cal-img');
+  var dots      = document.getElementById('cal-dots');
+  var hint      = document.getElementById('cal-hint');
+  var p1Box     = document.getElementById('cal-p1');
+  var p2Box     = document.getElementById('cal-p2');
+  var resultBox = document.getElementById('cal-result');
+  var btnComp   = document.getElementById('cal-btn-compute');
+  var btnSave   = document.getElementById('cal-btn-save');
+  var calPts    = [];
+  var calResult = null;
+
+  function closeModal() { modal.remove(); }
+  document.getElementById('cal-close').onclick     = closeModal;
+  document.getElementById('cal-btn-cancel').onclick = closeModal;
+
+  // Load scheme image
+  _loadSchemeUrlForQuarry(qname).then(function(url) {
+    document.getElementById('cal-loading').remove();
+    if (!url) {
+      img.style.display = 'none';
+      var msg = document.createElement('div');
+      msg.style.cssText = 'padding:24px;text-align:center;color:#f28b82;font-size:13px';
+      msg.textContent = 'Схема для карьера «' + qname + '» не загружена. Сначала загрузите схему в разделе «Схемы».';
+      document.getElementById('cal-wrap').appendChild(msg);
+      hint.textContent = 'Схема не найдена — используйте ручной ввод координат.';
+      return;
+    }
+    img.style.display = 'block';
+    img.src = url;
+  });
+
+  // Click on image
+  document.getElementById('cal-wrap').addEventListener('click', function(e) {
+    if (!img.complete || !img.naturalWidth) return;
+    if (calPts.length >= 2) return;
+    var rect   = img.getBoundingClientRect();
+    var wrapEl = document.getElementById('cal-wrap');
+    var dispX  = e.clientX - rect.left + wrapEl.scrollLeft;
+    var dispY  = e.clientY - rect.top  + wrapEl.scrollTop;
+    var scaleR = img.naturalWidth / img.offsetWidth;
+    var pxNat  = Math.round(dispX * scaleR);
+    var pyNat  = Math.round(dispY * scaleR);
+
+    calPts.push({ px: pxNat, py: pyNat });
+    var ptNum = calPts.length;
+    var color = ptNum === 1 ? '#ea4335' : '#7ab4f5';
+
+    var dot = document.createElement('div');
+    dot.style.cssText = 'position:absolute;width:14px;height:14px;border-radius:50%;' +
+      'border:2px solid #fff;background:' + color + ';transform:translate(-50%,-50%);' +
+      'left:' + dispX + 'px;top:' + dispY + 'px;box-shadow:0 1px 4px rgba(0,0,0,.5)';
+    dots.appendChild(dot);
+
+    if (ptNum === 1) {
+      p1Box.style.display = '';
+      hint.textContent = 'Шаг 2: Введите координаты точки 1, затем нажмите на вторую точку на карте';
+    } else {
+      p2Box.style.display = '';
+      btnComp.style.display = '';
+      hint.textContent = 'Шаг 3: Введите координаты точки 2, затем нажмите «Вычислить границы»';
+    }
+  });
+
+  btnComp.addEventListener('click', function() {
+    if (calPts.length < 2) return;
+    var x1 = parseFloat(document.getElementById('cal-x1').value);
+    var y1 = parseFloat(document.getElementById('cal-y1').value);
+    var x2 = parseFloat(document.getElementById('cal-x2').value);
+    var y2 = parseFloat(document.getElementById('cal-y2').value);
+    if ([x1,y1,x2,y2].some(isNaN)) {
+      Toast.fail('cal', 'Введите координаты для обеих точек');
+      return;
+    }
+    try {
+      calResult = _computeBoundsFromCalibration(
+        { px: calPts[0].px, py: calPts[0].py, rx: x1, ry: y1 },
+        { px: calPts[1].px, py: calPts[1].py, rx: x2, ry: y2 },
+        img.naturalWidth, img.naturalHeight
+      );
+    } catch(err) {
+      Toast.fail('cal', err.message);
+      return;
+    }
+    resultBox.style.display = '';
+    resultBox.innerHTML =
+      '<div style="font-weight:600;margin-bottom:8px">Вычисленные границы координатной сетки:</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">' +
+        '<div>X min: <strong>' + Math.round(calResult.xMin) + '</strong></div>' +
+        '<div>X max: <strong>' + Math.round(calResult.xMax) + '</strong></div>' +
+        '<div>Y min: <strong>' + Math.round(calResult.yMin) + '</strong></div>' +
+        '<div>Y max: <strong>' + Math.round(calResult.yMax) + '</strong></div>' +
+      '</div>';
+    btnSave.style.display = '';
+    hint.textContent = '✓ Границы вычислены. Проверьте значения и нажмите «Сохранить».';
+    hint.style.background = 'rgba(76,175,125,.12)';
+    hint.style.color = '#4caf7d';
+  });
+
+  btnSave.addEventListener('click', function() {
+    if (!calResult) return;
+    btnSave.disabled = true;
+    btnSave.textContent = 'Сохранение...';
+    Api.saveQuarryBounds(qid, calResult)
+      .then(function() {
+        var q = AppState.quarries && AppState.quarries.find(function(q) { return q.id === qid; });
+        if (q) { q.xMin = calResult.xMin; q.xMax = calResult.xMax; q.yMin = calResult.yMin; q.yMax = calResult.yMax; }
+        Toast.show('Координатная привязка карьера «' + qname + '» сохранена', 'success');
+        closeModal();
+        renderQuarryMapsPanel();
+      })
+      .catch(function(err) {
+        Toast.fail('cal', 'Ошибка: ' + err.message);
+        btnSave.disabled = false;
+        btnSave.textContent = 'Сохранить';
+      });
+  });
 }

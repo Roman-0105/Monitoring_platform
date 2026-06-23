@@ -386,7 +386,19 @@ function renderWellCoordsCard(well) {
 
 // ── Карточка карты ────────────────────────────────────────
 
-var WELL_BOUNDS = { Xmin: 45850, Xmax: 47350, Ymin: 15800, Ymax: 17350 };
+var _WELL_BOUNDS_FALLBACK = { Xmin: 45850, Xmax: 47350, Ymin: 15800, Ymax: 17350 };
+var WELL_BOUNDS = _WELL_BOUNDS_FALLBACK;
+
+function _refreshWellBounds() {
+  if (window.AppState && AppState.quarries && AppState.activeQuarry) {
+    var q = AppState.quarries.find(function(q) { return q.name === AppState.activeQuarry; });
+    if (q && q.xMin != null && q.xMax != null && q.yMin != null && q.yMax != null) {
+      WELL_BOUNDS = { Xmin: q.xMin, Xmax: q.xMax, Ymin: q.yMin, Ymax: q.yMax };
+      return;
+    }
+  }
+  WELL_BOUNDS = _WELL_BOUNDS_FALLBACK;
+}
 
 var _wellsMap = {
   schemeUrl: null,
@@ -399,6 +411,7 @@ var _wellsMap = {
 };
 
 function renderWellMapCard() {
+  _refreshWellBounds();
   var body = document.getElementById('wells-map-body');
   if (!body) return;
 

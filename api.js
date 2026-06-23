@@ -575,7 +575,26 @@ var Api = (function() {
   async function getQuarries() {
     var { data, error } = await client().from('quarries').select('*').order('id');
     if (error) throw new Error(error.message);
-    return (data || []).map(function(r) { return { id: r.id, name: r.name }; });
+    return (data || []).map(function(r) {
+      return {
+        id:   r.id,
+        name: r.name,
+        xMin: r.x_min  != null ? Number(r.x_min)  : null,
+        xMax: r.x_max  != null ? Number(r.x_max)  : null,
+        yMin: r.y_min  != null ? Number(r.y_min)  : null,
+        yMax: r.y_max  != null ? Number(r.y_max)  : null,
+      };
+    });
+  }
+
+  async function saveQuarryBounds(id, bounds) {
+    var { error } = await client().from('quarries').update({
+      x_min: bounds.xMin,
+      x_max: bounds.xMax,
+      y_min: bounds.yMin,
+      y_max: bounds.yMax,
+    }).eq('id', id);
+    if (error) throw new Error(error.message);
   }
 
   // ── Ping ─────────────────────────────────────────────────
@@ -741,6 +760,7 @@ var Api = (function() {
   return {
     client:              client,
     getQuarries:         getQuarries,
+    saveQuarryBounds:    saveQuarryBounds,
     getPoints:           getPoints,
     getPoint:            getPoint,
     getWorkers:          getWorkers,

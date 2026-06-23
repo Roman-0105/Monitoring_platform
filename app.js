@@ -35,6 +35,7 @@ var AppState = {
   syncing:        false,
   currentUser:    null,
   activeQuarry:   (function() { try { return localStorage.getItem('activeQuarry') || ''; } catch(e) { return ''; } })(),
+  quarries:       [],
 };
 
 
@@ -43,7 +44,7 @@ var AppState = {
 function _renderQuarrySwitcher(quarries) {
   var el = document.getElementById('quarry-switcher');
   if (!el) return;
-  if (quarries) el._quarries = quarries;
+  if (quarries) { el._quarries = quarries; AppState.quarries = quarries; }
   var list = el._quarries || [];
   if (list.length < 2) { el.style.display = 'none'; return; }
 
