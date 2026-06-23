@@ -759,13 +759,31 @@ function _computeBoundsFromCalibration(p1, p2, imgW, imgH) {
 }
 
 function _loadSchemeUrlForQuarry(quarryName) {
+  function toUrl(path) {
+    var r = Api.client().storage.from('schemes').getPublicUrl(path);
+    return r.data ? r.data.publicUrl : null;
+  }
+  // Try exact quarry match first, then fall back to null/empty quarry, then any latest scheme
   return Api.client().from('schemes')
-    .select('storage_path').eq('quarry', quarryName)
+    .select('storage_path,quarry').eq('quarry', quarryName)
     .order('uploaded_at', { ascending: false }).limit(1).maybeSingle()
     .then(function(res) {
-      if (res.error || !res.data || !res.data.storage_path) return null;
-      var r = Api.client().storage.from('schemes').getPublicUrl(res.data.storage_path);
-      return r.data ? r.data.publicUrl : null;
+      if (!res.error && res.data && res.data.storage_path) return toUrl(res.data.storage_path);
+      // Fallback: null/empty quarry (legacy uploads)
+      return Api.client().from('schemes')
+        .select('storage_path').is('quarry', null)
+        .order('uploaded_at', { ascending: false }).limit(1).maybeSingle()
+        .then(function(r2) {
+          if (!r2.error && r2.data && r2.data.storage_path) return toUrl(r2.data.storage_path);
+          // Last resort: any scheme
+          return Api.client().from('schemes')
+            .select('storage_path')
+            .order('uploaded_at', { ascending: false }).limit(1).maybeSingle()
+            .then(function(r3) {
+              if (!r3.error && r3.data && r3.data.storage_path) return toUrl(r3.data.storage_path);
+              return null;
+            });
+        });
     }).catch(function() { return null; });
 }
 

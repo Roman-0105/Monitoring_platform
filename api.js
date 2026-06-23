@@ -407,16 +407,20 @@ var Api = (function() {
 
   async function getSchemes() {
     var quarry = (window.AppState && AppState.activeQuarry) || '';
-    var q = client().from('schemes').select('*')
+    var { data, error } = await client().from('schemes').select('*')
       .order('week_key',    { ascending: false })
       .order('uploaded_at', { ascending: false });
-    if (quarry) q = q.eq('quarry', quarry);
-    var { data, error } = await q;
     if (error) throw new Error(error.message);
+
+    // Client-side quarry filter: empty/null quarry treated as belonging to active quarry
+    var all = data || [];
+    if (quarry) {
+      all = all.filter(function(r) { return (r.quarry || quarry) === quarry; });
+    }
 
     // Deduplicate: keep only the newest entry per week_key
     var seen = {};
-    var rows  = (data || []).filter(function(r) {
+    var rows = all.filter(function(r) {
       if (seen[r.week_key]) return false;
       seen[r.week_key] = true;
       return true;
@@ -450,7 +454,9 @@ var Api = (function() {
     }
 
     // Получаем текущий storage_path чтобы удалить старый файл
-    var _uploadQuarry = (window.AppState && AppState.activeQuarry) || 'Карьер 1';
+    var _uploadQuarry = (window.AppState && AppState.activeQuarry)
+      || (window.AppState && AppState.quarries && AppState.quarries[0] && AppState.quarries[0].name)
+      || '';
     var { data: existing } = await client()
       .from('schemes').select('storage_path')
       .eq('week_key', params.weekKey)
