@@ -673,14 +673,13 @@ var Api = (function() {
 
   async function getWells() {
     var quarry = (window.AppState && AppState.activeQuarry) || '';
-    var defaultQuarry = 'Карьер 1';
     var { data, error } = await client().from('wells').select('*').order('name', { ascending: true });
     if (error) throw new Error(error.message);
     var all = (data || []).map(rowToWell);
     if (!quarry) return all;
-    // Treat wells with empty/null quarry as belonging to the default quarry
+    // Wells without quarry set are treated as belonging to the active quarry (legacy data)
     return all.filter(function(w) {
-      return (w.quarry || defaultQuarry) === quarry;
+      return (w.quarry || quarry) === quarry;
     });
   }
 
