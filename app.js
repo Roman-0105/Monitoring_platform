@@ -34,7 +34,7 @@ var AppState = {
   editingPointId: null,
   syncing:        false,
   currentUser:    null,
-  activeQuarry:   (function() { try { return localStorage.getItem('activeQuarry') || 'Карьер 1'; } catch(e) { return 'Карьер 1'; } })(),
+  activeQuarry:   (function() { try { return localStorage.getItem('activeQuarry') || ''; } catch(e) { return ''; } })(),
 };
 
 
@@ -46,6 +46,16 @@ function _renderQuarrySwitcher(quarries) {
   if (quarries) el._quarries = quarries;
   var list = el._quarries || [];
   if (list.length < 2) { el.style.display = 'none'; return; }
+
+  // Auto-select first quarry if activeQuarry is empty or not in the list
+  var names = list.map(function(q) { return q.name; });
+  var needsReload = false;
+  if (!AppState.activeQuarry || names.indexOf(AppState.activeQuarry) < 0) {
+    AppState.activeQuarry = list[0].name;
+    try { localStorage.setItem('activeQuarry', AppState.activeQuarry); } catch(e) {}
+    needsReload = true;
+  }
+
   el.style.display = 'flex';
   el.innerHTML = list.map(function(q) {
     var isActive = q.name === AppState.activeQuarry;
@@ -56,6 +66,8 @@ function _renderQuarrySwitcher(quarries) {
       'color:' + (isActive ? '#fff' : 'var(--txt-1)') + '">' +
       (q.name + '').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</button>';
   }).join('');
+
+  if (needsReload) _reloadAllData();
 }
 
 window.setActiveQuarry = function(name) {
