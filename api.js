@@ -316,11 +316,11 @@ var Api = (function() {
 
   async function getPoints() {
     var quarry = (window.AppState && AppState.activeQuarry) || '';
-    var q = client().from('points').select('*').order('created_at', { ascending: false });
-    if (quarry) q = q.eq('quarry', quarry);
-    var { data, error } = await q;
+    var { data, error } = await client().from('points').select('*').order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
-    return (data || []).map(rowToPoint);
+    var all = (data || []).map(rowToPoint);
+    if (!quarry) return all;
+    return all.filter(function(p) { return (p.quarry || quarry) === quarry; });
   }
 
   async function getPoint(id) {
@@ -523,10 +523,11 @@ var Api = (function() {
     var quarry = (window.AppState && AppState.activeQuarry) || '';
     var query = client().from('ditches').select('*').order('created_at', { ascending: false });
     if (pointNumber) query = query.eq('point_number', pointNumber);
-    if (quarry) query = query.eq('quarry', quarry);
     var { data, error } = await query;
     if (error) throw new Error(error.message);
-    return { ditches: (data || []).map(rowToDitch) };
+    var all = (data || []).map(rowToDitch);
+    if (!quarry) return { ditches: all };
+    return { ditches: all.filter(function(d) { return (d.quarry || quarry) === quarry; }) };
   }
 
   async function getDitch(id) {
