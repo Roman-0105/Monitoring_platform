@@ -673,11 +673,15 @@ var Api = (function() {
 
   async function getWells() {
     var quarry = (window.AppState && AppState.activeQuarry) || '';
-    var q = client().from('wells').select('*').order('name', { ascending: true });
-    if (quarry) q = q.eq('quarry', quarry);
-    var { data, error } = await q;
+    var defaultQuarry = 'Карьер 1';
+    var { data, error } = await client().from('wells').select('*').order('name', { ascending: true });
     if (error) throw new Error(error.message);
-    return (data || []).map(rowToWell);
+    var all = (data || []).map(rowToWell);
+    if (!quarry) return all;
+    // Treat wells with empty/null quarry as belonging to the default quarry
+    return all.filter(function(w) {
+      return (w.quarry || defaultQuarry) === quarry;
+    });
   }
 
   async function getWell(id) {

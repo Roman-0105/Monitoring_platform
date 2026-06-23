@@ -54,7 +54,7 @@ function _renderQuarrySwitcher(quarries) {
       'border:1px solid var(--accent);' +
       'background:' + (isActive ? 'var(--accent)' : 'transparent') + ';' +
       'color:' + (isActive ? '#fff' : 'var(--txt-1)') + '">' +
-      escHTML(q.name) + '</button>';
+      (q.name + '').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</button>';
   }).join('');
 }
 
