@@ -791,11 +791,23 @@ function _openCalibrationTool(qid, qname) {
         'Шаг 1: Нажмите на первую опорную точку на карте (точку с известными координатами X, Y)' +
       '</div>' +
 
-      '<div id="cal-wrap" style="position:relative;overflow:auto;border:1px solid var(--line);border-radius:8px;' +
-        'max-height:440px;cursor:crosshair;flex-shrink:0;min-height:120px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">' +
+        '<div style="font-size:12px;color:var(--txt-3)">Колёсико мыши или кнопки для зума · прокрутка для перемещения</div>' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<button id="cal-zoom-out" class="btn btn-sm btn-outline" style="padding:2px 10px;font-size:18px;line-height:1">−</button>' +
+          '<span id="cal-zoom-label" style="min-width:46px;text-align:center;font-size:13px;font-weight:500">100%</span>' +
+          '<button id="cal-zoom-in" class="btn btn-sm btn-outline" style="padding:2px 10px;font-size:18px;line-height:1">+</button>' +
+          '<button id="cal-zoom-reset" class="btn btn-sm btn-outline" style="padding:2px 9px;font-size:12px">↺</button>' +
+        '</div>' +
+      '</div>' +
+
+      '<div id="cal-wrap" style="overflow:auto;border:1px solid var(--line);border-radius:8px;' +
+        'max-height:440px;cursor:crosshair;flex-shrink:0;min-height:120px;background:var(--bg)">' +
         '<div id="cal-loading" style="padding:24px;text-align:center;color:var(--txt-3)">Загрузка схемы...</div>' +
-        '<img id="cal-img" style="display:none;max-width:100%;user-select:none" draggable="false">' +
-        '<div id="cal-dots" style="position:absolute;inset:0;pointer-events:none"></div>' +
+        '<div id="cal-canvas" style="position:relative;display:inline-block;line-height:0">' +
+          '<img id="cal-img" style="display:none;user-select:none" draggable="false">' +
+          '<div id="cal-dots" style="position:absolute;inset:0;pointer-events:none"></div>' +
+        '</div>' +
       '</div>' +
 
       '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
@@ -830,6 +842,7 @@ function _openCalibrationTool(qid, qname) {
   var img       = document.getElementById('cal-img');
   var dots      = document.getElementById('cal-dots');
   var hint      = document.getElementById('cal-hint');
+  var wrapEl    = document.getElementById('cal-wrap');
   var p1Box     = document.getElementById('cal-p1');
   var p2Box     = document.getElementById('cal-p2');
   var resultBox = document.getElementById('cal-result');
@@ -837,50 +850,104 @@ function _openCalibrationTool(qid, qname) {
   var btnSave   = document.getElementById('cal-btn-save');
   var calPts    = [];
   var calResult = null;
+  var zoomLevel = 1.0;
+  var imgBaseW  = 0;
+  var ZOOM_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0];
 
   function closeModal() { modal.remove(); }
-  document.getElementById('cal-close').onclick     = closeModal;
+  document.getElementById('cal-close').onclick      = closeModal;
   document.getElementById('cal-btn-cancel').onclick = closeModal;
+
+  function renderDots() {
+    dots.innerHTML = '';
+    if (!img.naturalWidth || !imgBaseW) return;
+    var scale = (imgBaseW * zoomLevel) / img.naturalWidth;
+    calPts.forEach(function(pt, i) {
+      var color = i === 0 ? '#ea4335' : '#7ab4f5';
+      var dot = document.createElement('div');
+      dot.style.cssText = 'position:absolute;width:14px;height:14px;border-radius:50%;' +
+        'border:2px solid #fff;background:' + color + ';transform:translate(-50%,-50%);' +
+        'left:' + (pt.px * scale) + 'px;top:' + (pt.py * scale) + 'px;' +
+        'box-shadow:0 1px 4px rgba(0,0,0,.5)';
+      dots.appendChild(dot);
+    });
+  }
+
+  function applyZoom(newZoom, pivotClient) {
+    if (!imgBaseW) return;
+    var oldZoom = zoomLevel;
+    zoomLevel = Math.max(ZOOM_STEPS[0], Math.min(ZOOM_STEPS[ZOOM_STEPS.length - 1], newZoom));
+    img.style.width = Math.round(imgBaseW * zoomLevel) + 'px';
+    renderDots();
+    document.getElementById('cal-zoom-label').textContent = Math.round(zoomLevel * 100) + '%';
+    if (pivotClient) {
+      var rect  = wrapEl.getBoundingClientRect();
+      var pivX  = (pivotClient.x - rect.left + wrapEl.scrollLeft) * (zoomLevel / oldZoom);
+      var pivY  = (pivotClient.y - rect.top  + wrapEl.scrollTop)  * (zoomLevel / oldZoom);
+      wrapEl.scrollLeft = pivX - (pivotClient.x - rect.left);
+      wrapEl.scrollTop  = pivY - (pivotClient.y - rect.top);
+    }
+  }
+
+  function stepZoom(delta, pivotClient) {
+    var idx = 0;
+    var closest = Infinity;
+    ZOOM_STEPS.forEach(function(s, i) {
+      var d = Math.abs(s - zoomLevel);
+      if (d < closest) { closest = d; idx = i; }
+    });
+    applyZoom(ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, idx + delta))], pivotClient);
+  }
+
+  document.getElementById('cal-zoom-in').onclick    = function() { stepZoom(+1); };
+  document.getElementById('cal-zoom-out').onclick   = function() { stepZoom(-1); };
+  document.getElementById('cal-zoom-reset').onclick = function() { applyZoom(1.0); };
+
+  wrapEl.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    stepZoom(e.deltaY < 0 ? +1 : -1, { x: e.clientX, y: e.clientY });
+  }, { passive: false });
 
   // Load scheme image
   _loadSchemeUrlForQuarry(qname).then(function(url) {
-    document.getElementById('cal-loading').remove();
+    document.getElementById('cal-loading').style.display = 'none';
     if (!url) {
-      img.style.display = 'none';
       var msg = document.createElement('div');
       msg.style.cssText = 'padding:24px;text-align:center;color:#f28b82;font-size:13px';
       msg.textContent = 'Схема для карьера «' + qname + '» не загружена. Сначала загрузите схему в разделе «Схемы».';
-      document.getElementById('cal-wrap').appendChild(msg);
+      wrapEl.appendChild(msg);
       hint.textContent = 'Схема не найдена — используйте ручной ввод координат.';
       return;
     }
     img.style.display = 'block';
+    img.style.maxWidth = '100%';
     img.src = url;
+    img.onload = function() {
+      setTimeout(function() {
+        imgBaseW = img.offsetWidth;
+        img.style.maxWidth = 'none';
+        img.style.width = imgBaseW + 'px';
+        renderDots();
+      }, 0);
+    };
   });
 
-  // Click on image
-  document.getElementById('cal-wrap').addEventListener('click', function(e) {
-    if (!img.complete || !img.naturalWidth) return;
+  // Click on wrap to place calibration points
+  wrapEl.addEventListener('click', function(e) {
+    if (!img.complete || !img.naturalWidth || !imgBaseW) return;
     if (calPts.length >= 2) return;
-    var rect   = img.getBoundingClientRect();
-    var wrapEl = document.getElementById('cal-wrap');
-    var dispX  = e.clientX - rect.left + wrapEl.scrollLeft;
-    var dispY  = e.clientY - rect.top  + wrapEl.scrollTop;
+    var rect  = img.getBoundingClientRect();
+    var dispX = e.clientX - rect.left;
+    var dispY = e.clientY - rect.top;
+    if (dispX < 0 || dispY < 0 || dispX > img.offsetWidth || dispY > img.offsetHeight) return;
     var scaleR = img.naturalWidth / img.offsetWidth;
     var pxNat  = Math.round(dispX * scaleR);
     var pyNat  = Math.round(dispY * scaleR);
 
     calPts.push({ px: pxNat, py: pyNat });
-    var ptNum = calPts.length;
-    var color = ptNum === 1 ? '#ea4335' : '#7ab4f5';
+    renderDots();
 
-    var dot = document.createElement('div');
-    dot.style.cssText = 'position:absolute;width:14px;height:14px;border-radius:50%;' +
-      'border:2px solid #fff;background:' + color + ';transform:translate(-50%,-50%);' +
-      'left:' + dispX + 'px;top:' + dispY + 'px;box-shadow:0 1px 4px rgba(0,0,0,.5)';
-    dots.appendChild(dot);
-
-    if (ptNum === 1) {
+    if (calPts.length === 1) {
       p1Box.style.display = '';
       hint.textContent = 'Шаг 2: Введите координаты точки 1, затем нажмите на вторую точку на карте';
     } else {
