@@ -354,12 +354,12 @@
         </div>
 
         <!-- Правая область: карта + список (sub-grid со stretch) -->
-        <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;align-items:stretch">
+        <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;align-items:stretch;height:clamp(400px,calc(100vh - 300px),760px)">
 
           <!-- Центр: карта -->
-          <div class="card" style="padding:16px">
-            <div class="card-title">Положение на схеме</div>
-            <div id="wells-map-body" style="position:relative;overflow:hidden;border-radius:6px;cursor:crosshair"></div>
+          <div class="card" style="padding:16px;display:flex;flex-direction:column;overflow:hidden">
+            <div class="card-title" style="flex-shrink:0">Положение на схеме</div>
+            <div id="wells-map-body" style="position:relative;overflow:hidden;border-radius:6px;cursor:crosshair;flex:1;min-height:0"></div>
           </div>
 
           <!-- Список скважин — растягивается по высоте карты -->
