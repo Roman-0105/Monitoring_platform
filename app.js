@@ -49,7 +49,7 @@ function _renderQuarrySwitcher(quarries) {
   el.style.display = 'flex';
   el.innerHTML = list.map(function(q) {
     var isActive = q.name === AppState.activeQuarry;
-    return '<button onclick="setActiveQuarry(' + JSON.stringify(q.name) + ')" ' +
+    return '<button onclick="setActiveQuarry(\'' + q.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" ' +
       'style="padding:4px 14px;border-radius:16px;font-size:13px;cursor:pointer;transition:all .15s;' +
       'border:1px solid var(--accent);' +
       'background:' + (isActive ? 'var(--accent)' : 'transparent') + ';' +
