@@ -8,6 +8,8 @@ var WellsState = {
   editingMeas:  null,
   measWellId:   null,
   subTab:       'view',
+  filterQuarry: '',
+  filterType:   '',
 };
 
 var _wellsTabInited = false;
@@ -103,16 +105,38 @@ function renderWellRegistryList() {
   var wrap = document.getElementById('wells-registry-list');
   if (!wrap) return;
 
+  _renderWellFilters();
+
   if (!WellsState.list.length) {
     wrap.innerHTML = '<p class="form-hint" style="font-size:12px">Скважины не добавлены.<br>Перейдите во вкладку «Реестр».</p>';
     return;
   }
 
+  var filtered = WellsState.list.filter(function(w) {
+    if (WellsState.filterQuarry && w.quarry !== WellsState.filterQuarry) return false;
+    if (WellsState.filterType === 'drainage'    && w.wellType !== 'drainage')    return false;
+    if (WellsState.filterType === 'piezometric' && w.wellType !== 'piezometric') return false;
+    return true;
+  });
+
+  var countEl = document.getElementById('wells-list-count');
+  if (countEl) {
+    var total = WellsState.list.length;
+    countEl.textContent = filtered.length < total
+      ? filtered.length + ' / ' + total
+      : total + ' шт.';
+  }
+
+  if (!filtered.length) {
+    wrap.innerHTML = '<p class="form-hint" style="font-size:12px">Нет скважин по фильтру</p>';
+    return;
+  }
+
   var html = '';
-  WellsState.list.forEach(function(w) {
-    var isSelected = w.id === WellsState.selectedId;
+  filtered.forEach(function(w) {
+    var isSelected  = w.id === WellsState.selectedId;
     var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
-    var isPiezo = w.wellType === 'piezometric';
+    var isPiezo     = w.wellType === 'piezometric';
     html += '<div class="well-list-item" data-well-id="' + escHTML(w.id) + '" style="' +
       'padding:8px 10px;border-radius:6px;cursor:pointer;margin-bottom:4px;' +
       'border:1px solid ' + (isSelected ? (isPiezo ? '#7c4dff' : '#f9ab00') : 'rgba(255,255,255,.07)') + ';' +
@@ -139,6 +163,48 @@ function renderWellRegistryList() {
       renderWellDetail();
     });
   });
+}
+
+function _renderWellFilters() {
+  var filterWrap = document.getElementById('wells-filters');
+  if (!filterWrap) return;
+
+  var quarries = [];
+  WellsState.list.forEach(function(w) {
+    if (w.quarry && quarries.indexOf(w.quarry) === -1) quarries.push(w.quarry);
+  });
+  quarries.sort();
+
+  var quarryOpts = '<option value="">Все карьеры</option>';
+  quarries.forEach(function(q) {
+    quarryOpts += '<option value="' + escHTML(q) + '"' + (WellsState.filterQuarry === q ? ' selected' : '') + '>' + escHTML(q) + '</option>';
+  });
+
+  var typeOpts =
+    '<option value="">Все типы</option>' +
+    '<option value="drainage"'    + (WellsState.filterType === 'drainage'    ? ' selected' : '') + '>Дренажные</option>' +
+    '<option value="piezometric"' + (WellsState.filterType === 'piezometric' ? ' selected' : '') + '>Пьезометрические</option>';
+
+  var selStyle = 'font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box';
+  filterWrap.innerHTML =
+    (quarries.length > 0 ?
+      '<select id="wells-filter-quarry" class="form-control" style="' + selStyle + '">' + quarryOpts + '</select>' : '') +
+    '<select id="wells-filter-type" class="form-control" style="' + selStyle + '">' + typeOpts + '</select>';
+
+  var quarryEl = document.getElementById('wells-filter-quarry');
+  var typeEl   = document.getElementById('wells-filter-type');
+  if (quarryEl) {
+    quarryEl.addEventListener('change', function() {
+      WellsState.filterQuarry = this.value;
+      renderWellRegistryList();
+    });
+  }
+  if (typeEl) {
+    typeEl.addEventListener('change', function() {
+      WellsState.filterType = this.value;
+      renderWellRegistryList();
+    });
+  }
 }
 
 // ── Реестр: панель управления (подвкладка) ────────────────

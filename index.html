@@ -290,7 +290,7 @@
     <!-- Панель: просмотр скважины -->
     <div id="wells-panel-view">
       <!-- Верхняя строка: паспорт+координаты | карта | список -->
-      <div style="display:grid;grid-template-columns:260px 1fr 220px;gap:12px;margin-bottom:12px;align-items:start">
+      <div style="display:grid;grid-template-columns:260px 1fr 220px;gap:12px;margin-bottom:12px;align-items:stretch">
 
         <!-- Левая колонка: паспорт + координаты + легенда -->
         <div style="display:flex;flex-direction:column;gap:12px">
@@ -335,6 +335,15 @@
                 </svg>
                 <span>Кластер скважин<br><span style="color:var(--txt-3);font-size:11px">(клик — приблизить)</span></span>
               </div>
+              <div style="border-top:1px solid rgba(255,255,255,.07);margin:2px 0"></div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg width="32" height="12" style="flex-shrink:0">
+                  <line x1="0" y1="6" x2="32" y2="6" stroke="#7c4dff" stroke-width="2" stroke-dasharray="5,3"/>
+                  <circle cx="10" cy="6" r="3" fill="#4caf7d" stroke="rgba(0,0,0,.4)" stroke-width="0.8"/>
+                  <circle cx="24" cy="6" r="3" fill="#9aa0a6" stroke="rgba(0,0,0,.4)" stroke-width="0.8"/>
+                </svg>
+                <span>Пьезо (VWP)<br><span style="color:var(--txt-3);font-size:11px">● к лог. / ● нет</span></span>
+              </div>
               <div style="font-size:11px;color:var(--txt-3);margin-top:2px;line-height:1.7">
                 🖱 Колесо — масштаб<br>
                 ✋ Зажать + тянуть — пан<br>
@@ -351,8 +360,12 @@
         </div>
 
         <!-- Правая колонка: список скважин -->
-        <div class="card" style="padding:16px;max-height:520px;display:flex;flex-direction:column">
-          <div class="card-title">Скважины</div>
+        <div class="card" style="padding:16px;display:flex;flex-direction:column;min-height:400px">
+          <div id="wells-list-header" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+            <span class="card-title" style="margin:0">Скважины</span>
+            <span id="wells-list-count" style="font-size:11px;color:var(--txt-3)"></span>
+          </div>
+          <div id="wells-filters" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px"></div>
           <div id="wells-registry-list" style="overflow-y:auto;flex:1"></div>
         </div>
       </div>
