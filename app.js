@@ -34,8 +34,66 @@ var AppState = {
   editingPointId: null,
   syncing:        false,
   currentUser:    null,
+  activeQuarry:   (function() { try { return localStorage.getItem('activeQuarry') || 'Карьер 1'; } catch(e) { return 'Карьер 1'; } })(),
 };
 
+
+// ── Переключатель карьеров ────────────────────────────────
+
+function _renderQuarrySwitcher(quarries) {
+  var el = document.getElementById('quarry-switcher');
+  if (!el) return;
+  if (quarries) el._quarries = quarries;
+  var list = el._quarries || [];
+  if (list.length < 2) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = list.map(function(q) {
+    var isActive = q.name === AppState.activeQuarry;
+    return '<button onclick="setActiveQuarry(' + JSON.stringify(q.name) + ')" ' +
+      'style="padding:4px 14px;border-radius:16px;font-size:13px;cursor:pointer;transition:all .15s;' +
+      'border:1px solid var(--accent);' +
+      'background:' + (isActive ? 'var(--accent)' : 'transparent') + ';' +
+      'color:' + (isActive ? '#fff' : 'var(--txt-1)') + '">' +
+      escHTML(q.name) + '</button>';
+  }).join('');
+}
+
+window.setActiveQuarry = function(name) {
+  if (name === AppState.activeQuarry) return;
+  AppState.activeQuarry = name;
+  try { localStorage.setItem('activeQuarry', name); } catch(e) {}
+  _renderQuarrySwitcher();
+  _reloadAllData();
+};
+
+function _reloadAllData() {
+  if (AppState.syncing) return;
+  showLoader('Переключение карьера...');
+  // Clear map scheme cache so it reloads for new quarry
+  window._mapSchemeImg = null;
+  Promise.all([Points.load(), Schemes.load()]).then(function() {
+    renderPointsList();
+    initMapFilters();
+    initStatsFilters();
+    renderStatsPage();
+    if (typeof initDitchModule === 'function') {
+      initDitchModule(function() {});
+    }
+    if (typeof initWellsModule === 'function') {
+      initWellsModule(function() {
+        if (AppState.currentTab === 'wells' && typeof renderWellsPage === 'function') renderWellsPage();
+      });
+    }
+    if (AppState.currentTab === 'map') {
+      window._mapSchemeImg = null;
+      if (typeof renderMap === 'function') renderMap();
+    }
+    hideLoader();
+  }).catch(function(err) {
+    Toast.fail('reload', 'Ошибка загрузки: ' + (err.message || ''));
+    hideLoader();
+  });
+}
 
 // ── Lightbox для фото ────────────────────────────────────
 
@@ -160,6 +218,10 @@ window.initApp = function() {
         if (AppState.currentTab === 'wells' && typeof renderWellsPage === 'function') renderWellsPage();
       });
     }
+    // Загружаем список карьеров и рендерим переключатель
+    Api.getQuarries().then(function(quarries) {
+      _renderQuarrySwitcher(quarries);
+    }).catch(function() {});
   }).catch(function(err) {
     Diagnostics.setError('sync', 'Начальная загрузка: ' + err.message);
     Toast.fail('init-load', 'Ошибка загрузки данных: ' + (err.message || 'проверьте соединение'));

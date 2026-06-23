@@ -191,6 +191,7 @@ var Api = (function() {
       horizon:         p.horizon         || '',
       comment:         p.comment         || '',
       photos:          Array.isArray(p.photoUrls) ? p.photoUrls : [],
+      quarry:          p.quarry          || (window.AppState && AppState.activeQuarry) || '',
       created_at:      p.createdAt       || new Date().toISOString(),
     };
   }
@@ -215,6 +216,7 @@ var Api = (function() {
       horizon:        r.horizon,
       comment:        r.comment,
       photoUrls:      r.photos || [],
+      quarry:         r.quarry || '',
       createdAt:      r.created_at,
       // Поля совместимости (offline queue)
       syncStatus:     'synced',
@@ -244,6 +246,7 @@ var Api = (function() {
       id:              d.id,
       point_number:    d.pointNumber    || '',
       ditch_name:      d.ditchName      || '',
+      quarry:          d.quarry         || (window.AppState && AppState.activeQuarry) || '',
       monitoring_date: d.monitoringDate || null,
       worker:          d.worker         || '',
       lat:             d.lat            != null ? d.lat    : null,
@@ -274,6 +277,7 @@ var Api = (function() {
       id:             r.id,
       pointNumber:    r.point_number,
       ditchName:      r.ditch_name,
+      quarry:         r.quarry || '',
       monitoringDate: r.monitoring_date,
       worker:         r.worker,
       lat:            r.lat,
@@ -311,9 +315,10 @@ var Api = (function() {
   // ── Points CRUD ───────────────────────────────────────────
 
   async function getPoints() {
-    var { data, error } = await client()
-      .from('points').select('*')
-      .order('created_at', { ascending: false });
+    var quarry = (window.AppState && AppState.activeQuarry) || '';
+    var q = client().from('points').select('*').order('created_at', { ascending: false });
+    if (quarry) q = q.eq('quarry', quarry);
+    var { data, error } = await q;
     if (error) throw new Error(error.message);
     return (data || []).map(rowToPoint);
   }
@@ -401,10 +406,12 @@ var Api = (function() {
   // ── Schemes ───────────────────────────────────────────────
 
   async function getSchemes() {
-    var { data, error } = await client()
-      .from('schemes').select('*')
+    var quarry = (window.AppState && AppState.activeQuarry) || '';
+    var q = client().from('schemes').select('*')
       .order('week_key',    { ascending: false })
       .order('uploaded_at', { ascending: false });
+    if (quarry) q = q.eq('quarry', quarry);
+    var { data, error } = await q;
     if (error) throw new Error(error.message);
 
     // Deduplicate: keep only the newest entry per week_key
@@ -443,8 +450,12 @@ var Api = (function() {
     }
 
     // Получаем текущий storage_path чтобы удалить старый файл
+    var _uploadQuarry = (window.AppState && AppState.activeQuarry) || 'Карьер 1';
     var { data: existing } = await client()
-      .from('schemes').select('storage_path').eq('week_key', params.weekKey).maybeSingle();
+      .from('schemes').select('storage_path')
+      .eq('week_key', params.weekKey)
+      .eq('quarry', _uploadQuarry)
+      .maybeSingle();
 
     if (existing && existing.storage_path && existing.storage_path !== path) {
       await client().storage.from('schemes').remove([existing.storage_path]).catch(function() {});
@@ -454,13 +465,13 @@ var Api = (function() {
       .from('schemes').upload(path, blob, { upsert: false, contentType: params.mimeType });
     if (uploadError) throw new Error('Storage: ' + uploadError.message + ' (status ' + (uploadError.statusCode || uploadError.status || '?') + ')');
 
-    // week_key — первичный ключ таблицы, upsert корректно обновляет существующую строку
     var { error: dbError } = await client().from('schemes').upsert({
       week_key:     params.weekKey,
       storage_path: path,
       uploaded_at:  new Date().toISOString(),
       uploaded_by:  params.uploadedBy || '',
-    });
+      quarry:       _uploadQuarry,
+    }, { onConflict: 'week_key,quarry' });
     if (dbError) throw new Error(dbError.message);
   }
 
@@ -503,8 +514,10 @@ var Api = (function() {
   // ── Ditches CRUD ──────────────────────────────────────────
 
   async function getDitches(pointNumber) {
+    var quarry = (window.AppState && AppState.activeQuarry) || '';
     var query = client().from('ditches').select('*').order('created_at', { ascending: false });
     if (pointNumber) query = query.eq('point_number', pointNumber);
+    if (quarry) query = query.eq('quarry', quarry);
     var { data, error } = await query;
     if (error) throw new Error(error.message);
     return { ditches: (data || []).map(rowToDitch) };
@@ -557,6 +570,14 @@ var Api = (function() {
     })};
   }
 
+  // ── Quarries ──────────────────────────────────────────────
+
+  async function getQuarries() {
+    var { data, error } = await client().from('quarries').select('*').order('id');
+    if (error) throw new Error(error.message);
+    return (data || []).map(function(r) { return { id: r.id, name: r.name }; });
+  }
+
   // ── Ping ─────────────────────────────────────────────────
 
   async function ping() {
@@ -575,7 +596,7 @@ var Api = (function() {
       id:               w.id,
       name:             w.name             || '',
       domain:           w.domain           || '',
-      quarry:           w.quarry           || '',
+      quarry:           w.quarry           || (window.AppState && AppState.activeQuarry) || '',
       quarry_section:   w.quarrySection    || '',
       status:           w.status           || 'Активная',
       depth:            w.depth            != null ? w.depth          : null,
@@ -651,8 +672,10 @@ var Api = (function() {
   // ── Wells CRUD ────────────────────────────────────────────
 
   async function getWells() {
-    var { data, error } = await client()
-      .from('wells').select('*').order('name', { ascending: true });
+    var quarry = (window.AppState && AppState.activeQuarry) || '';
+    var q = client().from('wells').select('*').order('name', { ascending: true });
+    if (quarry) q = q.eq('quarry', quarry);
+    var { data, error } = await q;
     if (error) throw new Error(error.message);
     return (data || []).map(rowToWell);
   }
@@ -714,6 +737,7 @@ var Api = (function() {
 
   return {
     client:              client,
+    getQuarries:         getQuarries,
     getPoints:           getPoints,
     getPoint:            getPoint,
     getWorkers:          getWorkers,
