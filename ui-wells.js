@@ -112,17 +112,20 @@ function renderWellRegistryList() {
   WellsState.list.forEach(function(w) {
     var isSelected = w.id === WellsState.selectedId;
     var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
+    var isPiezo = w.wellType === 'piezometric';
     html += '<div class="well-list-item" data-well-id="' + escHTML(w.id) + '" style="' +
       'padding:8px 10px;border-radius:6px;cursor:pointer;margin-bottom:4px;' +
-      'border:1px solid ' + (isSelected ? '#f9ab00' : 'rgba(255,255,255,.07)') + ';' +
-      'background:' + (isSelected ? 'rgba(249,171,0,.1)' : 'rgba(255,255,255,.02)') + '">' +
-      '<div style="font-size:13px;font-weight:' + (isSelected ? '600' : '400') + ';color:' + (isSelected ? '#f9ab00' : 'var(--txt-1)') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+      'border:1px solid ' + (isSelected ? (isPiezo ? '#7c4dff' : '#f9ab00') : 'rgba(255,255,255,.07)') + ';' +
+      'background:' + (isSelected ? (isPiezo ? 'rgba(124,77,255,.1)' : 'rgba(249,171,0,.1)') : 'rgba(255,255,255,.02)') + '">' +
+      '<div style="font-size:13px;font-weight:' + (isSelected ? '600' : '400') + ';color:' + (isSelected ? (isPiezo ? '#7c4dff' : '#f9ab00') : 'var(--txt-1)') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
         escHTML(w.name) +
+        (isPiezo ? '<span style="font-size:9px;background:#7c4dff22;color:#7c4dff;border-radius:3px;padding:1px 4px;margin-left:5px;font-weight:600;vertical-align:middle">VWP</span>' : '') +
       '</div>' +
       (w.quarry ? '<div style="font-size:11px;color:var(--txt-3);margin-top:1px">' + escHTML(w.quarry) + (w.quarrySection ? ' · ' + escHTML(w.quarrySection) : '') + '</div>' : '') +
       '<div style="display:flex;gap:6px;margin-top:2px;align-items:center">' +
         (w.depth != null ? '<span style="font-size:11px;color:var(--txt-3)">⬇ ' + w.depth + ' м</span>' : '') +
         (w.status ? '<span style="font-size:10px;color:' + statusColor + ';font-weight:500">● ' + escHTML(w.status) + '</span>' : '') +
+        (isPiezo && w.sensors && w.sensors.length ? '<span style="font-size:10px;color:#7c4dff">◆ ' + w.sensors.length + ' дат.</span>' : '') +
       '</div>' +
     '</div>';
   });
@@ -173,6 +176,7 @@ function renderWellsRegistryPanel() {
   var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
     '<thead><tr style="border-bottom:1px solid var(--line)">' +
       '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Название</th>' +
+      '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Тип</th>' +
       '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Карьер</th>' +
       '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Участок</th>' +
       '<th style="text-align:left;padding:8px 10px;color:var(--txt-3);font-weight:500">Статус</th>' +
@@ -185,8 +189,15 @@ function renderWellsRegistryPanel() {
   WellsState.list.forEach(function(w) {
     var lastMeas = _getLastMeasurement(w.id);
     var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
+    var isPiezoRow = w.wellType === 'piezometric';
     html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05)">' +
       '<td style="padding:8px 10px;font-weight:500">' + escHTML(w.name) + '</td>' +
+      '<td style="padding:8px 10px">' +
+        (isPiezoRow
+          ? '<span style="color:#7c4dff;font-weight:500">◆ Пьезо</span>' +
+            (w.sensors && w.sensors.length ? '<span style="font-size:11px;color:var(--txt-3);margin-left:4px">(' + w.sensors.length + ' дат.)</span>' : '')
+          : '<span style="color:var(--txt-3)">Дренажная</span>') +
+      '</td>' +
       '<td style="padding:8px 10px;color:var(--txt-2)">' + escHTML(w.quarry || '—') + '</td>' +
       '<td style="padding:8px 10px;color:var(--txt-2)">' + escHTML(w.quarrySection || '—') + '</td>' +
       '<td style="padding:8px 10px"><span style="color:' + statusColor + ';font-weight:500">● ' + escHTML(w.status || '—') + '</span></td>' +
@@ -234,14 +245,18 @@ function renderWellInfoCard(well) {
 
   var lastMeas = _getLastMeasurement(well.id);
   var statusColor = WELL_STATUS_COLORS[well.status] || '';
+  var isPiezo = well.wellType === 'piezometric';
   var html = '';
   html += row('Название', well.name);
+  html += row('Тип', isPiezo
+    ? '<span style="color:#7c4dff;font-weight:600">◆ Пьезометрическая</span>'
+    : '<span style="color:var(--txt-2)">Дренажная</span>', null);
   html += row('Статус', well.status ? '● ' + well.status : null, statusColor);
   html += row('Карьер', well.quarry);
   html += row('Участок', well.quarrySection);
   html += row('Домен', well.domain);
   html += row('Глубина', well.depth != null ? well.depth + ' м' : null);
-  html += row('Угол наклона', well.inclination != null ? well.inclination + '°' : null);
+  html += row('Угол наклона', well.inclination != null ? well.inclination + '° (справочно)' : null);
   html += row('Азимут', well.azimuth != null ? well.azimuth + '°' : null);
   html += row('Диаметр', well.drillDiameter != null ? well.drillDiameter + ' мм' : null);
   html += row('Обсадка', well.casing);
@@ -249,6 +264,32 @@ function renderWellInfoCard(well) {
   html += row('Оголовок', well.hasWellhead ? 'Да' : 'Нет');
   html += row('Дебит (бурение)', well.flowAfterDrill != null ? well.flowAfterDrill + ' м³/ч' : null);
   html += row('Дебит (посл.)', lastMeas ? lastMeas.flowRate + ' м³/ч' : null);
+
+  if (isPiezo && well.sensors && well.sensors.length) {
+    html += '<div style="border-top:1px solid rgba(255,255,255,.07);margin-top:8px;padding-top:8px">' +
+      '<div style="font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Датчики VWP (' + well.sensors.length + ' шт.)</div>';
+    well.sensors.forEach(function(s) {
+      var isConn = s.connectedToLogger;
+      var connColor = isConn ? '#4caf7d' : '#9aa0a6';
+      html += '<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:12px;font-weight:500">' + escHTML(s.name || '—') + '</span>' +
+          '<span style="font-size:11px;color:' + connColor + ';font-weight:500">' +
+            (isConn ? '● Логгер' : '○ Нет связи') +
+          '</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--txt-3);margin-top:2px">' +
+          'Гл.: ' + (s.depth != null ? s.depth + ' м' : '—') +
+          (s.serialNumber ? ' · S/N датч.: ' + escHTML(s.serialNumber) : '') +
+          (isConn && s.loggerSN ? ' · S/N лог.: ' + escHTML(s.loggerSN) : '') +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+  } else if (isPiezo) {
+    html += '<div style="border-top:1px solid rgba(255,255,255,.07);margin-top:8px;padding-top:8px;font-size:12px;color:var(--txt-3)">Датчики не добавлены</div>';
+  }
+
   body.innerHTML = html;
 }
 
@@ -574,29 +615,66 @@ function _renderWellShafts(p2s) {
 
     var cx  = (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * z.imgW;
     var cy  = (WELL_BOUNDS.Ymax - w.yLocal)  / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * z.imgH;
-    var color  = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
-    var isSel  = w.id === WellsState.selectedId;
-    var azRad  = w.azimuth * Math.PI / 180;
-    var inclDeg = w.inclination != null ? w.inclination : 90;
-    var reach  = w.depth * Math.sin(inclDeg * Math.PI / 180);
-    var eCx    = cx + reach * Math.sin(azRad) * scaleX;
-    var eCy    = cy - reach * Math.cos(azRad) * scaleY;
+    var color   = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
+    var isSel   = w.id === WellsState.selectedId;
+    var isPiezo = w.wellType === 'piezometric';
+    var azRad   = w.azimuth * Math.PI / 180;
+    var reach   = w.depth;
+    var eCx     = cx + reach * Math.sin(azRad) * scaleX;
+    var eCy     = cy - reach * Math.cos(azRad) * scaleY;
+    var shaftColor = isPiezo ? '#7c4dff' : color;
 
     var line = document.createElementNS(NS, 'line');
     line.setAttribute('x1', cx.toFixed(2));  line.setAttribute('y1', cy.toFixed(2));
     line.setAttribute('x2', eCx.toFixed(2)); line.setAttribute('y2', eCy.toFixed(2));
-    line.setAttribute('stroke', color);
+    line.setAttribute('stroke', shaftColor);
     line.setAttribute('stroke-width', isSel ? '3' : '2');
+    if (isPiezo) line.setAttribute('stroke-dasharray', '5,3');
     line.setAttribute('stroke-linecap', 'round');
     line.setAttribute('vector-effect', 'non-scaling-stroke');
     line.setAttribute('pointer-events', 'none');
     line.setAttribute('opacity', isSel ? '1' : '0.7');
     shaftsG.appendChild(line);
 
+    if (isPiezo && Array.isArray(w.sensors) && w.sensors.length) {
+      var perpX = Math.cos(azRad);
+      var perpY = Math.sin(azRad);
+      w.sensors.forEach(function(s) {
+        if (s.depth == null || s.depth <= 0 || s.depth > w.depth) return;
+        var ratio = s.depth / w.depth;
+        var sx = cx + reach * ratio * Math.sin(azRad) * scaleX;
+        var sy = cy - reach * ratio * Math.cos(azRad) * scaleY;
+        var sColor = s.connectedToLogger ? '#4caf7d' : '#9aa0a6';
+
+        var sDot = document.createElementNS(NS, 'circle');
+        sDot.setAttribute('cx', sx.toFixed(2));
+        sDot.setAttribute('cy', sy.toFixed(2));
+        sDot.setAttribute('r',  (3.5 * p2s).toFixed(2));
+        sDot.setAttribute('fill', sColor);
+        sDot.setAttribute('stroke', 'rgba(0,0,0,.5)');
+        sDot.setAttribute('stroke-width', (0.8 * p2s).toFixed(2));
+        sDot.setAttribute('pointer-events', 'none');
+        shaftsG.appendChild(sDot);
+
+        var lbl = document.createElementNS(NS, 'text');
+        lbl.setAttribute('x', (sx + perpX * 8 * p2s).toFixed(2));
+        lbl.setAttribute('y', (sy + perpY * 8 * p2s).toFixed(2));
+        lbl.setAttribute('font-size', (8 * p2s).toFixed(2));
+        lbl.setAttribute('font-family', 'sans-serif');
+        lbl.setAttribute('fill', sColor);
+        lbl.setAttribute('stroke', 'rgba(0,0,0,.7)');
+        lbl.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
+        lbl.setAttribute('paint-order', 'stroke');
+        lbl.setAttribute('pointer-events', 'none');
+        lbl.textContent = s.depth + 'м';
+        shaftsG.appendChild(lbl);
+      });
+    }
+
     var dot = document.createElementNS(NS, 'circle');
     dot.setAttribute('cx', eCx.toFixed(2)); dot.setAttribute('cy', eCy.toFixed(2));
     dot.setAttribute('r',  (4 * p2s).toFixed(2));
-    dot.setAttribute('fill', color);
+    dot.setAttribute('fill', shaftColor);
     dot.setAttribute('stroke', 'rgba(0,0,0,.6)');
     dot.setAttribute('stroke-width', (1 * p2s).toFixed(2));
     dot.setAttribute('pointer-events', 'none');
@@ -655,7 +733,8 @@ function _pinPathD(cx, cy, r) {
 
 function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   var isSel   = w.id === WellsState.selectedId;
-  var color   = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
+  var isPiezo = w.wellType === 'piezometric';
+  var color   = isPiezo ? '#7c4dff' : (WELL_STATUS_COLORS[w.status] || '#9aa0a6');
   var r       = (isSel ? 11 : 7) * p2s;
   var strokeW = 1.5 * p2s;
   var hcy     = cy - r * 2.5;
@@ -768,10 +847,13 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   g.appendChild(_mkC(NS, cx, hcy, r * 2.5, 'transparent', null, 0, 'wm-hit'));
 
   var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
+  var connCount = isPiezo && Array.isArray(w.sensors) ? w.sensors.filter(function(s) { return s.connectedToLogger; }).length : 0;
   var tipHtml = '<b>' + escHTML(w.name) + '</b>' +
+    (isPiezo ? ' <span style="color:#7c4dff;font-size:11px">◆ Пьезо</span>' : '') +
     (w.status   ? ' <span style="color:' + statusColor + '">● ' + escHTML(w.status) + '</span>' : '') +
     (w.depth    != null ? '<br><span style="color:#9aa0a6">Глубина: ' + w.depth + ' м</span>' : '') +
-    (w.azimuth  != null ? '  ·  Аз: ' + w.azimuth + '°' : '');
+    (w.azimuth  != null ? '  ·  Аз: ' + w.azimuth + '°' : '') +
+    (isPiezo && w.sensors && w.sensors.length ? '<br><span style="color:#7c4dff">Датчики: ' + w.sensors.length + ' шт. (' + connCount + ' к лог.)</span>' : '');
 
   g.addEventListener('mouseenter', function(e) { _showWmTip(tipHtml, e); });
   g.addEventListener('mousemove',  function(e) { _moveWmTip(e); });
@@ -1331,11 +1413,21 @@ function _buildWellModal(title, well) {
     return '<option value="' + escHTML(o) + '"' + (o === (w.status||'Активная') ? ' selected' : '') + '>' + escHTML(o) + '</option>';
   }).join('');
 
+  var isPiezo = w.wellType === 'piezometric';
+  var wellTypeOpts =
+    '<option value="drainage"'   + (!isPiezo ? ' selected' : '') + '>Дренажная</option>' +
+    '<option value="piezometric"' + (isPiezo  ? ' selected' : '') + '>Пьезометрическая (VWP)</option>';
+
   modal.innerHTML = [
     '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:24px;width:min(640px,95vw);border:1px solid rgba(255,255,255,.08);margin:auto">',
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">',
         '<span style="font-size:16px;font-weight:600">' + escHTML(title) + '</span>',
         '<button id="wells-modal-close" style="background:none;border:none;color:var(--txt-2);font-size:22px;cursor:pointer">✕</button>',
+      '</div>',
+
+      '<div class="form-group" style="margin-bottom:14px">',
+        '<label class="form-label">Тип скважины</label>',
+        '<select id="wells-f-type" class="form-control" style="width:100%;box-sizing:border-box">' + wellTypeOpts + '</select>',
       '</div>',
 
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">',
@@ -1345,7 +1437,7 @@ function _buildWellModal(title, well) {
         _wfSel('Статус', 'wells-f-status', statusOpts),
         _wf('Домен', 'wells-f-domain', 'text', w.domain || ''),
         _wf('Глубина, м', 'wells-f-depth', 'number', w.depth != null ? w.depth : ''),
-        _wf('Угол наклона, °', 'wells-f-inclination', 'number', w.inclination != null ? w.inclination : ''),
+        _wf('Угол наклона, ° (справочно)', 'wells-f-inclination', 'number', w.inclination != null ? w.inclination : ''),
         _wf('Азимут, °', 'wells-f-azimuth', 'number', w.azimuth != null ? w.azimuth : ''),
         _wf('Диаметр бурения, мм', 'wells-f-drill-diameter', 'number', w.drillDiameter != null ? w.drillDiameter : ''),
         _wf('Обсадка', 'wells-f-casing', 'text', w.casing || ''),
@@ -1367,6 +1459,10 @@ function _buildWellModal(title, well) {
           '<input id="wells-f-lon" type="text" class="form-control" readonly placeholder="из X/Y" style="width:100%;box-sizing:border-box;opacity:.7" value="' + (w.lon != null ? w.lon : '') + '"></div>',
       '</div>',
 
+      '<div id="wells-sensors-wrap"' + (!isPiezo ? ' style="display:none"' : '') + '>',
+        _buildSensorsBlockHTML(w.sensors),
+      '</div>',
+
       '<p id="wells-modal-err" style="color:var(--red,#ea4335);font-size:13px;margin-bottom:10px;display:none"></p>',
       '<button id="wells-modal-save" class="btn btn-primary btn-full">' + (well ? 'Сохранить изменения' : 'Добавить скважину') + '</button>',
     '</div>',
@@ -1377,6 +1473,25 @@ function _buildWellModal(title, well) {
   modal.addEventListener('click', function(e) { if (e.target === modal) closeWellModal(); });
   ['wells-f-x', 'wells-f-y'].forEach(function(id) {
     document.getElementById(id).addEventListener('input', _updateWellLatLon);
+  });
+  document.getElementById('wells-f-type').addEventListener('change', function() {
+    var wrap = document.getElementById('wells-sensors-wrap');
+    if (wrap) wrap.style.display = this.value === 'piezometric' ? '' : 'none';
+  });
+  document.getElementById('wells-add-sensor').addEventListener('click', function() {
+    var list   = document.getElementById('wells-sensors-list');
+    var emptyP = document.getElementById('wells-sensors-empty');
+    list.insertAdjacentHTML('beforeend', _sensorRowHTML({}));
+    if (emptyP) emptyP.style.display = 'none';
+  });
+  document.getElementById('wells-sensors-list').addEventListener('click', function(e) {
+    var btn = e.target.closest('.sensor-del-btn');
+    if (!btn) return;
+    var row = btn.closest('.wells-sensor-row');
+    if (row) row.remove();
+    var list   = document.getElementById('wells-sensors-list');
+    var emptyP = document.getElementById('wells-sensors-empty');
+    if (list && emptyP && !list.querySelector('.wells-sensor-row')) emptyP.style.display = '';
   });
   document.getElementById('wells-modal-save').addEventListener('click', saveWell);
 }
@@ -1400,6 +1515,52 @@ function _wfCheck(label, id, checked) {
   return '<div class="form-group" style="margin:0;display:flex;align-items:center;gap:8px;padding-top:20px">' +
     '<input id="' + id + '" type="checkbox"' + (checked ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer">' +
     '<label for="' + id + '" class="form-label" style="margin:0;cursor:pointer">' + escHTML(label) + '</label></div>';
+}
+
+function _buildSensorsBlockHTML(sensors) {
+  var rows = (sensors || []).map(function(s) { return _sensorRowHTML(s); }).join('');
+  var isEmpty = !rows;
+  return '<div style="border-top:1px solid rgba(255,255,255,.08);margin-top:14px;padding-top:12px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+      '<div style="font-size:12px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Датчики VWP</div>' +
+      '<button type="button" id="wells-add-sensor" class="btn btn-sm btn-outline" style="padding:2px 10px;font-size:12px">+ Добавить датчик</button>' +
+    '</div>' +
+    '<div id="wells-sensors-list">' + rows + '</div>' +
+    '<p id="wells-sensors-empty" style="font-size:12px;color:var(--txt-3);margin:0' + (isEmpty ? '' : ';display:none') + '">Датчики не добавлены. Нажмите «+ Добавить датчик».</p>' +
+  '</div>';
+}
+
+function _sensorRowHTML(s) {
+  return '<div class="wells-sensor-row" style="display:grid;grid-template-columns:1fr 70px 1fr 1fr 28px;gap:6px;margin-bottom:8px;align-items:end">' +
+    '<div><label style="font-size:11px;color:var(--txt-3);display:block;margin-bottom:3px">Название датчика</label>' +
+      '<input type="text" class="form-control sensor-name" value="' + escHTML((s && s.name) || '') + '" placeholder="HBS-13-VWP-1" style="width:100%;box-sizing:border-box;font-size:12px"></div>' +
+    '<div><label style="font-size:11px;color:var(--txt-3);display:block;margin-bottom:3px">Глубина, м</label>' +
+      '<input type="number" step="any" class="form-control sensor-depth" value="' + ((s && s.depth != null) ? s.depth : '') + '" style="width:100%;box-sizing:border-box;font-size:12px"></div>' +
+    '<div><label style="font-size:11px;color:var(--txt-3);display:block;margin-bottom:3px">S/N датчика</label>' +
+      '<input type="text" class="form-control sensor-sn" value="' + escHTML((s && s.serialNumber) || '') + '" style="width:100%;box-sizing:border-box;font-size:12px"></div>' +
+    '<div><label style="font-size:11px;color:var(--txt-3);display:block;margin-bottom:3px">S/N логгера (пусто = нет)</label>' +
+      '<input type="text" class="form-control sensor-logger-sn" value="' + escHTML((s && s.loggerSN) || '') + '" placeholder="нет связи" style="width:100%;box-sizing:border-box;font-size:12px"></div>' +
+    '<div><button type="button" class="sensor-del-btn btn btn-sm btn-danger" style="padding:4px 0;width:28px;text-align:center">✕</button></div>' +
+  '</div>';
+}
+
+function _collectSensors() {
+  var sensors = [];
+  document.querySelectorAll('#wells-sensors-list .wells-sensor-row').forEach(function(row, i) {
+    var name      = row.querySelector('.sensor-name').value.trim();
+    var depth     = parseFloat(row.querySelector('.sensor-depth').value);
+    var sn        = row.querySelector('.sensor-sn').value.trim();
+    var loggerSN  = row.querySelector('.sensor-logger-sn').value.trim();
+    sensors.push({
+      id:               'sensor_' + Date.now() + '_' + i,
+      name:             name,
+      depth:            isNaN(depth) ? null : depth,
+      serialNumber:     sn,
+      loggerSN:         loggerSN,
+      connectedToLogger: loggerSN.length > 0,
+    });
+  });
+  return sensors;
 }
 
 function _updateWellLatLon() {
@@ -1431,9 +1592,11 @@ function saveWell() {
     lat = wgs.lat; lon = wgs.lon;
   }
 
+  var wellType = document.getElementById('wells-f-type').value || 'drainage';
   var well = {
     id:             (WellsState.editingWell && WellsState.editingWell.id) || ('well_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
     name:           name,
+    wellType:       wellType,
     quarry:         (document.getElementById('wells-f-quarry').value || '').trim(),
     quarrySection:  document.getElementById('wells-f-section').value || '',
     status:         document.getElementById('wells-f-status').value || 'Активная',
@@ -1447,6 +1610,7 @@ function saveWell() {
     hasWellhead:    document.getElementById('wells-f-has-wellhead').checked,
     flowAfterDrill: num('wells-f-flow-after-drill'),
     xLocal: xLocal, yLocal: yLocal, zLocal: num('wells-f-z'), lat: lat, lon: lon,
+    sensors: wellType === 'piezometric' ? _collectSensors() : [],
   };
 
   var op = WellsState.editingWell ? Api.updateWell(well) : Api.createWell(well);

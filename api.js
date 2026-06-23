@@ -591,6 +591,8 @@ var Api = (function() {
       z_local:          w.zLocal           != null ? w.zLocal         : null,
       lat:              w.lat              != null ? w.lat            : null,
       lon:              w.lon              != null ? w.lon            : null,
+      well_type:        w.wellType         || 'drainage',
+      sensors:          Array.isArray(w.sensors) ? w.sensors : [],
       created_at:       w.createdAt        || new Date().toISOString(),
     };
   }
@@ -616,6 +618,8 @@ var Api = (function() {
       zLocal:         r.z_local,
       lat:            r.lat,
       lon:            r.lon,
+      wellType:       r.well_type || 'drainage',
+      sensors:        Array.isArray(r.sensors) ? r.sensors : [],
       createdAt:      r.created_at,
     };
   }
