@@ -289,8 +289,8 @@
 
     <!-- Панель: просмотр скважины -->
     <div id="wells-panel-view">
-      <!-- Верхняя строка: паспорт+координаты | карта | список -->
-      <div style="display:grid;grid-template-columns:260px 1fr 220px;gap:12px;margin-bottom:12px;align-items:stretch">
+      <!-- Верхняя строка: паспорт+координаты | [карта + список] -->
+      <div style="display:grid;grid-template-columns:260px 1fr;gap:12px;margin-bottom:12px;align-items:start">
 
         <!-- Левая колонка: паспорт + координаты + легенда -->
         <div style="display:flex;flex-direction:column;gap:12px">
@@ -353,20 +353,25 @@
           </div>
         </div>
 
-        <!-- Центр: карта -->
-        <div class="card" style="padding:16px">
-          <div class="card-title">Положение на схеме</div>
-          <div id="wells-map-body" style="position:relative;overflow:hidden;border-radius:6px;cursor:crosshair"></div>
-        </div>
+        <!-- Правая область: карта + список (sub-grid со stretch) -->
+        <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;align-items:stretch">
 
-        <!-- Правая колонка: список скважин -->
-        <div class="card" style="padding:16px;display:flex;flex-direction:column;min-height:400px">
-          <div id="wells-list-header" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-            <span class="card-title" style="margin:0">Скважины</span>
-            <span id="wells-list-count" style="font-size:11px;color:var(--txt-3)"></span>
+          <!-- Центр: карта -->
+          <div class="card" style="padding:16px">
+            <div class="card-title">Положение на схеме</div>
+            <div id="wells-map-body" style="position:relative;overflow:hidden;border-radius:6px;cursor:crosshair"></div>
           </div>
-          <div id="wells-filters" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px"></div>
-          <div id="wells-registry-list" style="overflow-y:auto;flex:1"></div>
+
+          <!-- Список скважин — растягивается по высоте карты -->
+          <div class="card" style="padding:16px;display:flex;flex-direction:column;overflow:hidden">
+            <div id="wells-list-header" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;flex-shrink:0">
+              <span class="card-title" style="margin:0">Скважины</span>
+              <span id="wells-list-count" style="font-size:11px;color:var(--txt-3)"></span>
+            </div>
+            <div id="wells-filters" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;flex-shrink:0"></div>
+            <div id="wells-registry-list" style="overflow-y:auto;flex:1;min-height:0"></div>
+          </div>
+
         </div>
       </div>
 
