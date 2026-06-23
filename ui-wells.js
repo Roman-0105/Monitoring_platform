@@ -314,9 +314,7 @@ function renderWellInfoCard(well) {
   var isPiezo = well.wellType === 'piezometric';
   var html = '';
   html += row('Название', well.name);
-  html += row('Тип', isPiezo
-    ? '<span style="color:#7c4dff;font-weight:600">◆ Пьезометрическая</span>'
-    : '<span style="color:var(--txt-2)">Дренажная</span>', null);
+  html += row('Тип', isPiezo ? '◆ Пьезометрическая' : 'Дренажная', isPiezo ? '#7c4dff' : 'var(--txt-3)');
   html += row('Статус', well.status ? '● ' + well.status : null, statusColor);
   html += row('Карьер', well.quarry);
   html += row('Участок', well.quarrySection);
@@ -427,7 +425,7 @@ function _buildWellMapDOM(body, url) {
   // SVG fills the card; height set after natural image dimensions are known
   var svg = document.createElementNS(NS, 'svg');
   svg.id = 'wells-map-svg';
-  svg.style.cssText = 'display:block;width:100%;touch-action:none;cursor:crosshair';
+  svg.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;cursor:crosshair';
 
   var bgImg = document.createElementNS(NS, 'image');
   bgImg.setAttribute('x', '0');  bgImg.setAttribute('y', '0');
@@ -461,8 +459,6 @@ function _buildWellMapDOM(body, url) {
     _wellsMap.imgH = ih;
     bgImg.setAttribute('width',  iw);
     bgImg.setAttribute('height', ih);
-
-    svg.setAttribute('height', Math.round((body.offsetWidth || 600) * ih / iw));
 
     _wellsMap.vbX  = 0; _wellsMap.vbY  = 0; _wellsMap.vbW  = iw; _wellsMap.vbH  = ih;
     _wellsMap.tvbX = 0; _wellsMap.tvbY = 0; _wellsMap.tvbW = iw; _wellsMap.tvbH = ih;
