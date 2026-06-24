@@ -917,7 +917,7 @@ function _openCalibrationTool(qid, qname, schemeUrl) {
   var calResult = null;
   var zoomLevel = 1.0;
   var imgBaseW  = 0;
-  var ZOOM_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0];
+  var ZOOM_STEPS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0];
 
   function closeModal() { modal.remove(); }
   document.getElementById('cal-close').onclick      = closeModal;
@@ -992,6 +992,13 @@ function _openCalibrationTool(qid, qname, schemeUrl) {
         imgBaseW = img.offsetWidth;
         img.style.maxWidth = 'none';
         img.style.width = imgBaseW + 'px';
+        // Open at maximum zoom for precise corner placement
+        applyZoom(ZOOM_STEPS[ZOOM_STEPS.length - 1]);
+        // Center the view
+        setTimeout(function() {
+          wrapEl.scrollLeft = (wrapEl.scrollWidth - wrapEl.clientWidth) / 2;
+          wrapEl.scrollTop  = (wrapEl.scrollHeight - wrapEl.clientHeight) / 2;
+        }, 0);
         renderDots();
       }, 0);
     };
