@@ -613,8 +613,6 @@ var Api = (function() {
     } catch (_) { return false; }
   }
 
-  function getImage() { return Promise.resolve(null); }
-
   // ── Маппинг wells ─────────────────────────────────────────
 
   function wellToRow(w) {
@@ -778,7 +776,7 @@ var Api = (function() {
     getDitch:            getDitch,
     getDitchHistory:     getDitchHistory,
     ping:                ping,
-    getImage:            getImage,
+
     post:                function() { return Promise.resolve(); },
     createPoint:         createPoint,
     updatePoint:         updatePoint,

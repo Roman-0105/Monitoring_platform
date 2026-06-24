@@ -719,7 +719,7 @@ function renderQuarryMapsPanel() {
 }
 
 function _saveQuarryBoundsFromForm(qid) {
-  var q = AppState.quarries && AppState.quarries.find(function(q) { return q.id === qid; });
+  var q = AppState.quarries && AppState.quarries.find(function(q) { return String(q.id) === String(qid); });
   if (!q) return;
   var xMin = parseFloat(document.getElementById('qmap-xmin-' + qid).value);
   var xMax = parseFloat(document.getElementById('qmap-xmax-' + qid).value);
@@ -1016,7 +1016,7 @@ function _openCalibrationTool(qid, qname) {
     btnSave.textContent = 'Сохранение...';
     Api.saveQuarryBounds(qid, calResult)
       .then(function() {
-        var q = AppState.quarries && AppState.quarries.find(function(q) { return q.id === qid; });
+        var q = AppState.quarries && AppState.quarries.find(function(q) { return String(q.id) === String(qid); });
         if (q) { q.xMin = calResult.xMin; q.xMax = calResult.xMax; q.yMin = calResult.yMin; q.yMax = calResult.yMax; }
         Toast.show('Координатная привязка карьера «' + qname + '» сохранена', 'success');
         closeModal();
