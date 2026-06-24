@@ -199,7 +199,7 @@ var Schemes = (function() {
 
   // ── Загрузка схемы на сервер ──────────────────────────────
 
-  function upload(file, weekKey, deviceId) {
+  function upload(file, weekKey, deviceId, quarryName) {
     Diagnostics.set('schemeStatus', 'loading');
 
     // Общий таймаут 40 сек
@@ -217,6 +217,7 @@ var Schemes = (function() {
         base64:     data.base64,
         mimeType:   data.mime || 'image/png',
         uploadedBy: deviceId || Storage.getDeviceId(),
+        quarry:     quarryName || '',
       });
     }).then(function() {
       // POST отправлен — сбрасываем кэш и сразу считаем успехом
