@@ -8,7 +8,6 @@ var WellsState = {
   editingMeas:  null,
   measWellId:   null,
   subTab:       'view',
-  filterQuarry: '',
   filterType:   '',
 };
 
@@ -59,6 +58,17 @@ function initWellsTab() {
     addMeasBtn.addEventListener('click', function() {
       if (!WellsState.selectedId) { Toast.show('Выберите скважину', 'warning'); return; }
       openAddMeasurementForm(WellsState.selectedId);
+    });
+  }
+
+  // Кнопка скрытия условных обозначений
+  var legendToggle  = document.getElementById('btn-wells-legend-toggle');
+  var legendContent = document.getElementById('wells-legend-content');
+  if (legendToggle && legendContent) {
+    legendToggle.addEventListener('click', function() {
+      var hidden = legendContent.style.display === 'none';
+      legendContent.style.display = hidden ? '' : 'none';
+      legendToggle.textContent = hidden ? '−' : '+';
     });
   }
 
@@ -113,7 +123,6 @@ function renderWellRegistryList() {
   }
 
   var filtered = WellsState.list.filter(function(w) {
-    if (WellsState.filterQuarry && w.quarry !== WellsState.filterQuarry) return false;
     if (WellsState.filterType === 'drainage'    && w.wellType !== 'drainage')    return false;
     if (WellsState.filterType === 'piezometric' && w.wellType !== 'piezometric') return false;
     return true;
@@ -169,42 +178,25 @@ function _renderWellFilters() {
   var filterWrap = document.getElementById('wells-filters');
   if (!filterWrap) return;
 
-  var quarries = [];
-  WellsState.list.forEach(function(w) {
-    if (w.quarry && quarries.indexOf(w.quarry) === -1) quarries.push(w.quarry);
-  });
-  quarries.sort();
+  var types = [
+    { value: '',             label: 'Все' },
+    { value: 'drainage',    label: '⬇ Дрен.' },
+    { value: 'piezometric', label: '◆ Пьезо' },
+  ];
 
-  var quarryOpts = '<option value="">Все карьеры</option>';
-  quarries.forEach(function(q) {
-    quarryOpts += '<option value="' + escHTML(q) + '"' + (WellsState.filterQuarry === q ? ' selected' : '') + '>' + escHTML(q) + '</option>';
-  });
+  filterWrap.innerHTML = '<div style="display:flex;gap:4px">' +
+    types.map(function(t) {
+      var active = WellsState.filterType === t.value;
+      return '<button class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-outline') + ' wf-type-btn" ' +
+        'data-type="' + t.value + '" style="flex:1;padding:4px 6px;font-size:11px">' + t.label + '</button>';
+    }).join('') + '</div>';
 
-  var typeOpts =
-    '<option value="">Все типы</option>' +
-    '<option value="drainage"'    + (WellsState.filterType === 'drainage'    ? ' selected' : '') + '>Дренажные</option>' +
-    '<option value="piezometric"' + (WellsState.filterType === 'piezometric' ? ' selected' : '') + '>Пьезометрические</option>';
-
-  var selStyle = 'font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box';
-  filterWrap.innerHTML =
-    (quarries.length > 0 ?
-      '<select id="wells-filter-quarry" class="form-control" style="' + selStyle + '">' + quarryOpts + '</select>' : '') +
-    '<select id="wells-filter-type" class="form-control" style="' + selStyle + '">' + typeOpts + '</select>';
-
-  var quarryEl = document.getElementById('wells-filter-quarry');
-  var typeEl   = document.getElementById('wells-filter-type');
-  if (quarryEl) {
-    quarryEl.addEventListener('change', function() {
-      WellsState.filterQuarry = this.value;
+  filterWrap.querySelectorAll('.wf-type-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      WellsState.filterType = this.dataset.type;
       renderWellRegistryList();
     });
-  }
-  if (typeEl) {
-    typeEl.addEventListener('change', function() {
-      WellsState.filterType = this.value;
-      renderWellRegistryList();
-    });
-  }
+  });
 }
 
 // ── Реестр: панель управления (подвкладка) ────────────────
