@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI Рекомендации — Мониторинг платформа</title>
+<style>
+  :root {
+    --bg-0:#0d1117; --bg-1:#161b22; --bg-2:#21262d; --bg-3:#30363d;
+    --txt-0:#f0f6fc; --txt-1:#e6edf3; --txt-2:#8b949e; --txt-3:#656d76;
+    --gold:#f9ab00; --gold-d:#c87800; --green:#3fb950; --red:#f85149;
+    --blue:#58a6ff; --purple:#bc8cff; --orange:#ffa657;
+    --border:#30363d; --radius:8px; --radius-sm:4px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg-0); color:var(--txt-1); font:14px/1.5 "Segoe UI",system-ui,sans-serif; padding:24px; }
+  h1 { font-size:22px; color:var(--gold); margin-bottom:8px; }
+  .subtitle { color:var(--txt-2); margin-bottom:32px; font-size:13px; }
+  h2 { font-size:17px; color:var(--txt-0); margin:40px 0 6px; border-bottom:1px solid var(--border); padding-bottom:8px; }
+  h3 { font-size:13px; color:var(--gold); margin:20px 0 10px; text-transform:uppercase; letter-spacing:.06em; }
+  .tab-desc { color:var(--txt-2); font-size:13px; margin-bottom:16px; line-height:1.6; }
+  .variants { display:grid; gap:24px; }
+  .variants.two { grid-template-columns:1fr 1fr; }
+  @media(max-width:900px){ .variants.two { grid-template-columns:1fr; } }
+  .variant { background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .variant-label { background:var(--bg-2); padding:8px 12px; font-size:11px; color:var(--gold); font-weight:700; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--border); }
+  .variant-note { padding:8px 12px; font-size:12px; color:var(--txt-2); background:var(--bg-2); border-top:1px solid var(--border); line-height:1.5; }
+  .mock { padding:12px; background:var(--bg-0); }
+  .m-row { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .m-field { background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:5px 8px; font-size:12px; color:var(--txt-2); flex:1; min-width:0; }
+  .m-field.gold { border-color:var(--gold); color:var(--gold); }
+  .m-label { font-size:10px; color:var(--txt-3); margin-bottom:2px; }
+  .m-btn { background:var(--gold); color:#000; border:none; border-radius:var(--radius-sm); padding:5px 12px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .m-btn.ghost { background:transparent; color:var(--txt-2); border:1px solid var(--border); }
+  .m-btn.green { background:var(--green); color:#000; }
+  .m-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; }
+  .chip-ok { background:#3fb95022; color:var(--green); border:1px solid #3fb95055; }
+  .chip-warn { background:#ffa65722; color:var(--orange); border:1px solid #ffa65755; }
+  .chip-err { background:#f8514922; color:var(--red); border:1px solid #f8514955; }
+  .chip-blue { background:#58a6ff22; color:var(--blue); border:1px solid #58a6ff55; }
+  .m-card { background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius); padding:10px; }
+  .m-card-title { font-size:11px; font-weight:700; color:var(--txt-0); margin-bottom:6px; }
+  .m-stat-val { font-size:20px; font-weight:700; color:var(--gold); line-height:1; }
+  .m-stat-lbl { font-size:10px; color:var(--txt-2); margin-top:3px; }
+  .m-divider { border:none; border-top:1px solid var(--border); margin:8px 0; }
+  .m-table { width:100%; border-collapse:collapse; font-size:11px; }
+  .m-table th { color:var(--txt-3); font-weight:600; padding:4px 6px; text-align:left; border-bottom:1px solid var(--border); }
+  .m-table td { padding:4px 6px; color:var(--txt-2); border-bottom:1px solid #21262d; }
+  .m-progress { height:6px; background:var(--bg-3); border-radius:3px; overflow:hidden; margin-top:3px; }
+  .m-progress-fill { height:100%; border-radius:3px; }
+  .m-map { background:linear-gradient(135deg,#1a2332 0%,#0d1117 100%); flex:1; position:relative; display:flex; align-items:center; justify-content:center; color:var(--txt-3); font-size:11px; }
+  .m-panel { background:var(--bg-1); border-left:1px solid var(--border); width:220px; flex-shrink:0; padding:10px; overflow:hidden; }
+  .m-tabs { display:flex; gap:2px; background:var(--bg-2); padding:2px; border-radius:var(--radius-sm); margin-bottom:8px; }
+  .m-tab { flex:1; padding:4px; font-size:10px; border-radius:3px; text-align:center; color:var(--txt-2); }
+  .m-tab.active { background:var(--bg-3); color:var(--txt-0); }
+  .m-pill-filter { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; }
+  .m-pill { padding:3px 9px; border-radius:20px; font-size:10px; border:1px solid var(--border); color:var(--txt-2); }
+  .m-pill.active { border-color:var(--gold); color:var(--gold); background:#f9ab0011; }
+  .m-search { width:100%; background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:5px 8px; font-size:11px; color:var(--txt-2); }
+  .m-switch { width:28px; height:15px; background:var(--bg-3); border-radius:8px; position:relative; display:inline-block; }
+  .m-switch.on { background:var(--gold); }
+  .m-switch::after { content:''; position:absolute; width:11px; height:11px; background:#fff; border-radius:50%; top:2px; left:2px; }
+  .m-switch.on::after { left:15px; }
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .dot-ok { background:var(--green); }
+  .dot-warn { background:var(--orange); }
+  .dot-err { background:var(--red); }
+  .dot-blue { background:var(--blue); }
+  .m-mini-chart { height:40px; background:var(--bg-2); border-radius:4px; position:relative; overflow:hidden; }
+  .m-mini-chart svg { position:absolute; inset:0; width:100%; height:100%; }
+  .section-tag { display:inline-block; background:var(--bg-2); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:10px; color:var(--txt-3); margin-left:8px; vertical-align:middle; }
+  .new-badge { display:inline-block; background:#3fb95033; border:1px solid var(--green); color:var(--green); border-radius:4px; padding:1px 6px; font-size:10px; margin-left:6px; }
+  .alert-box { border-radius:var(--radius-sm); padding:7px 10px; font-size:11px; margin-bottom:6px; display:flex; align-items:flex-start; gap:8px; }
+  .alert-warn { background:#ffa65711; border-left:3px solid var(--orange); }
+  .alert-crit { background:#f8514911; border-left:3px solid var(--red); }
+  .alert-ok   { background:#3fb95011; border-left:3px solid var(--green); }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:8px; }
+  .kpi-card { background:var(--bg-2); border-radius:6px; padding:10px 8px; text-align:center; border:1px solid var(--border); }
+  .kpi-val { font-size:18px; font-weight:700; }
+  .kpi-lbl { font-size:9px; color:var(--txt-3); margin-top:2px; text-transform:uppercase; letter-spacing:.04em; }
+</style>
+</head>
+<body>
+
+<h1>UI Рекомендации — Мониторинг платформа</h1>
+<p class="subtitle">Визуальные макеты для каждой вкладки · Предложения по улучшению UX · Дополнительные функции для Водоотлива</p>
+
+<!-- КАРТА -->
+<h2>1. Карта <span class="section-tag">Текущее: базовое</span></h2>
+<p class="tab-desc">Фильтры занимают левую панель, перекрывая карту. Цель: вынести фильтры в компактный бар над картой, детальная панель — сбоку без перекрытия.</p>
+
+<div class="variants two">
+  <div class="variant">
+    <div class="variant-label">Вариант А — фильтр-бар над картой</div>
+    <div class="mock">
+      <div class="m-row" style="background:var(--bg-2);border-radius:var(--radius-sm);padding:6px 8px;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+        <input class="m-search" style="width:140px;flex:none;" placeholder="🔍 Поиск точки…">
+        <div class="m-pill-filter" style="margin:0;flex:1;">
+          <span class="m-pill active">Все</span>
+          <span class="m-pill">Действующие</span>
+          <span class="m-pill">Аварийные</span>
+          <span class="m-pill">Ликвид.</span>
+        </div>
+        <button class="m-btn ghost" style="font-size:10px;">📅 Дата</button>
+        <button class="m-btn ghost" style="font-size:10px;">⚙ Слои</button>
+      </div>
+      <div style="display:flex;gap:0;height:190px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div class="m-map">
+          <div style="text-align:center;">
+            <div style="font-size:24px;margin-bottom:6px;">🗺</div>
+            <div>SVG-карта объектов</div>
+          </div>
+          <div style="position:absolute;bottom:8px;left:8px;background:#0d111799;padding:6px 8px;border-radius:4px;font-size:10px;line-height:1.8;">
+            <div><span class="dot dot-ok"></span> Действующая</div>
+            <div><span class="dot dot-err"></span> Аварийная</div>
+            <div><span class="dot" style="background:var(--txt-3)"></span> Ликвидированная</div>
+          </div>
+        </div>
+        <div class="m-panel" style="width:195px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:12px;font-weight:700;color:var(--txt-0);">ПТ-7 / Северный</span>
+            <span class="m-chip chip-ok">Действ.</span>
+          </div>
+          <hr class="m-divider">
+          <div style="font-size:10px;color:var(--txt-3);">Последнее измерение</div>
+          <div style="font-size:12px;color:var(--txt-1);margin-bottom:8px;">15.06.2026 · 12.4 м</div>
+          <div style="font-size:10px;color:var(--txt-3);margin-bottom:4px;">Динамика уровня</div>
+          <div class="m-mini-chart">
+            <svg viewBox="0 0 160 40" preserveAspectRatio="none">
+              <polyline points="0,30 20,28 40,25 60,22 80,24 100,20 120,18 140,16 160,14" fill="none" stroke="#f9ab00" stroke-width="1.5" opacity=".8"/>
+              <polyline points="0,30 20,28 40,25 60,22 80,24 100,20 120,18 140,16 160,14 160,40 0,40" fill="#f9ab0015" stroke="none"/>
+            </svg>
+          </div>
+          <hr class="m-divider">
+          <div class="m-row" style="margin:0;">
+            <button class="m-btn" style="flex:1;font-size:10px;">Детали</button>
+            <button class="m-btn ghost" style="font-size:10px;">✏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Карта занимает максимум экрана, все фильтры в одну строку, детальная панель — справа без перекрытия.</div>
+  </div>
+
+  <div class="variant">
+    <div class="variant-label">Вариант Б — плавающие контролы (floating UI)</div>
+    <div class="mock">
+      <div style="position:relative;height:220px;">
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,#1a2332,#0d1117);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--txt-3);font-size:11px;">
+          <div style="text-align:center;">🗺 Карта во весь экран</div>
+        </div>
+        <div style="position:absolute;top:8px;left:8px;background:#161b22ee;border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:10px;color:var(--txt-2);">🔍 Поиск…</div>
+        <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;">
+          <div style="background:#161b22ee;border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:10px;color:var(--gold);">Все статусы ▾</div>
+          <div style="background:#161b22ee;border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:10px;color:var(--txt-2);">⚙ Слои</div>
+        </div>
+        <div style="position:absolute;bottom:8px;left:8px;background:#161b22ee;border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:10px;">
+          <div style="display:flex;gap:12px;">
+            <span><b style="color:var(--green);">42</b> <span style="color:var(--txt-3)">Действ.</span></span>
+            <span><b style="color:var(--red);">3</b> <span style="color:var(--txt-3)">Авар.</span></span>
+            <span><b style="color:var(--txt-3);">11</b> <span style="color:var(--txt-3)">Лик.</span></span>
+          </div>
+        </div>
+        <div style="position:absolute;bottom:8px;right:8px;width:170px;background:#161b22ee;border:1px solid #f9ab0066;border-radius:var(--radius);padding:8px;">
+          <div style="font-size:11px;font-weight:700;color:var(--txt-0);margin-bottom:4px;">ПТ-14 · Восточный</div>
+          <div style="display:flex;gap:4px;margin-bottom:6px;"><span class="m-chip chip-err">Авар.</span><span style="font-size:10px;color:var(--txt-2)">↑ 0.8 м/нед</span></div>
+          <div style="font-size:10px;color:var(--txt-3);">Уровень: <b style="color:var(--red);">3.2 м</b></div>
+          <button class="m-btn" style="width:100%;margin-top:6px;font-size:10px;">Открыть →</button>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Карта 100% экрана, минималистично. ⚠ Плавающие элементы могут перекрывать маркеры.</div>
+  </div>
+</div>
+
+<!-- ТОЧКИ -->
+<h2>2. Точки наблюдения</h2>
+<p class="tab-desc">Простая таблица с большими строками. Цель: компактный master-detail без перехода на отдельную страницу.</p>
+
+<div class="variants two">
+  <div class="variant">
+    <div class="variant-label">Вариант А — master-detail (список + панель)</div>
+    <div class="mock">
+      <div style="display:flex;gap:0;height:230px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div style="width:210px;flex-shrink:0;border-right:1px solid var(--border);">
+          <div style="padding:6px;background:var(--bg-2);border-bottom:1px solid var(--border);">
+            <input class="m-search" placeholder="🔍 Фильтр…">
+          </div>
+          <div style="border-bottom:1px solid var(--border);padding:7px 10px;background:var(--bg-0);">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;font-weight:600;color:var(--gold);">ПТ-1</span>
+              <span class="m-chip chip-ok" style="font-size:9px;">Действ.</span>
+            </div>
+            <div style="font-size:10px;color:var(--txt-3);margin-top:2px;">Северный · подз · 12.4 м</div>
+          </div>
+          <div style="border-bottom:1px solid var(--border);padding:7px 10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;font-weight:600;">ПТ-2</span>
+              <span class="m-chip chip-warn" style="font-size:9px;">Предупр.</span>
+            </div>
+            <div style="font-size:10px;color:var(--txt-3);margin-top:2px;">Северный · пов · 8.1 м</div>
+          </div>
+          <div style="border-bottom:1px solid var(--border);padding:7px 10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;font-weight:600;">ПТ-5</span>
+              <span class="m-chip chip-err" style="font-size:9px;">Авар.</span>
+            </div>
+            <div style="font-size:10px;color:var(--txt-3);margin-top:2px;">Восточный · подз · 3.2 м</div>
+          </div>
+          <div style="padding:7px 10px;">
+            <div style="font-size:12px;">ПТ-7</div>
+            <div style="font-size:10px;color:var(--txt-3);">Южный · подз · 15.0 м</div>
+          </div>
+        </div>
+        <div style="flex:1;padding:10px;overflow-y:auto;">
+          <div class="m-row" style="margin-bottom:10px;">
+            <span style="font-size:15px;font-weight:700;color:var(--txt-0);">ПТ-1 · Северный</span>
+            <span class="m-chip chip-ok">Действующая</span>
+            <button class="m-btn ghost" style="margin-left:auto;font-size:10px;">✏</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <div class="kpi-card"><div class="kpi-val" style="color:var(--blue);">12.4</div><div class="kpi-lbl">Уровень, м</div></div>
+            <div class="kpi-card"><div class="kpi-val" style="color:var(--green);">↓0.3</div><div class="kpi-lbl">Δ за нед.</div></div>
+          </div>
+          <table class="m-table">
+            <tr><th>Дата</th><th>Уровень</th><th>Метод</th><th>Исполн.</th></tr>
+            <tr><td>15.06</td><td style="color:var(--blue);">12.4 м</td><td>Лента</td><td>Иванов</td></tr>
+            <tr><td>08.06</td><td>12.7 м</td><td>Лента</td><td>Петров</td></tr>
+          </table>
+          <div class="m-mini-chart" style="margin-top:8px;">
+            <svg viewBox="0 0 200 40" preserveAspectRatio="none">
+              <polyline points="0,35 33,30 66,25 100,22 133,20 166,18 200,14" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+              <polyline points="0,35 33,30 66,25 100,22 133,20 166,18 200,14 200,40 0,40" fill="#58a6ff12" stroke="none"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Классический master-detail — быстрый просмотр без модальных окон. Оптимально для 20+ точек.</div>
+  </div>
+
+  <div class="variant">
+    <div class="variant-label">Вариант Б — карточки с раскрытием</div>
+    <div class="mock">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="background:var(--bg-1);border:1px solid var(--gold);border-radius:var(--radius);overflow:hidden;">
+          <div style="padding:8px 10px;background:var(--bg-2);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;font-weight:700;color:var(--gold);">ПТ-1</span>
+            <span class="m-chip chip-ok">Действ.</span>
+          </div>
+          <div style="padding:8px 10px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt-2);margin-bottom:6px;"><span>Северный</span><span>Подземная</span></div>
+            <div style="display:flex;align-items:flex-end;gap:6px;margin-bottom:6px;">
+              <span style="font-size:22px;font-weight:700;color:var(--blue);">12.4</span>
+              <span style="font-size:10px;color:var(--txt-3);margin-bottom:3px;">м · 15.06</span>
+              <span style="font-size:11px;color:var(--green);margin-bottom:2px;">↓0.3</span>
+            </div>
+            <div class="m-mini-chart" style="height:30px;">
+              <svg viewBox="0 0 120 30" preserveAspectRatio="none">
+                <polyline points="0,25 20,22 40,18 60,16 80,14 100,12 120,10" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+              </svg>
+            </div>
+            <div class="m-row" style="margin-top:6px;">
+              <button class="m-btn" style="flex:1;font-size:10px;">Измерения</button>
+              <button class="m-btn ghost" style="font-size:10px;">✏</button>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+          <div style="padding:8px 10px;background:var(--bg-2);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;font-weight:700;">ПТ-2</span>
+            <span class="m-chip chip-warn">Предупр.</span>
+          </div>
+          <div style="padding:8px 10px;">
+            <div style="font-size:11px;color:var(--txt-3);">Северный · Поверхностная</div>
+            <div style="font-size:18px;font-weight:700;color:var(--orange);margin-top:4px;">8.1 <span style="font-size:10px;color:var(--txt-3);">м</span></div>
+          </div>
+        </div>
+        <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;opacity:.8;">
+          <div style="padding:8px 10px;background:var(--bg-2);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;font-weight:700;">ПТ-5</span>
+            <span class="m-chip chip-err">Авар.</span>
+          </div>
+          <div style="padding:8px 10px;">
+            <div style="font-size:11px;color:var(--txt-3);">Восточный · Подземная</div>
+            <div style="font-size:18px;font-weight:700;color:var(--red);margin-top:4px;">3.2 <span style="font-size:10px;color:var(--txt-3);">м</span></div>
+          </div>
+        </div>
+        <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;opacity:.6;">
+          <div style="padding:8px 10px;background:var(--bg-2);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;font-weight:700;">ПТ-7</span>
+            <span class="m-chip chip-ok">Действ.</span>
+          </div>
+          <div style="padding:8px 10px;">
+            <div style="font-size:11px;color:var(--txt-3);">Южный · Подземная</div>
+            <div style="font-size:18px;font-weight:700;color:var(--blue);margin-top:4px;">15.0 <span style="font-size:10px;color:var(--txt-3);">м</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Визуально богаче, сразу видны значения. ⚠ При 30+ точках нужна виртуализация списка.</div>
+  </div>
+</div>
+
+<!-- АНАЛИТИКА -->
+<h2>3. Аналитика</h2>
+<p class="tab-desc">Графики "стеной" без контекста. Цель: KPI-дашборд вверху, фильтр периода всегда виден, графики ниже.</p>
+
+<div class="variants two">
+  <div class="variant">
+    <div class="variant-label">Вариант А — дашборд с KPI + графики (рекомендуется)</div>
+    <div class="mock">
+      <div class="kpi-grid" style="margin-bottom:12px;">
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--green);">42</div><div class="kpi-lbl">Действ. точки</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--red);">3</div><div class="kpi-lbl">Аварийных</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--blue);">11.2</div><div class="kpi-lbl">Сред. уровень, м</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--orange);">↑0.4</div><div class="kpi-lbl">Δ уровень мес.</div></div>
+      </div>
+      <div class="m-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+        <span style="font-size:11px;color:var(--txt-3);">Период:</span>
+        <span class="m-pill active">7 дней</span>
+        <span class="m-pill">30 дней</span>
+        <span class="m-pill">3 мес.</span>
+        <span class="m-pill">Свой…</span>
+        <div style="flex:1;"></div>
+        <button class="m-btn ghost" style="font-size:10px;">⬇ CSV</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="m-card">
+          <div class="m-card-title">Динамика уровней</div>
+          <div class="m-mini-chart" style="height:60px;">
+            <svg viewBox="0 0 200 60" preserveAspectRatio="none">
+              <polyline points="0,50 30,42 60,35 90,28 120,32 150,24 180,20 200,16" fill="none" stroke="#58a6ff" stroke-width="2"/>
+              <polyline points="0,55 30,50 60,45 90,48 120,44 150,40 180,38 200,35" fill="none" stroke="#f9ab00" stroke-width="2" stroke-dasharray="4,2"/>
+            </svg>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:4px;font-size:9px;color:var(--txt-3);">
+            <span><span style="color:var(--blue);">━</span> Подземные</span>
+            <span><span style="color:var(--gold);">╌</span> Поверх.</span>
+          </div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">Распределение по горизонту</div>
+          <div style="display:flex;align-items:center;gap:8px;height:60px;">
+            <svg width="60" height="60" viewBox="0 0 60 60">
+              <circle cx="30" cy="30" r="22" fill="none" stroke="#30363d" stroke-width="10"/>
+              <circle cx="30" cy="30" r="22" fill="none" stroke="#58a6ff" stroke-width="10" stroke-dasharray="70 70" stroke-dashoffset="-52" transform="rotate(-90 30 30)"/>
+              <circle cx="30" cy="30" r="22" fill="none" stroke="#f9ab00" stroke-width="10" stroke-dasharray="45 95" stroke-dashoffset="-122" transform="rotate(-90 30 30)"/>
+              <text x="30" y="34" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="700">56</text>
+            </svg>
+            <div style="font-size:10px;line-height:1.9;">
+              <div><span style="color:var(--blue);">█</span> Q-I: 18 шт</div>
+              <div><span style="color:var(--gold);">█</span> Q-II: 15 шт</div>
+              <div><span style="color:var(--txt-3);">█</span> Прочие: 23 шт</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ KPI сверху — мгновенный обзор ситуации, графики — детализация. Рекомендуется как основной вид.</div>
+  </div>
+
+  <div class="variant">
+    <div class="variant-label">Вариант Б — сводная таблица с sparkline-трендами</div>
+    <div class="mock">
+      <div class="m-row" style="margin-bottom:8px;">
+        <input class="m-search" style="flex:1;" placeholder="🔍 Фильтр по точке…">
+        <select class="m-field" style="flex:none;width:110px;"><option>Все горизонты</option></select>
+        <button class="m-btn ghost" style="font-size:10px;">⬇ CSV</button>
+      </div>
+      <table class="m-table">
+        <tr><th>Точка</th><th>Горизонт</th><th>Последний</th><th>Δ 30 дн</th><th>Тренд</th><th>Статус</th></tr>
+        <tr>
+          <td style="color:var(--txt-0);font-weight:600;">ПТ-1</td><td>Q-I</td><td style="color:var(--blue);">12.4 м</td>
+          <td style="color:var(--green);">↓ 0.6</td>
+          <td><svg width="50" height="16"><polyline points="0,14 10,11 20,8 30,7 40,5 50,3" fill="none" stroke="#3fb950" stroke-width="1.5"/></svg></td>
+          <td><span class="m-chip chip-ok">Норма</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--txt-0);font-weight:600;">ПТ-2</td><td>Q-II</td><td style="color:var(--orange);">8.1 м</td>
+          <td style="color:var(--orange);">↑ 1.2</td>
+          <td><svg width="50" height="16"><polyline points="0,12 10,11 20,11 30,12 40,13 50,14" fill="none" stroke="#ffa657" stroke-width="1.5"/></svg></td>
+          <td><span class="m-chip chip-warn">Предупр.</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--txt-0);font-weight:600;">ПТ-5</td><td>Q-I</td><td style="color:var(--red);">3.2 м</td>
+          <td style="color:var(--red);">↑ 2.8</td>
+          <td><svg width="50" height="16"><polyline points="0,14 10,14 20,13 30,11 40,8 50,3" fill="none" stroke="#f85149" stroke-width="1.5"/></svg></td>
+          <td><span class="m-chip chip-err">Авар.</span></td>
+        </tr>
+      </table>
+    </div>
+    <div class="variant-note">✅ Сканирование взглядом, sparkline-тренды вместо отдельных графиков. Оптимально для оперативного контроля.</div>
+  </div>
+</div>
+
+<!-- КАНАВЫ -->
+<h2>4. Канавы</h2>
+<p class="tab-desc">Длинная форма расчёта без предпросмотра результата. Цель: аккордеон-форма + результат рядом с историей.</p>
+
+<div class="variants two">
+  <div class="variant">
+    <div class="variant-label">Вариант А — форма-аккордеон + история справа</div>
+    <div class="mock">
+      <div style="display:flex;gap:8px;height:220px;">
+        <div style="width:195px;flex-shrink:0;overflow-y:auto;">
+          <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:4px;overflow:hidden;">
+            <div style="padding:7px 10px;font-size:11px;font-weight:700;color:var(--gold);display:flex;justify-content:space-between;">Секция <span>▲</span></div>
+            <div style="padding:8px 10px;border-top:1px solid var(--border);">
+              <div class="m-label">Название канавы</div>
+              <div class="m-field" style="margin-bottom:6px;">К-1 Северная</div>
+              <div class="m-label">Метод</div>
+              <div class="m-field" style="margin-bottom:6px;">Поплавковый</div>
+              <div class="m-row">
+                <div style="flex:1;"><div class="m-label">L, м</div><div class="m-field">10</div></div>
+                <div style="flex:1;"><div class="m-label">t, сек</div><div class="m-field">45</div></div>
+              </div>
+            </div>
+          </div>
+          <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:4px;">
+            <div style="padding:7px 10px;font-size:11px;color:var(--txt-2);display:flex;justify-content:space-between;">Сечение <span>▼</span></div>
+          </div>
+          <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+            <div style="padding:7px 10px;font-size:11px;color:var(--txt-2);display:flex;justify-content:space-between;">Результат <span>▼</span></div>
+          </div>
+          <button class="m-btn" style="width:100%;">⚡ Рассчитать</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;">
+          <div class="m-card" style="margin-bottom:8px;background:#f9ab0011;border-color:var(--gold);">
+            <div class="m-card-title">Результат расчёта</div>
+            <div style="display:flex;gap:12px;align-items:flex-end;">
+              <div><div class="m-stat-val">0.42</div><div class="m-stat-lbl">Q, м³/с</div></div>
+              <div><div class="m-stat-val" style="color:var(--blue);font-size:16px;">0.68</div><div class="m-stat-lbl">V, м/с</div></div>
+              <div><div class="m-stat-val" style="color:var(--txt-2);font-size:16px;">0.62</div><div class="m-stat-lbl">Площадь, м²</div></div>
+            </div>
+            <button class="m-btn green" style="margin-top:8px;width:100%;font-size:11px;">💾 Сохранить</button>
+          </div>
+          <div style="font-size:10px;color:var(--txt-3);margin-bottom:4px;">История — К-1 Северная</div>
+          <table class="m-table">
+            <tr><th>Дата</th><th>Q, м³/с</th><th>V, м/с</th><th>Исполн.</th></tr>
+            <tr><td>15.06</td><td style="color:var(--gold);">0.42</td><td>0.68</td><td>Иванов</td></tr>
+            <tr><td>08.06</td><td>0.38</td><td>0.61</td><td>Петров</td></tr>
+            <tr><td>01.06</td><td>0.51</td><td>0.74</td><td>Иванов</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Аккордеон сжимает форму, результат и история видны рядом — не нужно переключаться между экранами.</div>
+  </div>
+
+  <div class="variant">
+    <div class="variant-label">Вариант Б — двухколоночная компактная форма</div>
+    <div class="mock">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div><div class="m-label">Канава</div><div class="m-field gold">К-1 Северная</div></div>
+        <div><div class="m-label">Дата</div><div class="m-field">2026-06-15</div></div>
+        <div><div class="m-label">Метод</div><div class="m-field">Поплавковый</div></div>
+        <div><div class="m-label">L поплавка, м</div><div class="m-field">10</div></div>
+        <div><div class="m-label">V₀.₂, м/с</div><div class="m-field">0.65</div></div>
+        <div><div class="m-label">V₀.₆, м/с</div><div class="m-field">0.70</div></div>
+        <div><div class="m-label">V₀.₈, м/с</div><div class="m-field">0.68</div></div>
+        <div><div class="m-label">Ширина, м</div><div class="m-field">1.2</div></div>
+        <div><div class="m-label">Глубина, м</div><div class="m-field">0.52</div></div>
+        <div><div class="m-label">Исполнитель</div><div class="m-field">Иванов А.П.</div></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="m-btn" style="flex:1;">⚡ Рассчитать</button>
+        <div style="flex:1;background:#f9ab0011;border:1px solid var(--gold);border-radius:var(--radius-sm);padding:6px 10px;text-align:center;">
+          <span style="font-size:16px;font-weight:700;color:var(--gold);">0.42</span>
+          <span style="font-size:10px;color:var(--txt-3);"> м³/с</span>
+        </div>
+        <button class="m-btn green">💾</button>
+      </div>
+    </div>
+    <div class="variant-note">✅ Все поля на одном экране без прокрутки — оптимально для полевого ввода с планшета.</div>
+  </div>
+</div>
+
+<!-- СКВАЖИНЫ -->
+<h2>5. Скважины</h2>
+<p class="tab-desc">SVG-схема работает, но данные скважины скрыты в маленькой карточке. Цель: развёрнутая боковая панель с вкладками.</p>
+
+<div class="variants two">
+  <div class="variant">
+    <div class="variant-label">Вариант А — схема + боковая панель с вкладками</div>
+    <div class="mock">
+      <div style="display:flex;gap:0;height:210px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div class="m-map">
+          <div style="text-align:center;color:var(--txt-3);font-size:11px;">
+            <div style="margin-bottom:8px;">⬡ SVG схема скважин</div>
+            <div style="display:flex;gap:10px;justify-content:center;">
+              <div style="width:12px;height:12px;border-radius:50%;background:var(--gold);border:2px solid #fff;box-shadow:0 0 6px var(--gold);"></div>
+              <div style="width:12px;height:12px;border-radius:50%;background:var(--blue);border:2px solid #fff;"></div>
+              <div style="width:12px;height:12px;border-radius:50%;background:var(--red);border:2px solid #fff;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="m-panel" style="width:185px;">
+          <div class="m-tabs">
+            <div class="m-tab active">Данные</div>
+            <div class="m-tab">График</div>
+            <div class="m-tab">Таблица</div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:2px;">СКВ-3 · Блок А</div>
+          <div style="font-size:10px;color:var(--txt-3);margin-bottom:8px;">Горизонт Q-I · Глубина 45 м</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
+            <div class="kpi-card" style="padding:6px;"><div class="kpi-val" style="font-size:14px;color:var(--blue);">28.3</div><div class="kpi-lbl">Уровень, м</div></div>
+            <div class="kpi-card" style="padding:6px;"><div class="kpi-val" style="font-size:14px;color:var(--green);">↓1.2</div><div class="kpi-lbl">Δ мес.</div></div>
+          </div>
+          <div class="m-mini-chart" style="height:44px;margin-bottom:8px;">
+            <svg viewBox="0 0 170 44" preserveAspectRatio="none">
+              <polyline points="0,38 28,32 56,26 84,22 112,20 140,17 170,14" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+              <polyline points="0,38 28,32 56,26 84,22 112,20 140,17 170,14 170,44 0,44" fill="#58a6ff10" stroke="none"/>
+            </svg>
+          </div>
+          <button class="m-btn" style="width:100%;font-size:10px;">Все измерения</button>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Вкладки (Данные / График / Таблица) без лишних переходов. Данные скважины всегда рядом со схемой.</div>
+  </div>
+
+  <div class="variant">
+    <div class="variant-label">Вариант Б — схема + список + нижняя полоса данных</div>
+    <div class="mock">
+      <div style="height:210px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;">
+        <div style="flex:1;display:flex;overflow:hidden;">
+          <div class="m-map" style="border-radius:0;">⬡ SVG схема</div>
+          <div style="width:125px;border-left:1px solid var(--border);">
+            <div style="padding:5px 8px;font-size:10px;font-weight:700;color:var(--txt-3);background:var(--bg-2);border-bottom:1px solid var(--border);">СКВАЖИНЫ</div>
+            <div style="padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg-0);">
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:11px;color:var(--gold);">СКВ-3</span><span class="dot dot-ok"></span></div>
+              <div style="font-size:9px;color:var(--txt-3);">28.3 м · Блок А</div>
+            </div>
+            <div style="padding:6px 8px;border-bottom:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:11px;">СКВ-5</span><span class="dot dot-blue"></span></div>
+              <div style="font-size:9px;color:var(--txt-3);">31.8 м · Блок Б</div>
+            </div>
+            <div style="padding:6px 8px;">
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:11px;">СКВ-8</span><span class="dot dot-err"></span></div>
+              <div style="font-size:9px;color:var(--txt-3);">5.1 м · Блок А</div>
+            </div>
+          </div>
+        </div>
+        <div style="height:52px;border-top:1px solid var(--gold);background:#f9ab0008;padding:6px 10px;display:flex;gap:16px;align-items:center;">
+          <div><div class="m-stat-val" style="font-size:15px;">28.3</div><div class="m-stat-lbl">Уровень, м</div></div>
+          <div><div class="m-stat-val" style="font-size:15px;color:var(--green);">↓1.2</div><div class="m-stat-lbl">Δ мес.</div></div>
+          <div class="m-mini-chart" style="flex:1;height:36px;">
+            <svg viewBox="0 0 120 36" preserveAspectRatio="none">
+              <polyline points="0,30 24,25 48,20 72,17 96,14 120,11" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <button class="m-btn" style="font-size:10px;">Детали</button>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Нижняя полоса не перекрывает схему. ⚠ Мало пространства — только для краткой сводки.</div>
+  </div>
+</div>
+
+<!-- ВОДООТЛИВ -->
+<h2>6. Водоотлив <span class="section-tag">Основной акцент</span></h2>
+<p class="tab-desc">Вкладка показывает только аналитику. Предлагается расширить до оперативного дашборда с мониторингом насосов и тревогами.</p>
+
+<div class="variants two">
+  <div class="variant">
+    <div class="variant-label">Вариант А — оперативный дашборд (рекомендуется)</div>
+    <div class="mock">
+      <div class="kpi-grid" style="margin-bottom:10px;grid-template-columns:repeat(4,1fr);">
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--blue);">2 840</div><div class="kpi-lbl">Qфакт, м³/сут</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--orange);">3 200</div><div class="kpi-lbl">Qплан, м³/сут</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--green);">88%</div><div class="kpi-lbl">Выполнение</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color:var(--red);">↑0.12</div><div class="kpi-lbl">Приток, м/ч</div></div>
+      </div>
+      <div class="alert-crit alert-box">⚠ <div><b>НПГ-3:</b> давление 2.1 МПа — выше нормы.</div></div>
+      <div class="alert-warn alert-box" style="margin-bottom:10px;">🔧 <div><b>НПГ-5:</b> ТО через 120 часов.</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+        <div class="m-card" style="border-color:var(--green);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:11px;font-weight:700;">НПГ-1</span><span class="m-chip chip-ok">Работает</span></div>
+          <div style="font-size:10px;color:var(--txt-3);">Q: <b style="color:var(--txt-1);">980 м³/ч</b></div>
+          <div class="m-progress" style="margin-top:6px;"><div class="m-progress-fill" style="width:78%;background:var(--green);"></div></div>
+          <div style="font-size:9px;color:var(--txt-3);margin-top:2px;">78% от макс.</div>
+        </div>
+        <div class="m-card" style="border-color:var(--red);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:11px;font-weight:700;">НПГ-3</span><span class="m-chip chip-err">Авар.</span></div>
+          <div style="font-size:10px;color:var(--txt-3);">P: <b style="color:var(--red);">2.1 МПа</b></div>
+          <div class="m-progress" style="margin-top:6px;"><div class="m-progress-fill" style="width:95%;background:var(--red);"></div></div>
+          <div style="font-size:9px;color:var(--txt-3);margin-top:2px;">95% от макс.</div>
+        </div>
+        <div class="m-card">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:11px;font-weight:700;">НПГ-5</span><span class="m-chip chip-blue">Резерв</span></div>
+          <div style="font-size:10px;color:var(--txt-3);">ТО через <b style="color:var(--txt-1);">120 ч</b></div>
+          <div class="m-progress" style="margin-top:6px;"><div class="m-progress-fill" style="width:0%;background:var(--txt-3);"></div></div>
+          <div style="font-size:9px;color:var(--txt-3);margin-top:2px;">Не работает</div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ <b>Рекомендован.</b> KPI + тревоги + насосы на одном экране. Диспетчер видит всё без прокрутки.</div>
+  </div>
+
+  <div class="variant">
+    <div class="variant-label">Вариант Б — живая SVG P&ID-схема водоотлива</div>
+    <div class="mock">
+      <svg width="100%" height="155" viewBox="0 0 420 155">
+        <defs>
+          <pattern id="g2" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M20 0L0 0 0 20" fill="none" stroke="#21262d" stroke-width=".5"/>
+          </pattern>
+        </defs>
+        <rect width="420" height="155" fill="url(#g2)"/>
+        <line x1="0" y1="50" x2="420" y2="50" stroke="#30363d" stroke-width="1" stroke-dasharray="6,4"/>
+        <text x="6" y="44" fill="#656d76" font-size="9">Поверхность</text>
+        <!-- Зумп 1 -->
+        <rect x="10" y="80" width="50" height="60" rx="3" fill="#1a2332" stroke="#30363d" stroke-width="1.5"/>
+        <text x="35" y="97" text-anchor="middle" fill="#8b949e" font-size="8" font-weight="600">ЗУМП-1</text>
+        <rect x="10" y="107" width="50" height="33" fill="#58a6ff18"/>
+        <text x="35" y="126" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="700">2.4 м</text>
+        <!-- Pipe z1→p1 -->
+        <path d="M60 110 L95 110" stroke="#30363d" stroke-width="5" fill="none"/>
+        <circle cx="70" cy="110" r="2.5" fill="#58a6ff" opacity=".7"/>
+        <circle cx="82" cy="110" r="2.5" fill="#58a6ff" opacity=".4"/>
+        <!-- Pump 1 OK -->
+        <circle cx="113" cy="110" r="17" fill="#1a2332" stroke="#3fb950" stroke-width="2"/>
+        <text x="113" y="107" text-anchor="middle" fill="#3fb950" font-size="8" font-weight="700">НПГ-1</text>
+        <text x="113" y="118" text-anchor="middle" fill="#e6edf3" font-size="9">980</text>
+        <text x="113" y="127" text-anchor="middle" fill="#8b949e" font-size="7">м³/ч</text>
+        <!-- Pipe p1→surface -->
+        <path d="M130 110 L170 110 L170 36" stroke="#30363d" stroke-width="5" fill="none"/>
+        <circle cx="148" cy="110" r="2.5" fill="#3fb950" opacity=".6"/>
+        <circle cx="170" cy="75" r="2.5" fill="#3fb950" opacity=".5"/>
+        <!-- Зумп 2 (critical) -->
+        <rect x="190" y="80" width="50" height="60" rx="3" fill="#1a2332" stroke="#f85149" stroke-width="2"/>
+        <text x="215" y="97" text-anchor="middle" fill="#f85149" font-size="8" font-weight="600">ЗУМП-2</text>
+        <rect x="190" y="97" width="50" height="43" fill="#f8514918"/>
+        <text x="215" y="118" text-anchor="middle" fill="#f85149" font-size="10" font-weight="700">3.2 м</text>
+        <text x="215" y="130" text-anchor="middle" fill="#f85149" font-size="8">▲ КРИТИЧНО</text>
+        <!-- Pump 3 alarm -->
+        <path d="M240 110 L270 110" stroke="#30363d" stroke-width="5" fill="none"/>
+        <circle cx="288" cy="110" r="17" fill="#1a2332" stroke="#f85149" stroke-width="2.5"/>
+        <text x="288" y="107" text-anchor="middle" fill="#f85149" font-size="8" font-weight="700">НПГ-3</text>
+        <text x="288" y="118" text-anchor="middle" fill="#f85149" font-size="9">АВАР.</text>
+        <!-- Pump 5 reserve -->
+        <circle cx="113" cy="30" r="13" fill="#1a2332" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="3,2"/>
+        <text x="113" y="27" text-anchor="middle" fill="#58a6ff" font-size="8">НПГ-5</text>
+        <text x="113" y="37" text-anchor="middle" fill="#8b949e" font-size="7">резерв</text>
+        <!-- Surface drain -->
+        <rect x="140" y="16" width="80" height="16" rx="3" fill="#21262d" stroke="#30363d"/>
+        <text x="180" y="27" text-anchor="middle" fill="#8b949e" font-size="8">ВОДОСБРОС</text>
+        <!-- Legend -->
+        <rect x="320" y="80" width="95" height="70" rx="4" fill="#161b22" stroke="#30363d"/>
+        <text x="330" y="94" fill="#8b949e" font-size="8" font-weight="600">ЛЕГЕНДА</text>
+        <circle cx="333" cy="106" r="4" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+        <text x="341" y="109" fill="#8b949e" font-size="8">Работает</text>
+        <circle cx="333" cy="120" r="4" fill="none" stroke="#f85149" stroke-width="1.5"/>
+        <text x="341" y="123" fill="#8b949e" font-size="8">Авария</text>
+        <circle cx="333" cy="134" r="4" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="2,1"/>
+        <text x="341" y="137" fill="#8b949e" font-size="8">Резерв</text>
+        <line x1="327" y1="146" x2="338" y2="146" stroke="#58a6ff" stroke-width="3"/>
+        <text x="341" y="149" fill="#8b949e" font-size="8">Поток воды</text>
+      </svg>
+    </div>
+    <div class="variant-note">✅ Живая схема — интуитивна любому технику. Анимация потоков через CSS stroke-dashoffset. ⚠ Требует значительной разработки.</div>
+  </div>
+</div>
+
+<!-- ИСТОРИЯ -->
+<h2>7. История</h2>
+<p class="tab-desc">Хронология измерений. Цель: calendar heatmap для обзора активности + timeline для деталей.</p>
+
+<div class="variants two">
+  <div class="variant">
+    <div class="variant-label">Вариант А — calendar heatmap + детали справа (рекомендуется)</div>
+    <div class="mock">
+      <div style="display:flex;gap:8px;height:200px;">
+        <div style="flex:1;">
+          <div class="m-row" style="margin-bottom:8px;">
+            <span style="font-size:12px;font-weight:700;color:var(--txt-0);">Июнь 2026</span>
+            <div style="flex:1;"></div>
+            <button class="m-btn ghost" style="font-size:10px;">◀</button>
+            <button class="m-btn ghost" style="font-size:10px;">▶</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">
+            <div style="font-size:8px;color:var(--txt-3);text-align:center;">Пн</div>
+            <div style="font-size:8px;color:var(--txt-3);text-align:center;">Вт</div>
+            <div style="font-size:8px;color:var(--txt-3);text-align:center;">Ср</div>
+            <div style="font-size:8px;color:var(--txt-3);text-align:center;">Чт</div>
+            <div style="font-size:8px;color:var(--txt-3);text-align:center;">Пт</div>
+            <div style="font-size:8px;color:var(--txt-3);text-align:center;">Сб</div>
+            <div style="font-size:8px;color:var(--txt-3);text-align:center;">Вс</div>
+            <div></div>
+            <div style="aspect-ratio:1;background:#3fb95033;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb95066;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb9501a;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb95099;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:var(--bg-3);border-radius:2px;opacity:.4;"></div>
+            <div style="aspect-ratio:1;background:var(--bg-3);border-radius:2px;opacity:.4;"></div>
+            <div style="aspect-ratio:1;background:#3fb95044;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb95099;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#f9ab0055;border-radius:2px;border:1px solid var(--gold);"></div>
+            <div style="aspect-ratio:1;background:#3fb95066;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb950bb;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:var(--bg-3);border-radius:2px;opacity:.4;"></div>
+            <div style="aspect-ratio:1;background:var(--bg-3);border-radius:2px;opacity:.4;"></div>
+            <div style="aspect-ratio:1;background:#3fb95033;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb95066;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb95033;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:#3fb95099;border-radius:2px;border:2px solid var(--gold);"></div>
+            <div style="aspect-ratio:1;background:#3fb950cc;border-radius:2px;"></div>
+            <div style="aspect-ratio:1;background:var(--bg-3);border-radius:2px;opacity:.4;"></div>
+            <div style="aspect-ratio:1;background:var(--bg-3);border-radius:2px;opacity:.4;"></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;font-size:9px;color:var(--txt-3);align-items:center;">
+            <span>Мало</span>
+            <div style="width:10px;height:8px;background:#3fb9501a;border-radius:1px;"></div>
+            <div style="width:10px;height:8px;background:#3fb95066;border-radius:1px;"></div>
+            <div style="width:10px;height:8px;background:#3fb950cc;border-radius:1px;"></div>
+            <span>Много</span>
+          </div>
+        </div>
+        <div style="width:160px;border-left:1px solid var(--border);padding-left:10px;overflow-y:auto;">
+          <div style="font-size:11px;font-weight:700;color:var(--txt-0);margin-bottom:4px;">11 июня · 8 замеров</div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="background:var(--bg-2);border-radius:4px;padding:5px 7px;">
+              <div style="font-size:11px;font-weight:600;">ПТ-1</div>
+              <div style="font-size:9px;color:var(--txt-3);">12.4 м · 09:15 · Иванов</div>
+            </div>
+            <div style="background:var(--bg-2);border-radius:4px;padding:5px 7px;">
+              <div style="font-size:11px;font-weight:600;">ПТ-2</div>
+              <div style="font-size:9px;color:var(--txt-3);">8.1 м · 10:00 · Петров</div>
+            </div>
+            <div style="background:var(--bg-2);border-radius:4px;padding:5px 7px;">
+              <div style="font-size:11px;font-weight:600;">К-1 (Канава)</div>
+              <div style="font-size:9px;color:var(--txt-3);">Q 0.42 м³/с · 11:30</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Calendar heatmap — активность за месяц на одном экране. Клик по дню = детали справа. Интуитивно и информативно.</div>
+  </div>
+
+  <div class="variant">
+    <div class="variant-label">Вариант Б — хронологическая лента (timeline)</div>
+    <div class="mock">
+      <div class="m-row" style="margin-bottom:8px;">
+        <input class="m-search" style="flex:1;" placeholder="🔍 Точка, канава, исполнитель…">
+        <button class="m-btn ghost" style="font-size:10px;">📅 Июнь</button>
+      </div>
+      <div style="position:relative;padding-left:20px;">
+        <div style="position:absolute;left:7px;top:0;bottom:0;width:2px;background:var(--border);border-radius:1px;"></div>
+        <div style="position:relative;margin-bottom:10px;">
+          <div style="position:absolute;left:-16px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--green);border:2px solid var(--bg-0);"></div>
+          <div style="font-size:10px;color:var(--txt-3);margin-bottom:2px;">15 июня · 09:15</div>
+          <div style="background:var(--bg-2);border-radius:var(--radius-sm);padding:6px 8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;font-weight:600;">ПТ-1 · Северный</span>
+              <span style="font-size:11px;color:var(--blue);font-weight:700;">12.4 м</span>
+            </div>
+            <div style="font-size:10px;color:var(--txt-3);">Лента · Иванов А.П.</div>
+          </div>
+        </div>
+        <div style="position:relative;margin-bottom:10px;">
+          <div style="position:absolute;left:-16px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--gold);border:2px solid var(--bg-0);"></div>
+          <div style="font-size:10px;color:var(--txt-3);margin-bottom:2px;">15 июня · 10:00</div>
+          <div style="background:var(--bg-2);border-radius:var(--radius-sm);padding:6px 8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;font-weight:600;">К-1 Северная</span>
+              <span style="font-size:11px;color:var(--gold);font-weight:700;">0.42 м³/с</span>
+            </div>
+            <div style="font-size:10px;color:var(--txt-3);">Поплавковый · Петров В.С.</div>
+          </div>
+        </div>
+        <div style="position:relative;">
+          <div style="position:absolute;left:-16px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--red);border:2px solid var(--bg-0);"></div>
+          <div style="font-size:10px;color:var(--txt-3);margin-bottom:2px;">08 июня · 14:30</div>
+          <div style="background:var(--bg-2);border-radius:var(--radius-sm);padding:6px 8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;font-weight:600;">ПТ-5 · Восточный</span>
+              <span style="font-size:11px;color:var(--red);font-weight:700;">3.2 м ⚠</span>
+            </div>
+            <div style="font-size:10px;color:var(--txt-3);">Лента · Сидоров Г.Д.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Хронологическая лента — формат журнала. Цвет точки кодирует тип и критичность записи.</div>
+  </div>
+</div>
+
+<!-- НАСТРОЙКИ -->
+<h2>8. Настройки</h2>
+<p class="tab-desc">Разделы настроек разбросаны по горизонтальным вкладкам. Цель: вертикальная навигация — надёжнее масштабируется.</p>
+
+<div class="variants" style="max-width:700px;">
+  <div class="variant">
+    <div class="variant-label">Вариант — вертикальные вкладки + контент справа</div>
+    <div class="mock">
+      <div style="display:flex;gap:0;height:155px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div style="width:135px;background:var(--bg-2);border-right:1px solid var(--border);flex-shrink:0;padding:6px;">
+          <div style="padding:7px 10px;font-size:11px;font-weight:600;background:var(--bg-0);border-radius:var(--radius-sm);color:var(--gold);border-left:2px solid var(--gold);margin-bottom:2px;">Пользователи</div>
+          <div style="padding:7px 10px;font-size:11px;color:var(--txt-2);margin-bottom:2px;">Карьеры</div>
+          <div style="padding:7px 10px;font-size:11px;color:var(--txt-2);margin-bottom:2px;">Схемы</div>
+          <div style="padding:7px 10px;font-size:11px;color:var(--txt-2);">Пороги тревог</div>
+        </div>
+        <div style="flex:1;padding:10px;overflow-y:auto;">
+          <div class="m-row" style="margin-bottom:10px;">
+            <span style="font-size:13px;font-weight:700;color:var(--txt-0);">Пользователи</span>
+            <button class="m-btn" style="margin-left:auto;font-size:10px;">+ Добавить</button>
+          </div>
+          <table class="m-table">
+            <tr><th>Имя</th><th>Email</th><th>Роль</th><th></th></tr>
+            <tr>
+              <td style="color:var(--txt-0);">Иванов А.П.</td><td>ivanov@mine.ru</td>
+              <td><span class="m-chip chip-blue">Диспетчер</span></td>
+              <td><button class="m-btn ghost" style="font-size:9px;padding:2px 6px;">✏</button></td>
+            </tr>
+            <tr>
+              <td style="color:var(--txt-0);">Петров В.С.</td><td>petrov@mine.ru</td>
+              <td><span class="m-chip chip-ok">Замерщик</span></td>
+              <td><button class="m-btn ghost" style="font-size:9px;padding:2px 6px;">✏</button></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="variant-note">✅ Вертикальная навигация экономит вертикальное пространство и хорошо масштабируется при добавлении новых разделов.</div>
+  </div>
+</div>
+
+<!-- ДОППРЕДЛОЖЕНИЯ ДЛЯ ВОДООТЛИВА -->
+<h2>9. Дополнительные предложения для «Водоотлива» <span class="new-badge">NEW</span></h2>
+
+<h3>9.1 Система оповещений и пороговых значений</h3>
+<div class="variant" style="margin-bottom:16px;">
+  <div class="variant-label">Пороги → Алерты → Уведомления</div>
+  <div class="mock">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="m-card">
+        <div class="m-card-title">Настройка порогов</div>
+        <div style="margin-bottom:8px;">
+          <div class="m-label">Уровень в зумпе</div>
+          <div class="m-row" style="gap:6px;margin-top:3px;">
+            <span style="font-size:10px;color:var(--orange);">Предупр.:</span>
+            <div class="m-field" style="width:50px;flex:none;">2.0 м</div>
+            <span style="font-size:10px;color:var(--red);">Критично:</span>
+            <div class="m-field" style="width:50px;flex:none;">3.0 м</div>
+          </div>
+        </div>
+        <div>
+          <div class="m-label">Приток воды, м/ч</div>
+          <div class="m-row" style="gap:6px;margin-top:3px;">
+            <span style="font-size:10px;color:var(--orange);">Предупр.:</span>
+            <div class="m-field" style="width:50px;flex:none;">0.15</div>
+            <span style="font-size:10px;color:var(--red);">Критично:</span>
+            <div class="m-field" style="width:50px;flex:none;">0.25</div>
+          </div>
+        </div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Активные тревоги</div>
+        <div class="alert-crit alert-box">🔴 <div><b>Зумп №2:</b> уровень 3.2 м — КРИТИЧНО</div></div>
+        <div class="alert-warn alert-box">🟡 <div><b>Зумп №1:</b> уровень 2.1 м</div></div>
+        <div class="alert-ok alert-box">🟢 <div>Все насосы функционируют</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="variant-note">
+    <b>Реализация:</b> Supabase Realtime на таблицу измерений + Edge Function для Push/Email при превышении.
+    Таблица: <code>alert_thresholds(quarry_id, metric, warn_value, crit_value)</code>.
+  </div>
+</div>
+
+<h3>9.2 График водного баланса (Приток vs Откачка)</h3>
+<div class="variant" style="margin-bottom:16px;">
+  <div class="variant-label">Баланс в реальном времени</div>
+  <div class="mock">
+    <div class="m-row" style="margin-bottom:8px;gap:12px;">
+      <div class="kpi-card" style="flex:1;"><div class="kpi-val" style="color:var(--red);">+280</div><div class="kpi-lbl">Приток, м³/ч</div></div>
+      <div style="font-size:20px;color:var(--txt-3);align-self:center;">vs</div>
+      <div class="kpi-card" style="flex:1;"><div class="kpi-val" style="color:var(--green);">1 960</div><div class="kpi-lbl">Откачка, м³/ч</div></div>
+      <div style="font-size:20px;color:var(--txt-3);align-self:center;">=</div>
+      <div class="kpi-card" style="flex:1;background:#3fb95011;border-color:var(--green);"><div class="kpi-val" style="color:var(--green);">+1 680</div><div class="kpi-lbl">Баланс, м³/ч</div></div>
+    </div>
+    <div class="m-mini-chart" style="height:55px;">
+      <svg viewBox="0 0 300 55" preserveAspectRatio="none">
+        <polyline points="0,10 50,12 100,10 150,14 200,11 250,10 300,12" fill="none" stroke="#3fb950" stroke-width="2"/>
+        <polyline points="0,45 50,43 100,40 150,48 200,44 250,41 300,39" fill="none" stroke="#f85149" stroke-width="2" stroke-dasharray="5,3"/>
+        <text x="5" y="25" fill="#3fb950" font-size="8" opacity=".7">Откачка</text>
+        <text x="5" y="52" fill="#f85149" font-size="8" opacity=".7">Приток</text>
+      </svg>
+    </div>
+  </div>
+  <div class="variant-note">
+    <b>Реализация:</b> Приток — из данных точек наблюдения (динамика уровня × площадь водосбора). Откачка — из счётчиков насосов.
+    Таблица: <code>water_balance_log(ts, quarry_id, inflow_m3h, outflow_m3h)</code>. Обновление каждые 15 мин через Supabase Realtime.
+  </div>
+</div>
+
+<h3>9.3 Учёт обслуживания насосов</h3>
+<div class="variant" style="margin-bottom:16px;">
+  <div class="variant-label">Журнал ТО + предиктивные напоминания</div>
+  <div class="mock">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div class="m-card" style="border-color:var(--green);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:12px;font-weight:700;">НПГ-1</span><span class="m-chip chip-ok">OK</span></div>
+        <div style="font-size:10px;color:var(--txt-3);">Последнее ТО: 01.05.2026</div>
+        <div class="m-progress" style="margin:6px 0;"><div class="m-progress-fill" style="width:35%;background:var(--green);"></div></div>
+        <div style="font-size:10px;color:var(--txt-2);">350 / 1000 ч</div>
+        <div style="font-size:10px;color:var(--green);margin-top:2px;">Следующее: ~650 ч</div>
+      </div>
+      <div class="m-card" style="border-color:var(--orange);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:12px;font-weight:700;">НПГ-3</span><span class="m-chip chip-warn">Скоро</span></div>
+        <div style="font-size:10px;color:var(--txt-3);">Последнее ТО: 10.04.2026</div>
+        <div class="m-progress" style="margin:6px 0;"><div class="m-progress-fill" style="width:88%;background:var(--orange);"></div></div>
+        <div style="font-size:10px;color:var(--txt-2);">880 / 1000 ч</div>
+        <div style="font-size:10px;color:var(--orange);margin-top:2px;">ТО через ~120 ч (≈5 дн)</div>
+      </div>
+      <div class="m-card" style="border-color:var(--red);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:12px;font-weight:700;">НПГ-5</span><span class="m-chip chip-err">Просроч.</span></div>
+        <div style="font-size:10px;color:var(--txt-3);">Последнее ТО: 15.03.2026</div>
+        <div class="m-progress" style="margin:6px 0;"><div class="m-progress-fill" style="width:100%;background:var(--red);"></div></div>
+        <div style="font-size:10px;color:var(--red);">1 180 / 1000 ч</div>
+        <div style="font-size:10px;color:var(--red);margin-top:2px;">Превышено на 180 ч!</div>
+      </div>
+    </div>
+  </div>
+  <div class="variant-note">
+    <b>Реализация:</b> Таблицы <code>pumps(id, name, quarry_id, to_interval_hours)</code>
+    и <code>pump_maintenance_log(pump_id, date, hours_at_service, worker, notes)</code>.
+    Edge Function для ежедневной проверки и push-уведомлений при приближении ТО.
+  </div>
+</div>
+
+<h3>9.4 Цифровой сменный рапорт</h3>
+<div class="variant" style="margin-bottom:16px;">
+  <div class="variant-label">Замена бумажного журнала смены</div>
+  <div class="mock">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="m-card">
+        <div class="m-card-title">Рапорт — 15.06.2026 · Дневная</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+          <div><div class="m-label">Смена</div><div class="m-field">Дневная 06–18</div></div>
+          <div><div class="m-label">Начальник</div><div class="m-field">Козлов В.П.</div></div>
+        </div>
+        <div class="m-label" style="margin-bottom:4px;">Состояние насосов</div>
+        <div style="font-size:10px;color:var(--txt-2);background:var(--bg-2);border-radius:4px;padding:6px;margin-bottom:6px;line-height:1.7;">
+          НПГ-1: работал всю смену, Q=980 м³/ч<br>
+          НПГ-3: останов 10:30–11:45 (замена сальника)
+        </div>
+        <div class="m-label" style="margin-bottom:2px;">Замечания</div>
+        <div class="m-field" style="font-size:11px;color:var(--txt-2);">Повышенный уровень в зумпе №2 с 14:00</div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Итоги смены</div>
+        <div class="kpi-grid" style="grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+          <div class="kpi-card" style="padding:6px;"><div class="kpi-val" style="font-size:14px;color:var(--blue);">23 520</div><div class="kpi-lbl">Откачано, м³</div></div>
+          <div class="kpi-card" style="padding:6px;"><div class="kpi-val" style="font-size:14px;color:var(--green);">8</div><div class="kpi-lbl">Измерений</div></div>
+          <div class="kpi-card" style="padding:6px;"><div class="kpi-val" style="font-size:14px;color:var(--red);">1</div><div class="kpi-lbl">Инцидентов</div></div>
+          <div class="kpi-card" style="padding:6px;"><div class="kpi-val" style="font-size:14px;color:var(--orange);">75%</div><div class="kpi-lbl">КПД смены</div></div>
+        </div>
+        <div class="m-row">
+          <button class="m-btn" style="flex:1;">💾 Сохранить</button>
+          <button class="m-btn ghost" style="font-size:10px;">📄 PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="variant-note">
+    <b>Реализация:</b> Таблица <code>shift_reports(quarry_id, shift_type, date, foreman_id, pump_log, incidents, total_outflow_m3)</code>.
+    PDF-экспорт через <code>window.print()</code> с CSS @media print. Привязка к замерам смены через дату+смену.
+  </div>
+</div>
+
+<h3>9.5 Суточный экспорт отчётов</h3>
+<div class="variant" style="margin-bottom:16px;">
+  <div class="variant-label">Ручной и автоматический экспорт</div>
+  <div class="mock">
+    <div class="m-row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div><div class="m-label">Период</div><div class="m-field">01.06.2026 – 15.06.2026</div></div>
+      <div><div class="m-label">Карьер</div><div class="m-field">Карьер №1 — Северный</div></div>
+      <div><div class="m-label">Формат</div><div class="m-field">Excel (.xlsx)</div></div>
+      <button class="m-btn" style="align-self:flex-end;">⬇ Экспорт</button>
+    </div>
+    <div style="background:var(--bg-2);border-radius:var(--radius-sm);padding:8px 10px;font-size:11px;color:var(--txt-2);margin-bottom:8px;line-height:1.7;">
+      <b style="color:var(--txt-0);">В экспорт входит:</b><br>
+      ✓ Суточные объёмы откачки (м³/сут) · ✓ Уровни в точках наблюдения<br>
+      ✓ Расходы в канавах · ✓ Насосы по сменам · ✓ Водный баланс
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--txt-0);margin-bottom:6px;">Автоматические отчёты</div>
+    <div style="display:flex;gap:20px;">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-2);">
+        <div class="m-switch on"></div> Суточный (06:00 каждый день)
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-2);">
+        <div class="m-switch"></div> Недельный (понедельник)
+      </div>
+    </div>
+  </div>
+  <div class="variant-note">
+    <b>Реализация:</b> Supabase Edge Function (cron) агрегирует данные за сутки, генерирует CSV/Excel через SheetJS.
+    Файл публикуется в Storage с TTL 7 дней. Email через Resend API.
+  </div>
+</div>
+
+<h3>9.6 Живая P&amp;ID-схема водоотливного комплекса</h3>
+<div class="variant">
+  <div class="variant-label">Интерактивная SVG-схема с анимацией потоков</div>
+  <div class="mock">
+    <svg width="100%" height="150" viewBox="0 0 440 150">
+      <defs>
+        <pattern id="g3" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M20 0L0 0 0 20" fill="none" stroke="#21262d" stroke-width=".5"/>
+        </pattern>
+      </defs>
+      <rect width="440" height="150" fill="url(#g3)"/>
+      <line x1="0" y1="48" x2="440" y2="48" stroke="#30363d" stroke-width="1" stroke-dasharray="6,4"/>
+      <text x="6" y="42" fill="#656d76" font-size="9">Поверхность</text>
+      <text x="6" y="62" fill="#656d76" font-size="9">Подземный горизонт</text>
+      <!-- Зумп 1 -->
+      <rect x="10" y="75" width="52" height="60" rx="3" fill="#1a2332" stroke="#30363d" stroke-width="1.5"/>
+      <text x="36" y="91" text-anchor="middle" fill="#8b949e" font-size="8" font-weight="600">ЗУМП-1</text>
+      <rect x="10" y="104" width="52" height="31" fill="#58a6ff18"/>
+      <text x="36" y="123" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="700">2.4 м</text>
+      <text x="36" y="133" text-anchor="middle" fill="#3fb950" font-size="8">норма</text>
+      <!-- Flow z1→p1 -->
+      <path d="M62 108 L98 108" stroke="#30363d" stroke-width="5" fill="none"/>
+      <circle cx="72" cy="108" r="2.5" fill="#58a6ff" opacity=".7"/>
+      <circle cx="85" cy="108" r="2.5" fill="#58a6ff" opacity=".4"/>
+      <!-- Pump 1 OK -->
+      <circle cx="116" cy="108" r="17" fill="#1a2332" stroke="#3fb950" stroke-width="2"/>
+      <text x="116" y="105" text-anchor="middle" fill="#3fb950" font-size="8" font-weight="700">НПГ-1</text>
+      <text x="116" y="115" text-anchor="middle" fill="#e6edf3" font-size="9">980</text>
+      <text x="116" y="124" text-anchor="middle" fill="#8b949e" font-size="7">м³/ч</text>
+      <!-- p1 → surface -->
+      <path d="M133 108 L172 108 L172 34" stroke="#30363d" stroke-width="5" fill="none"/>
+      <circle cx="150" cy="108" r="2.5" fill="#3fb950" opacity=".6"/>
+      <circle cx="172" cy="72" r="2.5" fill="#3fb950" opacity=".4"/>
+      <!-- Зумп 2 critical -->
+      <rect x="195" y="75" width="52" height="60" rx="3" fill="#1a2332" stroke="#f85149" stroke-width="2"/>
+      <text x="221" y="91" text-anchor="middle" fill="#f85149" font-size="8" font-weight="600">ЗУМП-2</text>
+      <rect x="195" y="91" width="52" height="44" fill="#f8514918"/>
+      <text x="221" y="116" text-anchor="middle" fill="#f85149" font-size="10" font-weight="700">3.2 м</text>
+      <text x="221" y="128" text-anchor="middle" fill="#f85149" font-size="8">КРИТИЧНО ▲</text>
+      <!-- Pump 3 alarm -->
+      <path d="M247 108 L278 108" stroke="#30363d" stroke-width="5" fill="none"/>
+      <circle cx="296" cy="108" r="17" fill="#1a2332" stroke="#f85149" stroke-width="2.5"/>
+      <text x="296" y="105" text-anchor="middle" fill="#f85149" font-size="8" font-weight="700">НПГ-3</text>
+      <text x="296" y="116" text-anchor="middle" fill="#f85149" font-size="9">АВАР.</text>
+      <!-- Pump 5 reserve -->
+      <circle cx="116" cy="28" r="13" fill="#1a2332" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <text x="116" y="25" text-anchor="middle" fill="#58a6ff" font-size="8">НПГ-5</text>
+      <text x="116" y="35" text-anchor="middle" fill="#8b949e" font-size="7">резерв</text>
+      <!-- Surface drain -->
+      <rect x="143" y="16" width="80" height="15" rx="3" fill="#21262d" stroke="#30363d"/>
+      <text x="183" y="27" text-anchor="middle" fill="#8b949e" font-size="8">ВОДОСБРОС</text>
+      <!-- Flow meter -->
+      <rect x="340" y="28" width="30" height="14" rx="3" fill="#21262d" stroke="#f9ab00" stroke-width="1.5"/>
+      <text x="355" y="38" text-anchor="middle" fill="#f9ab00" font-size="8">RM</text>
+      <path d="M370 35 L395 35" stroke="#30363d" stroke-width="4"/>
+      <rect x="395" y="25" width="38" height="20" rx="3" fill="#21262d" stroke="#30363d"/>
+      <text x="414" y="33" text-anchor="middle" fill="#3fb950" font-size="8">1 960</text>
+      <text x="414" y="42" text-anchor="middle" fill="#8b949e" font-size="7">м³/ч</text>
+      <!-- Legend -->
+      <rect x="330" y="75" width="105" height="72" rx="4" fill="#161b22" stroke="#30363d"/>
+      <text x="340" y="90" fill="#8b949e" font-size="8" font-weight="600">ЛЕГЕНДА</text>
+      <circle cx="343" cy="102" r="4" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="351" y="105" fill="#8b949e" font-size="8">Насос (работает)</text>
+      <circle cx="343" cy="116" r="4" fill="none" stroke="#f85149" stroke-width="1.5"/>
+      <text x="351" y="119" fill="#8b949e" font-size="8">Насос (авария)</text>
+      <circle cx="343" cy="130" r="4" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="2,1"/>
+      <text x="351" y="133" fill="#8b949e" font-size="8">Насос (резерв)</text>
+      <line x1="337" y1="144" x2="349" y2="144" stroke="#58a6ff" stroke-width="3"/>
+      <text x="351" y="147" fill="#8b949e" font-size="8">Поток воды</text>
+    </svg>
+  </div>
+  <div class="variant-note">
+    <b>Реализация:</b> SVG строится из конфигурации карьера (позиции зумпов/насосов из БД).
+    Анимация потоков — CSS <code>stroke-dashoffset</code>. Данные обновляются через Supabase Realtime.
+    Таблицы: <code>dewatering_units(id, quarry_id, type, name, x, y, capacity)</code>,
+    <code>dewatering_readings(unit_id, ts, flow_m3h, level_m, pressure_mpa, status)</code>.
+  </div>
+</div>
+
+<!-- ПРИОРИТЕТЫ -->
+<div style="margin-top:40px;padding-top:16px;border-top:1px solid var(--border);font-size:11px;color:var(--txt-3);line-height:2;">
+  <b style="color:var(--txt-2);font-size:12px;">Приоритетный план реализации:</b><br>
+  1. <b style="color:var(--gold);">Карта — Вариант А</b> (фильтр-бар) — минимум изменений, максимум пространства карте<br>
+  2. <b style="color:var(--gold);">Точки — Вариант А</b> (master-detail) — ускоряет работу с журналом точек<br>
+  3. <b style="color:var(--gold);">Водоотлив 9.1</b> — пороги и оповещения — критически важно для безопасности<br>
+  4. <b style="color:var(--gold);">Водоотлив 9.3</b> — учёт ТО насосов — снижает риск аварий<br>
+  5. <b style="color:var(--gold);">История — Вариант А</b> (calendar heatmap) — навигация по данным<br>
+  6. <b style="color:var(--gold);">Водоотлив 9.4</b> — цифровой сменный рапорт — замена бумажного журнала<br>
+  7. <b style="color:var(--gold);">Водоотлив 9.2</b> + <b style="color:var(--gold);">9.6</b> — водный баланс и SVG-схема — аналитические инструменты<br>
+  8. <b style="color:var(--gold);">Водоотлив 9.5</b> — суточный экспорт — автоматизация отчётности
+</div>
+
+</body>
+</html>
