@@ -188,7 +188,7 @@ function loadAndRenderHistory() {
     else             renderHistoryChart();
   }).catch(function(err) {
     _histState.loading = false;
-    chartArea.innerHTML = '<p style="padding:16px;color:#ea4335;font-size:13px">Ошибка: '+err.message+'</p>';
+    chartArea.innerHTML = '<p style="padding:16px;color:#ea4335;font-size:13px">Ошибка: ' + escHTML(err && err.message ? err.message : String(err)) + '</p>';
   });
 }
 
@@ -439,8 +439,6 @@ function renderHistoryChart() {
   if(areaPath) svg+='<path d="'+areaPath+'" fill="rgba(26,115,232,.1)"/>';
   if(linePath) svg+='<path d="'+linePath+'" fill="none" stroke="#1a73e8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
 
-  var INTENSITY_R={'Слабая (капёж)':6,'Умеренная':9,'Сильная (поток)':12,'Очень сильная':16};
-
   days.forEach(function(d,i){
     var x=xPos(i), y=yPos(d.totalLps);
     var isSelected=_histState.clickedDay && _histState.clickedDay.dateKey===d.dateKey;
@@ -478,7 +476,6 @@ function renderHistoryChart() {
     dot.addEventListener('click', function(){
       var idx=parseInt(this.getAttribute('data-idx'));
       _histState.clickedDay=days[idx];
-      renderHistoryDayDetail(days[idx]);
       renderHistoryChart();
     });
   });

@@ -141,14 +141,6 @@ function getWeekDateRange(weekKey) {
   return { start: fmt(start), end: fmt(end) };
 }
 
-/**
- * Возвращает дату понедельника недели в формате YYYY-MM-DD.
- */
-function getWeekStartDate(weekKey) {
-  var range = getWeekDateRange(weekKey);
-  return range ? range.start : null;
-}
-
 function getWeekKeyFromDate(iso) {
   if (!iso) return null;
   var d = new Date(iso);
@@ -159,18 +151,6 @@ function getWeekKeyFromDate(iso) {
   var yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
   var weekNo = Math.ceil((((dt - yearStart) / 86400000) + 1) / 7);
   return dt.getUTCFullYear() + '-W' + (weekNo < 10 ? '0' + weekNo : weekNo);
-}
-
-function getAllWeekKeys() {
-  var set = {};
-  Points.getList().forEach(function(p) {
-    var wk = getWeekKeyFromDate(p.createdAt);
-    if (wk) set[wk] = true;
-  });
-  Schemes.getList().forEach(function(s) {
-    if (s.weekKey) set[s.weekKey] = true;
-  });
-  return Object.keys(set).sort().reverse();
 }
 
 function fillSelectOptions(selectEl, options, selectedValue, fallbackLabel) {
@@ -482,13 +462,15 @@ function buildDateFilterWidget(containerId, selectedDates, onChange) {
       dropdown.classList.toggle('open');
     });
 
-    // Закрытие по клику вне — удаляем предыдущий обработчик перед добавлением нового
+    // Закрытие по клику вне — очищаем старый обработчик на контейнере перед добавлением нового
     if (_closeHandler) document.removeEventListener('click', _closeHandler);
+    if (container._dfCloseHandler) document.removeEventListener('click', container._dfCloseHandler);
     _closeHandler = function(e) {
       if (!wrap.contains(e.target)) {
         dropdown.classList.remove('open');
       }
     };
+    container._dfCloseHandler = _closeHandler;
     document.addEventListener('click', _closeHandler);
 
     wrap.appendChild(btn);

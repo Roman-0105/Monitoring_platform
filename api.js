@@ -814,7 +814,13 @@ var Api = (function() {
     getDitchHistory:     getDitchHistory,
     ping:                ping,
 
-    post:                function() { return Promise.resolve(); },
+    post: function(payload) {
+      if (!payload || !payload.action) return Promise.reject(new Error('Missing action'));
+      if (payload.action === 'createDitch') return createDitch(payload.ditch);
+      if (payload.action === 'updateDitch') return updateDitch(payload.ditch);
+      if (payload.action === 'deleteDitch') return deleteDitch(payload.id);
+      return Promise.reject(new Error('Unknown action: ' + payload.action));
+    },
     createPoint:         createPoint,
     updatePoint:         updatePoint,
     deletePoint:         deletePoint,

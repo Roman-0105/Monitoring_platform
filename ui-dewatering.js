@@ -283,7 +283,7 @@ var DewateringState = {
     d.id=this._id('wlv'); this.waterLevels.push(d); this.save();
     if (window.Api) Api.upsertDewLevel(dewLevelToRow(d)).catch(function(e) {
       console.error('[dewatering] Supabase: не удалось сохранить замер уровня', d.id, e);
-      if (window.Toast) Toast.show('⚠️ Замер сохранён локально, но не синхронизирован с сервером', 'warn');
+      if (window.Toast) Toast.show('⚠️ Замер сохранён локально, но не синхронизирован с сервером', 'warning');
     });
     return d;
   },
@@ -292,7 +292,7 @@ var DewateringState = {
     if(i>=0){ this.waterLevels[i]=Object.assign({},this.waterLevels[i],d); this.save();
       if (window.Api) Api.upsertDewLevel(dewLevelToRow(this.waterLevels[i])).catch(function(e) {
         console.error('[dewatering] Supabase: не удалось обновить замер уровня', id, e);
-        if (window.Toast) Toast.show('⚠️ Изменение сохранено локально, но не синхронизировано с сервером', 'warn');
+        if (window.Toast) Toast.show('⚠️ Изменение сохранено локально, но не синхронизировано с сервером', 'warning');
       }); }
   },
   deleteWaterLevel: function(id) {
@@ -368,6 +368,9 @@ var _dewDiagramPanX     = 0;
 var _dewDiagramPanY     = 0;
 var _dewDiagramPanning  = false;
 var _dewDiagramPanStart = null;
+// Stored pan listeners — replaced on each diagram init to prevent accumulation
+var _dewPanMoveHandler  = null;
+var _dewPanUpHandler    = null;
 
 // Smooth zoom via requestAnimationFrame
 var _dewZoomTarget      = 1.0;
@@ -709,20 +712,27 @@ function _dewDiagramInitInteraction() {
     _dewDiagramPanStart = { x: e.clientX - _dewDiagramPanX, y: e.clientY - _dewDiagramPanY };
     vp.style.cursor = 'grabbing';
   });
-  document.addEventListener('mousemove', function(e) {
+
+  // Remove previous listeners before adding new ones — prevents accumulation on re-render
+  if (_dewPanMoveHandler) document.removeEventListener('mousemove', _dewPanMoveHandler);
+  if (_dewPanUpHandler)   document.removeEventListener('mouseup',   _dewPanUpHandler);
+
+  _dewPanMoveHandler = function(e) {
     if (!_dewDiagramPanning || !_dewDiagramPanStart) return;
     _dewDiagramPanX = e.clientX - _dewDiagramPanStart.x;
     _dewDiagramPanY = e.clientY - _dewDiagramPanStart.y;
     _dewDiagramApplyTransform();
-  });
-  document.addEventListener('mouseup', function() {
+  };
+  _dewPanUpHandler = function() {
     if (_dewDiagramPanning) {
       _dewDiagramPanning = false;
       _dewDiagramPanStart = null;
       var vp2 = document.getElementById('dew-diagram-viewport');
       if (vp2) vp2.style.cursor = 'grab';
     }
-  });
+  };
+  document.addEventListener('mousemove', _dewPanMoveHandler);
+  document.addEventListener('mouseup',   _dewPanUpHandler);
 }
 
 // ── Animation toggle ─────────────────────────────────────────
@@ -1249,7 +1259,6 @@ function _dewRenderDiagram(wrap) {
     _dewDiagramInitInteraction();
     _dewDiagramApplyTransform();
     _dewUpdateZoomLabel();
-    _dewUpdateThemeBtns();
   }, 0);
 }
 

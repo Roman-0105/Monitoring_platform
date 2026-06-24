@@ -166,16 +166,7 @@ window.initApp = function() {
 
   initTabs();
 
-  // Глобальный сброс тултипа при смене вкладки
-  document.querySelectorAll('.tab-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var tooltipEl = document.getElementById('map-tooltip');
-      if (tooltipEl) tooltipEl.style.display = 'none';
-      document.querySelectorAll('.map-point-card').forEach(function(el){ el.remove(); });
-  // Скрываем карточку канавы (класс ditch-map-card)
-  document.querySelectorAll('.ditch-map-card').forEach(function(el){ el.remove(); });
-    });
-  });
+  // Сброс тултипа и карточек — только через switchTab (дублирование удалено)
   initPhotoLightbox();
   initEditModal();
   initDiagButtons();
@@ -341,7 +332,7 @@ function toggleSidebar() {
   var sidebar = document.getElementById('tab-bar');
   if (!sidebar) return;
   var collapsed = sidebar.classList.toggle('collapsed');
-  try { localStorage.setItem('sidebar-collapsed', collapsed ? '1' : ''); } catch(e) {}
+  try { if (collapsed) localStorage.setItem('sidebar-collapsed', '1'); else localStorage.removeItem('sidebar-collapsed'); } catch(e) {}
 }
 
 // ── Синхронизация ─────────────────────────────────────────
@@ -398,6 +389,9 @@ function switchTab(name) {
     window._reportInited = true;
     initReportTab();
   }
+  if (name !== 'wells' && typeof _wellsMap !== 'undefined') {
+    _wellsMap.animating = false;
+  }
   if (name === 'wells' && typeof initWellsTab === 'function') {
     initWellsTab();
   }
@@ -413,6 +407,7 @@ function switchTab(name) {
   // Скрываем карточку канавы (класс ditch-map-card)
   document.querySelectorAll('.ditch-map-card').forEach(function(el){ el.remove(); });
 
+  if (name !== 'map' && typeof MapModule !== 'undefined' && MapModule.stopPulse) MapModule.stopPulse();
   if (name === 'diag')     Diagnostics.render();
   if (name === 'map')      { _mapSchemeImg = null; initMapFilters(); renderMap(); initMapLegend(); updateMapLegendPoints(); }
   if (name === 'settings') { refreshSchemesData(); renderSettingsColors(); switchSettingsTab('main'); if (typeof renderUsersPanel === 'function' && AppState.currentUser && AppState.currentUser.role === 'admin') renderUsersPanel(); }

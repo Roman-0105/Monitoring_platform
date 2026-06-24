@@ -973,6 +973,7 @@ function openAddPointModal(xLocal, yLocal) {
   if (delBtn) delBtn.style.display = 'none';
 
   var form = document.getElementById('edit-form');
+  if (!form) return;
   form._mapCoords = { xLocal: xLocal, yLocal: yLocal };
 
   document.getElementById('edit-modal-title').textContent = 'Новая точка на карте';
