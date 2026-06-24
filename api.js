@@ -500,13 +500,20 @@ var Api = (function() {
       .from('schemes').upload(path, blob, { upsert: false, contentType: params.mimeType });
     if (uploadError) throw new Error('Storage: ' + uploadError.message + ' (status ' + (uploadError.statusCode || uploadError.status || '?') + ')');
 
-    var { error: dbError } = await client().from('schemes').upsert({
+    // Delete old DB row if one existed, then insert fresh (avoids needing a unique constraint)
+    if (existing) {
+      await client().from('schemes')
+        .delete()
+        .eq('week_key', params.weekKey)
+        .eq('quarry', _uploadQuarry);
+    }
+    var { error: dbError } = await client().from('schemes').insert({
       week_key:     params.weekKey,
       storage_path: path,
       uploaded_at:  new Date().toISOString(),
       uploaded_by:  params.uploadedBy || '',
       quarry:       _uploadQuarry,
-    }, { onConflict: 'week_key,quarry' });
+    });
     if (dbError) throw new Error(dbError.message);
   }
 
