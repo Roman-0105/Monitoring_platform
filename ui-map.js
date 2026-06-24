@@ -187,6 +187,7 @@ function renderMap() {
   var canvas   = document.getElementById('map-canvas');
   var noScheme = document.getElementById('map-no-scheme');
   if (!canvas) return;
+  if (typeof MapModule !== 'undefined' && MapModule.refreshBounds) MapModule.refreshBounds();
   renderMapSchemeSelector();
 
   var scheme = getMapActiveScheme();

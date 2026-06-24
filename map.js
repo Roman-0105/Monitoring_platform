@@ -25,10 +25,26 @@ var MapModule = (function() {
   var _styleCache = {};
   var _coordCache = {}; // мемоизация wgs84ToXY: 'lat,lon' → {x, y}
 
+  var _BOUNDS_FALLBACK = {
+    Xmin: 45850, Xmax: 47350,
+    Ymin: 15800, Ymax: 17350,
+  };
+
   var BOUNDS = {
     Xmin: 45850, Xmax: 47350,
     Ymin: 15800, Ymax: 17350,
   };
+
+  function refreshBounds() {
+    if (window.AppState && AppState.quarries && AppState.activeQuarry) {
+      var q = AppState.quarries.find(function(q) { return q.name === AppState.activeQuarry; });
+      if (q && q.xMin != null && q.xMax != null && q.yMin != null && q.yMax != null) {
+        BOUNDS = { Xmin: q.xMin, Xmax: q.xMax, Ymin: q.yMin, Ymax: q.yMax };
+        return;
+      }
+    }
+    BOUNDS = _BOUNDS_FALLBACK;
+  }
 
   var MAP_STYLE = {
     markerFill: '#ff8c00',
@@ -494,6 +510,7 @@ var MapModule = (function() {
 
   return {
     BOUNDS:        BOUNDS,
+    refreshBounds: refreshBounds,
     STATUS_COLORS: STATUS_COLORS,
     pixelToXY:     pixelToXY,
     xyToPixel:     xyToPixel,
