@@ -13,28 +13,6 @@ function initSettings() {
   renderSettingsColors();
   initSettingsTabs();
 
-  var fileInput = document.getElementById('scheme-file');
-  if (fileInput && !fileInput._bound) {
-    fileInput._bound = true;
-    fileInput.addEventListener('change', function() {
-      var file    = fileInput.files && fileInput.files[0];
-      var preview = document.getElementById('scheme-preview');
-      if (!preview) return;
-      if (!file) { preview.innerHTML = ''; return; }
-      var url = URL.createObjectURL(file);
-      var img = document.createElement('img');
-      img.src = url;
-      img.onload = function() { URL.revokeObjectURL(url); };
-      preview.innerHTML = '';
-      preview.appendChild(img);
-    });
-  }
-
-  var uploadBtn = document.getElementById('btn-upload-scheme');
-  if (uploadBtn && !uploadBtn._bound) {
-    uploadBtn._bound = true;
-    uploadBtn.addEventListener('click', uploadScheme);
-  }
 }
 
 function refreshSchemesData() {
@@ -101,102 +79,136 @@ function switchSettingsTab(name) {
 // ── Схемы ─────────────────────────────────────────────────
 
 function renderSettingsSchemes() {
-  var weekEl = document.getElementById('settings-week-key');
-  if (weekEl) weekEl.textContent = Schemes.formatWeekKey(Schemes.currentWeekKey());
+  var panel = document.getElementById('settings-panel-main');
+  if (!panel) return;
 
-  // Заполняем поле выбора недели текущей неделей по умолчанию
-  var weekInput = document.getElementById('scheme-week-input');
-  if (weekInput && !weekInput.value) weekInput.value = Schemes.currentWeekKey();
-  var container           = document.getElementById('settings-schemes-list');
-  var activeEl            = document.getElementById('settings-active-scheme');
-  var currentWeekStatusEl = document.getElementById('settings-current-week-status');
-  if (!container) return;
+  var quarries = (window.AppState && AppState.quarries) || [];
+  var current  = Schemes.currentWeekKey();
 
-  var schemes = Schemes.getList().slice().sort(function(a, b) {
-    var aW = a.weekKey || '', bW = b.weekKey || '';
-    if (aW !== bW) return aW > bW ? -1 : 1;
-    var aAt = a.uploadedAt || '', bAt = b.uploadedAt || '';
-    return aAt > bAt ? -1 : (aAt < bAt ? 1 : 0);
-  });
-  var current      = Schemes.currentWeekKey();
-  var activeScheme = Schemes.getCurrent();
-  var cwScheme     = Schemes.getByWeek(current);
-
-  if (!schemes.length) {
-    container.innerHTML = '<p class="form-hint">Схем пока нет</p>';
-    if (activeEl)            activeEl.textContent = '';
-    if (currentWeekStatusEl) currentWeekStatusEl.textContent = 'Статус текущей недели: схема не загружена';
+  if (!quarries.length) {
+    panel.innerHTML = '<div class="card"><p class="form-hint" style="margin:0">Карьеры не загружены. Обновите страницу.</p></div>';
     return;
   }
 
-  if (currentWeekStatusEl) {
-    if (cwScheme) {
-      currentWeekStatusEl.textContent = 'Статус текущей недели: схема загружена';
-    } else if (activeScheme) {
-      currentWeekStatusEl.textContent = 'Статус текущей недели: нет, используется ' + Schemes.formatWeekKey(activeScheme.weekKey);
-    } else {
-      currentWeekStatusEl.textContent = 'Статус текущей недели: схема не загружена';
-    }
-  }
+  panel.innerHTML = quarries.map(function(q) {
+    return '<div class="card" style="margin-bottom:12px">' +
+      '<div class="card-title" style="margin-bottom:12px">' + escHTML(q.name) + '</div>' +
 
-  if (activeEl) {
-    if (activeScheme) {
-      var currentHit = activeScheme.weekKey === current;
-      activeEl.textContent = 'Активная схема: ' + Schemes.formatWeekKey(activeScheme.weekKey) +
-        (currentHit ? ' (текущая неделя)' : ' (последняя доступная)');
-    } else {
-      activeEl.textContent = '';
-    }
-  }
+      '<div class="form-group">' +
+        '<label class="form-label">Загруженные схемы</label>' +
+        '<div id="schemes-list-' + q.id + '" class="settings-schemes-list">Загрузка...</div>' +
+      '</div>' +
 
-  var html = '';
-  for (var i = 0; i < schemes.length; i++) {
-    var s     = schemes[i];
-    var label = s.weekKey ? Schemes.formatWeekKey(s.weekKey) : 'Без недели';
-    html += '<div class="scheme-item">';
-    html += '<div><div class="scheme-item__week">' + label + '</div>';
-    html += '<div class="scheme-item__date">' + (s.uploadedAt ? formatDate(s.uploadedAt) : '—') + '</div></div>';
-    if (s.weekKey === current) html += '<span class="scheme-item__current">✅ Текущая</span>';
-    else if (activeScheme && s.weekKey === activeScheme.weekKey) html += '<span class="scheme-item__current">📌 Активная</span>';
-    html += '</div>';
-  }
-  container.innerHTML = html;
+      '<div class="form-group">' +
+        '<label class="form-label">Загрузить новую схему</label>' +
+        '<div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:10px">' +
+          '<div style="flex:1">' +
+            '<label class="form-label" style="font-size:11px;margin-bottom:4px">Неделя</label>' +
+            '<input type="week" id="scheme-week-' + q.id + '" class="form-control" value="' + current + '" style="width:100%;padding:8px 10px;font-size:14px">' +
+          '</div>' +
+        '</div>' +
+        '<div id="scheme-preview-' + q.id + '"></div>' +
+        '<label class="photo-pick-btn" for="scheme-file-' + q.id + '">' +
+          '🗺 Выбрать PNG / JPG / PDF файл' +
+          '<input type="file" id="scheme-file-' + q.id + '" data-qid="' + q.id + '" data-qname="' + escHTML(q.name) + '" accept="image/png,image/jpeg,image/svg+xml,application/pdf" style="display:none">' +
+        '</label>' +
+        '<button class="btn btn-primary btn-full scheme-upload-btn" data-qid="' + q.id + '" data-qname="' + escHTML(q.name) + '" style="margin-top:10px">⬆️ Загрузить для ' + escHTML(q.name) + '</button>' +
+        '<p class="form-hint" id="scheme-status-' + q.id + '"></p>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // File preview bindings per quarry
+  quarries.forEach(function(q) {
+    var fileInput = document.getElementById('scheme-file-' + q.id);
+    if (!fileInput) return;
+    fileInput.addEventListener('change', function() {
+      var preview = document.getElementById('scheme-preview-' + q.id);
+      if (!preview) return;
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) { preview.innerHTML = ''; return; }
+      if (f.type === 'application/pdf') {
+        preview.innerHTML = '<p class="form-hint">📄 ' + escHTML(f.name) + '</p>';
+      } else {
+        var url = URL.createObjectURL(f);
+        preview.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:180px;border-radius:6px;margin-bottom:8px;object-fit:contain">';
+      }
+    });
+  });
+
+  // Upload button delegation
+  panel.addEventListener('click', function(e) {
+    var btn = e.target.closest('.scheme-upload-btn');
+    if (btn) _uploadSchemeForQuarry(btn.dataset.qid, btn.dataset.qname);
+  });
+
+  // Load scheme lists
+  quarries.forEach(function(q) {
+    _loadAndRenderSchemeList(q, current);
+  });
 }
 
-function uploadScheme() {
-  var fileInput  = document.getElementById('scheme-file');
-  var statusEl   = document.getElementById('scheme-upload-status');
-  var weekInput  = document.getElementById('scheme-week-input');
+function _loadAndRenderSchemeList(quarry, currentWeek) {
+  var container = document.getElementById('schemes-list-' + quarry.id);
+  if (!container) return;
+  Api.getSchemesByQuarry(quarry.name).then(function(schemes) {
+    if (!schemes.length) {
+      container.innerHTML = '<p class="form-hint">Схем пока нет</p>';
+      return;
+    }
+    var html = '';
+    schemes.forEach(function(s) {
+      var label = s.weekKey ? Schemes.formatWeekKey(s.weekKey) : 'Без недели';
+      var isCurrent = s.weekKey === currentWeek;
+      html += '<div class="scheme-item">';
+      html += '<div><div class="scheme-item__week">' + escHTML(label) + '</div>';
+      html += '<div class="scheme-item__date">' + (s.uploadedAt ? formatDate(s.uploadedAt) : '—') + '</div></div>';
+      if (isCurrent) html += '<span class="scheme-item__current">✅ Текущая</span>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<p class="form-hint" style="color:#f28b82">Ошибка: ' + escHTML(err.message) + '</p>';
+  });
+}
+
+function _uploadSchemeForQuarry(qid, qname) {
+  var fileInput = document.getElementById('scheme-file-' + qid);
+  var statusEl  = document.getElementById('scheme-status-' + qid);
+  var weekInput = document.getElementById('scheme-week-' + qid);
   var file = fileInput && fileInput.files && fileInput.files[0];
   if (!file) { if (statusEl) statusEl.textContent = '❌ Выберите файл схемы'; return; }
 
-  // Берём неделю из поля — если пусто, берём текущую
   var weekKey = (weekInput && weekInput.value) ? weekInput.value : Schemes.currentWeekKey();
-  // Нормализуем: "2026-W07" → "2026-W07" (браузер может вернуть "2026-W7")
   weekKey = weekKey.replace(/W(\d)$/, 'W0$1');
 
-  var uploadBtn = document.getElementById('btn-upload-scheme');
-  if (statusEl) statusEl.textContent = '⏳ Загрузка ' + Schemes.formatWeekKey(weekKey) + '...';
+  var uploadBtn = document.querySelector('.scheme-upload-btn[data-qid="' + qid + '"]');
+  if (statusEl)  statusEl.textContent = '⏳ Загрузка ' + Schemes.formatWeekKey(weekKey) + '...';
   if (uploadBtn) uploadBtn.disabled = true;
-  Toast.progress('scheme-upload', 'Загрузка схемы карьера...', 30);
+  Toast.progress('scheme-up-' + qid, 'Загрузка схемы ' + qname + '...', 30);
 
-  Schemes.upload(file, weekKey, Storage.getDeviceId()).then(function() {
-    if (statusEl)  statusEl.textContent = '✅ Схема загружена';
-    Toast.done('scheme-upload', 'Схема карьера загружена');
-    if (fileInput) fileInput.value = '';
-    var preview = document.getElementById('scheme-preview');
-    if (preview) preview.innerHTML = '';
-    return Schemes.load();
-  }).then(function() {
-    renderSettingsSchemes();
-    _mapSchemeImg = null;
-    if (AppState.currentTab === 'map') renderMap();
-  }).catch(function(err) {
-    if (statusEl) statusEl.textContent = '❌ ' + err.message;
-    Toast.fail('scheme-upload', 'Ошибка загрузки схемы');
-  }).then(function() {
-    if (uploadBtn) uploadBtn.disabled = false;
-  });
+  Schemes.upload(file, weekKey, Storage.getDeviceId(), qname)
+    .then(function() {
+      if (statusEl) statusEl.textContent = '✅ Схема загружена';
+      Toast.done('scheme-up-' + qid, 'Схема ' + qname + ' загружена');
+      if (fileInput) fileInput.value = '';
+      var preview = document.getElementById('scheme-preview-' + qid);
+      if (preview) preview.innerHTML = '';
+      var quarry = AppState.quarries && AppState.quarries.find(function(q) { return String(q.id) === String(qid); });
+      if (quarry) _loadAndRenderSchemeList(quarry, Schemes.currentWeekKey());
+      return Schemes.load();
+    })
+    .then(function() {
+      window._mapSchemeImg = null;
+      if (AppState.currentTab === 'map' && typeof renderMap === 'function') renderMap();
+    })
+    .catch(function(err) {
+      if (statusEl) statusEl.textContent = '❌ ' + escHTML(err.message);
+      Toast.fail('scheme-up-' + qid, 'Ошибка загрузки схемы');
+    })
+    .then(function() {
+      if (uploadBtn) uploadBtn.disabled = false;
+    });
 }
 
 // ── Цвета карты ───────────────────────────────────────────
@@ -682,7 +694,7 @@ function renderQuarryMapsPanel() {
   }
 
   var html = '<p class="form-hint" style="margin-bottom:16px">Задайте реальные координаты углов карты для каждого карьера. ' +
-    'Используйте ручной ввод или откалибруйте по двум точкам на схеме.</p>';
+    'Выберите схему для визуальной калибровки или введите координаты вручную.</p>';
 
   quarries.forEach(function(q) {
     var ok = q.xMin != null && q.xMax != null;
@@ -691,6 +703,14 @@ function renderQuarryMapsPanel() {
         '<div class="card-title" style="margin:0">' + escHTML(q.name) + '</div>' +
         '<span style="font-size:11px;color:' + (ok ? '#4caf7d' : '#f9ab00') + '">' + (ok ? '✓ Настроена' : '⚠ Не настроена') + '</span>' +
       '</div>' +
+
+      '<div class="form-group" style="margin-bottom:12px">' +
+        '<label class="form-label">Схема для калибровки</label>' +
+        '<select id="qmap-scheme-' + q.id + '" class="form-control" style="width:100%;padding:8px 10px;font-size:14px">' +
+          '<option value="">Загрузка схем...</option>' +
+        '</select>' +
+      '</div>' +
+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' +
         '<div><label class="form-label">X min (Запад)</label>' +
           '<input type="number" id="qmap-xmin-' + q.id + '" class="form-control" value="' + (q.xMin != null ? q.xMin : '') + '" placeholder="45850"></div>' +
@@ -701,20 +721,47 @@ function renderQuarryMapsPanel() {
         '<div><label class="form-label">Y max (Север)</label>' +
           '<input type="number" id="qmap-ymax-' + q.id + '" class="form-control" value="' + (q.yMax != null ? q.yMax : '') + '" placeholder="17350"></div>' +
       '</div>' +
+
       '<div style="display:flex;gap:8px">' +
         '<button class="btn btn-sm btn-primary qmap-save-btn" data-qid="' + q.id + '">Сохранить</button>' +
-        '<button class="btn btn-sm btn-outline qmap-cal-btn" data-qid="' + q.id + '" data-qname="' + escHTML(q.name) + '">📐 Откалибровать по карте</button>' +
+        '<button class="btn btn-sm btn-outline qmap-cal-btn" data-qid="' + q.id + '" data-qname="' + escHTML(q.name) + '">📐 Откалибровать</button>' +
       '</div>' +
     '</div>';
   });
 
   panel.innerHTML = html;
 
+  // Populate scheme selects per quarry
+  quarries.forEach(function(q) {
+    Api.getSchemesByQuarry(q.name).then(function(schemes) {
+      var sel = document.getElementById('qmap-scheme-' + q.id);
+      if (!sel) return;
+      if (!schemes.length) {
+        sel.innerHTML = '<option value="">Нет схем — загрузите схему во вкладке «Схемы»</option>';
+        return;
+      }
+      sel.innerHTML = '<option value="">Выберите схему для калибровки...</option>' +
+        schemes.map(function(s) {
+          var label = s.weekKey ? Schemes.formatWeekKey(s.weekKey) : 'Без недели';
+          return '<option value="' + escHTML(s.driveUrl) + '">' + escHTML(label) + '</option>';
+        }).join('');
+    }).catch(function() {
+      var sel = document.getElementById('qmap-scheme-' + q.id);
+      if (sel) sel.innerHTML = '<option value="">Ошибка загрузки схем</option>';
+    });
+  });
+
   panel.addEventListener('click', function(e) {
     var s = e.target.closest('.qmap-save-btn');
     if (s) { _saveQuarryBoundsFromForm(s.dataset.qid); return; }
     var c = e.target.closest('.qmap-cal-btn');
-    if (c) _openCalibrationTool(c.dataset.qid, c.dataset.qname);
+    if (c) {
+      var qid   = c.dataset.qid;
+      var qname = c.dataset.qname;
+      var sel   = document.getElementById('qmap-scheme-' + qid);
+      var schemeUrl = sel ? sel.value : '';
+      _openCalibrationTool(qid, qname, schemeUrl || null);
+    }
   });
 }
 
@@ -787,7 +834,7 @@ function _loadSchemeUrlForQuarry(quarryName) {
     }).catch(function() { return null; });
 }
 
-function _openCalibrationTool(qid, qname) {
+function _openCalibrationTool(qid, qname, schemeUrl) {
   var ex = document.getElementById('quarry-cal-modal');
   if (ex) ex.remove();
 
@@ -926,8 +973,8 @@ function _openCalibrationTool(qid, qname) {
     stepZoom(e.deltaY < 0 ? +1 : -1, { x: e.clientX, y: e.clientY });
   }, { passive: false });
 
-  // Load scheme image
-  _loadSchemeUrlForQuarry(qname).then(function(url) {
+  // Load scheme image — use pre-selected URL if provided, else load latest
+  (schemeUrl ? Promise.resolve(schemeUrl) : _loadSchemeUrlForQuarry(qname)).then(function(url) {
     document.getElementById('cal-loading').style.display = 'none';
     if (!url) {
       var msg = document.createElement('div');

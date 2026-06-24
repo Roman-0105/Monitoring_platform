@@ -439,6 +439,34 @@ var Api = (function() {
     });
   }
 
+  async function getSchemesByQuarry(quarryName) {
+    var { data, error } = await client().from('schemes').select('*')
+      .order('week_key',    { ascending: false })
+      .order('uploaded_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    var all = (data || []);
+    if (quarryName) {
+      all = all.filter(function(r) { return (r.quarry || quarryName) === quarryName; });
+    }
+    var seen = {};
+    var rows = all.filter(function(r) {
+      if (seen[r.week_key]) return false;
+      seen[r.week_key] = true;
+      return true;
+    });
+    return rows.map(function(r) {
+      var urlResult = client().storage.from('schemes').getPublicUrl(r.storage_path);
+      var publicUrl = urlResult.data ? urlResult.data.publicUrl : '';
+      return {
+        weekKey:    r.week_key,
+        driveUrl:   publicUrl,
+        storagePath: r.storage_path,
+        uploadedAt: r.uploaded_at || '',
+        quarry:     r.quarry || '',
+      };
+    });
+  }
+
   async function uploadScheme(params) {
     if (!params.base64 || params.base64.length < 100) {
       throw new Error('Схема не сжалась корректно — пустые данные изображения');
@@ -454,7 +482,8 @@ var Api = (function() {
     }
 
     // Получаем текущий storage_path чтобы удалить старый файл
-    var _uploadQuarry = (window.AppState && AppState.activeQuarry)
+    var _uploadQuarry = params.quarry
+      || (window.AppState && AppState.activeQuarry)
       || (window.AppState && AppState.quarries && AppState.quarries[0] && AppState.quarries[0].name)
       || '';
     var { data: existing } = await client()
@@ -772,6 +801,7 @@ var Api = (function() {
     getHistory:          getHistory,
     getPhotos:           getPhotos,
     getSchemes:          getSchemes,
+    getSchemesByQuarry:  getSchemesByQuarry,
     getDitches:          getDitches,
     getDitch:            getDitch,
     getDitchHistory:     getDitchHistory,

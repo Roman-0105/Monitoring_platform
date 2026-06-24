@@ -193,42 +193,7 @@
     </div>
 
     <div class="settings-panel active" id="settings-panel-main">
-      <div class="card">
-        <div class="card-title">Схема карьера</div>
-        <p class="form-hint" style="margin-bottom:12px">
-          Загружай PNG схему карьера. Схема привязана к текущей неделе
-          и автоматически появится у всех пользователей.
-        </p>
-        <div class="form-group">
-          <label class="form-label">Активная схема</label>
-          <div id="settings-week-key" class="settings-week-label">—</div>
-          <p class="form-hint" id="settings-current-week-status"></p>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Загруженные схемы</label>
-          <div id="settings-schemes-list" class="settings-schemes-list">Загрузка...</div>
-          <p class="form-hint" id="settings-active-scheme"></p>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Загрузить схему</label>
-          <div class="form-row" style="display:flex;gap:10px;align-items:flex-end;margin-bottom:10px">
-            <div style="flex:1">
-              <label class="form-label" style="font-size:11px;margin-bottom:4px">Неделя</label>
-              <input type="week" id="scheme-week-input" class="form-control"
-                style="width:100%;padding:8px 10px;font-size:14px">
-            </div>
-          </div>
-          <div id="scheme-preview"></div>
-          <label class="photo-pick-btn" for="scheme-file">
-            🗺 Выбрать PNG / JPG файл
-            <input type="file" id="scheme-file" accept="image/png,image/jpeg,image/svg+xml,application/pdf" style="display:none">
-          </label>
-          <button class="btn btn-primary btn-full" id="btn-upload-scheme" style="margin-top:10px">
-            ⬆️ Загрузить схему
-          </button>
-          <p class="form-hint" id="scheme-upload-status"></p>
-        </div>
-      </div>
+      <!-- Содержимое рендерится через renderSettingsSchemes() -->
     </div>
 
     <div class="settings-panel" id="settings-panel-legend">
