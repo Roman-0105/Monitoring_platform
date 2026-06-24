@@ -395,11 +395,11 @@ function _refreshWellBounds() {
 var _wellsMap = {
   schemeUrl: null,
   imgW: 0, imgH: 0,
-  vbX: 0, vbY: 0, vbW: 0, vbH: 0,    // current viewBox
-  tvbX: 0, tvbY: 0, tvbW: 0, tvbH: 0, // target viewBox (for animation)
+  vbX: 0, vbY: 0, vbW: 0, vbH: 0,
+  tvbX: 0, tvbY: 0, tvbW: 0, tvbH: 0,
   animating: false, ready: false,
-  // PDF state
   pdfPage: null, pdfRendering: false, pdfLastScale: 0,
+  card: { offX: 85, offY: -120, collapsed: false },
 };
 
 function renderWellMapCard() {
@@ -664,6 +664,23 @@ function _zoomToCluster(cluster) {
   if (z._startAnim) z._startAnim();
 }
 
+function _zoomToWell(w) {
+  if (w.xLocal == null || w.yLocal == null) return;
+  var z   = _wellsMap;
+  var svg = document.getElementById('wells-map-svg');
+  if (!svg) return;
+  var r   = svg.getBoundingClientRect();
+  var asp = (r.width || 600) / (r.height || 400);
+  var vbW = z.imgW * 0.14;
+  var vbH = vbW / asp;
+  var cx  = (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * z.imgW;
+  var cy  = (WELL_BOUNDS.Ymax - w.yLocal)  / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * z.imgH;
+  z.tvbX = Math.max(0, Math.min(z.imgW - vbW, cx - vbW / 2));
+  z.tvbY = Math.max(0, Math.min(z.imgH - vbH, cy - vbH / 2));
+  z.tvbW = vbW; z.tvbH = vbH;
+  if (z._startAnim) z._startAnim();
+}
+
 // ── Marker rendering ──────────────────────────────────────
 
 function _renderWellShafts(p2s) {
@@ -771,6 +788,8 @@ function _renderWellMapMarkers() {
       _appendSingleMarker(marksG, entry.well, entry.cx, entry.cy, NS, p2s);
     }
   });
+
+  _refreshDataCard();
 }
 
 function _mkC(NS, cx, cy, r2, fill, stroke, sw2, cls) {
@@ -783,28 +802,24 @@ function _mkC(NS, cx, cy, r2, fill, stroke, sw2, cls) {
   return c;
 }
 
-function _pinPathD(cx, cy, r) {
-  var hcy = cy - r * 2.5;
-  var lx  = cx - r;
-  var rx  = cx + r;
-  var f   = function(v) { return v.toFixed(2); };
-  return 'M' + f(cx) + ',' + f(cy) +
-    ' C' + f(cx - r * 0.4) + ',' + f(cy - r * 0.5) +
-    ' ' + f(lx) + ',' + f(hcy + r * 0.8) +
-    ' ' + f(lx) + ',' + f(hcy) +
-    ' A' + f(r) + ',' + f(r) + ' 0 0 0 ' + f(rx) + ',' + f(hcy) +
-    ' C' + f(rx) + ',' + f(hcy + r * 0.8) +
-    ' ' + f(cx + r * 0.4) + ',' + f(cy - r * 0.5) +
-    ' ' + f(cx) + ',' + f(cy) + ' Z';
+function _diamondPoints(cx, cy, r) {
+  return cx.toFixed(2)+','+(cy-r).toFixed(2)+' '+(cx+r).toFixed(2)+','+cy.toFixed(2)+' '+cx.toFixed(2)+','+(cy+r).toFixed(2)+' '+(cx-r).toFixed(2)+','+cy.toFixed(2);
+}
+
+function _hexPoints(cx, cy, r) {
+  var pts = [];
+  for (var i = 0; i < 6; i++) {
+    var a = (i * 60 - 90) * Math.PI / 180;
+    pts.push((cx + r * Math.cos(a)).toFixed(2) + ',' + (cy + r * Math.sin(a)).toFixed(2));
+  }
+  return pts.join(' ');
 }
 
 function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   var isSel   = w.id === WellsState.selectedId;
   var isPiezo = w.wellType === 'piezometric';
   var color   = isPiezo ? '#7c4dff' : (WELL_STATUS_COLORS[w.status] || '#9aa0a6');
-  var r       = (isSel ? 11 : 7) * p2s;
-  var strokeW = 1.5 * p2s;
-  var hcy     = cy - r * 2.5;
+  var r       = (isSel ? 13 : 8) * p2s;
 
   var g = document.createElementNS(NS, 'g');
   g.setAttribute('data-well-id', w.id);
@@ -813,39 +828,68 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   g.setAttribute('data-cy',      cy.toFixed(2));
   g.setAttribute('data-azimuth', w.azimuth != null ? String(w.azimuth) : '');
   g.setAttribute('data-depth',   w.depth   != null ? String(w.depth)   : '');
+  g.setAttribute('data-piezo',   isPiezo ? '1' : '0');
   g.style.cursor = 'pointer';
 
+  // Radar sweep rings (selected well only — concept B)
   if (isSel) {
-    var halo = document.createElementNS(NS, 'circle');
-    halo.setAttribute('cx', cx.toFixed(1)); halo.setAttribute('cy', hcy.toFixed(1));
-    halo.setAttribute('r', (r * 2.0).toFixed(2));
-    halo.setAttribute('fill', '#f9ab0028');
-    halo.setAttribute('class', 'wm-halo');
-    g.appendChild(halo);
+    var radarOuter = document.createElementNS(NS, 'circle');
+    radarOuter.setAttribute('cx', cx.toFixed(2)); radarOuter.setAttribute('cy', cy.toFixed(2));
+    radarOuter.setAttribute('r', (r * 3.5).toFixed(2));
+    radarOuter.setAttribute('fill', 'none');
+    radarOuter.setAttribute('stroke', color);
+    radarOuter.setAttribute('stroke-width', (0.7 * p2s).toFixed(2));
+    radarOuter.setAttribute('stroke-dasharray', (4*p2s).toFixed(2)+','+(4*p2s).toFixed(2));
+    radarOuter.setAttribute('opacity', '.3');
+    radarOuter.setAttribute('class', 'wm-radar-ring1');
+    radarOuter.setAttribute('pointer-events', 'none');
+    g.appendChild(radarOuter);
 
-    var selRing = document.createElementNS(NS, 'circle');
-    selRing.setAttribute('cx', cx.toFixed(1)); selRing.setAttribute('cy', hcy.toFixed(1));
-    selRing.setAttribute('r', (r + 3 * p2s).toFixed(2));
-    selRing.setAttribute('fill', 'none');
-    selRing.setAttribute('stroke', '#f9ab00');
-    selRing.setAttribute('stroke-width', (2 * p2s).toFixed(2));
-    selRing.setAttribute('class', 'wm-sel-ring');
-    g.appendChild(selRing);
+    var radarSweep = document.createElementNS(NS, 'circle');
+    radarSweep.setAttribute('cx', cx.toFixed(2)); radarSweep.setAttribute('cy', cy.toFixed(2));
+    radarSweep.setAttribute('r', (r * 3.5).toFixed(2));
+    radarSweep.setAttribute('fill', 'none');
+    radarSweep.setAttribute('stroke', color);
+    radarSweep.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
+    radarSweep.setAttribute('stroke-dasharray', (r * 5).toFixed(2)+','+(r * 17).toFixed(2));
+    radarSweep.setAttribute('opacity', '.75');
+    radarSweep.setAttribute('class', 'wm-radar-sweep');
+    radarSweep.setAttribute('pointer-events', 'none');
+    var animEl = document.createElementNS(NS, 'animateTransform');
+    animEl.setAttribute('attributeName', 'transform');
+    animEl.setAttribute('type', 'rotate');
+    animEl.setAttribute('from', '0 '+cx.toFixed(2)+' '+cy.toFixed(2));
+    animEl.setAttribute('to',   '360 '+cx.toFixed(2)+' '+cy.toFixed(2));
+    animEl.setAttribute('dur', '6s');
+    animEl.setAttribute('repeatCount', 'indefinite');
+    radarSweep.appendChild(animEl);
+    g.appendChild(radarSweep);
+
+    var radarInner = document.createElementNS(NS, 'circle');
+    radarInner.setAttribute('cx', cx.toFixed(2)); radarInner.setAttribute('cy', cy.toFixed(2));
+    radarInner.setAttribute('r', (r * 2.2).toFixed(2));
+    radarInner.setAttribute('fill', 'none');
+    radarInner.setAttribute('stroke', color);
+    radarInner.setAttribute('stroke-width', (0.5 * p2s).toFixed(2));
+    radarInner.setAttribute('opacity', '.2');
+    radarInner.setAttribute('class', 'wm-radar-ring2');
+    radarInner.setAttribute('pointer-events', 'none');
+    g.appendChild(radarInner);
   }
 
-  // Azimuth arrow: direction from azimuth, length from depth
+  // Azimuth ray with depth ticks and arrowhead (concept B)
   if (w.azimuth != null) {
     var azRad    = w.azimuth * Math.PI / 180;
     var adx      = Math.sin(azRad);
     var ady      = -Math.cos(azRad);
-    var arrowLen = (w.depth != null ? Math.min(50, Math.max(8, w.depth * 0.2)) : 20) * p2s;
+    var arrowLen = (w.depth != null ? Math.min(60, Math.max(12, w.depth * 0.25)) : 20) * p2s;
     var ax2 = cx + adx * arrowLen;
-    var ay2 = hcy + ady * arrowLen;
+    var ay2 = cy + ady * arrowLen;
     var headSz = 5 * p2s;
-    var px = -ady, py = adx;
+    var pvx = -ady, pvy = adx;
 
     var shaft = document.createElementNS(NS, 'line');
-    shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', hcy.toFixed(2));
+    shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', cy.toFixed(2));
     shaft.setAttribute('x2', ax2.toFixed(2)); shaft.setAttribute('y2', ay2.toFixed(2));
     shaft.setAttribute('stroke', color);
     shaft.setAttribute('stroke-width', (2 * p2s).toFixed(2));
@@ -854,34 +898,69 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
     shaft.setAttribute('class', 'wm-arrow-shaft');
     g.appendChild(shaft);
 
+    // Depth tick circles every 50 m along the ray
+    if (w.depth != null && w.depth > 50) {
+      var numTicks = Math.min(5, Math.floor(w.depth / 50) - 1);
+      for (var ti = 1; ti <= numTicks; ti++) {
+        var tratio = (ti * 50) / w.depth;
+        var tickEl = document.createElementNS(NS, 'circle');
+        tickEl.setAttribute('cx', (cx + adx * arrowLen * tratio).toFixed(2));
+        tickEl.setAttribute('cy', (cy + ady * arrowLen * tratio).toFixed(2));
+        tickEl.setAttribute('r',  (1.8 * p2s).toFixed(2));
+        tickEl.setAttribute('fill', color);
+        tickEl.setAttribute('opacity', '0.5');
+        tickEl.setAttribute('pointer-events', 'none');
+        tickEl.setAttribute('class', 'wm-depth-tick');
+        g.appendChild(tickEl);
+      }
+    }
+
     var arHead = document.createElementNS(NS, 'polygon');
     arHead.setAttribute('points',
       ax2.toFixed(2)+','+ay2.toFixed(2)+' '+
-      (ax2 - adx*headSz + px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + py*headSz*0.5).toFixed(2)+' '+
-      (ax2 - adx*headSz - px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - py*headSz*0.5).toFixed(2));
+      (ax2 - adx*headSz + pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + pvy*headSz*0.5).toFixed(2)+' '+
+      (ax2 - adx*headSz - pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - pvy*headSz*0.5).toFixed(2));
     arHead.setAttribute('fill', color);
     arHead.setAttribute('pointer-events', 'none');
     arHead.setAttribute('class', 'wm-arrow-head');
     g.appendChild(arHead);
+
+    // Depth label at ray tip (selected only)
+    if (isSel && w.depth != null) {
+      var depLbl = document.createElementNS(NS, 'text');
+      depLbl.setAttribute('x', (ax2 + adx * 6 * p2s).toFixed(2));
+      depLbl.setAttribute('y', (ay2 + ady * 6 * p2s + 3 * p2s).toFixed(2));
+      depLbl.setAttribute('text-anchor', 'middle');
+      depLbl.setAttribute('font-size', (8 * p2s).toFixed(2));
+      depLbl.setAttribute('font-family', 'sans-serif');
+      depLbl.setAttribute('fill', color);
+      depLbl.setAttribute('stroke', 'rgba(0,0,0,.7)');
+      depLbl.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
+      depLbl.setAttribute('paint-order', 'stroke');
+      depLbl.setAttribute('pointer-events', 'none');
+      depLbl.setAttribute('class', 'wm-depth-lbl');
+      depLbl.textContent = w.depth + 'м';
+      g.appendChild(depLbl);
+    }
   }
 
-  // Teardrop pin body: tip at (cx, cy), head circle at (cx, hcy)
-  var pin = document.createElementNS(NS, 'path');
-  pin.setAttribute('d', _pinPathD(cx, cy, r));
-  pin.setAttribute('fill', color);
-  pin.setAttribute('stroke', 'rgba(255,255,255,.7)');
-  pin.setAttribute('stroke-width', strokeW.toFixed(2));
-  pin.setAttribute('stroke-linejoin', 'round');
-  pin.setAttribute('class', 'wm-pin');
-  g.appendChild(pin);
+  // Shape: diamond (drainage) or hexagon (piezometric) — concept B
+  var shape = document.createElementNS(NS, 'polygon');
+  shape.setAttribute('points', isPiezo ? _hexPoints(cx, cy, r) : _diamondPoints(cx, cy, r));
+  shape.setAttribute('fill', color);
+  shape.setAttribute('stroke', 'rgba(255,255,255,.75)');
+  shape.setAttribute('stroke-width', (2 * p2s).toFixed(2));
+  shape.setAttribute('stroke-linejoin', 'round');
+  shape.setAttribute('class', 'wm-shape');
+  g.appendChild(shape);
 
-  // Number inside pin head
+  // Number label inside shape
   var numMatch = w.name ? w.name.match(/(\d+)/) : null;
   var numLabel = numMatch ? numMatch[1].slice(-2) : (w.name ? w.name.slice(0, 2) : '?');
-  var numFS = Math.min(10 * p2s, r * 1.1);
+  var numFS = Math.min(9 * p2s, r * 0.85);
   var numEl = document.createElementNS(NS, 'text');
   numEl.setAttribute('x', cx.toFixed(1));
-  numEl.setAttribute('y', (hcy + numFS * 0.38).toFixed(1));
+  numEl.setAttribute('y', (cy + numFS * 0.38).toFixed(1));
   numEl.setAttribute('text-anchor', 'middle');
   numEl.setAttribute('font-size', numFS.toFixed(2));
   numEl.setAttribute('font-weight', '700');
@@ -892,18 +971,19 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   numEl.textContent = numLabel;
   g.appendChild(numEl);
 
+  // Name label below shape (selected only)
   if (isSel) {
-    var nameFS = 11 * p2s;
+    var nameFS = 10 * p2s;
     var lbl = document.createElementNS(NS, 'text');
     lbl.setAttribute('x',             cx.toFixed(1));
-    lbl.setAttribute('y',             (cy + nameFS + 4 * p2s).toFixed(1));
+    lbl.setAttribute('y',             (cy + r + nameFS + 3 * p2s).toFixed(1));
     lbl.setAttribute('text-anchor',   'middle');
     lbl.setAttribute('font-size',     nameFS.toFixed(2));
     lbl.setAttribute('font-weight',   '600');
     lbl.setAttribute('font-family',   'sans-serif');
     lbl.setAttribute('fill',          color);
     lbl.setAttribute('stroke',        'rgba(0,0,0,.8)');
-    lbl.setAttribute('stroke-width',  (2.5 * p2s).toFixed(2));
+    lbl.setAttribute('stroke-width',  (2 * p2s).toFixed(2));
     lbl.setAttribute('paint-order',   'stroke');
     lbl.setAttribute('pointer-events','none');
     lbl.setAttribute('class', 'wm-label');
@@ -911,7 +991,7 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
     g.appendChild(lbl);
   }
 
-  g.appendChild(_mkC(NS, cx, hcy, r * 2.5, 'transparent', null, 0, 'wm-hit'));
+  g.appendChild(_mkC(NS, cx, cy, r * 2, 'transparent', null, 0, 'wm-hit'));
 
   var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
   var connCount = isPiezo && Array.isArray(w.sensors) ? w.sensors.filter(function(s) { return s.connectedToLogger; }).length : 0;
@@ -931,6 +1011,10 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
     WellsState.selectedId = w.id;
     renderWellRegistryList();
     renderWellDetail();
+  });
+  g.addEventListener('dblclick', function(e) {
+    e.stopPropagation();
+    _zoomToWell(w);
   });
   marksG.appendChild(g);
 }
@@ -1007,77 +1091,115 @@ function _updateMarkerSizes() {
 
   marksG.querySelectorAll('g[data-well-id]').forEach(function(g) {
     var isSel   = g.getAttribute('data-sel') === '1';
+    var isPiezo = g.getAttribute('data-piezo') === '1';
     var cx      = parseFloat(g.getAttribute('data-cx'));
     var cy      = parseFloat(g.getAttribute('data-cy'));
     var azAttr  = g.getAttribute('data-azimuth');
     var depAttr = g.getAttribute('data-depth');
-    var azimuth = azAttr  !== '' ? parseFloat(azAttr)  : null;
+    var azimuth = azAttr !== '' ? parseFloat(azAttr)  : null;
     var depth   = depAttr !== '' ? parseFloat(depAttr) : null;
+    var r       = (isSel ? 13 : 8) * p2s;
 
-    var r   = (isSel ? 11 : 7) * p2s;
-    var hcy = cy - r * 2.5;
+    // Radar rings
+    var rr1 = g.querySelector('.wm-radar-ring1');
+    var rs  = g.querySelector('.wm-radar-sweep');
+    var rr2 = g.querySelector('.wm-radar-ring2');
+    if (rr1) {
+      rr1.setAttribute('r', (r * 3.5).toFixed(2));
+      rr1.setAttribute('stroke-dasharray', (4*p2s).toFixed(2)+','+(4*p2s).toFixed(2));
+    }
+    if (rs) {
+      rs.setAttribute('r', (r * 3.5).toFixed(2));
+      rs.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
+      rs.setAttribute('stroke-dasharray', (r*5).toFixed(2)+','+(r*17).toFixed(2));
+      var animEl = rs.querySelector('animateTransform');
+      if (animEl) {
+        animEl.setAttribute('from', '0 '+cx.toFixed(2)+' '+cy.toFixed(2));
+        animEl.setAttribute('to',   '360 '+cx.toFixed(2)+' '+cy.toFixed(2));
+      }
+    }
+    if (rr2) rr2.setAttribute('r', (r * 2.2).toFixed(2));
 
-    var halo    = g.querySelector('.wm-halo');
-    var selRing = g.querySelector('.wm-sel-ring');
-    var pin     = g.querySelector('.wm-pin');
-    var num     = g.querySelector('.wm-num');
-    var hit     = g.querySelector('.wm-hit');
-    var lbl     = g.querySelector('.wm-label');
-    var shaft   = g.querySelector('.wm-arrow-shaft');
-    var arHead  = g.querySelector('.wm-arrow-head');
+    // Shape
+    var shape = g.querySelector('.wm-shape');
+    if (shape) {
+      shape.setAttribute('points', isPiezo ? _hexPoints(cx, cy, r) : _diamondPoints(cx, cy, r));
+      shape.setAttribute('stroke-width', (2 * p2s).toFixed(2));
+    }
 
-    if (halo) {
-      halo.setAttribute('cx', cx.toFixed(1)); halo.setAttribute('cy', hcy.toFixed(1));
-      halo.setAttribute('r', (r * 2.0).toFixed(2));
-    }
-    if (selRing) {
-      selRing.setAttribute('cx', cx.toFixed(1)); selRing.setAttribute('cy', hcy.toFixed(1));
-      selRing.setAttribute('r', (r + 3 * p2s).toFixed(2));
-      selRing.setAttribute('stroke-width', (2 * p2s).toFixed(2));
-    }
-    if (pin) {
-      pin.setAttribute('d', _pinPathD(cx, cy, r));
-      pin.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
-    }
+    // Number
+    var num = g.querySelector('.wm-num');
     if (num) {
-      var numFS = Math.min(10 * p2s, r * 1.1);
+      var numFS = Math.min(9 * p2s, r * 0.85);
       num.setAttribute('x', cx.toFixed(1));
-      num.setAttribute('y', (hcy + numFS * 0.38).toFixed(1));
+      num.setAttribute('y', (cy + numFS * 0.38).toFixed(1));
       num.setAttribute('font-size', numFS.toFixed(2));
     }
+
+    // Hit area
+    var hit = g.querySelector('.wm-hit');
     if (hit) {
-      hit.setAttribute('cx', cx.toFixed(1)); hit.setAttribute('cy', hcy.toFixed(1));
-      hit.setAttribute('r', (r * 2.5).toFixed(2));
+      hit.setAttribute('cx', cx.toFixed(1)); hit.setAttribute('cy', cy.toFixed(1));
+      hit.setAttribute('r', (r * 2).toFixed(2));
     }
+
+    // Name label (selected)
+    var lbl = g.querySelector('.wm-label');
     if (lbl) {
-      var nameFS = 11 * p2s;
+      var nameFS = 10 * p2s;
       lbl.setAttribute('x', cx.toFixed(1));
-      lbl.setAttribute('y', (cy + nameFS + 4 * p2s).toFixed(1));
+      lbl.setAttribute('y', (cy + r + nameFS + 3 * p2s).toFixed(1));
       lbl.setAttribute('font-size', nameFS.toFixed(2));
-      lbl.setAttribute('stroke-width', (2.5 * p2s).toFixed(2));
+      lbl.setAttribute('stroke-width', (2 * p2s).toFixed(2));
     }
+
+    // Azimuth shaft + arrowhead + depth label
+    var shaft  = g.querySelector('.wm-arrow-shaft');
+    var arHead = g.querySelector('.wm-arrow-head');
+    var depLbl = g.querySelector('.wm-depth-lbl');
     if (shaft && azimuth != null) {
       var azRad    = azimuth * Math.PI / 180;
       var adx      = Math.sin(azRad);
       var ady      = -Math.cos(azRad);
-      var arrowLen = (depth != null ? Math.min(50, Math.max(8, depth * 0.2)) : 20) * p2s;
+      var arrowLen = (depth != null ? Math.min(60, Math.max(12, depth * 0.25)) : 20) * p2s;
       var ax2 = cx + adx * arrowLen;
-      var ay2 = hcy + ady * arrowLen;
-      shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', hcy.toFixed(2));
+      var ay2 = cy + ady * arrowLen;
+      shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', cy.toFixed(2));
       shaft.setAttribute('x2', ax2.toFixed(2)); shaft.setAttribute('y2', ay2.toFixed(2));
       shaft.setAttribute('stroke-width', (2 * p2s).toFixed(2));
       if (arHead) {
         var headSz = 5 * p2s;
-        var px = -ady, py = adx;
+        var pvx = -ady, pvy = adx;
         arHead.setAttribute('points',
           ax2.toFixed(2)+','+ay2.toFixed(2)+' '+
-          (ax2 - adx*headSz + px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + py*headSz*0.5).toFixed(2)+' '+
-          (ax2 - adx*headSz - px*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - py*headSz*0.5).toFixed(2));
+          (ax2 - adx*headSz + pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + pvy*headSz*0.5).toFixed(2)+' '+
+          (ax2 - adx*headSz - pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - pvy*headSz*0.5).toFixed(2));
       }
+      if (depLbl) {
+        depLbl.setAttribute('x', (ax2 + adx * 6 * p2s).toFixed(2));
+        depLbl.setAttribute('y', (ay2 + ady * 6 * p2s + 3 * p2s).toFixed(2));
+        depLbl.setAttribute('font-size', (8 * p2s).toFixed(2));
+      }
+    }
+
+    // Depth tick marks
+    var ticks = g.querySelectorAll('.wm-depth-tick');
+    if (ticks.length && azimuth != null && depth != null) {
+      var azRad2 = azimuth * Math.PI / 180;
+      var adx2   = Math.sin(azRad2);
+      var ady2   = -Math.cos(azRad2);
+      var len2   = (Math.min(60, Math.max(12, depth * 0.25))) * p2s;
+      ticks.forEach(function(tick, ti) {
+        var ratio = ((ti + 1) * 50) / depth;
+        if (ratio >= 1) return;
+        tick.setAttribute('cx', (cx + adx2 * len2 * ratio).toFixed(2));
+        tick.setAttribute('cy', (cy + ady2 * len2 * ratio).toFixed(2));
+        tick.setAttribute('r',  (1.8 * p2s).toFixed(2));
+      });
     }
   });
 
-  // Update shaft-layer endpoint dot radii to match current zoom
+  // Shaft-layer endpoint dots
   var shaftsG = document.getElementById('wells-map-shafts');
   if (shaftsG) {
     shaftsG.querySelectorAll('circle').forEach(function(c) {
@@ -1086,6 +1208,7 @@ function _updateMarkerSizes() {
     });
   }
 
+  // Cluster markers
   marksG.querySelectorAll('g[data-cluster]').forEach(function(g) {
     var r  = 13 * p2s;
     var cx = parseFloat(g.getAttribute('data-cx') || 0);
@@ -1143,6 +1266,7 @@ function _setupWellMapZoom(body, svg) {
     z.vbH += (z.tvbH - z.vbH) * L;
     _applyViewBox();
     _updateMarkerSizes();
+    _updateDataCard();
     var done = Math.abs(z.tvbX - z.vbX) < 0.05 && Math.abs(z.tvbY - z.vbY) < 0.05 &&
                Math.abs(z.tvbW - z.vbW) < 0.05 && Math.abs(z.tvbH - z.vbH) < 0.05;
     if (done) {
@@ -1208,6 +1332,222 @@ function _setupWellMapZoom(body, svg) {
   });
 }
 
+// ── Плавающая карточка данных (концепция D) ───────────────
+
+function _svgToBodyCoords(cx, cy) {
+  var svg  = document.getElementById('wells-map-svg');
+  var body = document.getElementById('wells-map-body');
+  if (!svg || !body) return { x: 0, y: 0 };
+  var sr = svg.getBoundingClientRect();
+  var br = body.getBoundingClientRect();
+  var z  = _wellsMap;
+  return {
+    x: (cx - z.vbX) / z.vbW * sr.width  + (sr.left - br.left),
+    y: (cy - z.vbY) / z.vbH * sr.height + (sr.top  - br.top),
+  };
+}
+
+function _getSelWellInfo() {
+  if (!WellsState.selectedId) return null;
+  var w = WellsState.list.find(function(w2) { return w2.id === WellsState.selectedId; });
+  if (!w || w.xLocal == null || w.yLocal == null) return null;
+  var z  = _wellsMap;
+  var cx = (w.xLocal - WELL_BOUNDS.Xmin) / (WELL_BOUNDS.Xmax - WELL_BOUNDS.Xmin) * z.imgW;
+  var cy = (WELL_BOUNDS.Ymax - w.yLocal)  / (WELL_BOUNDS.Ymax - WELL_BOUNDS.Ymin) * z.imgH;
+  return { w: w, cx: cx, cy: cy };
+}
+
+function _buildMiniSparkline(meas, color) {
+  if (!meas || !meas.length) return '';
+  var data = meas.filter(function(m) { return m.flowRate != null; })
+    .sort(function(a, b) { return (a.measurementDate||'') > (b.measurementDate||'') ? 1 : -1; })
+    .slice(-10);
+  if (data.length < 2) return '';
+  var flows = data.map(function(m) { return m.flowRate; });
+  var minV = Math.min.apply(null, flows), maxV = Math.max.apply(null, flows);
+  var range = maxV - minV || 1;
+  var W = 148, H = 28, PAD = 2;
+  var pts = data.map(function(m, i) {
+    var x = PAD + i / (data.length - 1) * (W - PAD * 2);
+    var y = PAD + (1 - (m.flowRate - minV) / range) * (H - PAD * 2);
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  });
+  var pathD = 'M' + pts.join(' L');
+  var lp = pts[pts.length - 1].split(',');
+  var areaD = pathD + ' L' + lp[0] + ',' + (H-PAD) + ' L' + PAD + ',' + (H-PAD) + ' Z';
+  var cid = 'wdc-sg-' + color.replace(/[^a-f0-9]/gi, '');
+  return '<svg width="' + W + '" height="' + H + '" style="display:block;margin-bottom:2px">' +
+    '<defs><linearGradient id="' + cid + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + color + '" stop-opacity=".25"/>' +
+      '<stop offset="100%" stop-color="' + color + '" stop-opacity="0"/>' +
+    '</linearGradient></defs>' +
+    '<path d="' + areaD + '" fill="url(#' + cid + ')"/>' +
+    '<path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + lp[0] + '" cy="' + lp[1] + '" r="3" fill="' + color + '"/>' +
+  '</svg>';
+}
+
+function _refreshDataCard() {
+  var body = document.getElementById('wells-map-body');
+  if (!body || !_wellsMap.ready) return;
+
+  var card    = document.getElementById('wells-data-card');
+  var connSvg = document.getElementById('wells-card-connector');
+  var sel     = _getSelWellInfo();
+
+  if (!sel) {
+    if (card)    card.style.display    = 'none';
+    if (connSvg) connSvg.style.display = 'none';
+    return;
+  }
+
+  var w          = sel.w;
+  var isPiezo    = w.wellType === 'piezometric';
+  var color      = isPiezo ? '#7c4dff' : (WELL_STATUS_COLORS[w.status] || '#9aa0a6');
+  var statusColor = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
+
+  if (!card) {
+    body.style.position = 'relative';
+    card = document.createElement('div');
+    card.id = 'wells-data-card';
+    card.style.cssText = 'position:absolute;z-index:20;border-radius:10px;padding:9px 12px;min-width:160px;max-width:210px;backdrop-filter:blur(12px);user-select:none';
+    body.appendChild(card);
+  }
+  if (!connSvg) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = '<svg id="wells-card-connector" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:10"><line id="wells-connector-line"/></svg>';
+    body.insertBefore(tmp.firstChild, body.firstChild);
+    connSvg = document.getElementById('wells-card-connector');
+  }
+
+  card.style.display    = '';
+  connSvg.style.display = '';
+  card.style.background = 'rgba(8,12,20,.92)';
+  card.style.border     = '1px solid ' + color + '80';
+  card.style.boxShadow  = '0 0 20px ' + color + '33,0 4px 20px rgba(0,0,0,.7)';
+
+  var meas      = WellsState.measurements[w.id] || [];
+  var spark     = _buildMiniSparkline(meas, color);
+  var lastMeas  = _getLastMeasurement(w.id);
+  var collapsed = _wellsMap.card.collapsed;
+
+  var html = '<div id="wells-card-hdr" style="display:flex;justify-content:space-between;align-items:center;' + (collapsed ? '' : 'margin-bottom:6px;') + 'cursor:move;gap:6px">' +
+    '<span style="font-size:12px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHTML(w.name) + '</span>' +
+    '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">' +
+      (w.status ? '<span style="font-size:9px;background:' + statusColor + '22;color:' + statusColor + ';border-radius:3px;padding:1px 5px;font-weight:600;white-space:nowrap">● ' + escHTML(w.status) + '</span>' : '') +
+      '<button id="wells-card-col-btn" style="background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);cursor:pointer;border-radius:3px;padding:0 5px;font-size:11px;line-height:1.7;flex-shrink:0">' + (collapsed ? '+' : '−') + '</button>' +
+    '</div>' +
+  '</div>';
+
+  if (!collapsed) {
+    html += '<div>';
+    if (w.depth != null || w.azimuth != null) {
+      html += '<div style="font-size:10px;color:#6e7681;margin-bottom:5px">' +
+        (w.depth   != null ? '⬇ <b style="color:#e8eaed">' + w.depth + 'м</b>' : '') +
+        (w.depth != null && w.azimuth != null ? '&nbsp;·&nbsp;' : '') +
+        (w.azimuth != null ? '🧭 <b style="color:#e8eaed">' + w.azimuth + '°</b>' : '') +
+        (isPiezo && w.sensors && w.sensors.length ? '&nbsp;·&nbsp;<span style="color:#7c4dff">◆&nbsp;' + w.sensors.length + 'дат.</span>' : '') +
+      '</div>';
+    }
+    if (spark) {
+      html += '<div style="font-size:9px;color:#6e7681;margin-bottom:2px">Дебит (м³/ч)</div>' + spark;
+      if (lastMeas) {
+        html += '<div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px">' +
+          '<span style="color:#6e7681">' + (lastMeas.measurementDate ? formatDate(lastMeas.measurementDate) : '') + '</span>' +
+          '<span style="color:#f9ab00;font-weight:700">→&nbsp;' + lastMeas.flowRate + '&nbsp;м³/ч</span>' +
+        '</div>';
+      }
+    } else if (!isPiezo) {
+      html += '<div style="font-size:10px;color:#6e7681;margin-top:2px">Замеры отсутствуют</div>';
+    }
+    if (isPiezo && w.sensors && w.sensors.length) {
+      html += '<div style="border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding-top:5px">';
+      w.sensors.forEach(function(s) {
+        var sc = s.connectedToLogger ? '#4caf7d' : '#9aa0a6';
+        html += '<div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px">' +
+          '<span style="color:' + sc + '">◆ ' + escHTML(s.name || '—') + '</span>' +
+          '<span style="color:#6e7681">' + (s.depth != null ? s.depth + 'м' : '') + (s.connectedToLogger ? ' · лог.' : ' · нет') + '</span>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  card.innerHTML = html;
+
+  // Drag card header
+  var hdr = card.querySelector('#wells-card-hdr');
+  if (hdr) {
+    var cd = { on: false, sx: 0, sy: 0, ox: 0, oy: 0 };
+    hdr.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      cd.on = true; cd.sx = e.clientX; cd.sy = e.clientY;
+      cd.ox = _wellsMap.card.offX; cd.oy = _wellsMap.card.offY;
+      e.preventDefault(); e.stopPropagation();
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!cd.on) return;
+      _wellsMap.card.offX = cd.ox + (e.clientX - cd.sx);
+      _wellsMap.card.offY = cd.oy + (e.clientY - cd.sy);
+      _updateDataCard();
+    });
+    document.addEventListener('mouseup', function() { cd.on = false; });
+  }
+
+  // Collapse toggle
+  var colBtn = card.querySelector('#wells-card-col-btn');
+  if (colBtn) {
+    colBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _wellsMap.card.collapsed = !_wellsMap.card.collapsed;
+      _refreshDataCard();
+    });
+  }
+
+  _updateDataCard();
+}
+
+function _updateDataCard() {
+  var card     = document.getElementById('wells-data-card');
+  var connLine = document.getElementById('wells-connector-line');
+  if (!card || !connLine) return;
+
+  var sel = _getSelWellInfo();
+  if (!sel) { card.style.display = 'none'; return; }
+
+  var sc = _svgToBodyCoords(sel.cx, sel.cy);
+  var ox = _wellsMap.card.offX;
+  var oy = _wellsMap.card.offY;
+
+  card.style.left = (sc.x + ox) + 'px';
+  card.style.top  = (sc.y + oy) + 'px';
+
+  var cw = card.offsetWidth  || 170;
+  var ch = card.offsetHeight || 90;
+  var anchorX, anchorY;
+  if (oy + ch < 0) {
+    anchorX = sc.x + ox + cw / 2; anchorY = sc.y + oy + ch;
+  } else if (oy > 0) {
+    anchorX = sc.x + ox + cw / 2; anchorY = sc.y + oy;
+  } else if (ox > 0) {
+    anchorX = sc.x + ox; anchorY = sc.y + oy + ch / 2;
+  } else {
+    anchorX = sc.x + ox + cw; anchorY = sc.y + oy + ch / 2;
+  }
+
+  var isPiezo = sel.w.wellType === 'piezometric';
+  var color   = isPiezo ? '#7c4dff' : (WELL_STATUS_COLORS[sel.w.status] || '#9aa0a6');
+  connLine.setAttribute('x1', anchorX.toFixed(1));
+  connLine.setAttribute('y1', anchorY.toFixed(1));
+  connLine.setAttribute('x2', sc.x.toFixed(1));
+  connLine.setAttribute('y2', sc.y.toFixed(1));
+  connLine.setAttribute('stroke', color);
+  connLine.setAttribute('stroke-width', '1.5');
+  connLine.setAttribute('stroke-dasharray', '5,3');
+  connLine.setAttribute('opacity', '.55');
+}
+
 // ── График замеров ────────────────────────────────────────
 
 function renderWellChartCard(well) {
@@ -1226,6 +1566,7 @@ function renderWellChartCard(well) {
     if (WellsState.selectedId === well.id) {
       _drawWellChart(body, meas);
       renderMeasurementsTable(well);
+      _refreshDataCard();
     }
   }).catch(function(err) {
     body.innerHTML = '<p class="form-hint" style="color:var(--red)">Ошибка: ' + escHTML(err.message) + '</p>';
