@@ -1270,54 +1270,74 @@ function _anlSetupTrendInteractions(allWells, visWells, allDFull, trendEl) {
     if (brushSvg && allDFull.length >= 2) {
       var BPL = 42, BPR = 12, BW = 440;
       var bcW = BW - BPL - BPR;
+
       function fracFromBrushX(svgX) { return Math.max(0, Math.min(1, (svgX - BPL) / bcW)); }
       function getBrushSvgX(e) {
-        var r = brushSvg.getBoundingClientRect();
+        // Always look up current element — closure ref goes stale after re-render
+        var el = document.getElementById('anl-brush-svg');
+        if (!el) return BPL;
+        var r = el.getBoundingClientRect();
         return ((e.clientX - r.left) / (r.width || 1)) * BW;
+      }
+      function updateBrushVisuals() {
+        var el = document.getElementById('anl-brush-svg');
+        if (!el) return;
+        var bx1 = BPL + _anlTrend.brushSt * bcW;
+        var bx2 = BPL + _anlTrend.brushEn * bcW;
+        var selW = Math.max(4, bx2 - bx1);
+        var sel = el.querySelector('#anl-brush-sel');
+        var lh  = el.querySelector('#anl-brush-lh');
+        var rh  = el.querySelector('#anl-brush-rh');
+        if (sel) { sel.setAttribute('x', bx1.toFixed(1)); sel.setAttribute('width', selW.toFixed(1)); }
+        if (lh)  { lh.setAttribute('x1', bx1.toFixed(1)); lh.setAttribute('x2', bx1.toFixed(1)); }
+        if (rh)  { rh.setAttribute('x1', bx2.toFixed(1)); rh.setAttribute('x2', bx2.toFixed(1)); }
       }
 
       var dragMode = null; // 'left' | 'right' | 'move' | 'new'
-      var dragStartX = 0, dragStartSt = 0, dragStartEn = 0;
+      var dragStartFrac = 0, dragStartSt = 0, dragStartEn = 0;
 
       function onBrushMove(e) {
         if (!_anlBrDrag.on) return;
         var fx = fracFromBrushX(getBrushSvgX(e));
         if (dragMode === 'left') {
-          _anlTrend.brushSt = Math.max(0, Math.min(fx, _anlTrend.brushEn - 0.05));
+          _anlTrend.brushSt = Math.max(0, Math.min(fx, _anlTrend.brushEn - 0.04));
         } else if (dragMode === 'right') {
-          _anlTrend.brushEn = Math.min(1, Math.max(fx, _anlTrend.brushSt + 0.05));
+          _anlTrend.brushEn = Math.min(1, Math.max(fx, _anlTrend.brushSt + 0.04));
         } else if (dragMode === 'move') {
           var span = dragStartEn - dragStartSt;
-          var delta = fx - fracFromBrushX(dragStartX);
+          var delta = fx - dragStartFrac;
           var newSt = Math.max(0, Math.min(1 - span, dragStartSt + delta));
           _anlTrend.brushSt = newSt;
           _anlTrend.brushEn = newSt + span;
         } else if (dragMode === 'new') {
-          var anchor = fracFromBrushX(dragStartX);
-          if (fx > anchor) { _anlTrend.brushSt = anchor; _anlTrend.brushEn = Math.min(1, fx); }
-          else { _anlTrend.brushSt = Math.max(0, fx); _anlTrend.brushEn = anchor; }
+          if (fx > dragStartFrac) { _anlTrend.brushSt = dragStartFrac; _anlTrend.brushEn = Math.min(1, fx); }
+          else { _anlTrend.brushSt = Math.max(0, fx); _anlTrend.brushEn = dragStartFrac; }
         }
-        _anlDrawTrend(allWells, trendEl);
+        // Update brush visuals in-place — no full re-render during drag
+        updateBrushVisuals();
       }
       function onBrushUp() {
+        if (!_anlBrDrag.on) return;
         _anlBrDrag.on = false;
         dragMode = null;
         document.removeEventListener('mousemove', onBrushMove);
         document.removeEventListener('mouseup', onBrushUp);
+        // Full re-render only on release
+        _anlDrawTrend(allWells, trendEl);
       }
 
       brushSvg.addEventListener('mousedown', function(e) {
         var svgX = getBrushSvgX(e);
-        var fx = fracFromBrushX(svgX);
-        var lhX = BPL + _anlTrend.brushSt * bcW;
-        var rhX = BPL + _anlTrend.brushEn * bcW;
+        var fx   = fracFromBrushX(svgX);
+        var lhX  = BPL + _anlTrend.brushSt * bcW;
+        var rhX  = BPL + _anlTrend.brushEn * bcW;
         _anlBrDrag.on = true;
-        dragStartX = svgX;
-        dragStartSt = _anlTrend.brushSt;
-        dragStartEn = _anlTrend.brushEn;
-        if (Math.abs(svgX - lhX) < 8) dragMode = 'left';
-        else if (Math.abs(svgX - rhX) < 8) dragMode = 'right';
-        else if (svgX >= lhX && svgX <= rhX) dragMode = 'move';
+        dragStartFrac = fx;
+        dragStartSt   = _anlTrend.brushSt;
+        dragStartEn   = _anlTrend.brushEn;
+        if (Math.abs(svgX - lhX) < 10) dragMode = 'left';
+        else if (Math.abs(svgX - rhX) < 10) dragMode = 'right';
+        else if (svgX > lhX && svgX < rhX) dragMode = 'move';
         else dragMode = 'new';
         document.addEventListener('mousemove', onBrushMove);
         document.addEventListener('mouseup', onBrushUp);
