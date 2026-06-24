@@ -58,15 +58,21 @@ function _renderQuarrySwitcher(quarries, suppressReload) {
   }
 
   el.style.display = 'flex';
-  el.innerHTML = list.map(function(q) {
-    var isActive = q.name === AppState.activeQuarry;
-    return '<button onclick="setActiveQuarry(\'' + q.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" ' +
-      'style="padding:4px 14px;border-radius:16px;font-size:13px;cursor:pointer;transition:all .15s;' +
-      'border:1px solid var(--accent);' +
-      'background:' + (isActive ? 'var(--accent)' : 'transparent') + ';' +
-      'color:' + (isActive ? '#fff' : 'var(--txt-1)') + '">' +
-      (q.name + '').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</button>';
-  }).join('');
+  el.innerHTML =
+    '<div style="padding:2px 10px 4px;font-size:11px;font-weight:600;letter-spacing:.04em;' +
+      'color:var(--txt-3,#9aa0b4);text-transform:uppercase">Карьер</div>' +
+    list.map(function(q) {
+      var isActive = q.name === AppState.activeQuarry;
+      return '<button onclick="setActiveQuarry(\'' + q.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" ' +
+        'style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;' +
+        'font-size:13px;font-weight:' + (isActive ? '600' : '400') + ';cursor:pointer;' +
+        'border:none;border-radius:8px;text-align:left;transition:background .15s;' +
+        'background:' + (isActive ? 'var(--accent)' : 'transparent') + ';' +
+        'color:' + (isActive ? '#fff' : 'var(--txt-1)') + '">' +
+        '<span style="font-size:10px;line-height:1">' + (isActive ? '◉' : '◎') + '</span>' +
+        (q.name + '').replace(/&/g,'&amp;').replace(/</g,'&lt;') +
+        '</button>';
+    }).join('');
 
   if (needsReload && !suppressReload) _reloadAllData();
 }
@@ -205,46 +211,48 @@ window.initApp = function() {
   window.addEventListener('online',  updateNetStatus);
   window.addEventListener('offline', updateNetStatus);
 
-  // Загрузка данных: сначала карьеры (чтобы activeQuarry был установлен до загрузки точек)
-  Api.getQuarries()
-    .then(function(quarries) { _renderQuarrySwitcher(quarries, true); })
-    .catch(function() {})
-    .then(function() {
-      return Promise.all([Workers.load(), Points.load(), Schemes.load()]);
-    })
-    .then(function() {
-      renderWorkers();
-      renderPointsList();
-      initMapFilters();
-      initStatsFilters();
-      renderStatsPage();
-      Diagnostics.clearError();
-      Diagnostics.set('queueSize', Storage.getQueue().length);
-      hideLoader();
-      if (typeof initDitchModule === 'function') {
-        initDitchModule(function() {
-          var activeTab = document.querySelector('[data-stats-tab].active');
-          if (activeTab && activeTab.dataset.statsTab === 'ditches') {
-            if (typeof renderDitchStatsPanel === 'function') renderDitchStatsPanel();
-          }
-        });
-      }
-      if (typeof initWellsModule === 'function') {
-        initWellsModule(function() {
-          if (AppState.currentTab === 'wells' && typeof renderWellsPage === 'function') renderWellsPage();
-        });
-      }
-    })
-    .catch(function(err) {
-      Diagnostics.setError('sync', 'Начальная загрузка: ' + err.message);
-      Toast.fail('init-load', 'Ошибка загрузки данных: ' + (err.message || 'проверьте соединение'));
-      renderWorkers();
-      renderPointsList();
-      initMapFilters();
-      initStatsFilters();
-      renderStatsPage();
-      hideLoader();
-    });
+  // Workers (не зависят от карьера) и карьеры грузим параллельно
+  Promise.all([
+    Workers.load().catch(function() { return []; }),
+    Api.getQuarries().catch(function() { return []; }),
+  ]).then(function(results) {
+    renderWorkers();
+    // Устанавливаем activeQuarry ДО загрузки данных; suppressReload=true — данные
+    // грузим сами ниже, чтобы не было двойного запроса
+    _renderQuarrySwitcher(results[1] || [], true);
+    // Загружаем данные уже с правильным activeQuarry
+    return Promise.all([Points.load(), Schemes.load()]);
+  }).then(function() {
+    renderPointsList();
+    initMapFilters();
+    initStatsFilters();
+    renderStatsPage();
+    Diagnostics.clearError();
+    Diagnostics.set('queueSize', Storage.getQueue().length);
+    hideLoader();
+    if (typeof initDitchModule === 'function') {
+      initDitchModule(function() {
+        var activeTab = document.querySelector('[data-stats-tab].active');
+        if (activeTab && activeTab.dataset.statsTab === 'ditches') {
+          if (typeof renderDitchStatsPanel === 'function') renderDitchStatsPanel();
+        }
+      });
+    }
+    if (typeof initWellsModule === 'function') {
+      initWellsModule(function() {
+        if (AppState.currentTab === 'wells' && typeof renderWellsPage === 'function') renderWellsPage();
+      });
+    }
+  }).catch(function(err) {
+    Diagnostics.setError('sync', 'Начальная загрузка: ' + err.message);
+    Toast.fail('init-load', 'Ошибка загрузки данных: ' + (err.message || 'проверьте соединение'));
+    renderWorkers();
+    renderPointsList();
+    initMapFilters();
+    initStatsFilters();
+    renderStatsPage();
+    hideLoader();
+  });
 
   // Автосинхронизация — интервал из настроек
   applySyncInterval();
