@@ -12,6 +12,17 @@ var _anlCompare = '';   // сравниваемый обход
 var _anlDomain  = 'all';
 var _anlWorker  = 'all';
 
+var _anlTrend = {
+  period:    'all',  // '7d' | '14d' | '30d' | 'all'
+  chartType: 'area', // 'area' | 'line' | 'step'
+  hidden:    {},     // { wellId: true }
+  brushSt:   0,      // 0..1 fraction of periodD
+  brushEn:   1,
+  tableMode: false,
+  showWells: null,   // null = auto top-5, or array of IDs
+};
+var _anlBrDrag = { on: false }; // brush drag state (module-level to avoid listener accumulation)
+
 // ── Вспомогательные ─────────────────────────────────────────
 
 function _anlPtsForDate(date) {
@@ -859,6 +870,463 @@ function _anlRenderHorizons() {
     '<table class="anl-tbl"><thead>' + hdr + '</thead><tbody>' + rows + '</tbody></table></div>' + bars;
 }
 
+// ── Тренд: вспомогательные ───────────────────────────────────
+
+function _anlTrendWellsForPeriod(wells) {
+  // Выбираем до 5 скважин (из showWells или топ по последнему дебиту)
+  var pool = _anlTrend.showWells
+    ? wells.filter(function(w) { return _anlTrend.showWells.indexOf(w.id) >= 0; })
+    : wells;
+  var withMeas = pool.filter(function(w) {
+    return WellsState.measurements[w.id] && WellsState.measurements[w.id].length >= 2;
+  });
+  withMeas.sort(function(a, b) {
+    var ma = WellsState.measurements[a.id], mb = WellsState.measurements[b.id];
+    var qa = 0, qb = 0;
+    if (ma && ma.length) { var fa = parseFloat(ma[ma.length - 1].flowRate); if (!isNaN(fa)) qa = fa; }
+    if (mb && mb.length) { var fb = parseFloat(mb[mb.length - 1].flowRate); if (!isNaN(fb)) qb = fb; }
+    return qb - qa;
+  });
+  if (!_anlTrend.showWells) withMeas = withMeas.slice(0, 5);
+  return withMeas;
+}
+
+function _anlTrendDates(wells) {
+  var cutoff = null;
+  if (_anlTrend.period !== 'all') {
+    var days = parseInt(_anlTrend.period);
+    var d = new Date(); d.setDate(d.getDate() - days);
+    cutoff = d.toISOString().slice(0, 10);
+  }
+  var all = [];
+  wells.forEach(function(w) {
+    (WellsState.measurements[w.id] || []).forEach(function(m) {
+      var d = (m.measurementDate || '').slice(0, 10);
+      if (d && (!cutoff || d >= cutoff) && all.indexOf(d) < 0) all.push(d);
+    });
+  });
+  all.sort();
+  return all;
+}
+
+function _anlTrendBrushDates(allD) {
+  var st = Math.floor(_anlTrend.brushSt * (allD.length - 1));
+  var en = Math.ceil(_anlTrend.brushEn  * (allD.length - 1));
+  st = Math.max(0, Math.min(st, allD.length - 1));
+  en = Math.max(st + 1, Math.min(en, allD.length - 1));
+  return allD.slice(st, en + 1);
+}
+
+var _ANL_CLRS = ['#58a6ff', '#3fb950', '#f9ab00', '#d2a8ff', '#ff7b72'];
+
+function _anlDrawTrendTable(wells, allD, trendEl) {
+  var visWells = wells.filter(function(w) { return !_anlTrend.hidden[w.id]; });
+  if (!visWells.length || !allD.length) {
+    trendEl.querySelector('.anl-trend-body').innerHTML =
+      '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">Нет данных</p>';
+    return;
+  }
+  var hdr = '<tr><th style="padding:5px 8px;font-size:10px;color:var(--txt-3);border-bottom:1px solid var(--line);white-space:nowrap">Дата</th>' +
+    visWells.map(function(w, i) {
+      var ci = wells.indexOf(w);
+      var clr = _ANL_CLRS[ci % _ANL_CLRS.length];
+      return '<th style="padding:5px 8px;font-size:10px;color:' + clr + ';border-bottom:1px solid var(--line);white-space:nowrap">' + escHTML(w.name) + '</th>';
+    }).join('') +
+    '<th style="padding:5px 8px;font-size:10px;color:var(--txt-3);border-bottom:1px solid var(--line)">Итого</th></tr>';
+
+  var rows = allD.map(function(d) {
+    var total = 0;
+    var cells = visWells.map(function(w) {
+      var meas = WellsState.measurements[w.id] || [];
+      var m = null;
+      for (var k = 0; k < meas.length; k++) { if ((meas[k].measurementDate || '').slice(0, 10) === d) { m = meas[k]; break; } }
+      var q = m ? (parseFloat(m.flowRate) || 0) : null;
+      if (q !== null) total += q;
+      return '<td style="padding:4px 8px;font-size:11px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04)">' +
+        (q !== null ? q.toFixed(2) : '<span style="color:var(--txt-3)">—</span>') + '</td>';
+    }).join('');
+    return '<tr><td style="padding:4px 8px;font-size:11px;color:var(--txt-3);border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap">' +
+      formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</td>' + cells +
+      '<td style="padding:4px 8px;font-size:11px;text-align:right;font-weight:600;border-bottom:1px solid rgba(255,255,255,.04)">' + total.toFixed(2) + '</td></tr>';
+  }).join('');
+
+  var body = trendEl.querySelector('.anl-trend-body');
+  body.innerHTML = '<div style="overflow:auto;max-height:220px"><table style="width:100%;border-collapse:collapse">' +
+    '<thead>' + hdr + '</thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function _anlDrawTrendChart(wells, allD, trendEl) {
+  var W = 440, H = 185, PL = 42, PR = 12, PT = 12, PB = 32;
+  var cW = W - PL - PR, cH = H - PT - PB;
+  var n = allD.length;
+  if (!n) return;
+
+  var visWells = wells.filter(function(w) { return !_anlTrend.hidden[w.id]; });
+  var allQ = [];
+  visWells.forEach(function(w) {
+    (WellsState.measurements[w.id] || []).forEach(function(m) {
+      var d = (m.measurementDate || '').slice(0, 10);
+      if (allD.indexOf(d) >= 0) { var f = parseFloat(m.flowRate); if (!isNaN(f)) allQ.push(f); }
+    });
+  });
+  var maxQ = (Math.max.apply(null, allQ.length ? allQ : [1]) || 1) * 1.15;
+
+  function px(i) { return PL + (n > 1 ? (i / (n - 1)) * cW : cW / 2); }
+  function py(q)  { return PT + (1 - q / maxQ) * cH; }
+
+  // Status zones
+  var zones =
+    '<rect x="' + PL + '" y="' + py(maxQ / 1.15).toFixed(1) + '" width="' + cW + '" height="' + (py(maxQ * 0.5 / 1.15) - py(maxQ / 1.15)).toFixed(1) + '" fill="rgba(63,185,80,.07)"/>' +
+    '<rect x="' + PL + '" y="' + py(maxQ * 0.5 / 1.15).toFixed(1) + '" width="' + cW + '" height="' + (py(maxQ * 0.2 / 1.15) - py(maxQ * 0.5 / 1.15)).toFixed(1) + '" fill="rgba(249,171,0,.07)"/>' +
+    '<rect x="' + PL + '" y="' + py(maxQ * 0.2 / 1.15).toFixed(1) + '" width="' + cW + '" height="' + (py(0) - py(maxQ * 0.2 / 1.15)).toFixed(1) + '" fill="rgba(234,67,53,.07)"/>';
+
+  // Grid lines + Y labels
+  var yTicks = [0, 0.25, 0.5, 0.75, 1].map(function(f) { return maxQ * f; });
+  var grid = yTicks.map(function(q) {
+    return '<line x1="' + PL + '" y1="' + py(q).toFixed(1) + '" x2="' + (W - PR) + '" y2="' + py(q).toFixed(1) + '" stroke="rgba(255,255,255,.06)" stroke-width="1"/>' +
+           '<text x="' + (PL - 4) + '" y="' + (py(q) + 3.5).toFixed(1) + '" fill="var(--txt-3)" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
+  }).join('') + '<text x="12" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="9" text-anchor="middle" transform="rotate(-90 12 ' + (PT + cH / 2) + ')">м³/ч</text>';
+
+  // Gradient defs
+  var gradDefs = wells.map(function(w, si) {
+    var clr = _ANL_CLRS[si % _ANL_CLRS.length];
+    return '<linearGradient id="aTG' + si + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + clr + '" stop-opacity=".22"/>' +
+      '<stop offset="100%" stop-color="' + clr + '" stop-opacity="0"/></linearGradient>';
+  }).join('');
+
+  // Series paths
+  var series = wells.map(function(w, si) {
+    if (_anlTrend.hidden[w.id]) return '';
+    var clr = _ANL_CLRS[si % _ANL_CLRS.length];
+    var mMap = {};
+    (WellsState.measurements[w.id] || []).forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
+    var pts = allD.map(function(d, i) { return mMap[d] != null ? { x: px(i), y: py(mMap[d]), q: mMap[d] } : null; }).filter(Boolean);
+    if (!pts.length) return '';
+    var spts = pts.map(function(p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+    var smooth = _anlTrend.chartType === 'step'
+      ? 'M' + pts.map(function(p, j) { return (j ? 'H' + p.x.toFixed(1) + 'V' : '') + p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ')
+      : _anlPtsToSmooth(spts);
+    var areaPath = smooth + ' L' + pts[pts.length - 1].x.toFixed(1) + ',' + (PT + cH) + ' L' + pts[0].x.toFixed(1) + ',' + (PT + cH) + ' Z';
+    var lp = pts[pts.length - 1];
+    var dot = '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="3.5" fill="' + clr + '"/>' +
+              '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="7" fill="none" stroke="' + clr + '" stroke-width="1.2" opacity=".4"/>';
+    var showArea = _anlTrend.chartType === 'area';
+    return (showArea ? '<path d="' + areaPath + '" fill="url(#aTG' + si + ')"/>' : '') +
+           '<path class="anl-trend-line" data-wi="' + w.id + '" d="' + smooth + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+           dot;
+  }).join('');
+
+  // X axis labels
+  var step = Math.max(1, Math.ceil(n / 6));
+  var xL = allD.map(function(d, i) {
+    if (i % step !== 0 && i !== n - 1) return '';
+    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - PB + 14) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="middle">' +
+      formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
+  }).join('');
+
+  // Crosshair overlay (invisible rect to capture mouse)
+  var overlay = '<rect class="anl-trend-overlay" x="' + PL + '" y="' + PT + '" width="' + cW + '" height="' + cH + '" fill="transparent"/>' +
+    '<line class="anl-trend-xhair" x1="-9999" y1="' + PT + '" x2="-9999" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="4,3" pointer-events="none"/>';
+
+  var body = trendEl.querySelector('.anl-trend-body');
+  body.innerHTML = '<div style="position:relative">' +
+    '<svg id="anl-trend-svg" viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+    '<defs>' + gradDefs + '</defs>' +
+    '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.08)" stroke-width="1"/>' +
+    '<line x1="' + PL + '" y1="' + (PT + cH) + '" x2="' + (W - PR) + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.08)" stroke-width="1"/>' +
+    zones + grid + series + xL + overlay + '</svg>' +
+    '<div id="anl-trend-tip" style="position:absolute;display:none;pointer-events:none;background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:11px;min-width:120px;box-shadow:0 4px 16px rgba(0,0,0,.35);z-index:20"></div>' +
+    '</div>';
+}
+
+function _anlDrawTrendBrush(wells, allD, trendEl) {
+  var BW = 440, BH = 44, BPL = 42, BPR = 12, BPT = 4, BPB = 4;
+  var bcW = BW - BPL - BPR, bcH = BH - BPT - BPB;
+  var n = allD.length;
+  if (n < 2) return;
+
+  function bpx(i) { return BPL + (i / (n - 1)) * bcW; }
+  var allQ = [];
+  wells.forEach(function(w) {
+    (WellsState.measurements[w.id] || []).forEach(function(m) {
+      var d = (m.measurementDate || '').slice(0, 10);
+      if (allD.indexOf(d) >= 0) { var f = parseFloat(m.flowRate); if (!isNaN(f)) allQ.push(f); }
+    });
+  });
+  var maxQ = Math.max.apply(null, allQ.length ? allQ : [1]) || 1;
+  function bpy(q) { return BPT + (1 - q / maxQ) * bcH; }
+
+  var miniSeries = wells.map(function(w, si) {
+    if (_anlTrend.hidden[w.id]) return '';
+    var clr = _ANL_CLRS[si % _ANL_CLRS.length];
+    var mMap = {};
+    (WellsState.measurements[w.id] || []).forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
+    var pts = allD.map(function(d, i) { return mMap[d] != null ? bpx(i).toFixed(1) + ',' + bpy(mMap[d]).toFixed(1) : null; }).filter(Boolean);
+    return pts.length >= 2 ? '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + clr + '" stroke-width="1.2" opacity=".6"/>' : '';
+  }).join('');
+
+  var bx1 = bpx(_anlTrend.brushSt * (n - 1)), bx2 = bpx(_anlTrend.brushEn * (n - 1));
+  var selW = Math.max(4, bx2 - bx1);
+
+  var brushSvg =
+    '<svg id="anl-brush-svg" viewBox="0 0 ' + BW + ' ' + BH + '" style="width:100%;display:block;cursor:crosshair">' +
+    '<rect x="' + BPL + '" y="' + BPT + '" width="' + bcW + '" height="' + bcH + '" fill="rgba(255,255,255,.03)" rx="2"/>' +
+    miniSeries +
+    '<rect id="anl-brush-sel" x="' + bx1.toFixed(1) + '" y="' + BPT + '" width="' + selW.toFixed(1) + '" height="' + bcH + '" fill="rgba(88,166,255,.15)" stroke="rgba(88,166,255,.5)" stroke-width="1" rx="2" style="cursor:ew-resize"/>' +
+    '<line id="anl-brush-lh" x1="' + bx1.toFixed(1) + '" y1="' + BPT + '" x2="' + bx1.toFixed(1) + '" y2="' + (BPT + bcH) + '" stroke="rgba(88,166,255,.8)" stroke-width="2" style="cursor:ew-resize"/>' +
+    '<line id="anl-brush-rh" x1="' + bx2.toFixed(1) + '" y1="' + BPT + '" x2="' + bx2.toFixed(1) + '" y2="' + (BPT + bcH) + '" stroke="rgba(88,166,255,.8)" stroke-width="2" style="cursor:ew-resize"/>' +
+    '</svg>';
+
+  var brushWrap = trendEl.querySelector('.anl-trend-brush');
+  if (brushWrap) brushWrap.innerHTML = brushSvg;
+}
+
+function _anlDrawTrend(wells, trendEl) {
+  if (!trendEl) return;
+  var visWells = _anlTrendWellsForPeriod(wells);
+
+  if (!visWells.length) {
+    var anyLoaded = wells.some(function(w) { return WellsState.measurements[w.id] !== undefined; });
+    trendEl.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">' +
+      (anyLoaded ? 'Недостаточно данных (нужно ≥2 замера на скважину)' : 'Замеры загружаются…') + '</p>';
+    return;
+  }
+
+  var allDFull = _anlTrendDates(visWells);
+  var allD = _anlTrendBrushDates(allDFull);
+
+  // Toolbar
+  var periodBtns = ['7d', '14d', '30d', 'all'].map(function(p) {
+    var lbl = p === 'all' ? 'Всё' : p.replace('d', 'д');
+    var act = _anlTrend.period === p;
+    return '<button class="anl-tb-btn' + (act ? ' anl-tb-btn-on' : '') + '" data-period="' + p + '">' + lbl + '</button>';
+  }).join('');
+
+  var typeBtns = [['area', 'Область'], ['line', 'Линия'], ['step', 'Ступень']].map(function(t) {
+    var act = _anlTrend.chartType === t[0];
+    return '<button class="anl-tb-btn' + (act ? ' anl-tb-btn-on' : '') + '" data-ctype="' + t[0] + '">' + t[1] + '</button>';
+  }).join('');
+
+  // Well selector
+  var allWellsWithMeas = wells.filter(function(w) { return WellsState.measurements[w.id] && WellsState.measurements[w.id].length >= 1; });
+  var wellOpts = allWellsWithMeas.map(function(w, i) {
+    var sel = !_anlTrend.showWells || _anlTrend.showWells.indexOf(w.id) >= 0;
+    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 10px;cursor:pointer;white-space:nowrap">' +
+      '<input type="checkbox" data-wid="' + w.id + '" ' + (sel ? 'checked' : '') + ' style="accent-color:' + _ANL_CLRS[i % _ANL_CLRS.length] + '">' +
+      '<span style="font-size:12px">' + escHTML(w.name) + '</span></label>';
+  }).join('');
+
+  var legend = visWells.map(function(w, i) {
+    var clr = _ANL_CLRS[i % _ANL_CLRS.length];
+    var hidden = _anlTrend.hidden[w.id];
+    return '<span class="anl-leg-item" data-lwid="' + w.id + '" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;opacity:' + (hidden ? 0.35 : 1) + '">' +
+      '<span style="display:inline-block;width:16px;height:2px;background:' + clr + ';border-radius:1px"></span>' +
+      '<span style="font-size:10px;color:var(--txt-2)">' + escHTML(w.name) + '</span></span>';
+  }).join('');
+
+  var tableBtnLbl = _anlTrend.tableMode ? 'График' : 'Таблица';
+
+  trendEl.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">' +
+      '<div style="display:flex;align-items:center;gap:4px">' +
+        '<span style="font-size:10px;color:var(--txt-3);margin-right:4px">Период:</span>' + periodBtns +
+        '<span style="font-size:10px;color:var(--txt-3);margin-left:10px;margin-right:4px">Тип:</span>' + typeBtns +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<div style="position:relative">' +
+          '<button class="anl-tb-btn" id="anl-well-sel-btn">Скважины ▾</button>' +
+          '<div id="anl-well-sel-drop" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg-2);border:1px solid var(--line);border-radius:8px;z-index:30;min-width:150px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4)">' +
+            wellOpts + '</div>' +
+        '</div>' +
+        '<button class="anl-tb-btn" id="anl-table-toggle">' + tableBtnLbl + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">' + legend + '</div>' +
+    '<div class="anl-trend-body"></div>' +
+    '<div class="anl-trend-brush" style="margin-top:6px"></div>';
+
+  if (_anlTrend.tableMode) {
+    _anlDrawTrendTable(visWells, allD, trendEl);
+  } else {
+    _anlDrawTrendChart(visWells, allD, trendEl);
+    _anlDrawTrendBrush(visWells, allDFull, trendEl);
+  }
+
+  _anlSetupTrendInteractions(wells, visWells, allDFull, trendEl);
+}
+
+function _anlSetupTrendInteractions(allWells, visWells, allDFull, trendEl) {
+  // Period buttons
+  trendEl.querySelectorAll('[data-period]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _anlTrend.period = btn.getAttribute('data-period');
+      _anlTrend.brushSt = 0; _anlTrend.brushEn = 1;
+      _anlDrawTrend(allWells, trendEl);
+    });
+  });
+
+  // Chart type buttons
+  trendEl.querySelectorAll('[data-ctype]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _anlTrend.chartType = btn.getAttribute('data-ctype');
+      _anlDrawTrend(allWells, trendEl);
+    });
+  });
+
+  // Well selector dropdown
+  var selBtn = trendEl.querySelector('#anl-well-sel-btn');
+  var selDrop = trendEl.querySelector('#anl-well-sel-drop');
+  if (selBtn && selDrop) {
+    selBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      selDrop.style.display = selDrop.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', function() { if (selDrop) selDrop.style.display = 'none'; }, { once: true });
+    selDrop.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        var checked = Array.from(selDrop.querySelectorAll('input[type=checkbox]:checked')).map(function(c) { return c.getAttribute('data-wid'); });
+        _anlTrend.showWells = checked.length ? checked : null;
+        _anlTrend.brushSt = 0; _anlTrend.brushEn = 1;
+        _anlDrawTrend(allWells, trendEl);
+      });
+    });
+  }
+
+  // Table toggle
+  var tableBtn = trendEl.querySelector('#anl-table-toggle');
+  if (tableBtn) {
+    tableBtn.addEventListener('click', function() {
+      _anlTrend.tableMode = !_anlTrend.tableMode;
+      _anlDrawTrend(allWells, trendEl);
+    });
+  }
+
+  // Clickable legend
+  trendEl.querySelectorAll('.anl-leg-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      var wid = item.getAttribute('data-lwid');
+      if (wid) {
+        _anlTrend.hidden[wid] = !_anlTrend.hidden[wid];
+        _anlDrawTrend(allWells, trendEl);
+      }
+    });
+  });
+
+  // Crosshair + tooltip
+  var svg = trendEl.querySelector('#anl-trend-svg');
+  var overlay = svg && svg.querySelector('.anl-trend-overlay');
+  var xhair = svg && svg.querySelector('.anl-trend-xhair');
+  var tip = trendEl.querySelector('#anl-trend-tip');
+  if (overlay && xhair && tip && svg) {
+    var allD = _anlTrendBrushDates(allDFull);
+    var W = 440, PL = 42, PR = 12, PT = 12, PB = 32;
+    var cW = W - PL - PR, cH = W - PT - PB;
+    function getSvgX(e) {
+      var r = svg.getBoundingClientRect();
+      var svgW = r.width || 1;
+      return ((e.clientX - r.left) / svgW) * W;
+    }
+    overlay.addEventListener('mousemove', function(e) {
+      var svgX = getSvgX(e);
+      var frac = (svgX - PL) / cW;
+      frac = Math.max(0, Math.min(1, frac));
+      var idx = Math.round(frac * (allD.length - 1));
+      var d = allD[idx];
+      if (!d) return;
+      var cx = PL + (allD.length > 1 ? (idx / (allD.length - 1)) * cW : cW / 2);
+      xhair.setAttribute('x1', cx.toFixed(1));
+      xhair.setAttribute('x2', cx.toFixed(1));
+      var rows = visWells.map(function(w, i) {
+        if (_anlTrend.hidden[w.id]) return '';
+        var clr = _ANL_CLRS[i % _ANL_CLRS.length];
+        var meas = WellsState.measurements[w.id] || [];
+        var m = null;
+        for (var k = 0; k < meas.length; k++) { if ((meas[k].measurementDate || '').slice(0, 10) === d) { m = meas[k]; break; } }
+        var q = m ? (parseFloat(m.flowRate) || 0) : null;
+        return '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center">' +
+          '<span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + clr + '"></span>' + escHTML(w.name) + '</span>' +
+          '<b style="color:' + clr + '">' + (q !== null ? q.toFixed(2) + ' м³/ч' : '—') + '</b></div>';
+      }).filter(Boolean).join('');
+      tip.innerHTML = '<div style="color:var(--txt-3);font-size:10px;margin-bottom:5px">' + formatMonitoringDate(d) + '</div>' + rows;
+      var svgRect = svg.getBoundingClientRect();
+      var wrapRect = tip.parentElement.getBoundingClientRect();
+      var relX = e.clientX - wrapRect.left + 12;
+      var relY = e.clientY - wrapRect.top - 10;
+      tip.style.left = relX + 'px';
+      tip.style.top = relY + 'px';
+      tip.style.display = 'block';
+    });
+    overlay.addEventListener('mouseleave', function() {
+      xhair.setAttribute('x1', '-9999');
+      xhair.setAttribute('x2', '-9999');
+      tip.style.display = 'none';
+    });
+  }
+
+  // Brush interactions
+  if (!_anlTrend.tableMode) {
+    var brushSvg = trendEl.querySelector('#anl-brush-svg');
+    if (brushSvg && allDFull.length >= 2) {
+      var BPL = 42, BPR = 12, BW = 440;
+      var bcW = BW - BPL - BPR;
+      function fracFromBrushX(svgX) { return Math.max(0, Math.min(1, (svgX - BPL) / bcW)); }
+      function getBrushSvgX(e) {
+        var r = brushSvg.getBoundingClientRect();
+        return ((e.clientX - r.left) / (r.width || 1)) * BW;
+      }
+
+      var dragMode = null; // 'left' | 'right' | 'move' | 'new'
+      var dragStartX = 0, dragStartSt = 0, dragStartEn = 0;
+
+      function onBrushMove(e) {
+        if (!_anlBrDrag.on) return;
+        var fx = fracFromBrushX(getBrushSvgX(e));
+        if (dragMode === 'left') {
+          _anlTrend.brushSt = Math.max(0, Math.min(fx, _anlTrend.brushEn - 0.05));
+        } else if (dragMode === 'right') {
+          _anlTrend.brushEn = Math.min(1, Math.max(fx, _anlTrend.brushSt + 0.05));
+        } else if (dragMode === 'move') {
+          var span = dragStartEn - dragStartSt;
+          var delta = fx - fracFromBrushX(dragStartX);
+          var newSt = Math.max(0, Math.min(1 - span, dragStartSt + delta));
+          _anlTrend.brushSt = newSt;
+          _anlTrend.brushEn = newSt + span;
+        } else if (dragMode === 'new') {
+          var anchor = fracFromBrushX(dragStartX);
+          if (fx > anchor) { _anlTrend.brushSt = anchor; _anlTrend.brushEn = Math.min(1, fx); }
+          else { _anlTrend.brushSt = Math.max(0, fx); _anlTrend.brushEn = anchor; }
+        }
+        _anlDrawTrend(allWells, trendEl);
+      }
+      function onBrushUp() {
+        _anlBrDrag.on = false;
+        dragMode = null;
+        document.removeEventListener('mousemove', onBrushMove);
+        document.removeEventListener('mouseup', onBrushUp);
+      }
+
+      brushSvg.addEventListener('mousedown', function(e) {
+        var svgX = getBrushSvgX(e);
+        var fx = fracFromBrushX(svgX);
+        var lhX = BPL + _anlTrend.brushSt * bcW;
+        var rhX = BPL + _anlTrend.brushEn * bcW;
+        _anlBrDrag.on = true;
+        dragStartX = svgX;
+        dragStartSt = _anlTrend.brushSt;
+        dragStartEn = _anlTrend.brushEn;
+        if (Math.abs(svgX - lhX) < 8) dragMode = 'left';
+        else if (Math.abs(svgX - rhX) < 8) dragMode = 'right';
+        else if (svgX >= lhX && svgX <= rhX) dragMode = 'move';
+        else dragMode = 'new';
+        document.addEventListener('mousemove', onBrushMove);
+        document.addEventListener('mouseup', onBrushUp);
+        e.preventDefault();
+      });
+    }
+  }
+}
+
 // ── Скважины ─────────────────────────────────────────────────
 function _anlRenderWells() {
   var wells = (typeof WellsState !== 'undefined') ? WellsState.list : [];
@@ -927,125 +1395,7 @@ function _anlRenderWells() {
   }
 
   // Тренд скважин
-  var trendEl = document.getElementById('anl-well-trend');
-  if (trendEl) {
-    // Фильтруем скважины с ≥2 замерами, сортируем по последнему дебиту (как в рейтинге)
-    var withMeas = wells.filter(function(w) {
-      return WellsState.measurements[w.id] && WellsState.measurements[w.id].length >= 2;
-    });
-    withMeas.sort(function(a, b) {
-      var ma = WellsState.measurements[a.id], mb = WellsState.measurements[b.id];
-      var qa = 0, qb = 0;
-      if (ma && ma.length) { var fa = parseFloat(ma[ma.length - 1].flowRate); if (!isNaN(fa)) qa = fa; }
-      if (mb && mb.length) { var fb = parseFloat(mb[mb.length - 1].flowRate); if (!isNaN(fb)) qb = fb; }
-      return qb - qa;
-    });
-    withMeas = withMeas.slice(0, 3);
-
-    if (!withMeas.length) {
-      var anyLoaded = wells.some(function(w) { return WellsState.measurements[w.id] !== undefined; });
-      trendEl.innerHTML = '<p style="color:var(--txt-3);font-size:12px;padding:16px;text-align:center">' +
-        (anyLoaded ? 'Недостаточно данных для тренда (нужно ≥2 замера на скважину)' : 'Замеры загружаются…') + '</p>';
-      return;
-    }
-
-    var clrs = ['#58a6ff', '#3fb950', '#f9ab00'];
-    var allD = [];
-    withMeas.forEach(function(w) {
-      WellsState.measurements[w.id].forEach(function(m) {
-        var d = (m.measurementDate || '').slice(0, 10);
-        if (d && allD.indexOf(d) < 0) allD.push(d);
-      });
-    });
-    allD.sort();
-
-    var allQ = [];
-    withMeas.forEach(function(w) { WellsState.measurements[w.id].forEach(function(m) { var f = parseFloat(m.flowRate); if (!isNaN(f)) allQ.push(f); }); });
-    var maxQ = (Math.max.apply(null, allQ) || 1) * 1.15;
-
-    var W = 440, H = 185, PL = 40, PR = 10, PT = 10, PB = 30;
-    var cW = W - PL - PR, cH = H - PT - PB;
-    var n  = allD.length;
-    function px(i) { return PL + (i / Math.max(n - 1, 1)) * cW; }
-    function py(q)  { return PT + (1 - q / maxQ) * cH; }
-
-    var grid = [0, maxQ / 2, maxQ].map(function(q) {
-      return '<line x1="' + PL + '" y1="' + py(q).toFixed(1) + '" x2="' + (W - PR) + '" y2="' + py(q).toFixed(1) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
-             '<text x="' + (PL - 4) + '" y="' + (py(q) + 3).toFixed(1) + '" fill="var(--txt-3)" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
-    }).join('') +
-    '<text x="14" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="9" text-anchor="middle" transform="rotate(-90 14 ' + (PT + cH / 2) + ')">м³/ч</text>';
-
-    var gradDefs = withMeas.map(function(w, si) {
-      var clr = clrs[si];
-      return '<linearGradient id="wTG' + si + '" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0%" stop-color="' + clr + '" stop-opacity=".18"/>' +
-        '<stop offset="100%" stop-color="' + clr + '" stop-opacity="0"/>' +
-        '</linearGradient>';
-    }).join('');
-
-    var series = withMeas.map(function(w, si) {
-      var clr = clrs[si], mMap = {};
-      WellsState.measurements[w.id].forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
-      var validPts = allD.map(function(d, i) { return mMap[d] != null ? { x: px(i), y: py(mMap[d]), q: mMap[d] } : null; }).filter(Boolean);
-      var spts = validPts.map(function(pt) { return pt.x.toFixed(1) + ',' + pt.y.toFixed(1); }).join(' ');
-      var smoothPath = _anlPtsToSmooth(spts);
-      var dashAttr = si > 0 ? ' stroke-dasharray="' + (si * 4 + 4) + ',3"' : '';
-      // Area fill
-      var lastX = validPts.length ? validPts[validPts.length - 1].x : px(n - 1);
-      var firstX = validPts.length ? validPts[0].x : px(0);
-      var areaPath = smoothPath + ' L' + lastX.toFixed(1) + ',' + (PT + cH) + ' L' + firstX.toFixed(1) + ',' + (PT + cH) + ' Z';
-      // Value label: left-anchored when near right edge to avoid SVG clipping
-      var lastPt = validPts.length ? validPts[validPts.length - 1] : null;
-      var valLabel = '';
-      if (lastPt && lastPt.q > 0) {
-        var nearRight = lastPt.x > W - PR - 28;
-        var lx = nearRight ? (lastPt.x - 3).toFixed(1) : (lastPt.x + 3).toFixed(1);
-        var anchor = nearRight ? 'end' : 'start';
-        var ly = Math.max(PT + 8, lastPt.y - 4).toFixed(1);
-        valLabel = '<text x="' + lx + '" y="' + ly + '" fill="' + clr + '" font-size="8" font-weight="700" text-anchor="' + anchor + '">' + lastPt.q.toFixed(1) + '</text>';
-      }
-      return '<path d="' + areaPath + '" fill="url(#wTG' + si + ')"/>' +
-             '<path d="' + smoothPath + '" fill="none" stroke="' + clr + '" stroke-width="2"' + dashAttr + '/>' +
-             valLabel;
-    }).join('');
-
-    var step = Math.ceil(n / 5);
-    var xL = allD.filter(function(_, i) { return i % step === 0 || i === n - 1; }).map(function(d) {
-      return '<text x="' + px(allD.indexOf(d)).toFixed(1) + '" y="' + (H - PB + 14) + '" fill="var(--txt-3)" font-size="8" text-anchor="middle">' + formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
-    }).join('');
-
-    // Highlight rings at last data point per series
-    var rings = withMeas.map(function(w, si) {
-      var clr = clrs[si], mMap = {};
-      WellsState.measurements[w.id].forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
-      var validPts = allD.map(function(d, i) { return mMap[d] != null ? { x: px(i), y: py(mMap[d]) } : null; }).filter(Boolean);
-      if (!validPts.length) return '';
-      var lp = validPts[validPts.length - 1];
-      return '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="6" fill="none" stroke="' + clr + '" stroke-width="1.5" opacity=".45"/>' +
-             '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="3" fill="' + clr + '"/>';
-    }).join('');
-
-    // HTML legend above SVG
-    var legHtml =
-      '<div style="display:flex;align-items:center;justify-content:space-between;' +
-      'margin-bottom:4px;font-size:10px;color:var(--txt-2)">' +
-        '<div style="display:flex;gap:12px;align-items:center">' +
-          withMeas.map(function(w, i) {
-            var dashStyle = i > 0 ? 'border-bottom:2px dashed ' + clrs[i] : 'border-bottom:2px solid ' + clrs[i];
-            return '<span style="display:flex;align-items:center;gap:5px">' +
-              '<span style="display:inline-block;width:18px;height:2px;' + dashStyle + ';vertical-align:middle"></span>' +
-              escHTML(w.name) +
-            '</span>';
-          }).join('') +
-        '</div>' +
-        '<span style="color:var(--txt-3)">Последние ' + n + ' замеров</span>' +
-      '</div>';
-
-    trendEl.innerHTML = legHtml + '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
-      '<defs>' + gradDefs + '</defs>' +
-      '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
-      grid + series + rings + xL + '</svg>';
-  }
+  _anlDrawTrend(wells, document.getElementById('anl-well-trend'));
 }
 
 function renderHorizonBreakdown(byHorizon) {
