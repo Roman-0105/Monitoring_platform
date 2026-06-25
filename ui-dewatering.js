@@ -2586,9 +2586,10 @@ function _dewRenderQuickEntry(date) {
     pumps.forEach(function(p) {
       var existing = DewateringState.readingForDate(p.id, date);
       var prevRec  = DewateringState.lastActualReading(p.id, date);
-      var prevVal  = prevRec ? prevRec.reading : null;
+      var prevVal  = prevRec ? (prevRec.isReset ? (parseFloat(prevRec.resetStartValue) || 0) : parseFloat(prevRec.reading)) : null;
       var prevDate = prevRec ? prevRec.date : null;
-      var isStopped = existing ? existing.isStopped : false;
+      var isStopped = existing ? !!existing.isStopped : false;
+      var isReset   = existing ? !!existing.isReset   : false;
 
       html +=
         '<div style="padding:8px 0;border-top:1px solid var(--line-2)" data-pump-id="' + p.id + '">' +
@@ -2602,21 +2603,41 @@ function _dewRenderQuickEntry(date) {
           ' Насос не работал (простой)' +
         '</label>' +
         '<div id="dew-qe-fields-' + p.id + '" style="' + (isStopped ? 'display:none' : '') + '">' +
-          '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">' +
-            '<div>' +
-              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Пред. показание ' + (prevDate ? '(' + prevDate + ')' : '(нет данных)') + '</div>' +
-              '<div style="font-size:13px;font-weight:600;color:var(--txt-2);min-width:80px">' + (prevVal != null ? parseFloat(prevVal).toFixed(0) + ' м³' : '—') + '</div>' +
-            '</div>' +
-            '<div>' +
-              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Показание на 6:00 ' + (date || '') + '</div>' +
-              '<input type="number" id="dew-qe-val-' + p.id + '" class="form-control" value="' + (existing && !existing.isStopped ? existing.reading || '' : '') + '" placeholder="м³ накоп." style="width:110px;font-size:13px" oninput="_dewQeCalcVol(\'' + p.id + '\',' + (prevVal != null ? prevVal : 'null') + ')">' +
-            '</div>' +
-            '<div>' +
-              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Объём за сутки</div>' +
-              '<div id="dew-qe-vol-' + p.id + '" style="font-size:13px;font-weight:600;min-width:70px;color:var(--ok)">' +
-                _dewCalcVolDisplay(existing, prevVal) +
+          '<label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;margin-bottom:6px;color:' + (isReset ? 'var(--gold)' : 'var(--txt-3)') + '">' +
+            '<input type="checkbox" id="dew-qe-reset-chk-' + p.id + '"' + (isReset ? ' checked' : '') + ' onchange="_dewQeToggleReset(\'' + p.id + '\')">' +
+            ' 🔄 Замена расходомера / сброс показаний' +
+          '</label>' +
+          '<div id="dew-qe-normal-fields-' + p.id + '"' + (isReset ? ' style="display:none"' : '') + '>' +
+            '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px">' +
+              '<div>' +
+                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Пред. показание ' + (prevDate ? '(' + prevDate + ')' : '(нет данных)') + '</div>' +
+                '<div style="font-size:13px;font-weight:600;color:var(--txt-2);min-width:80px">' + (prevVal != null ? parseFloat(prevVal).toFixed(0) + ' м³' : '—') + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Показание на 6:00 ' + (date || '') + '</div>' +
+                '<input type="number" id="dew-qe-val-' + p.id + '" class="form-control" value="' + (existing && !existing.isStopped && !existing.isReset ? existing.reading || '' : '') + '" placeholder="м³ накоп." style="width:110px;font-size:13px" oninput="_dewQeCalcVol(\'' + p.id + '\',' + (prevVal != null ? prevVal : 'null') + ')">' +
+              '</div>' +
+              '<div>' +
+                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Объём за сутки</div>' +
+                '<div id="dew-qe-vol-' + p.id + '" style="font-size:13px;font-weight:600;min-width:70px;color:var(--ok)">' +
+                  _dewCalcVolDisplay(existing, prevVal) +
+                '</div>' +
               '</div>' +
             '</div>' +
+          '</div>' +
+          '<div id="dew-qe-reset-fields-' + p.id + '"' + (!isReset ? ' style="display:none"' : '') + '>' +
+            '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">' +
+              '<div class="form-group" style="margin:0">' +
+                '<label class="form-label" style="font-size:9px">Нач. показание нового счётчика, м³</label>' +
+                '<input type="number" id="dew-qe-reset-start-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.resetStartValue != null ? existing.resetStartValue : '')) + '" placeholder="0" style="width:150px;font-size:13px;font-weight:600">' +
+              '</div>' +
+              '<div class="form-group" style="margin:0">' +
+                '<label class="form-label" style="font-size:9px">Объём по старому счётчику (необяз.)</label>' +
+                '<input type="number" id="dew-qe-reset-vol-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.manualVolume != null ? existing.manualVolume : '')) + '" placeholder="м³" style="width:110px;font-size:12px">' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">' +
             _dewDistBlock(p.id) +
             '<div>' +
               '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Часов работы</div>' +
@@ -2652,6 +2673,7 @@ function _dewRenderQuickEntry(date) {
 function _dewCalcVolDisplay(existing, prevVal) {
   if (!existing) return '<span style="color:var(--txt-3)">—</span>';
   if (existing.isStopped) return '<span style="color:var(--txt-3)">простой</span>';
+  if (existing.isReset)   return '<span style="color:var(--gold)">🔄 замена</span>';
   if (existing.isManualVolume) return (parseFloat(existing.manualVolume) || 0).toFixed(0) + ' м³';
   if (prevVal == null) return '<span style="color:var(--txt-3)">нет пред.</span>';
   var diff = parseFloat(existing.reading) - parseFloat(prevVal);
@@ -2678,6 +2700,15 @@ function _dewQeToggleStopped(pumpId) {
   if (reason)  reason.style.display  = chk.checked ? '' : 'none';
 }
 
+function _dewQeToggleReset(pumpId) {
+  var chk    = document.getElementById('dew-qe-reset-chk-'     + pumpId);
+  var normal = document.getElementById('dew-qe-normal-fields-' + pumpId);
+  var reset  = document.getElementById('dew-qe-reset-fields-'  + pumpId);
+  if (!chk) return;
+  if (normal) normal.style.display = chk.checked ? 'none' : '';
+  if (reset)  reset.style.display  = chk.checked ? ''     : 'none';
+}
+
 function _dewSaveQuickEntry() {
   var date = document.getElementById('dew-jr-date') ? document.getElementById('dew-jr-date').value : _dewJFilter.date;
   if (!date) { Toast.show('Укажите дату', 'warning'); return; }
@@ -2687,19 +2718,29 @@ function _dewSaveQuickEntry() {
     var stoppedChk = document.getElementById('dew-qe-stopped-' + p.id);
     if (!stoppedChk) return;
 
-    var isStopped = stoppedChk.checked;
-    var existing  = DewateringState.readingForDate(p.id, date);
+    var isStopped  = stoppedChk.checked;
+    var resetChkEl = document.getElementById('dew-qe-reset-chk-' + p.id);
+    var isReset    = !isStopped && !!(resetChkEl && resetChkEl.checked);
+    var existing   = DewateringState.readingForDate(p.id, date);
 
     var data = {
       pumpId: p.id,
       date:   date,
       isStopped: isStopped,
       downtimeReason: isStopped ? ((document.getElementById('dew-qe-dreason-' + p.id) || {}).value || '').trim() : '',
-      isReset: false,
+      isReset: isReset,
       isManualVolume: false,
     };
 
-    if (!isStopped) {
+    if (!isStopped && isReset) {
+      var resetStartEl = document.getElementById('dew-qe-reset-start-' + p.id);
+      data.resetStartValue = resetStartEl ? (parseFloat(resetStartEl.value) || 0) : 0;
+      var resetVolEl = document.getElementById('dew-qe-reset-vol-' + p.id);
+      data.manualVolume  = resetVolEl && resetVolEl.value.trim() !== '' ? (parseFloat(resetVolEl.value) || 0) : null;
+      data.hoursWorked   = parseFloat((document.getElementById('dew-qe-hrs-'   + p.id) || {}).value) || null;
+      data.distributions = _dewGetDistributions(p.id);
+      data.notes         = ((document.getElementById('dew-qe-notes-' + p.id) || {}).value || '').trim();
+    } else if (!isStopped) {
       var valEl = document.getElementById('dew-qe-val-' + p.id);
       if (!valEl || valEl.value.trim() === '') return;
       data.reading      = parseFloat(valEl.value);
