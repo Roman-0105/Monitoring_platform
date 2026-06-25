@@ -169,10 +169,15 @@ var DewateringState = {
     if (!rec) return null;
     if (rec.isStopped) return 0;
     if (rec.isManualVolume) return parseFloat(rec.manualVolume) || 0;
-    if (rec.isReset) return parseFloat(rec.manualVolume) || 0;
+    if (rec.isReset) {
+      var endReading = parseFloat(rec.manualVolume);
+      return isNaN(endReading) ? 0 : Math.max(0, endReading - (parseFloat(rec.resetStartValue) || 0));
+    }
     var prev = this.lastActualReading(rec.pumpId, rec.date);
     if (!prev) return null;
-    var baseVal = prev.isReset ? (parseFloat(prev.resetStartValue) || 0) : parseFloat(prev.reading);
+    var baseVal = prev.isReset
+      ? (prev.manualVolume != null ? parseFloat(prev.manualVolume) : (parseFloat(prev.resetStartValue) || 0))
+      : parseFloat(prev.reading);
     var diff = parseFloat(rec.reading) - baseVal;
     return diff >= 0 ? diff : null;
   },
@@ -1653,7 +1658,7 @@ function _dewOpenFillModal(sumpId, date) {
   var pumpSectionsHtml = activePumps.map(function(p) {
     var existing = DewateringState.readingForDate(p.id, modalDate);
     var prevRec  = DewateringState.lastActualReading(p.id, modalDate);
-    var prevVal  = prevRec ? (prevRec.isReset ? (parseFloat(prevRec.resetStartValue) || 0) : parseFloat(prevRec.reading)) : null;
+    var prevVal  = prevRec ? (prevRec.isReset ? (prevRec.manualVolume != null ? parseFloat(prevRec.manualVolume) : (parseFloat(prevRec.resetStartValue) || 0)) : parseFloat(prevRec.reading)) : null;
     var prevDate = prevRec ? prevRec.date : null;
     var isStopped = existing ? !!existing.isStopped : false;
     var isReset   = existing ? !!existing.isReset   : false;
@@ -1661,7 +1666,7 @@ function _dewOpenFillModal(sumpId, date) {
 
     // Volume to show if existing reading already saved
     var curReadingVal = existing && !existing.isStopped && !existing.isReset && existing.reading != null ? parseFloat(existing.reading) : null;
-    var initVol = isReset   ? (parseFloat(existing && existing.manualVolume) || 0)
+    var initVol = isReset   ? DewateringState.computedVolume(existing)
                 : (curReadingVal != null && prevVal != null) ? (curReadingVal - prevVal) : null;
     var initVolHtml = isStopped ? '<span style="color:var(--txt-3)">простой</span>'
                     : isReset   ? '<span style="color:var(--gold)">🔄 замена</span>'
@@ -1710,7 +1715,7 @@ function _dewOpenFillModal(sumpId, date) {
               '<input type="number" id="dew-modal-reset-start-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.resetStartValue != null ? existing.resetStartValue : '')) + '" placeholder="0" style="width:160px;font-size:14px;font-weight:600">' +
             '</div>' +
             '<div class="form-group" style="margin:0">' +
-              '<label class="form-label" style="font-size:9px">Объём по старому счётчику (необяз.)</label>' +
+              '<label class="form-label" style="font-size:9px">Показание нового счётчика на 06:00 (необяз.)</label>' +
               '<input type="number" id="dew-modal-reset-vol-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.manualVolume != null ? existing.manualVolume : '')) + '" placeholder="м³" style="width:120px;font-size:12px">' +
             '</div>' +
           '</div>' +
@@ -2586,7 +2591,7 @@ function _dewRenderQuickEntry(date) {
     pumps.forEach(function(p) {
       var existing = DewateringState.readingForDate(p.id, date);
       var prevRec  = DewateringState.lastActualReading(p.id, date);
-      var prevVal  = prevRec ? (prevRec.isReset ? (parseFloat(prevRec.resetStartValue) || 0) : parseFloat(prevRec.reading)) : null;
+      var prevVal  = prevRec ? (prevRec.isReset ? (prevRec.manualVolume != null ? parseFloat(prevRec.manualVolume) : (parseFloat(prevRec.resetStartValue) || 0)) : parseFloat(prevRec.reading)) : null;
       var prevDate = prevRec ? prevRec.date : null;
       var isStopped = existing ? !!existing.isStopped : false;
       var isReset   = existing ? !!existing.isReset   : false;
@@ -2632,7 +2637,7 @@ function _dewRenderQuickEntry(date) {
                 '<input type="number" id="dew-qe-reset-start-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.resetStartValue != null ? existing.resetStartValue : '')) + '" placeholder="0" style="width:150px;font-size:13px;font-weight:600">' +
               '</div>' +
               '<div class="form-group" style="margin:0">' +
-                '<label class="form-label" style="font-size:9px">Объём по старому счётчику (необяз.)</label>' +
+                '<label class="form-label" style="font-size:9px">Показание нового счётчика на 06:00 (необяз.)</label>' +
                 '<input type="number" id="dew-qe-reset-vol-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.manualVolume != null ? existing.manualVolume : '')) + '" placeholder="м³" style="width:110px;font-size:12px">' +
               '</div>' +
             '</div>' +
@@ -2673,7 +2678,10 @@ function _dewRenderQuickEntry(date) {
 function _dewCalcVolDisplay(existing, prevVal) {
   if (!existing) return '<span style="color:var(--txt-3)">—</span>';
   if (existing.isStopped) return '<span style="color:var(--txt-3)">простой</span>';
-  if (existing.isReset)   return '<span style="color:var(--gold)">🔄 замена</span>';
+  if (existing.isReset) {
+    var vol = DewateringState.computedVolume(existing);
+    return '<span style="color:var(--gold)">🔄 ' + (vol > 0 ? vol.toFixed(0) + ' м³' : 'замена') + '</span>';
+  }
   if (existing.isManualVolume) return (parseFloat(existing.manualVolume) || 0).toFixed(0) + ' м³';
   if (prevVal == null) return '<span style="color:var(--txt-3)">нет пред.</span>';
   var diff = parseFloat(existing.reading) - parseFloat(prevVal);
