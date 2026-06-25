@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Водоотлив — UI Рекомендации</title>
+<style>
+  :root {
+    --bg-0:#0d1117; --bg-1:#161b22; --bg-2:#21262d; --bg-3:#30363d;
+    --txt-0:#f0f6fc; --txt-1:#e6edf3; --txt-2:#8b949e; --txt-3:#656d76;
+    --gold:#f9ab00; --green:#3fb950; --red:#f85149;
+    --blue:#58a6ff; --orange:#ffa657;
+    --border:#30363d; --r:8px; --rs:4px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg-0); color:var(--txt-1); font:14px/1.5 "Segoe UI",system-ui,sans-serif; padding:28px; max-width:1100px; }
+
+  h1 { font-size:22px; color:var(--gold); margin-bottom:6px; }
+  .sub { color:var(--txt-2); font-size:13px; margin-bottom:32px; }
+  h2 { font-size:16px; color:var(--txt-0); margin:36px 0 6px; border-bottom:1px solid var(--border); padding-bottom:8px; }
+  h3 { font-size:12px; color:var(--gold); margin:24px 0 10px; text-transform:uppercase; letter-spacing:.07em; }
+  .desc { color:var(--txt-2); font-size:13px; margin-bottom:16px; line-height:1.65; }
+
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media(max-width:860px){ .grid2 { grid-template-columns:1fr; } }
+
+  .card { background:var(--bg-1); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; }
+  .card-hd { background:var(--bg-2); padding:8px 14px; font-size:11px; color:var(--gold); font-weight:700; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--border); }
+  .card-ft { padding:9px 14px; font-size:12px; color:var(--txt-2); background:var(--bg-2); border-top:1px solid var(--border); line-height:1.55; }
+  .card-ft code { font-size:11px; background:var(--bg-3); padding:1px 5px; border-radius:3px; color:var(--txt-1); }
+  .mock { padding:14px; background:var(--bg-0); }
+
+  /* primitives */
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .field { background:var(--bg-2); border:1px solid var(--border); border-radius:var(--rs); padding:5px 8px; font-size:12px; color:var(--txt-2); flex:1; min-width:0; }
+  .lbl { font-size:10px; color:var(--txt-3); margin-bottom:2px; }
+  .btn { background:var(--gold); color:#000; border:none; border-radius:var(--rs); padding:5px 13px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .btn.g { background:transparent; color:var(--txt-2); border:1px solid var(--border); }
+  .btn.gr { background:var(--green); color:#000; }
+  .chip { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; }
+  .ok  { background:#3fb95022; color:var(--green);  border:1px solid #3fb95055; }
+  .w   { background:#ffa65722; color:var(--orange); border:1px solid #ffa65755; }
+  .er  { background:#f8514922; color:var(--red);    border:1px solid #f8514955; }
+  .bl  { background:#58a6ff22; color:var(--blue);   border:1px solid #58a6ff55; }
+  .mc  { background:var(--bg-1); border:1px solid var(--border); border-radius:var(--r); padding:10px; }
+  .mct { font-size:11px; font-weight:700; color:var(--txt-0); margin-bottom:6px; }
+  .hr  { border:none; border-top:1px solid var(--border); margin:8px 0; }
+  .tbl { width:100%; border-collapse:collapse; font-size:11px; }
+  .tbl th { color:var(--txt-3); font-weight:600; padding:4px 6px; text-align:left; border-bottom:1px solid var(--border); }
+  .tbl td { padding:4px 6px; color:var(--txt-2); border-bottom:1px solid #21262d; }
+  .bar { height:6px; background:var(--bg-3); border-radius:3px; overflow:hidden; margin-top:4px; }
+  .fill { height:100%; border-radius:3px; }
+  .spark { height:40px; background:var(--bg-2); border-radius:4px; position:relative; overflow:hidden; }
+  .spark svg { position:absolute; inset:0; width:100%; height:100%; }
+  .kpi { background:var(--bg-2); border-radius:6px; padding:10px 8px; text-align:center; border:1px solid var(--border); }
+  .kv { font-size:18px; font-weight:700; }
+  .kl { font-size:9px; color:var(--txt-3); margin-top:2px; text-transform:uppercase; letter-spacing:.04em; }
+  .kgrid { display:grid; gap:8px; }
+  .alert { border-radius:var(--rs); padding:7px 10px; font-size:11px; margin-bottom:6px; display:flex; align-items:flex-start; gap:8px; line-height:1.5; }
+  .a-er { background:#f8514911; border-left:3px solid var(--red); }
+  .a-w  { background:#ffa65711; border-left:3px solid var(--orange); }
+  .a-ok { background:#3fb95011; border-left:3px solid var(--green); }
+  .sw { width:28px; height:15px; background:var(--bg-3); border-radius:8px; display:inline-block; position:relative; flex-shrink:0; }
+  .sw.on { background:var(--gold); }
+  .sw::after { content:''; position:absolute; width:11px; height:11px; background:#fff; border-radius:50%; top:2px; left:2px; }
+  .sw.on::after { left:15px; }
+  .badge { display:inline-block; background:#3fb95033; border:1px solid var(--green); color:var(--green); border-radius:4px; padding:1px 7px; font-size:10px; margin-left:8px; vertical-align:middle; }
+  .impl { margin-top:10px; padding:9px 12px; background:var(--bg-1); border-radius:var(--rs); border:1px solid var(--border); font-size:11px; color:var(--txt-2); line-height:1.7; }
+  .impl b { color:var(--txt-1); }
+  .impl code { font-size:10px; background:var(--bg-3); padding:1px 4px; border-radius:3px; color:var(--txt-0); }
+  .num { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--gold); color:#000; font-size:10px; font-weight:700; flex-shrink:0; }
+  .prio-row { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-bottom:1px solid var(--border); }
+  .prio-row:last-child { border-bottom:none; }
+  .prio-txt { font-size:12px; color:var(--txt-1); }
+  .prio-txt span { color:var(--txt-2); font-size:11px; }
+</style>
+</head>
+<body>
+
+<h1>Водоотлив — UI рекомендации</h1>
+<p class="sub">Варианты переработки интерфейса + 6 новых функций для модуля мониторинга водоотлива</p>
+
+<!-- ─── ТЕКУЩИЙ ЭКРАН ─── -->
+<h2>Текущее состояние</h2>
+<p class="desc">
+  Вкладка «Водоотлив» сейчас показывает только аналитику расчётов — графики Chart.js
+  с фильтром по периоду и карьеру. Нет оперативной информации о насосах, уровнях, тревогах.
+  Диспетчер не видит текущую ситуацию — только исторические данные.
+</p>
+
+<!-- ─── ВАРИАНТ А ─── -->
+<h2>Вариант А — Оперативный дашборд <span class="badge">Рекомендуется</span></h2>
+<p class="desc">Главный экран — состояние системы прямо сейчас. Диспетчер видит всё без прокрутки: объёмы, тревоги, насосы.</p>
+
+<div class="card">
+  <div class="card-hd">Макет — Оперативный дашборд</div>
+  <div class="mock">
+
+    <!-- KPI row -->
+    <div class="kgrid" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px;">
+      <div class="kpi"><div class="kv" style="color:var(--blue);">2 840</div><div class="kl">Qфакт, м³/сут</div></div>
+      <div class="kpi"><div class="kv" style="color:var(--orange);">3 200</div><div class="kl">Qплан, м³/сут</div></div>
+      <div class="kpi" style="background:#3fb95011;border-color:#3fb95044;"><div class="kv" style="color:var(--green);">88%</div><div class="kl">Выполнение плана</div></div>
+      <div class="kpi" style="background:#f8514911;border-color:#f8514944;"><div class="kv" style="color:var(--red);">↑0.12</div><div class="kl">Приток, м/ч</div></div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="alert a-er">⚠ <div><b>НПГ-3:</b> давление 2.1 МПа — выше нормы. Требует проверки.</div></div>
+    <div class="alert a-w" style="margin-bottom:12px;">🔧 <div><b>НПГ-5:</b> ТО через 120 часов. Плановый останов 22.06.</div></div>
+
+    <!-- Насосы -->
+    <div style="font-size:11px;color:var(--txt-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">Насосные агрегаты</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+      <div class="mc" style="border-color:var(--green);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:700;">НПГ-1</span>
+          <span class="chip ok">Работает</span>
+        </div>
+        <div style="font-size:10px;color:var(--txt-3);">Q: <b style="color:var(--txt-1);">980 м³/ч</b> · P: 1.4 МПа</div>
+        <div class="bar" style="margin-top:6px;"><div class="fill" style="width:78%;background:var(--green);"></div></div>
+        <div style="font-size:9px;color:var(--txt-3);margin-top:2px;">78% от максимума</div>
+      </div>
+      <div class="mc" style="border-color:var(--red);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:700;">НПГ-3</span>
+          <span class="chip er">Авария</span>
+        </div>
+        <div style="font-size:10px;color:var(--txt-3);">Q: 0 · P: <b style="color:var(--red);">2.1 МПа</b></div>
+        <div class="bar" style="margin-top:6px;"><div class="fill" style="width:95%;background:var(--red);"></div></div>
+        <div style="font-size:9px;color:var(--red);margin-top:2px;">Давление критическое</div>
+      </div>
+      <div class="mc">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:700;">НПГ-5</span>
+          <span class="chip bl">Резерв</span>
+        </div>
+        <div style="font-size:10px;color:var(--txt-3);">ТО через <b style="color:var(--txt-1);">120 ч</b></div>
+        <div class="bar" style="margin-top:6px;"><div class="fill" style="width:0%;background:var(--txt-3);"></div></div>
+        <div style="font-size:9px;color:var(--txt-3);margin-top:2px;">Не работает</div>
+      </div>
+    </div>
+
+    <!-- Мини-тренды -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="mc">
+        <div class="mct">Объём откачки, м³/сут — 7 дней</div>
+        <div class="spark" style="height:52px;">
+          <svg viewBox="0 0 240 52" preserveAspectRatio="none">
+            <polyline points="0,42 34,38 68,30 102,28 136,35 170,22 204,18 240,14"
+              fill="none" stroke="#58a6ff" stroke-width="2"/>
+            <polyline points="0,42 34,38 68,30 102,28 136,35 170,22 204,18 240,14 240,52 0,52"
+              fill="#58a6ff0d" stroke="none"/>
+            <!-- plan line -->
+            <line x1="0" y1="20" x2="240" y2="20" stroke="#f9ab00" stroke-width="1" stroke-dasharray="4,3" opacity=".6"/>
+            <text x="200" y="17" fill="#f9ab00" font-size="8" opacity=".7">план</text>
+          </svg>
+        </div>
+      </div>
+      <div class="mc">
+        <div class="mct">Уровень зумпов, м</div>
+        <div class="spark" style="height:52px;">
+          <svg viewBox="0 0 240 52" preserveAspectRatio="none">
+            <polyline points="0,20 40,22 80,24 120,28 160,40 200,44 240,48"
+              fill="none" stroke="#f85149" stroke-width="2"/>
+            <polyline points="0,20 40,22 80,24 120,28 160,40 200,44 240,48 240,52 0,52"
+              fill="#f8514910" stroke="none"/>
+            <!-- warn threshold -->
+            <line x1="0" y1="35" x2="240" y2="35" stroke="#ffa657" stroke-width="1" stroke-dasharray="4,3" opacity=".7"/>
+            <text x="4" y="32" fill="#ffa657" font-size="8" opacity=".8">предупр.</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="card-ft">
+    ✅ <b>Главное преимущество:</b> диспетчер видит всю ситуацию на одном экране без прокрутки.<br>
+    Текущий Chart.js-раздел с аналитикой переезжает во вкладку «Аналитика» внутри этого же экрана.
+  </div>
+</div>
+
+<!-- ─── ВАРИАНТ Б ─── -->
+<h2>Вариант Б — Живая SVG P&amp;ID-схема</h2>
+<p class="desc">Интерактивная технологическая схема водоотливного комплекса. Каждый элемент кликабелен, данные обновляются в реальном времени.</p>
+
+<div class="card">
+  <div class="card-hd">Макет — SVG P&ID схема карьера</div>
+  <div class="mock">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:12px;font-weight:700;color:var(--txt-0);">Схема водоотлива — Карьер №1</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:10px;color:var(--txt-3);">Обновлено: 09:47</span>
+        <span class="chip ok">Система в работе</span>
+      </div>
+    </div>
+
+    <svg width="100%" height="175" viewBox="0 0 500 175" style="display:block;">
+      <defs>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M20 0L0 0 0 20" fill="none" stroke="#21262d" stroke-width=".5"/>
+        </pattern>
+        <!-- animated flow -->
+        <marker id="arr" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="4" markerHeight="4" orient="auto">
+          <path d="M0 0L8 4L0 8z" fill="#30363d"/>
+        </marker>
+      </defs>
+      <rect width="500" height="175" fill="url(#grid)" rx="6"/>
+
+      <!-- Ground line -->
+      <line x1="0" y1="58" x2="500" y2="58" stroke="#30363d" stroke-width="1" stroke-dasharray="5,4"/>
+      <text x="8" y="52" fill="#656d76" font-size="9">Поверхность</text>
+      <text x="8" y="73" fill="#656d76" font-size="9">Подземный горизонт</text>
+
+      <!-- ЗУМП 1 (норма) -->
+      <rect x="18" y="88" width="58" height="72" rx="4" fill="#1a2332" stroke="#30363d" stroke-width="1.5"/>
+      <text x="47" y="106" text-anchor="middle" fill="#8b949e" font-size="9" font-weight="600">ЗУМП-1</text>
+      <rect x="18" y="118" width="58" height="42" fill="#58a6ff18" rx="0"/>
+      <text x="47" y="137" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700">2.4 м</text>
+      <text x="47" y="151" text-anchor="middle" fill="#3fb950" font-size="8">● норма</text>
+
+      <!-- Pipe зумп1 → насос1 -->
+      <path d="M76 124 L114 124" stroke="#30363d" stroke-width="6" fill="none"/>
+      <!-- animated water dots -->
+      <circle cx="84" cy="124" r="3" fill="#58a6ff" opacity=".8">
+        <animate attributeName="cx" from="78" to="108" dur="1.8s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".8;.2;.8" dur="1.8s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="98" cy="124" r="3" fill="#58a6ff" opacity=".5">
+        <animate attributeName="cx" from="78" to="108" dur="1.8s" begin="0.6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".5;.1;.5" dur="1.8s" begin="0.6s" repeatCount="indefinite"/>
+      </circle>
+
+      <!-- НАСОС 1 (работает) -->
+      <circle cx="134" cy="124" r="20" fill="#1a2332" stroke="#3fb950" stroke-width="2.5"/>
+      <text x="134" y="120" text-anchor="middle" fill="#3fb950" font-size="9" font-weight="700">НПГ-1</text>
+      <text x="134" y="130" text-anchor="middle" fill="#e6edf3" font-size="10">980</text>
+      <text x="134" y="140" text-anchor="middle" fill="#8b949e" font-size="7">м³/ч</text>
+
+      <!-- Pipe насос1 → на поверхность -->
+      <path d="M154 124 L200 124 L200 42" stroke="#30363d" stroke-width="6" fill="none"/>
+      <circle cx="174" cy="124" r="3" fill="#3fb950" opacity=".7">
+        <animate attributeName="cx" from="156" to="195" dur="1.4s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="200" cy="90" r="3" fill="#3fb950" opacity=".5">
+        <animate attributeName="cy" from="120" to="45" dur="1.4s" repeatCount="indefinite"/>
+      </circle>
+
+      <!-- ЗУМП 2 (критично!) -->
+      <rect x="220" y="88" width="58" height="72" rx="4" fill="#1a2332" stroke="#f85149" stroke-width="2.5"/>
+      <text x="249" y="106" text-anchor="middle" fill="#f85149" font-size="9" font-weight="600">ЗУМП-2</text>
+      <rect x="220" y="104" width="58" height="56" fill="#f8514920" rx="0"/>
+      <text x="249" y="130" text-anchor="middle" fill="#f85149" font-size="12" font-weight="700">3.2 м</text>
+      <text x="249" y="148" text-anchor="middle" fill="#f85149" font-size="8">▲ КРИТИЧНО</text>
+
+      <!-- Pipe зумп2 → насос3 -->
+      <path d="M278 124 L316 124" stroke="#30363d" stroke-width="6" fill="none"/>
+
+      <!-- НАСОС 3 (авария) — статичный, не работает -->
+      <circle cx="336" cy="124" r="20" fill="#1a2332" stroke="#f85149" stroke-width="2.5"/>
+      <text x="336" y="120" text-anchor="middle" fill="#f85149" font-size="9" font-weight="700">НПГ-3</text>
+      <text x="336" y="133" text-anchor="middle" fill="#f85149" font-size="9">АВАР.</text>
+
+      <!-- НАСОС 5 (резерв, пунктир) -->
+      <circle cx="134" cy="30" r="16" fill="#1a2332" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="4,2"/>
+      <text x="134" y="27" text-anchor="middle" fill="#58a6ff" font-size="9">НПГ-5</text>
+      <text x="134" y="38" text-anchor="middle" fill="#8b949e" font-size="7">резерв</text>
+
+      <!-- Водосброс на поверхности -->
+      <rect x="165" y="18" width="78" height="18" rx="4" fill="#21262d" stroke="#30363d" stroke-width="1.5"/>
+      <text x="204" y="31" text-anchor="middle" fill="#8b949e" font-size="9">ВОДОСБРОС</text>
+
+      <!-- Расходомер -->
+      <rect x="200" y="38" width="30" height="12" rx="3" fill="#21262d" stroke="#f9ab00" stroke-width="1.5"/>
+      <text x="215" y="47" text-anchor="middle" fill="#f9ab00" font-size="7" font-weight="700">RM</text>
+
+      <!-- Задвижка -->
+      <polygon points="380,116 380,132 396,124" fill="#30363d" stroke="#8b949e" stroke-width="1"/>
+      <polygon points="412,132 412,116 396,124" fill="#30363d" stroke="#8b949e" stroke-width="1"/>
+      <line x1="396" y1="110" x2="396" y2="116" stroke="#8b949e" stroke-width="1.5"/>
+      <text x="396" y="145" text-anchor="middle" fill="#8b949e" font-size="7">ЗД-1</text>
+
+      <!-- Легенда -->
+      <rect x="415" y="78" width="82" height="90" rx="5" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+      <text x="425" y="94" fill="#8b949e" font-size="8" font-weight="700">ЛЕГЕНДА</text>
+      <circle cx="424" cy="107" r="5" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="433" y="111" fill="#8b949e" font-size="8">Работает</text>
+      <circle cx="424" cy="121" r="5" fill="none" stroke="#f85149" stroke-width="1.5"/>
+      <text x="433" y="125" fill="#8b949e" font-size="8">Авария</text>
+      <circle cx="424" cy="135" r="5" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="2,1.5"/>
+      <text x="433" y="139" fill="#8b949e" font-size="8">Резерв</text>
+      <line x1="418" y1="151" x2="430" y2="151" stroke="#58a6ff" stroke-width="3"/>
+      <text x="433" y="155" fill="#8b949e" font-size="8">Поток воды</text>
+    </svg>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;">
+      <div class="kpi"><div class="kv" style="color:var(--blue);font-size:15px;">980</div><div class="kl">НПГ-1, м³/ч</div></div>
+      <div class="kpi" style="border-color:#f8514944;"><div class="kv" style="color:var(--red);font-size:15px;">АВАР.</div><div class="kl">НПГ-3</div></div>
+      <div class="kpi"><div class="kv" style="color:var(--orange);font-size:15px;">3.2</div><div class="kl">Зумп-2, м</div></div>
+      <div class="kpi"><div class="kv" style="color:var(--green);font-size:15px;">980</div><div class="kl">Суммарно м³/ч</div></div>
+    </div>
+  </div>
+  <div class="card-ft">
+    ✅ <b>Главное преимущество:</b> схема понятна любому технику без инструкций — видно что работает, что стоит, куда течёт вода.<br>
+    ⚠ <b>Трудозатраты:</b> ~5–8 рабочих дней для настраиваемой схемы (позиции элементов из БД). Упрощённая фиксированная схема — 1–2 дня.
+  </div>
+</div>
+
+<!-- ─── ВАРИАНТ В ─── -->
+<h2>Вариант В — Комбинированный (А + Б)</h2>
+<p class="desc">Две вкладки внутри раздела «Водоотлив»: «Оперативно» (дашборд из варианта А) и «Схема» (P&ID из варианта Б).</p>
+
+<div class="card" style="max-width:560px;">
+  <div class="card-hd">Макет — переключение внутри вкладки</div>
+  <div class="mock">
+    <div style="display:flex;gap:2px;background:var(--bg-2);padding:3px;border-radius:var(--rs);width:fit-content;margin-bottom:12px;">
+      <div style="padding:6px 18px;font-size:12px;background:var(--bg-3);border-radius:3px;color:var(--txt-0);font-weight:600;">📊 Оперативно</div>
+      <div style="padding:6px 18px;font-size:12px;color:var(--txt-2);cursor:pointer;">🗺 Схема</div>
+      <div style="padding:6px 18px;font-size:12px;color:var(--txt-2);cursor:pointer;">📈 Аналитика</div>
+    </div>
+    <div class="alert a-er">⚠ НПГ-3 авария · Зумп-2: 3.2 м критично</div>
+    <div class="kgrid" style="grid-template-columns:repeat(4,1fr);margin-top:8px;">
+      <div class="kpi"><div class="kv" style="color:var(--blue);font-size:15px;">2 840</div><div class="kl">Qфакт, м³/сут</div></div>
+      <div class="kpi"><div class="kv" style="color:var(--green);font-size:15px;">88%</div><div class="kl">План выполнен</div></div>
+      <div class="kpi"><div class="kv" style="color:var(--red);font-size:15px;">1</div><div class="kl">Аварий</div></div>
+      <div class="kpi"><div class="kv" style="color:var(--orange);font-size:15px;">1</div><div class="kl">ТО скоро</div></div>
+    </div>
+  </div>
+  <div class="card-ft">
+    ✅ <b>Оптимальный выбор</b> если реализовывать постепенно: сначала делаем дашборд (вариант А), потом добавляем вкладку «Схема» (вариант Б).<br>
+    Вкладка «Аналитика» — существующие графики Chart.js.
+  </div>
+</div>
+
+<!-- ─── 6 НОВЫХ ФУНКЦИЙ ─── -->
+<h2>Новые функции для модуля «Водоотлив» <span class="badge">6 предложений</span></h2>
+
+<!-- 9.1 Пороги -->
+<h3>1 — Система порогов и оповещений</h3>
+<div class="grid2">
+  <div class="card">
+    <div class="card-hd">Настройка порогов</div>
+    <div class="mock">
+      <table class="tbl" style="margin-bottom:10px;">
+        <tr><th>Параметр</th><th>Предупр.</th><th>Критично</th><th>Канал</th></tr>
+        <tr><td>Уровень зумпа, м</td><td style="color:var(--orange);">2.0</td><td style="color:var(--red);">3.0</td><td>Push + SMS</td></tr>
+        <tr><td>Давление насоса, МПа</td><td style="color:var(--orange);">1.8</td><td style="color:var(--red);">2.0</td><td>Push</td></tr>
+        <tr><td>Приток воды, м/ч</td><td style="color:var(--orange);">0.15</td><td style="color:var(--red);">0.25</td><td>Email</td></tr>
+        <tr><td>Суточный объём, м³</td><td style="color:var(--orange);">2 500</td><td style="color:var(--red);">3 500</td><td>Push</td></tr>
+      </table>
+      <div class="alert a-er">🔴 Зумп-2: уровень 3.2 м — КРИТИЧНО (отправлено SMS)</div>
+      <div class="alert a-w">🟡 Давление НПГ-3: 1.9 МПа — предупреждение</div>
+      <div class="alert a-ok">🟢 Суточный объём 2 840 м³ — норма</div>
+    </div>
+  </div>
+  <div>
+    <div class="impl">
+      <b>База данных:</b><br>
+      <code>alert_thresholds(quarry_id, metric, warn_value, crit_value, channels[])</code><br><br>
+      <b>Реализация:</b><br>
+      • Supabase Realtime подписка на таблицу измерений<br>
+      • Edge Function проверяет пороги при каждой вставке<br>
+      • Push через Supabase Push Notifications<br>
+      • SMS/Email через Resend API или Twilio<br><br>
+      <b>Приоритет:</b> 🔴 Высокий — напрямую влияет на безопасность
+    </div>
+  </div>
+</div>
+
+<!-- 9.2 Водный баланс -->
+<h3>2 — График водного баланса</h3>
+<div class="grid2">
+  <div class="card">
+    <div class="card-hd">Приток vs Откачка — баланс</div>
+    <div class="mock">
+      <div class="kgrid" style="grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:6px;margin-bottom:10px;">
+        <div class="kpi" style="border-color:#f8514444;"><div class="kv" style="color:var(--red);">+280</div><div class="kl">Приток, м³/ч</div></div>
+        <div style="font-size:18px;color:var(--txt-3);text-align:center;">vs</div>
+        <div class="kpi" style="border-color:#3fb95044;"><div class="kv" style="color:var(--green);">1 960</div><div class="kl">Откачка, м³/ч</div></div>
+        <div style="font-size:18px;color:var(--txt-3);text-align:center;">=</div>
+        <div class="kpi" style="background:#3fb95011;border-color:var(--green);"><div class="kv" style="color:var(--green);">+1 680</div><div class="kl">Баланс, м³/ч</div></div>
+      </div>
+      <div class="spark" style="height:58px;">
+        <svg viewBox="0 0 300 58" preserveAspectRatio="none">
+          <polyline points="0,12 50,14 100,12 150,15 200,13 250,11 300,14"
+            fill="none" stroke="#3fb950" stroke-width="2"/>
+          <polyline points="0,48 50,45 100,42 150,50 200,46 250,43 300,41"
+            fill="none" stroke="#f85149" stroke-width="2" stroke-dasharray="6,3"/>
+          <text x="6" y="26" fill="#3fb950" font-size="8" opacity=".8">Откачка</text>
+          <text x="6" y="55" fill="#f85149" font-size="8" opacity=".8">Приток (из точек набл.)</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="impl">
+      <b>База данных:</b><br>
+      <code>water_balance_log(ts, quarry_id, inflow_m3h, outflow_m3h)</code><br><br>
+      <b>Реализация:</b><br>
+      • Приток — из данных точек наблюдения (Δ уровня × площадь водосбора)<br>
+      • Откачка — из показаний расходомеров насосов<br>
+      • Edge Function агрегирует каждые 15 минут<br>
+      • График обновляется через Supabase Realtime<br><br>
+      <b>Приоритет:</b> 🟡 Средний — важно для планирования
+    </div>
+  </div>
+</div>
+
+<!-- 9.3 ТО насосов -->
+<h3>3 — Учёт технического обслуживания насосов</h3>
+<div class="grid2">
+  <div class="card">
+    <div class="card-hd">Состояние насосов — ТО</div>
+    <div class="mock">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div class="mc" style="border-color:var(--green);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:12px;font-weight:700;">НПГ-1</span>
+            <span class="chip ok">OK</span>
+          </div>
+          <div style="font-size:10px;color:var(--txt-3);">Посл. ТО: 01.05.26</div>
+          <div class="bar" style="margin:5px 0;"><div class="fill" style="width:35%;background:var(--green);"></div></div>
+          <div style="font-size:10px;color:var(--txt-2);">350 / 1000 ч</div>
+          <div style="font-size:10px;color:var(--green);margin-top:2px;">Следующее: ~650 ч</div>
+        </div>
+        <div class="mc" style="border-color:var(--orange);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:12px;font-weight:700;">НПГ-3</span>
+            <span class="chip w">Скоро</span>
+          </div>
+          <div style="font-size:10px;color:var(--txt-3);">Посл. ТО: 10.04.26</div>
+          <div class="bar" style="margin:5px 0;"><div class="fill" style="width:88%;background:var(--orange);"></div></div>
+          <div style="font-size:10px;color:var(--txt-2);">880 / 1000 ч</div>
+          <div style="font-size:10px;color:var(--orange);margin-top:2px;">ТО через ~120 ч</div>
+        </div>
+        <div class="mc" style="border-color:var(--red);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:12px;font-weight:700;">НПГ-5</span>
+            <span class="chip er">Просроч.</span>
+          </div>
+          <div style="font-size:10px;color:var(--txt-3);">Посл. ТО: 15.03.26</div>
+          <div class="bar" style="margin:5px 0;"><div class="fill" style="width:100%;background:var(--red);"></div></div>
+          <div style="font-size:10px;color:var(--red);">1 180 / 1000 ч</div>
+          <div style="font-size:10px;color:var(--red);margin-top:2px;">Просрочено на 180 ч!</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn" style="font-size:10px;">+ Записать ТО</button>
+        <button class="btn g" style="font-size:10px;">История ТО</button>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="impl">
+      <b>База данных:</b><br>
+      <code>pumps(id, name, quarry_id, to_interval_hours)</code><br>
+      <code>pump_maintenance_log(pump_id, date, hours_at_service, worker, notes)</code><br><br>
+      <b>Реализация:</b><br>
+      • Наработка = дата сейчас − дата последнего ТО × средние часы/сутки<br>
+      • Edge Function (cron ежедневно) проверяет и рассылает уведомления<br>
+      • Порог предупреждения настраивается (например, за 150 ч до ТО)<br><br>
+      <b>Приоритет:</b> 🔴 Высокий — снижает риск аварийных отказов
+    </div>
+  </div>
+</div>
+
+<!-- 9.4 Сменный рапорт -->
+<h3>4 — Цифровой сменный рапорт</h3>
+<div class="grid2">
+  <div class="card">
+    <div class="card-hd">Рапорт смены — 15.06.2026 · Дневная</div>
+    <div class="mock">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+        <div><div class="lbl">Смена</div><div class="field">Дневная (06:00–18:00)</div></div>
+        <div><div class="lbl">Начальник смены</div><div class="field">Козлов В.П.</div></div>
+      </div>
+      <div class="lbl" style="margin-bottom:4px;">Работа насосов</div>
+      <table class="tbl" style="margin-bottom:8px;">
+        <tr><th>Агрегат</th><th>Статус</th><th>Наработка</th><th>Q сред., м³/ч</th></tr>
+        <tr><td>НПГ-1</td><td><span class="chip ok">Работал</span></td><td>12 ч</td><td style="color:var(--blue);">965</td></tr>
+        <tr><td>НПГ-3</td><td><span class="chip er">Останов</span></td><td>6.5 ч</td><td>—</td></tr>
+        <tr><td>НПГ-5</td><td><span class="chip bl">Резерв</span></td><td>0 ч</td><td>—</td></tr>
+      </table>
+      <div class="lbl" style="margin-bottom:4px;">Замечания / инциденты</div>
+      <div class="field" style="margin-bottom:8px;color:var(--txt-1);">Повышение давления НПГ-3 в 10:30, ручной останов, замена сальника.</div>
+      <div class="kgrid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px;">
+        <div class="kpi" style="padding:6px;"><div class="kv" style="font-size:14px;color:var(--blue);">23 520</div><div class="kl">Откачано, м³</div></div>
+        <div class="kpi" style="padding:6px;"><div class="kv" style="font-size:14px;color:var(--green);">8</div><div class="kl">Замеров</div></div>
+        <div class="kpi" style="padding:6px;"><div class="kv" style="font-size:14px;color:var(--red);">1</div><div class="kl">Инцидент</div></div>
+        <div class="kpi" style="padding:6px;"><div class="kv" style="font-size:14px;color:var(--orange);">73%</div><div class="kl">КПД</div></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn" style="flex:1;">💾 Сохранить рапорт</button>
+        <button class="btn g">📄 PDF</button>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="impl">
+      <b>База данных:</b><br>
+      <code>shift_reports(quarry_id, shift_type, date, foreman_id, pump_log jsonb, incidents text, total_outflow_m3)</code><br><br>
+      <b>Реализация:</b><br>
+      • Данные насосов автозаполняются из показаний за смену<br>
+      • PDF через <code>window.print()</code> с CSS @media print<br>
+      • Привязка к замерам точек и канав за период смены<br>
+      • Архив рапортов — фильтр по дате/карьеру/смене<br><br>
+      <b>Приоритет:</b> 🟡 Средний — заменяет бумажный журнал
+    </div>
+  </div>
+</div>
+
+<!-- 9.5 Экспорт -->
+<h3>5 — Суточный экспорт отчётов</h3>
+<div class="grid2">
+  <div class="card">
+    <div class="card-hd">Настройка экспорта</div>
+    <div class="mock">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+        <div><div class="lbl">Период</div><div class="field">01.06 – 25.06.2026</div></div>
+        <div><div class="lbl">Формат</div><div class="field">Excel (.xlsx)</div></div>
+        <div><div class="lbl">Карьер</div><div class="field">Карьер №1 — Северный</div></div>
+        <div style="display:flex;align-items:flex-end;"><button class="btn" style="width:100%;">⬇ Экспорт</button></div>
+      </div>
+      <div style="background:var(--bg-1);border-radius:var(--rs);padding:8px 10px;font-size:11px;color:var(--txt-2);margin-bottom:10px;line-height:1.8;border:1px solid var(--border);">
+        <b style="color:var(--txt-0);">Состав отчёта:</b><br>
+        ✓ Суточные объёмы откачки · ✓ Уровни в точках наблюдения<br>
+        ✓ Расходы канав · ✓ Насосы по сменам · ✓ Водный баланс
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--txt-0);margin-bottom:8px;">Автоматические отчёты</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt-1);">
+          <div class="sw on"></div>
+          Суточный отчёт каждый день в 06:00
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt-2);">
+          <div class="sw"></div>
+          Недельный отчёт по понедельникам
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt-2);">
+          <div class="sw"></div>
+          Аварийный отчёт при инциденте
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="impl">
+      <b>Реализация:</b><br>
+      • Supabase Edge Function (cron trigger) агрегирует данные<br>
+      • Генерация Excel через библиотеку SheetJS (бесплатная)<br>
+      • Файл сохраняется в Supabase Storage с TTL 30 дней<br>
+      • Ссылка на скачивание отправляется по Email (Resend API)<br>
+      • Ручной экспорт — тот же Edge Function, вызов по кнопке<br><br>
+      <b>Приоритет:</b> 🟢 Низкий — удобно, но не срочно
+    </div>
+  </div>
+</div>
+
+<!-- 9.6 Живая схема -->
+<h3>6 — Живая SVG P&amp;ID-схема с настройкой из БД</h3>
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-hd">Настраиваемая схема — позиции элементов из базы данных</div>
+  <div class="mock">
+    <div style="display:grid;grid-template-columns:1fr 240px;gap:12px;align-items:start;">
+      <div>
+        <div style="font-size:10px;color:var(--txt-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">Предпросмотр схемы</div>
+        <svg width="100%" height="130" viewBox="0 0 300 130" style="display:block;">
+          <rect width="300" height="130" fill="#0d1117" rx="6" stroke="#30363d"/>
+          <!-- elements from DB -->
+          <rect x="15" y="55" width="40" height="50" rx="3" fill="#1a2332" stroke="#30363d"/>
+          <text x="35" y="72" text-anchor="middle" fill="#8b949e" font-size="7">ЗУМП-1</text>
+          <rect x="15" y="78" width="40" height="27" fill="#58a6ff15"/>
+          <text x="35" y="96" text-anchor="middle" fill="#58a6ff" font-size="9" font-weight="700">2.4 м</text>
+          <path d="M55 80 L82 80" stroke="#30363d" stroke-width="5"/>
+          <circle cx="100" cy="80" r="16" fill="#1a2332" stroke="#3fb950" stroke-width="2"/>
+          <text x="100" y="77" text-anchor="middle" fill="#3fb950" font-size="7">НПГ-1</text>
+          <text x="100" y="87" text-anchor="middle" fill="#e6edf3" font-size="8">ОК</text>
+          <path d="M116 80 L145 80 L145 28" stroke="#30363d" stroke-width="5"/>
+          <rect x="115" y="16" width="60" height="14" rx="3" fill="#21262d" stroke="#30363d"/>
+          <text x="145" y="27" text-anchor="middle" fill="#8b949e" font-size="7">ВОДОСБРОС</text>
+          <rect x="160" y="55" width="40" height="50" rx="3" fill="#1a2332" stroke="#f85149" stroke-width="2"/>
+          <text x="180" y="72" text-anchor="middle" fill="#f85149" font-size="7">ЗУМП-2</text>
+          <rect x="160" y="68" width="40" height="37" fill="#f8514915"/>
+          <text x="180" y="93" text-anchor="middle" fill="#f85149" font-size="9" font-weight="700">3.2 м</text>
+          <path d="M200 80 L226 80" stroke="#30363d" stroke-width="5"/>
+          <circle cx="244" cy="80" r="16" fill="#1a2332" stroke="#f85149" stroke-width="2"/>
+          <text x="244" y="77" text-anchor="middle" fill="#f85149" font-size="7">НПГ-3</text>
+          <text x="244" y="87" text-anchor="middle" fill="#f85149" font-size="8">АВ.</text>
+        </svg>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--txt-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">Редактор элементов</div>
+        <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:var(--rs);padding:8px;font-size:11px;">
+          <div style="font-weight:700;color:var(--txt-0);margin-bottom:6px;">ЗУМП-2</div>
+          <div class="lbl">X позиция</div><div class="field" style="margin-bottom:4px;">160</div>
+          <div class="lbl">Y позиция</div><div class="field" style="margin-bottom:4px;">55</div>
+          <div class="lbl">Макс. уровень, м</div><div class="field" style="margin-bottom:8px;">4.0</div>
+          <button class="btn" style="width:100%;font-size:10px;">Сохранить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card-ft">
+    <b>База данных:</b> <code>dewatering_units(id, quarry_id, type, name, x, y, capacity_m3h)</code>,
+    <code>dewatering_readings(unit_id, ts, flow_m3h, level_m, pressure_mpa, status)</code><br><br>
+    <b>Реализация:</b> SVG генерируется из конфигурации карьера. Анимация потоков — CSS <code>stroke-dashoffset</code>.
+    Данные через Supabase Realtime. Визуальный редактор позиций — drag&amp;drop на схеме.<br><br>
+    ⚠ <b>Трудозатраты:</b> фиксированная схема ~1–2 дня, полностью настраиваемая — ~2 недели.
+  </div>
+</div>
+
+<!-- ПРИОРИТЕТЫ -->
+<h2>Что делать в первую очередь</h2>
+<div style="background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r);padding:16px;">
+  <div class="prio-row">
+    <div class="num">1</div>
+    <div class="prio-txt"><b>Пороги и оповещения</b> — функция 1<br><span>Критично для безопасности. Supabase Realtime + Edge Function. ~3–4 дня</span></div>
+  </div>
+  <div class="prio-row">
+    <div class="num">2</div>
+    <div class="prio-txt"><b>Оперативный дашборд</b> — Вариант А<br><span>Переработка главного экрана: KPI + тревоги + насосы. ~3–5 дней</span></div>
+  </div>
+  <div class="prio-row">
+    <div class="num">3</div>
+    <div class="prio-txt"><b>Учёт ТО насосов</b> — функция 3<br><span>Две таблицы + карточки с прогресс-барами. ~2–3 дня</span></div>
+  </div>
+  <div class="prio-row">
+    <div class="num">4</div>
+    <div class="prio-txt"><b>SVG P&ID схема</b> — Вариант Б (фиксированная)<br><span>Статичная схема с реальными данными. ~1–2 дня</span></div>
+  </div>
+  <div class="prio-row">
+    <div class="num">5</div>
+    <div class="prio-txt"><b>Сменный рапорт</b> — функция 4<br><span>Форма + PDF-экспорт. ~2–3 дня</span></div>
+  </div>
+  <div class="prio-row">
+    <div class="num">6</div>
+    <div class="prio-txt"><b>Водный баланс + Экспорт</b> — функции 2 и 5<br><span>По мере готовности остального. ~3–4 дня совокупно</span></div>
+  </div>
+</div>
+
+</body>
+</html>
