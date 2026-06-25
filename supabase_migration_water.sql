@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS dew_meter_readings (
   reading          NUMERIC,
   is_reset         BOOLEAN NOT NULL DEFAULT false,
   is_stopped       BOOLEAN NOT NULL DEFAULT false,
+  reset_start_value NUMERIC,
   downtime_reason  TEXT NOT NULL DEFAULT '',
   hours_worked     NUMERIC,
   distributions    JSONB NOT NULL DEFAULT '[]'::jsonb,
