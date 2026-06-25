@@ -153,7 +153,7 @@ var DewateringState = {
   lastActualReading: function(pumpId, date) {
     var candidates = this.meterReadings
       .filter(function(r) {
-        return r.pumpId === pumpId && r.date < date && !r.isStopped && !r.isReset && r.reading != null;
+        return r.pumpId === pumpId && r.date < date && !r.isStopped && (r.reading != null || r.isReset);
       })
       .sort(function(a, b) { return b.date.localeCompare(a.date); });
     return candidates.length ? candidates[0] : null;
@@ -169,10 +169,11 @@ var DewateringState = {
     if (!rec) return null;
     if (rec.isStopped) return 0;
     if (rec.isManualVolume) return parseFloat(rec.manualVolume) || 0;
-    if (rec.isReset) return 0;
+    if (rec.isReset) return parseFloat(rec.manualVolume) || 0;
     var prev = this.lastActualReading(rec.pumpId, rec.date);
     if (!prev) return null;
-    var diff = parseFloat(rec.reading) - parseFloat(prev.reading);
+    var baseVal = prev.isReset ? (parseFloat(prev.resetStartValue) || 0) : parseFloat(prev.reading);
+    var diff = parseFloat(rec.reading) - baseVal;
     return diff >= 0 ? diff : null;
   },
 
@@ -1652,15 +1653,18 @@ function _dewOpenFillModal(sumpId, date) {
   var pumpSectionsHtml = activePumps.map(function(p) {
     var existing = DewateringState.readingForDate(p.id, modalDate);
     var prevRec  = DewateringState.lastActualReading(p.id, modalDate);
-    var prevVal  = prevRec ? parseFloat(prevRec.reading) : null;
+    var prevVal  = prevRec ? (prevRec.isReset ? (parseFloat(prevRec.resetStartValue) || 0) : parseFloat(prevRec.reading)) : null;
     var prevDate = prevRec ? prevRec.date : null;
     var isStopped = existing ? !!existing.isStopped : false;
+    var isReset   = existing ? !!existing.isReset   : false;
     var st = DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off;
 
     // Volume to show if existing reading already saved
-    var curReadingVal = existing && !existing.isStopped && existing.reading != null ? parseFloat(existing.reading) : null;
-    var initVol = (curReadingVal != null && prevVal != null) ? (curReadingVal - prevVal) : null;
+    var curReadingVal = existing && !existing.isStopped && !existing.isReset && existing.reading != null ? parseFloat(existing.reading) : null;
+    var initVol = isReset   ? (parseFloat(existing && existing.manualVolume) || 0)
+                : (curReadingVal != null && prevVal != null) ? (curReadingVal - prevVal) : null;
     var initVolHtml = isStopped ? '<span style="color:var(--txt-3)">простой</span>'
+                    : isReset   ? '<span style="color:var(--gold)">🔄 замена</span>'
                     : initVol != null ? (initVol >= 0 ? '<span style="color:var(--ok)">' + initVol.toFixed(0) + ' м³</span>' : '<span style="color:var(--bad)">⚠ ' + initVol.toFixed(0) + '</span>')
                     : '<span style="color:var(--txt-3)">—</span>';
 
@@ -1679,19 +1683,39 @@ function _dewOpenFillModal(sumpId, date) {
         '</label>' +
       '</div>' +
       '<div id="dew-modal-fields-' + p.id + '"' + (isStopped ? ' style="display:none"' : '') + '>' +
+        '<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;margin-bottom:10px;color:' + (isReset ? 'var(--gold)' : 'var(--txt-3)') + '">' +
+          '<input type="checkbox" id="dew-modal-reset-chk-' + p.id + '"' + (isReset ? ' checked' : '') + ' onchange="_dewModalToggleReset(\'' + p.id + '\')">' +
+          ' 🔄 Замена расходомера / сброс показаний' +
+        '</label>' +
+        '<div id="dew-modal-normal-fields-' + p.id + '"' + (isReset ? ' style="display:none"' : '') + '>' +
+          '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">' +
+            '<div>' +
+              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Предыдущее показание' + (prevDate ? ' · ' + prevDate : '') + '</div>' +
+              '<div style="font-size:18px;font-weight:700;color:var(--txt-2);min-width:80px">' + (prevVal != null ? prevVal.toFixed(0) + ' <span style="font-size:11px;font-weight:400">м³</span>' : '<span style="color:var(--txt-3);font-size:14px">нет данных</span>') + '</div>' +
+            '</div>' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Показание на 06:00</label>' +
+              '<input type="number" id="dew-modal-val-' + p.id + '" class="form-control" value="' + (curReadingVal != null ? curReadingVal.toFixed(0) : '') + '" placeholder="м³ накоп." style="width:130px;font-size:15px;font-weight:600" oninput="_dewModalCalcVol(\'' + p.id + '\',' + (prevVal != null ? prevVal : 'null') + ')">' +
+            '</div>' +
+            '<div>' +
+              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Объём за сутки</div>' +
+              '<div id="dew-modal-vol-' + p.id + '" style="font-size:18px;font-weight:700;min-width:80px">' + initVolHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div id="dew-modal-reset-fields-' + p.id + '"' + (!isReset ? ' style="display:none"' : '') + '>' +
+          '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:6px;padding:10px 12px;margin-bottom:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Нач. показание нового счётчика, м³</label>' +
+              '<input type="number" id="dew-modal-reset-start-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.resetStartValue != null ? existing.resetStartValue : '')) + '" placeholder="0" style="width:160px;font-size:14px;font-weight:600">' +
+            '</div>' +
+            '<div class="form-group" style="margin:0">' +
+              '<label class="form-label" style="font-size:9px">Объём по старому счётчику (необяз.)</label>' +
+              '<input type="number" id="dew-modal-reset-vol-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.manualVolume != null ? existing.manualVolume : '')) + '" placeholder="м³" style="width:120px;font-size:12px">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">' +
-          '<div>' +
-            '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Предыдущее показание' + (prevDate ? ' · ' + prevDate : '') + '</div>' +
-            '<div style="font-size:18px;font-weight:700;color:var(--txt-2);min-width:80px">' + (prevVal != null ? prevVal.toFixed(0) + ' <span style="font-size:11px;font-weight:400">м³</span>' : '<span style="color:var(--txt-3);font-size:14px">нет данных</span>') + '</div>' +
-          '</div>' +
-          '<div class="form-group" style="margin:0">' +
-            '<label class="form-label" style="font-size:9px">Показание на 06:00</label>' +
-            '<input type="number" id="dew-modal-val-' + p.id + '" class="form-control" value="' + (curReadingVal != null ? curReadingVal.toFixed(0) : '') + '" placeholder="м³ накоп." style="width:130px;font-size:15px;font-weight:600" oninput="_dewModalCalcVol(\'' + p.id + '\',' + (prevVal != null ? prevVal : 'null') + ')">' +
-          '</div>' +
-          '<div>' +
-            '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Объём за сутки</div>' +
-            '<div id="dew-modal-vol-' + p.id + '" style="font-size:18px;font-weight:700;min-width:80px">' + initVolHtml + '</div>' +
-          '</div>' +
           '<div class="form-group" style="margin:0">' +
             '<label class="form-label" style="font-size:9px">Часов работы</label>' +
             '<input type="number" id="dew-modal-hrs-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.hoursWorked != null ? existing.hoursWorked : '')) + '" min="0" max="24" placeholder="ч" style="width:72px;font-size:12px">' +
@@ -1811,6 +1835,15 @@ function _dewModalToggleStopped(pumpId) {
   if (reason) reason.style.display = chk.checked ? ''     : 'none';
 }
 
+function _dewModalToggleReset(pumpId) {
+  var chk    = document.getElementById('dew-modal-reset-chk-'     + pumpId);
+  var normal = document.getElementById('dew-modal-normal-fields-' + pumpId);
+  var reset  = document.getElementById('dew-modal-reset-fields-'  + pumpId);
+  if (!chk) return;
+  if (normal) normal.style.display = chk.checked ? 'none' : '';
+  if (reset)  reset.style.display  = chk.checked ? ''     : 'none';
+}
+
 function _dewModalWlHint(sumpId) {
   var hint    = document.getElementById('dew-modal-wl-hint');
   var elevInp = document.getElementById('dew-modal-wl-elev');
@@ -1854,19 +1887,29 @@ function _dewSaveFillModal(sumpId) {
   pumps.forEach(function(p) {
     var stoppedEl = document.getElementById('dew-modal-stopped-' + p.id);
     if (!stoppedEl) return;
-    var isStopped = stoppedEl.checked;
-    var existing  = DewateringState.readingForDate(p.id, date);
+    var isStopped  = stoppedEl.checked;
+    var resetChkEl = document.getElementById('dew-modal-reset-chk-' + p.id);
+    var isReset    = !isStopped && !!(resetChkEl && resetChkEl.checked);
+    var existing   = DewateringState.readingForDate(p.id, date);
 
     var data = {
       pumpId:         p.id,
       date:           date,
       isStopped:      isStopped,
-      isReset:        false,
+      isReset:        isReset,
       isManualVolume: false,
       downtimeReason: isStopped ? (((document.getElementById('dew-modal-dreason-' + p.id) || {}).value) || '').trim() : '',
     };
 
-    if (!isStopped) {
+    if (!isStopped && isReset) {
+      var resetStartEl = document.getElementById('dew-modal-reset-start-' + p.id);
+      data.resetStartValue = resetStartEl ? (parseFloat(resetStartEl.value) || 0) : 0;
+      var resetVolEl = document.getElementById('dew-modal-reset-vol-' + p.id);
+      data.manualVolume   = resetVolEl && resetVolEl.value.trim() !== '' ? (parseFloat(resetVolEl.value) || 0) : null;
+      data.hoursWorked    = parseFloat((document.getElementById('dew-modal-hrs-'   + p.id) || {}).value) || null;
+      data.distributions  = _dewGetDistributions(p.id);
+      data.notes          = (((document.getElementById('dew-modal-notes-' + p.id) || {}).value) || '').trim();
+    } else if (!isStopped) {
       var valEl = document.getElementById('dew-modal-val-' + p.id);
       if (!valEl || valEl.value.trim() === '') return;
       data.reading       = parseFloat(valEl.value);
@@ -2742,17 +2785,21 @@ function _dewRenderReadingsTable() {
           }).join(', ')
         : '—';
       var volStr    = r.isStopped ? '<span style="color:var(--txt-3)">простой</span>'
+                   : r.isReset   ? '<span style="color:var(--gold)">🔄 ' + (vol != null ? vol.toFixed(0) + ' м³' : '—') + '</span>'
                    : vol == null  ? '<span style="color:var(--txt-3)">нет пред.</span>'
                    : '<span style="color:var(--ok);font-weight:600">' + vol.toFixed(0) + '</span>';
+      var readingDisp = r.isStopped ? '—'
+                      : r.isReset   ? '<span style="color:var(--gold)">→ ' + (r.resetStartValue != null ? parseFloat(r.resetStartValue).toFixed(0) : '0') + '</span>'
+                      : (r.reading != null ? parseFloat(r.reading).toFixed(0) : '—');
 
       var dataRow =
-        '<tr style="border-bottom:' + (isEditing ? 'none' : '1px solid var(--line-2)') + (isEditing ? ';background:rgba(255,255,255,.03)' : '') + '">' +
+        '<tr style="border-bottom:' + (isEditing ? 'none' : '1px solid var(--line-2)') + (isEditing ? ';background:rgba(255,255,255,.03)' : r.isReset ? ';background:rgba(251,191,36,.04)' : '') + '">' +
         '<td style="padding:5px 8px;color:var(--txt-1);white-space:nowrap">' + r.date + '</td>' +
         '<td style="padding:5px 8px">' +
           '<div style="color:var(--txt-1)">' + (pump ? escHTML(pump.name) : '—') + '</div>' +
           (sump ? '<div style="color:var(--txt-3);font-size:9px">' + escHTML(sump.name) + '</div>' : '') +
         '</td>' +
-        '<td style="padding:5px 8px;text-align:right;color:var(--txt-2)">' + (r.isStopped ? '—' : (r.reading != null ? parseFloat(r.reading).toFixed(0) : '—')) + '</td>' +
+        '<td style="padding:5px 8px;text-align:right;color:var(--txt-2)">' + readingDisp + '</td>' +
         '<td style="padding:5px 8px;text-align:right">' + volStr + '</td>' +
         '<td style="padding:5px 8px;text-align:right;color:var(--txt-3)">' + (r.hoursWorked != null ? parseFloat(r.hoursWorked).toFixed(1) : '—') + '</td>' +
         '<td style="padding:5px 8px;color:var(--txt-3);font-size:10px">' + distDisp + '</td>' +
