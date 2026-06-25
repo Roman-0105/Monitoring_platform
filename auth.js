@@ -37,7 +37,9 @@ var Auth = (function() {
   // ── Профиль текущего пользователя ────────────────────────
   async function getProfile() {
     if (_profile) return _profile;
-    var { data: { user } } = await _client().auth.getUser();
+    var res = await _client().auth.getUser();
+    if (res.error) throw new Error(res.error.message);
+    var user = res.data && res.data.user;
     if (!user) return null;
     var { data: prof } = await _client()
       .from('profiles').select('display_name, role').eq('id', user.id).maybeSingle();
@@ -52,7 +54,8 @@ var Auth = (function() {
 
   // ── Вызов Edge Function admin-users ──────────────────────
   async function callAdminFunction(body) {
-    var { data: { session } } = await _client().auth.getSession();
+    var sr = await _client().auth.getSession();
+    var session = sr.data && sr.data.session;
     if (!session) throw new Error('Нет сессии');
     var cfg = window.APP_CONFIG || {};
     var resp = await fetch(cfg.SUPABASE_URL + '/functions/v1/admin-users', {

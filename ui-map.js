@@ -973,6 +973,7 @@ function openAddPointModal(xLocal, yLocal) {
   if (delBtn) delBtn.style.display = 'none';
 
   var form = document.getElementById('edit-form');
+  if (!form) return;
   form._mapCoords = { xLocal: xLocal, yLocal: yLocal };
 
   document.getElementById('edit-modal-title').textContent = 'Новая точка на карте';
@@ -1072,8 +1073,8 @@ function showMapPointCard(p) {
     html += '<div class="mpc-row"><span class="mpc-label">X / Y</span><span>' +
       Number(p.xLocal).toFixed(2) + ' / ' + Number(p.yLocal).toFixed(2) + '</span></div>';
   }
-  if (p.horizon) html += '<div class="mpc-row"><span class="mpc-label">Горизонт</span><span>' + escAttr(p.horizon) + '</span></div>';
-  if (p.measureMethod) html += '<div class="mpc-row"><span class="mpc-label">Метод замера</span><span>' + escAttr(p.measureMethod) + '</span></div>';
+  if (p.horizon) html += '<div class="mpc-row"><span class="mpc-label">Горизонт</span><span>' + escHTML(p.horizon) + '</span></div>';
+  if (p.measureMethod) html += '<div class="mpc-row"><span class="mpc-label">Метод замера</span><span>' + escHTML(p.measureMethod) + '</span></div>';
   if (p.comment) html += '<div class="mpc-comment">' + escHTML(p.comment) + '</div>';
   html += '</div>';
 
@@ -1171,8 +1172,8 @@ function showDitchMapTooltip(d, clientX, clientY) {
   var el = document.getElementById('map-tooltip');
   if (!el) return;
   el.innerHTML =
-    '<b style="color:#4090e8">🌊 ' + escAttr(d.ditchName) + '</b>' +
-    (d.status ? ' · ' + escAttr(d.status) : '') + '<br>' +
+    '<b style="color:#4090e8">🌊 ' + escHTML(d.ditchName) + '</b>' +
+    (d.status ? ' · ' + escHTML(d.status) : '') + '<br>' +
     (d.flowM3h != null ? '<span style="color:#f9ab00">' + d.flowM3h.toFixed(3) + ' м³/ч</span>' : '');
   el.style.display = '';
 
@@ -1207,18 +1208,18 @@ function showDitchMapCard(ditch) {
   var html = '<div class="mpc-header">';
   html += '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">';
   html += '<span style="font-size:16px">🌊</span>';
-  html += '<span class="mpc-num" style="color:#4090e8">' + escAttr(ditch.ditchName) + '</span>';
+  html += '<span class="mpc-num" style="color:#4090e8">' + escHTML(ditch.ditchName) + '</span>';
   if (ditch.pointNumber) {
-    html += '<span style="font-size:10px;color:var(--txt-3)">· T' + escAttr(ditch.pointNumber) + '</span>';
+    html += '<span style="font-size:10px;color:var(--txt-3)">· T' + escHTML(ditch.pointNumber) + '</span>';
   }
   html += '</div>';
-  html += '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:' + col + '22;color:' + col + ';border:1px solid ' + col + '44">' + escAttr(ditch.status || 'Активная') + '</span>';
+  html += '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:' + col + '22;color:' + col + ';border:1px solid ' + col + '44">' + escHTML(ditch.status || 'Активная') + '</span>';
   html += '<button class="mpc-close">✕</button>';
   html += '</div>';
 
   html += '<div class="mpc-body">';
-  html += '<div class="mpc-row"><span class="mpc-label">Дата</span><span>' + escAttr(ditch.monitoringDate || '—') + '</span></div>';
-  html += '<div class="mpc-row"><span class="mpc-label">Сотрудник</span><span>' + escAttr(ditch.worker || '—') + '</span></div>';
+  html += '<div class="mpc-row"><span class="mpc-label">Дата</span><span>' + escHTML(ditch.monitoringDate || '—') + '</span></div>';
+  html += '<div class="mpc-row"><span class="mpc-label">Сотрудник</span><span>' + escHTML(ditch.worker || '—') + '</span></div>';
   if (ditch.width != null) {
     html += '<div class="mpc-row"><span class="mpc-label">Ширина</span><span>' + ditch.width.toFixed(2) + ' м</span></div>';
   }
@@ -1229,7 +1230,7 @@ function showDitchMapCard(ditch) {
     html += '<div class="mpc-row" style="color:#f9ab00;font-weight:600"><span class="mpc-label" style="color:var(--txt-2)">Водоприток Q</span><span>' + ditch.flowM3h.toFixed(3) + ' м³/ч</span></div>';
   }
   if (ditch.comment) {
-    html += '<div class="mpc-row"><span class="mpc-label">Комментарий</span><span>' + escAttr(ditch.comment) + '</span></div>';
+    html += '<div class="mpc-row"><span class="mpc-label">Комментарий</span><span>' + escHTML(ditch.comment) + '</span></div>';
   }
   html += '</div>';
 
@@ -1327,7 +1328,7 @@ function showDitchHistoryInPanel(ditchName, panelEl) {
         dateStr = dp[2] + '.' + dp[1] + '.' + dp[0].slice(2);
       }
       html += '<tr>';
-      html += '<td style="padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.04)">' + escAttr(dateStr) + '</td>';
+      html += '<td style="padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.04)">' + escHTML(dateStr) + '</td>';
       html += '<td style="padding:4px 8px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04)">' + (h.area != null ? h.area.toFixed(3) : '—') + '</td>';
       html += '<td style="padding:4px 8px;text-align:right;color:var(--gold);font-weight:600;border-bottom:1px solid rgba(255,255,255,.04)">' + (h.flowM3h != null ? h.flowM3h.toFixed(3) : '—') + '</td>';
       html += '</tr>';
@@ -1569,7 +1570,7 @@ function showPoiCard(p, clientX, clientY) {
     return '<div style="display:flex;justify-content:space-between;gap:6px;' +
       'padding:4px 10px;border-bottom:1px solid rgba(48,54,61,.4);font-size:10px">' +
       '<span style="color:var(--txt-3)">' + label + '</span>' +
-      '<span style="color:' + (color || 'var(--txt-2)') + ';font-weight:500;text-align:right">' + escAttr(String(val)) + '</span>' +
+      '<span style="color:' + (color || 'var(--txt-2)') + ';font-weight:500;text-align:right">' + escHTML(String(val)) + '</span>' +
       '</div>';
   }
 
@@ -1580,8 +1581,8 @@ function showPoiCard(p, clientX, clientY) {
       '<div style="display:flex;align-items:center;gap:7px">' +
         '<span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;background:' +
         (isDone ? 'var(--ok)' : 'rgba(139,148,158,.6)') + '"></span>' +
-        '<span style="font-size:13px;font-weight:700;color:var(--gold)">№' + escAttr(p.pointNumber) + '</span>' +
-        '<span style="font-size:11px;color:var(--txt-2)">' + escAttr(p.wall || p.domain || '') + '</span>' +
+        '<span style="font-size:13px;font-weight:700;color:var(--gold)">№' + escHTML(p.pointNumber) + '</span>' +
+        '<span style="font-size:11px;color:var(--txt-2)">' + escHTML(p.wall || p.domain || '') + '</span>' +
       '</div>' +
       '<button id="poi-card-close" style="width:20px;height:20px;border-radius:3px;border:1px solid var(--line);' +
       'background:transparent;color:var(--txt-2);font-size:12px;cursor:pointer;' +

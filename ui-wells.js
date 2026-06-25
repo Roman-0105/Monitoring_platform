@@ -9,6 +9,7 @@ var WellsState = {
   measWellId:   null,
   subTab:       'view',
   filterType:   '',
+  _fetchingId:  null,
 };
 
 var _wellsTabInited = false;
@@ -433,6 +434,7 @@ function _buildWellMapDOM(body, url) {
   svg.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;cursor:crosshair';
 
   var bgImg = document.createElementNS(NS, 'image');
+  bgImg.id = 'wells-map-bg';
   bgImg.setAttribute('x', '0');  bgImg.setAttribute('y', '0');
   bgImg.setAttribute('preserveAspectRatio', 'none');
   bgImg.setAttribute('href', url);
@@ -1309,7 +1311,7 @@ function _setupWellMapZoom(body, svg) {
     svg.style.cursor = 'grabbing';
     e.preventDefault();
   });
-  document.addEventListener('mousemove', function(e) {
+  var _wmPanMove = function(e) {
     if (!dragging) return;
     var rect  = svg.getBoundingClientRect();
     var dxSvg = -(e.clientX - dsx) / (rect.width  || 1) * z.vbW;
@@ -1318,12 +1320,18 @@ function _setupWellMapZoom(body, svg) {
     z.tvbX = z.vbX = vb.x;
     z.tvbY = z.vbY = vb.y;
     _applyViewBox();
-  });
-  document.addEventListener('mouseup', function() {
+  };
+  var _wmPanUp = function() {
     if (!dragging) return;
     dragging = false;
     svg.style.cursor = z.imgW / z.tvbW > 1.02 ? 'grab' : 'crosshair';
-  });
+  };
+  if (z._wmPanMove) document.removeEventListener('mousemove', z._wmPanMove);
+  if (z._wmPanUp)   document.removeEventListener('mouseup',   z._wmPanUp);
+  z._wmPanMove = _wmPanMove;
+  z._wmPanUp   = _wmPanUp;
+  document.addEventListener('mousemove', _wmPanMove);
+  document.addEventListener('mouseup',   _wmPanUp);
 
   // Double-click reset
   svg.addEventListener('dblclick', function() {
@@ -1486,13 +1494,19 @@ function _refreshDataCard() {
       cd.ox = _wellsMap.card.offX; cd.oy = _wellsMap.card.offY;
       e.preventDefault(); e.stopPropagation();
     });
-    document.addEventListener('mousemove', function(e) {
+    var _cardDragMove = function(e) {
       if (!cd.on) return;
       _wellsMap.card.offX = cd.ox + (e.clientX - cd.sx);
       _wellsMap.card.offY = cd.oy + (e.clientY - cd.sy);
       _updateDataCard();
-    });
-    document.addEventListener('mouseup', function() { cd.on = false; });
+    };
+    var _cardDragUp = function() { cd.on = false; };
+    if (_wellsMap._cardDragMove) document.removeEventListener('mousemove', _wellsMap._cardDragMove);
+    if (_wellsMap._cardDragUp)   document.removeEventListener('mouseup',   _wellsMap._cardDragUp);
+    _wellsMap._cardDragMove = _cardDragMove;
+    _wellsMap._cardDragUp   = _cardDragUp;
+    document.addEventListener('mousemove', _cardDragMove);
+    document.addEventListener('mouseup',   _cardDragUp);
   }
 
   // Collapse toggle
@@ -1561,7 +1575,9 @@ function renderWellChartCard(well) {
   }
 
   body.innerHTML = '<p class="form-hint">Загрузка замеров...</p>';
+  WellsState._fetchingId = well.id;
   Api.getWellMeasurements(well.id).then(function(meas) {
+    WellsState._fetchingId = null;
     WellsState.measurements[well.id] = meas;
     if (WellsState.selectedId === well.id) {
       _drawWellChart(body, meas);
@@ -1569,6 +1585,7 @@ function renderWellChartCard(well) {
       _refreshDataCard();
     }
   }).catch(function(err) {
+    WellsState._fetchingId = null;
     body.innerHTML = '<p class="form-hint" style="color:var(--red)">Ошибка: ' + escHTML(err.message) + '</p>';
   });
 }
@@ -1743,6 +1760,7 @@ function renderMeasurementsTable(well) {
   var meas = WellsState.measurements[well.id];
   if (!meas) {
     wrap.innerHTML = '<p class="form-hint">Загрузка...</p>';
+    if (WellsState._fetchingId === well.id) return; // renderWellChartCard already fetching
     Api.getWellMeasurements(well.id).then(function(list) {
       WellsState.measurements[well.id] = list;
       if (WellsState.selectedId === well.id) renderMeasurementsTable(well);

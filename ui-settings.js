@@ -128,19 +128,25 @@ function renderSettingsSchemes() {
       var f = fileInput.files && fileInput.files[0];
       if (!f) { preview.innerHTML = ''; return; }
       if (f.type === 'application/pdf') {
+        if (preview._blobUrl) { URL.revokeObjectURL(preview._blobUrl); preview._blobUrl = null; }
         preview.innerHTML = '<p class="form-hint">📄 ' + escHTML(f.name) + '</p>';
       } else {
+        if (preview._blobUrl) URL.revokeObjectURL(preview._blobUrl);
         var url = URL.createObjectURL(f);
+        preview._blobUrl = url;
         preview.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:180px;border-radius:6px;margin-bottom:8px;object-fit:contain">';
       }
     });
   });
 
-  // Upload button delegation
-  panel.addEventListener('click', function(e) {
-    var btn = e.target.closest('.scheme-upload-btn');
-    if (btn) _uploadSchemeForQuarry(btn.dataset.qid, btn.dataset.qname);
-  });
+  // Upload button delegation (guard against duplicate listeners on re-render)
+  if (!panel._schemeClickBound) {
+    panel._schemeClickBound = true;
+    panel.addEventListener('click', function(e) {
+      var btn = e.target.closest('.scheme-upload-btn');
+      if (btn) _uploadSchemeForQuarry(btn.dataset.qid, btn.dataset.qname);
+    });
+  }
 
   // Load scheme lists
   quarries.forEach(function(q) {

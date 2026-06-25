@@ -226,12 +226,12 @@ function _openPrintWindow(p, history) {
   '</div>' +
 
   // Комментарий
-  (p.comment ? '<div style="margin-bottom:16px"><div class="section-title">Комментарий</div><div style="padding:8px;background:#fafafa;border:1px solid #eee;border-radius:4px;font-size:13px">' + p.comment + '</div></div>' : '') +
+  (p.comment ? '<div style="margin-bottom:16px"><div class="section-title">Комментарий</div><div style="padding:8px;background:#fafafa;border:1px solid #eee;border-radius:4px;font-size:13px">' + escHTML(p.comment) + '</div></div>' : '') +
 
   // Координаты
   (p.lat || p.xLocal ? '<div class="coords" style="margin-bottom:16px"><div class="section-title">Координаты</div>' +
     (p.lat ? 'GPS: ' + Number(p.lat).toFixed(6) + ', ' + Number(p.lon).toFixed(6) + '&emsp;' : '') +
-    (p.xLocal ? 'Локальные: X=' + p.xLocal + ' Y=' + p.yLocal : '') +
+    (p.xLocal ? 'Локальные: X=' + escHTML(String(p.xLocal)) + ' Y=' + escHTML(String(p.yLocal)) : '') +
   '</div>' : '') +
 
   // История замеров

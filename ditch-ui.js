@@ -64,8 +64,9 @@ function hydraulicCalc(B, depthsCm, velMethod, velParams, n_rough, I) {
     }
   } else if (velMethod === 'multi') {
     var v02 = parseFloat(velParams.v02)||0;
+    var v06 = parseFloat(velParams.v06)||0;
     var v08 = parseFloat(velParams.v08)||0;
-    v_pol = (v02 + v08) / 2;
+    v_pol = v06 ? (v02 + 2*v06 + v08) / 4 : (v02 + v08) / 2;
   }
 
   var v_use = (v_pol != null && velMethod !== 'manning') ? v_pol : v_th;
@@ -216,7 +217,7 @@ function resetDitchForm() {
   var fields = ['dm-name','dm-point','dm-date','dm-worker','dm-lat','dm-lon','dm-xlocal','dm-ylocal',
                 'dm-width','dm-velocity','dm-floatT','dm-comment'];
   fields.forEach(function(id){ setField(id,''); });
-  setField('dm-floatL','1');
+  setField('dm-floatL','10');
   setField('dm-floatK','0.85');
   setField('dm-status','Активная');
   setDitchVelMethod('single', null);
@@ -523,6 +524,7 @@ function calcDitch() {
     velParams.K  = getField('dm-floatK');
   } else if (vm === 'multi') {
     velParams.v02 = getField('dm-v02');
+    velParams.v06 = getField('dm-v06');
     velParams.v08 = getField('dm-v08');
   }
   // manning — velParams пустые, используется только v_th
@@ -750,20 +752,20 @@ function renderDitchCard(ditch) {
   var html = '<div class="point-card ditch-card">';
   html += '<div class="point-card__header">';
   html += '<span class="ditch-card__icon">🌊</span>';
-  html += '<span class="point-card__num">' + escAttr(ditch.ditchName) + '</span>';
+  html += '<span class="point-card__num">' + escHTML(ditch.ditchName) + '</span>';
   if (ditch.pointNumber) {
-    html += '<span class="point-card__num" style="opacity:.6;font-size:11px"> · Т' + escAttr(ditch.pointNumber) + '</span>';
+    html += '<span class="point-card__num" style="opacity:.6;font-size:11px"> · Т' + escHTML(ditch.pointNumber) + '</span>';
   }
-  html += '<span class="badge badge--' + getDitchStatusKey(ditch.status) + '">' + escAttr(ditch.status || 'Активная') + '</span>';
+  html += '<span class="badge badge--' + getDitchStatusKey(ditch.status) + '">' + escHTML(ditch.status || 'Активная') + '</span>';
   html += '</div>';
 
   html += '<div class="point-card__body">';
   html += '<div class="mpc-row"><span class="mpc-label">Дата</span><span>' + (ditch.monitoringDate || '—') + '</span></div>';
-  html += '<div class="mpc-row"><span class="mpc-label">Сотрудник</span><span>' + escAttr(ditch.worker || '—') + '</span></div>';
+  html += '<div class="mpc-row"><span class="mpc-label">Сотрудник</span><span>' + escHTML(ditch.worker || '—') + '</span></div>';
   html += '<div class="mpc-row"><span class="mpc-label">Ширина</span><span>' + (ditch.width != null ? ditch.width.toFixed(2) + ' м' : '—') + '</span></div>';
   html += '<div class="mpc-row"><span class="mpc-label">Площадь S</span><span>' + (ditch.area != null ? ditch.area.toFixed(3) + ' м²' : '—') + '</span></div>';
   html += '<div class="mpc-row mpc-row--accent"><span class="mpc-label">Водоприток Q</span><span>' + (ditch.flowM3h != null ? ditch.flowM3h.toFixed(3) + ' м³/ч' : '—') + '</span></div>';
-  if (ditch.comment) html += '<div class="mpc-row"><span class="mpc-label">Комментарий</span><span>' + escAttr(ditch.comment) + '</span></div>';
+  if (ditch.comment) html += '<div class="mpc-row"><span class="mpc-label">Комментарий</span><span>' + escHTML(ditch.comment) + '</span></div>';
   html += '</div>';
 
   // Фото
@@ -800,13 +802,13 @@ function renderDitchHistoryPanel(name, hist) {
   if (!panel) return;
 
   if (!hist.length) {
-    panel.innerHTML = '<div style="padding:16px;color:var(--txt-3);font-size:12px">Нет истории для «' + escAttr(name) + '»</div>';
+    panel.innerHTML = '<div style="padding:16px;color:var(--txt-3);font-size:12px">Нет истории для «' + escHTML(name) + '»</div>';
     panel.style.display = '';
     return;
   }
 
   var html = '<div style="padding:14px">';
-  html += '<div style="font-size:13px;font-weight:600;color:var(--txt-1);margin-bottom:10px">📈 История канавы «' + escAttr(name) + '»</div>';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--txt-1);margin-bottom:10px">📈 История канавы «' + escHTML(name) + '»</div>';
   html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
   html += '<thead><tr>';
   html += '<th style="text-align:left;padding:5px 8px;color:var(--txt-3);border-bottom:1px solid var(--line)">Дата</th>';
@@ -817,10 +819,10 @@ function renderDitchHistoryPanel(name, hist) {
 
   hist.forEach(function(h) {
     html += '<tr>';
-    html += '<td style="padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04)">' + escAttr(h.monitoringDate) + '</td>';
+    html += '<td style="padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04)">' + escHTML(h.monitoringDate) + '</td>';
     html += '<td style="padding:5px 8px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04)">' + (h.area != null ? h.area.toFixed(3) : '—') + '</td>';
     html += '<td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--gold);border-bottom:1px solid rgba(255,255,255,.04)">' + (h.flowM3h != null ? h.flowM3h.toFixed(3) : '—') + '</td>';
-    html += '<td style="padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + escAttr(h.worker || '—') + '</td>';
+    html += '<td style="padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + escHTML(h.worker || '—') + '</td>';
     html += '</tr>';
   });
 

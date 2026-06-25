@@ -345,12 +345,12 @@ function openDetailModal(pointId) {
     'border-bottom:1px solid var(--line);background:var(--bg-0);gap:10px">' +
       '<div style="min-width:0;flex:1">' +
         '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:2px">' +
-          '<span style="font-size:20px;font-weight:700;color:var(--gold)">' + escAttr(p.pointNumber || '—') + '</span>' +
-          '<span style="font-size:13px;font-weight:500;color:var(--txt-1)">' + escAttr(p.wall || p.domain || '—') + '</span>' +
-          (p.status ? '<span class="badge ' + stClass + '">' + escAttr(p.status) + '</span>' : '') +
+          '<span style="font-size:20px;font-weight:700;color:var(--gold)">' + escHTML(p.pointNumber || '—') + '</span>' +
+          '<span style="font-size:13px;font-weight:500;color:var(--txt-1)">' + escHTML(p.wall || p.domain || '—') + '</span>' +
+          (p.status ? '<span class="badge ' + stClass + '">' + escHTML(p.status) + '</span>' : '') +
         '</div>' +
         '<div style="font-size:11px;color:var(--txt-3)">' +
-          escAttr(domainHorizon) +
+          escHTML(domainHorizon) +
           (domainHorizon ? ' · ' : '') +
           'последний замер ' + formatMonitoringDate(p.monitoringDate) +
         '</div>' +
@@ -393,16 +393,16 @@ function openDetailModal(pointId) {
     '<div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--txt-3);' +
     'text-transform:uppercase;margin-bottom:5px">Данные последнего замера</div>';
 
-  if (p.horizon)       body += _dmRow('Горизонт',       escAttr(p.horizon));
+  if (p.horizon)       body += _dmRow('Горизонт',       escHTML(p.horizon));
                        body += _dmRow('Дебит',           m3h);
                        body += _dmRow('Дата замера',     formatMonitoringDate(p.monitoringDate));
-  if (p.measureMethod) body += _dmRow('Способ',          escAttr(p.measureMethod));
-  if (p.intensity)     body += _dmRow('Интенсивность',   escAttr(p.intensity));
-  if (p.worker)        body += _dmRow('Замерщик',        escAttr(p.worker));
+  if (p.measureMethod) body += _dmRow('Способ',          escHTML(p.measureMethod));
+  if (p.intensity)     body += _dmRow('Интенсивность',   escHTML(p.intensity));
+  if (p.worker)        body += _dmRow('Замерщик',        escHTML(p.worker));
   if (p.xLocal != null) body += _dmRow('Координаты',
     'X: ' + Number(p.xLocal).toFixed(1) + '  Y: ' + Number(p.yLocal).toFixed(1));
-  if (p.waterColor)    body += _dmRow('Цвет воды',       escAttr(p.waterColor));
-  if (p.comment)       body += _dmRow('Примечание',      escAttr(p.comment));
+  if (p.waterColor)    body += _dmRow('Цвет воды',       escHTML(p.waterColor));
+  if (p.comment)       body += _dmRow('Примечание',      escHTML(p.comment));
 
   body += '</div>'; // /данные
   body += '</div>'; // /блок фото+данные
@@ -764,7 +764,7 @@ function _lbRow(label, val, valColor) {
     'gap:8px;padding:6px 0;border-bottom:1px solid rgba(48,54,61,.35);font-size:11px">' +
     '<span style="color:var(--txt-3);flex-shrink:0;font-size:10px">' + label + '</span>' +
     '<span style="color:' + (valColor || 'var(--txt-2)') + ';font-weight:500;' +
-    'text-align:right;word-break:break-word">' + escAttr(String(val)) + '</span>' +
+    'text-align:right;word-break:break-word">' + escHTML(String(val)) + '</span>' +
     '</div>';
 }
 
@@ -953,9 +953,9 @@ function _fillDetailHistory(box, history, pointNumber) {
         '<td style="' + tdSt + ';color:var(--txt-3);font-size:10px">' + (history.length - idx) + '</td>' +
         '<td style="' + tdSt + ';color:var(--gold);font-size:10px">' + formatMonitoringDate(r.monitoringDate || r.date) + '</td>' +
         '<td style="' + tdSt + ';color:' + qColor + ';font-weight:600;font-size:10px">' + qVal + '</td>' +
-        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escAttr(r.intensity || '—') + '</td>' +
-        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escAttr(r.measureMethod || '—') + '</td>' +
-        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escAttr(r.worker || '—') + '</td>' +
+        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escHTML(r.intensity || '—') + '</td>' +
+        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escHTML(r.measureMethod || '—') + '</td>' +
+        '<td style="' + tdSt + ';color:var(--txt-2);font-size:10px">' + escHTML(r.worker || '—') + '</td>' +
         '<td style="' + tdSt + ';text-align:center">' +
           '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;' +
           'background:' + dotClr + '"></span></td>' +

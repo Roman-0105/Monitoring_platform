@@ -186,20 +186,6 @@ function initStatsFilters() {
   if (btnXls) btnXls.addEventListener('click', function() { exportPointsXLSX(_anlCurrentPts()); });
 }
 
-// Возвращает актуальную палитру статусов — единый источник из MapModule
-function getStatusPalette() {
-  var palette = { 'Неизвестно': '#8f9aae' };
-  if (typeof MapModule !== 'undefined') {
-    var cfg = MapModule.getStyleConfig();
-    if (cfg && cfg.statusColors) {
-      Object.keys(cfg.statusColors).forEach(function(s) {
-        palette[s] = cfg.statusColors[s];
-      });
-    }
-  }
-  return palette;
-}
-
 function renderStatsPage() {
   initStatsFilters();
   _anlRenderKpis();
@@ -1220,8 +1206,8 @@ function _anlSetupTrendInteractions(allWells, visWells, allDFull, trendEl) {
   var tip = trendEl.querySelector('#anl-trend-tip');
   if (overlay && xhair && tip && svg) {
     var allD = _anlTrendBrushDates(allDFull);
-    var W = 440, PL = 42, PR = 12, PT = 12, PB = 32;
-    var cW = W - PL - PR, cH = W - PT - PB;
+    var W = 440, H = 185, PL = 42, PR = 12, PT = 12, PB = 32;
+    var cW = W - PL - PR, cH = H - PT - PB;
     function getSvgX(e) {
       var r = svg.getBoundingClientRect();
       var svgW = r.width || 1;
@@ -1249,7 +1235,6 @@ function _anlSetupTrendInteractions(allWells, visWells, allDFull, trendEl) {
           '<b style="color:' + clr + '">' + (q !== null ? q.toFixed(2) + ' м³/ч' : '—') + '</b></div>';
       }).filter(Boolean).join('');
       tip.innerHTML = '<div style="color:var(--txt-3);font-size:10px;margin-bottom:5px">' + formatMonitoringDate(d) + '</div>' + rows;
-      var svgRect = svg.getBoundingClientRect();
       var wrapRect = tip.parentElement.getBoundingClientRect();
       var relX = e.clientX - wrapRect.left + 12;
       var relY = e.clientY - wrapRect.top - 10;
@@ -1418,138 +1403,7 @@ function _anlRenderWells() {
   _anlDrawTrend(wells, document.getElementById('anl-well-trend'));
 }
 
-function renderHorizonBreakdown(byHorizon) {
-  var keys = Object.keys(byHorizon);
-  if (!keys.length) return '<p class="form-hint">Нет точек с указанным горизонтом.</p>';
-
-  // Сортируем: сначала по суммарному дебиту убыванию, затем по количеству
-  keys.sort(function(a, b) {
-    return byHorizon[b].totalLps - byHorizon[a].totalLps ||
-           byHorizon[b].count    - byHorizon[a].count;
-  });
-
-  // Считаем максимум для столбца прогресса
-  var maxLps = Math.max.apply(null, keys.map(function(k) { return byHorizon[k].totalLps; })) || 1;
-
-  var html =
-    '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-    '<thead><tr style="color:var(--txt-3);border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em">' +
-      '<th style="padding:6px 8px;text-align:left;font-weight:500">Горизонт</th>' +
-      '<th style="padding:6px 8px;text-align:center;font-weight:500">Точек</th>' +
-      '<th style="padding:6px 8px;text-align:right;font-weight:500">Σ л/с</th>' +
-      '<th style="padding:6px 8px;text-align:right;font-weight:500">Σ м³/ч</th>' +
-      '<th style="padding:6px 8px;text-align:right;font-weight:500">Ср. л/с</th>' +
-      '<th style="padding:6px 8px;min-width:80px;font-weight:500"></th>' +
-    '</tr></thead><tbody>';
-
-  keys.forEach(function(h) {
-    var d      = byHorizon[h];
-    var sumLps = Math.round(d.totalLps * 100) / 100;
-    var sumM3h = Math.round(lpsToM3h(d.totalLps) * 100) / 100;
-    var avgLps = d.withFlow ? Math.round(d.totalLps / d.withFlow * 100) / 100 : null;
-    var barPct = maxLps > 0 ? Math.round(d.totalLps / maxLps * 100) : 0;
-    var isUnknown = h === '—';
-
-    html +=
-      '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
-        '<td style="padding:8px 8px;font-weight:' + (isUnknown ? '400' : '600') + ';color:' + (isUnknown ? 'var(--txt-3)' : 'var(--txt-1)') + '">' +
-          (isUnknown ? '— не указан —' : '⛰️ ' + h) +
-        '</td>' +
-        '<td style="padding:8px;text-align:center;color:var(--txt-1)">' + d.count + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#1a73e8;font-weight:600">' + (d.withFlow ? sumLps : '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#f9ab00">' + (d.withFlow ? sumM3h : '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:var(--txt-2)">' + (avgLps != null ? avgLps : '—') + '</td>' +
-        '<td style="padding:8px 8px 8px 4px">' +
-          '<div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">' +
-            '<div style="height:6px;border-radius:3px;background:#1a73e8;width:' + barPct + '%;transition:width .3s"></div>' +
-          '</div>' +
-        '</td>' +
-      '</tr>';
-  });
-
-  html += '</tbody></table>';
-
-  // Итоговая строка если больше одного горизонта с данными
-  var totalKeys = keys.filter(function(k){ return k !== '—'; });
-  if (totalKeys.length > 1) {
-    var grandTotal = totalKeys.reduce(function(acc, k) { return acc + byHorizon[k].totalLps; }, 0);
-    var grandCount = totalKeys.reduce(function(acc, k) { return acc + byHorizon[k].count; }, 0);
-    html +=
-      '<div style="display:flex;gap:16px;padding:10px 8px 4px;border-top:1px solid var(--line);font-size:12px;color:var(--txt-3)">' +
-        '<span>Итого по горизонтам: <b style="color:var(--txt-1)">' + grandCount + ' точек</b></span>' +
-        '<span><b style="color:#1a73e8">' + Math.round(grandTotal*100)/100 + ' л/с</b> · ' +
-        '<b style="color:#f9ab00">' + Math.round(lpsToM3h(grandTotal)*100)/100 + ' м³/ч</b></span>' +
-      '</div>';
-  }
-
-  return html;
-}
-
-function renderPieChart(container, statsObj, palette) {
-  if (!container) return;
-  var keys  = Object.keys(statsObj).filter(function(k) { return statsObj[k] > 0; });
-  var total = keys.reduce(function(acc, k) { return acc + statsObj[k]; }, 0);
-  if (!total) {
-    container.innerHTML = '<p class="form-hint">Нет данных по выбранному фильтру.</p>';
-    return;
-  }
-  var cx = 90, cy = 90, r = 70;
-  var offset  = 0;
-  var circles = '';
-  keys.forEach(function(k) {
-    var val   = statsObj[k];
-    var frac  = val / total;
-    var len   = frac * (2 * Math.PI * r);
-    var color = (palette && palette[k]) ? palette[k] : '#9aa3b2';
-    circles += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r +
-      '" fill="none" stroke="' + color + '" stroke-width="22" stroke-linecap="butt" ' +
-      'stroke-dasharray="' + len.toFixed(2) + ' ' + (2 * Math.PI * r).toFixed(2) + '" ' +
-      'stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 90 90)"></circle>';
-    offset += len;
-  });
-
-  var legend = '<div class="pie-legend">';
-  keys.forEach(function(k) {
-    var color = (palette && palette[k]) ? palette[k] : '#9aa3b2';
-    legend += '<div class="pie-legend-row">' +
-      '<span class="pie-legend-name"><span class="pie-legend-dot" style="background:' + color + '"></span>' + k + '</span>' +
-      '<b>' + statsObj[k] + '</b></div>';
-  });
-  legend += '</div>';
-
-  container.innerHTML =
-    '<div class="pie-chart-wrap">' +
-      '<svg class="pie-chart-svg" viewBox="0 0 180 180" aria-label="Круговая диаграмма">' +
-        '<circle cx="90" cy="90" r="70" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="22"></circle>' +
-        circles +
-        '<text x="90" y="88" text-anchor="middle" fill="#ffd08b" style="font-size:22px;font-weight:800">' + total + '</text>' +
-        '<text x="90" y="106" text-anchor="middle" fill="#95a0af" style="font-size:11px">точек</text>' +
-      '</svg>' +
-      legend +
-    '</div>';
-}
-
-
 // ── Экспорт в CSV ─────────────────────────────────────────
-
-function renderExportButton(points) {
-  var wrap = document.getElementById('stats-export-wrap');
-  if (!wrap) return;
-
-  var label = points.length + ' точек';
-
-  var btnCsv = document.getElementById('btn-export-csv');
-  if (btnCsv) {
-    btnCsv.textContent = '⬇️ CSV (' + label + ')';
-    btnCsv.onclick = function() { exportPointsCSV(points); };
-  }
-
-  var btnXls = document.getElementById('btn-export-xlsx');
-  if (btnXls) {
-    btnXls.textContent = '⬇️ Excel (' + label + ')';
-    btnXls.onclick = function() { exportPointsXLSX(points); };
-  }
-}
 
 function exportPointsCSV(points) {
   if (!points || !points.length) {
@@ -1811,8 +1665,8 @@ function onDitchNameSearch(input) {
     var item = document.createElement('div');
     item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:12px;' +
       'color:var(--txt-1);border-bottom:1px solid rgba(255,255,255,.05);transition:background .1s';
-    item.innerHTML = '🌊 <b>' + escAttr(d.ditchName) + '</b>' +
-      (d.pointNumber ? '<span style="color:var(--txt-3);margin-left:6px">· T'+escAttr(d.pointNumber)+'</span>' : '') +
+    item.innerHTML = '🌊 <b>' + escHTML(d.ditchName) + '</b>' +
+      (d.pointNumber ? '<span style="color:var(--txt-3);margin-left:6px">· T'+escHTML(d.pointNumber)+'</span>' : '') +
       '<span style="float:right;color:var(--gold);font-size:11px">' +
       (d.flowM3h != null ? d.flowM3h.toFixed(2)+' м³/ч' : '') + '</span>';
     item.addEventListener('mouseenter', function(){ this.style.background='rgba(64,144,232,.12)'; });
@@ -1946,14 +1800,14 @@ function renderDitchList(list) {
 
     tr.innerHTML =
       '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04)">' +
-        '<span style="font-weight:600;color:var(--txt-1)">🌊 ' + escAttr(d.ditchName) + '</span>' +
-        (d.pointNumber ? '<span style="font-size:10px;color:var(--txt-3);margin-left:6px">· T' + escAttr(d.pointNumber) + '</span>' : '') +
+        '<span style="font-weight:600;color:var(--txt-1)">🌊 ' + escHTML(d.ditchName) + '</span>' +
+        (d.pointNumber ? '<span style="font-size:10px;color:var(--txt-3);margin-left:6px">· T' + escHTML(d.pointNumber) + '</span>' : '') +
       '</td>' +
       '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04)">' +
-        '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + col + '1a;color:' + col + ';border:1px solid ' + col + '44">' + escAttr(d.status||'Активная') + '</span>' +
+        '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + col + '1a;color:' + col + ';border:1px solid ' + col + '44">' + escHTML(d.status||'Активная') + '</span>' +
       '</td>' +
       '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + dateStr + '</td>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + escAttr(d.worker||'—') + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + escHTML(d.worker||'—') + '</td>' +
       '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);text-align:right;color:var(--txt-2)">' +
         (d.area != null ? d.area.toFixed(3) : '—') +
       '</td>' +
@@ -1997,7 +1851,7 @@ function showDitchDetail(ditch, autoHistory) {
   var panel = document.getElementById('ditch-detail-panel');
   var title = document.getElementById('ditch-detail-title');
   var info  = document.getElementById('ditch-detail-info');
-  if (!panel) return;
+  if (!panel || !title || !info) return;
 
   panel.style.display = '';
   title.textContent = '🌊 ' + ditch.ditchName;
@@ -2040,7 +1894,7 @@ function showDitchDetail(ditch, autoHistory) {
     '<div style="font-size:10px;color:var(--txt-3)">м³/ч</div></div>';
   if (ditch.comment) {
     html += '<div style="flex:1;min-width:160px"><div style="font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em">Комментарий</div>' +
-      '<div style="font-size:12px;color:var(--txt-2);margin-top:4px">' + escAttr(ditch.comment) + '</div></div>';
+      '<div style="font-size:12px;color:var(--txt-2);margin-top:4px">' + escHTML(ditch.comment) + '</div></div>';
   }
   html += '</div>';
 
@@ -2120,7 +1974,7 @@ function loadDitchHistory(ditchName) {
       var velNames = { single:'Вертушка', multi:'По точкам', float:'Поплавок' };
       html += '<tr>' +
         '<td style="padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + formatDitchDate(h.monitoringDate) + '</td>' +
-        '<td style="padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + escAttr(h.worker||'—') + '</td>' +
+        '<td style="padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + escHTML(h.worker||'—') + '</td>' +
         '<td style="padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--txt-2)">' + (velNames[h.velMethod]||h.velMethod||'—') + '</td>' +
         '<td style="padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);text-align:right;color:var(--txt-2)">' + (h.width != null ? h.width.toFixed(2) : '—') + '</td>' +
         '<td style="padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);text-align:right;color:var(--txt-2)">' + (h.area != null ? h.area.toFixed(3) : '—') + '</td>' +

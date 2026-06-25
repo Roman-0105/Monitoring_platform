@@ -3684,7 +3684,7 @@ function buildReportHTML(s) {
       conclAI +
       '<div class="conclusion-text">' +
         (s.conclusions
-          ? escAttr(s.conclusions).replace(/\n/g,'<br>')
+          ? escHTML(s.conclusions).replace(/\n/g,'<br>')
           : '<span style="color:#aaa;font-style:italic">Заключение не заполнено</span>') +
       '</div>' +
       footer() +
@@ -3717,8 +3717,8 @@ function getReportCSS(theme, orientation) {
   '.pages-wrap { padding: 32px 0 64px; display: flex; flex-direction: column; align-items: center; gap: 32px; }',
   '.page { background: #fff; width: ' + (orientation==='landscape'?'1123px':'794px') + '; min-height: ' + (orientation==='landscape'?'794px':'1123px') + '; box-shadow: 0 4px 24px rgba(0,0,0,.18); position: relative; overflow: hidden; padding: ' + (orientation==='landscape'?'36px 52px 48px':'48px 52px 60px') + '; font-size: 13px; color: #1a1a2e; }',
 
-  /* WATERMARK */
-  '.page::before { content: \'ВНУТРЕННИЙ\'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-45deg); font-size: 72px; font-weight: 800; color: rgba(220,53,69,.07); white-space: nowrap; pointer-events: none; z-index: 0; letter-spacing: .1em; }',
+  /* WATERMARK — content injected per-report via inline <style> only when s.watermark is set */
+  '.page::before { content: \'\'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-45deg); font-size: 72px; font-weight: 800; color: rgba(220,53,69,.07); white-space: nowrap; pointer-events: none; z-index: 0; letter-spacing: .1em; }',
   '.page > * { position: relative; z-index: 1; }',
 
   /* PAGE FOOTER */
