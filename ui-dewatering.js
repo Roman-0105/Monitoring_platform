@@ -417,6 +417,7 @@ function _dewSwitch(tab) {
   if (tab === 'journal')   _dewRenderJournal();
   if (tab === 'levels')    _dewRenderLevels();
   if (tab === 'analytics') _dewRenderAnalytics();
+  if (tab === 'scheme')    _dewRenderScheme();
 }
 
 // ── Обзор ────────────────────────────────────────────────────
@@ -555,6 +556,269 @@ function _dewKpi(label, val, sub, clr) {
   return '<div class="anl-kpi"><div class="anl-kpi-lbl">' + label + '</div>' +
     '<div class="anl-kpi-val" style="color:' + clr + '">' + val + '</div>' +
     (sub ? '<div class="anl-kpi-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+// ── P&ID Схема водоотлива ────────────────────────────────────
+
+function _dewRenderScheme() {
+  var el = document.getElementById('dew-panel-scheme');
+  if (!el) return;
+
+  var sumps = DewateringState.sumps;
+  if (!sumps.length) {
+    el.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--txt-3)">Зумпфы не добавлены — перейдите на вкладку <b>Зумпфы</b></div>';
+    return;
+  }
+
+  // Layout constants
+  var GY       = 100;  // y of ground line
+  var SURF_Y   = 48;   // y of surface discharge pipe
+  var SUMP_TOP = GY + 28;
+  var SUMP_W   = 90;
+  var SUMP_H   = 155;
+  var PUMP_R   = 21;
+  var PUMP_GAP = 10;
+  var H_GAP    = 44;   // gap: sump right → first pump center
+  var COL_GAP  = 56;   // gap between columns
+
+  // Per-column data
+  var columns = sumps.map(function(sump) {
+    var pumps  = DewateringState.pumpsOfSump(sump.id);
+    var nPumps = Math.max(1, pumps.length);
+    var pumpsW = nPumps * (PUMP_R * 2) + (nPumps - 1) * PUMP_GAP;
+    return { sump: sump, pumps: pumps, colW: SUMP_W + H_GAP + pumpsW };
+  });
+
+  // Compute x starts
+  var colX = [], x = 30;
+  columns.forEach(function(col) { colX.push(x); x += col.colW + COL_GAP; });
+
+  var totalW = Math.max(620, x + 20);
+  var totalH = Math.max(360, SUMP_TOP + SUMP_H + 56);
+
+  var s = [];
+
+  // CSS animation
+  s.push('<style>' +
+    '.dpf-h{animation:dpf-h 1.2s linear infinite}' +
+    '.dpf-v{animation:dpf-v 0.9s linear infinite}' +
+    '@keyframes dpf-h{to{stroke-dashoffset:-16}}' +
+    '@keyframes dpf-v{to{stroke-dashoffset:-16}}' +
+    '</style>');
+
+  // Defs: grid pattern
+  s.push('<defs>' +
+    '<pattern id="dpg" width="20" height="20" patternUnits="userSpaceOnUse">' +
+    '<path d="M20 0L0 0 0 20" fill="none" stroke="rgba(255,255,255,0.035)" stroke-width=".5"/>' +
+    '</pattern>' +
+    '</defs>');
+
+  // Background
+  s.push('<rect width="' + totalW + '" height="' + totalH + '" fill="var(--bg-1,#161b22)"/>');
+  s.push('<rect width="' + totalW + '" height="' + totalH + '" fill="url(#dpg)"/>');
+  // Underground section shading
+  s.push('<rect x="0" y="' + GY + '" width="' + totalW + '" height="' + (totalH - GY) + '" fill="rgba(0,0,0,0.22)"/>');
+
+  // Ground level line
+  s.push('<line x1="0" y1="' + GY + '" x2="' + totalW + '" y2="' + GY + '"' +
+    ' stroke="rgba(255,255,255,0.22)" stroke-width="1.5" stroke-dasharray="10,6"/>');
+  s.push('<text x="10" y="' + (GY - 7) + '" fill="rgba(255,255,255,0.32)" font-size="9">Поверхность земли</text>');
+  s.push('<text x="10" y="' + (GY + 15) + '" fill="rgba(255,255,255,0.18)" font-size="9">Подземный горизонт</text>');
+
+  var riserXList = [];
+  var anyWorking = false;
+
+  columns.forEach(function(col, i) {
+    var sump   = col.sump;
+    var pumps  = col.pumps;
+    var cx     = colX[i];
+    var sy     = SUMP_TOP;
+    var pipeY  = sy + Math.round(SUMP_H * 0.62);
+
+    // Water level
+    var latestWL = DewateringState.waterLevels
+      .filter(function(w) { return w.sumpId === sump.id; })
+      .sort(function(a, b) { return (b.date + b.time).localeCompare(a.date + a.time); });
+    var wl    = latestWL.length ? parseFloat(latestWL[0].elevation) : null;
+    var elev  = DewateringState.sumpCurrentElevation(sump.id);
+    var depth = (wl != null && elev != null) ? Math.max(0, wl - elev) : null;
+    var pct   = depth != null ? Math.min(1, depth / 5) : 0;
+    var fillH = Math.round(pct * (SUMP_H - 6));
+    var fillY = sy + SUMP_H - fillH;
+
+    var borderClr = depth == null ? 'rgba(88,166,255,0.4)'
+                  : depth > 3    ? 'rgba(248,81,73,0.85)'
+                  : depth > 1.5  ? 'rgba(251,191,36,0.75)'
+                  :                'rgba(88,166,255,0.65)';
+    var waterClr  = depth == null ? 'rgba(88,166,255,0.14)'
+                  : depth > 3    ? 'rgba(248,81,73,0.38)'
+                  : depth > 1.5  ? 'rgba(251,191,36,0.32)'
+                  :                'rgba(88,166,255,0.32)';
+    var levelClr  = depth == null ? 'rgba(255,255,255,0.3)'
+                  : depth > 3    ? '#f85149'
+                  : depth > 1.5  ? '#fbbf24'
+                  :                '#58a6ff';
+
+    var hasWk = pumps.some(function(p) { return p.status === 'working'; });
+    if (hasWk) anyWorking = true;
+
+    // Riser x = horizontal center of pump group
+    var nPumps    = Math.max(1, pumps.length);
+    var pumpsW    = nPumps * (PUMP_R * 2) + (nPumps - 1) * PUMP_GAP;
+    var pumpAreaX = cx + SUMP_W + H_GAP;
+    var riserX    = pumpAreaX + Math.floor(pumpsW / 2);
+    riserXList.push(riserX);
+
+    // ── Sump tank ──
+    s.push('<rect x="' + cx + '" y="' + sy + '" width="' + SUMP_W + '" height="' + SUMP_H + '" rx="4"' +
+      ' fill="rgba(10,18,30,0.96)" stroke="' + borderClr + '" stroke-width="1.5"/>');
+    // Water fill
+    if (fillH > 2) {
+      s.push('<rect x="' + (cx+2) + '" y="' + fillY + '" width="' + (SUMP_W-4) + '" height="' + (fillH-2) + '"' +
+        ' fill="' + waterClr + '"/>');
+      // Water surface line
+      s.push('<line x1="' + (cx+2) + '" y1="' + fillY + '" x2="' + (cx+SUMP_W-2) + '" y2="' + fillY + '"' +
+        ' stroke="' + levelClr + '" stroke-width="1.5" opacity="0.85"/>');
+    }
+    // Sump name
+    s.push('<text x="' + (cx + SUMP_W/2) + '" y="' + (sy + 14) + '"' +
+      ' text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9" font-weight="600">' + escHTML(sump.name.slice(0,14)) + '</text>');
+    // Quarry label (bottom inside tank)
+    if (sump.quarry) {
+      s.push('<text x="' + (cx + SUMP_W/2) + '" y="' + (sy + SUMP_H - 6) + '"' +
+        ' text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="8">' + escHTML(sump.quarry.slice(0,14)) + '</text>');
+    }
+    // Depth value
+    if (depth != null) {
+      var dvY = fillH > 20 ? fillY + 14 : fillY - 5;
+      s.push('<text x="' + (cx + SUMP_W/2) + '" y="' + dvY + '"' +
+        ' text-anchor="middle" fill="' + levelClr + '" font-size="12" font-weight="700">' + depth.toFixed(1) + ' м</text>');
+    } else {
+      s.push('<text x="' + (cx + SUMP_W/2) + '" y="' + (sy + SUMP_H/2 + 5) + '"' +
+        ' text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="9">нет данных</text>');
+    }
+
+    // ── Horizontal pipe: sump → pump ──
+    s.push('<line x1="' + (cx + SUMP_W) + '" y1="' + pipeY + '" x2="' + (pumpAreaX - 2) + '" y2="' + pipeY + '"' +
+      ' stroke="rgba(88,166,255,0.22)" stroke-width="6" stroke-linecap="round"/>');
+    if (hasWk) {
+      s.push('<line x1="' + (cx + SUMP_W) + '" y1="' + pipeY + '" x2="' + (pumpAreaX - 2) + '" y2="' + pipeY + '"' +
+        ' stroke="rgba(88,166,255,0.75)" stroke-width="2.5" stroke-dasharray="8,8" class="dpf-h"/>');
+    }
+
+    // ── Vertical riser: pump → surface ──
+    s.push('<line x1="' + riserX + '" y1="' + pipeY + '" x2="' + riserX + '" y2="' + SURF_Y + '"' +
+      ' stroke="rgba(88,166,255,0.22)" stroke-width="6" stroke-linecap="round"/>');
+    if (hasWk) {
+      s.push('<line x1="' + riserX + '" y1="' + pipeY + '" x2="' + riserX + '" y2="' + SURF_Y + '"' +
+        ' stroke="rgba(74,222,128,0.78)" stroke-width="2.5" stroke-dasharray="8,8" class="dpf-v"/>');
+    }
+
+    // ── Pump nodes ──
+    if (!pumps.length) {
+      // Placeholder circle
+      s.push('<circle cx="' + pumpAreaX + '" cy="' + pipeY + '" r="' + PUMP_R + '"' +
+        ' fill="rgba(10,18,30,0.9)" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-dasharray="4,3"/>');
+      s.push('<text x="' + pumpAreaX + '" y="' + (pipeY + 4) + '"' +
+        ' text-anchor="middle" fill="rgba(255,255,255,0.2)" font-size="9">—</text>');
+    } else {
+      pumps.forEach(function(pump, pi) {
+        var pcx = pumpAreaX + pi * (PUMP_R * 2 + PUMP_GAP) + PUMP_R;
+        var pcy = pipeY;
+        var pClr = pump.status === 'working' ? 'rgba(74,222,128,0.95)'
+                 : pump.status === 'repair'  ? 'rgba(248,81,73,0.9)'
+                 : pump.status === 'standby' ? 'rgba(88,166,255,0.8)'
+                 :                            'rgba(255,255,255,0.2)';
+        var pFill = pump.status === 'working' ? 'rgba(12,28,18,0.97)'
+                  : pump.status === 'repair'  ? 'rgba(28,10,10,0.97)'
+                  : pump.status === 'standby' ? 'rgba(10,16,28,0.97)'
+                  :                            'rgba(10,18,30,0.9)';
+        // Outer circle (P&ID pump symbol)
+        s.push('<circle cx="' + pcx + '" cy="' + pcy + '" r="' + PUMP_R + '"' +
+          ' fill="' + pFill + '" stroke="' + pClr + '" stroke-width="2.2"/>');
+        // Inner impeller arc (P&ID detail)
+        s.push('<path d="M' + (pcx-7) + ',' + (pcy+6) + ' A9,9,0,0,1,' + (pcx+7) + ',' + (pcy+6) + '"' +
+          ' fill="none" stroke="' + pClr + '" stroke-width="1.2" opacity="0.55"/>');
+        // Status dot (top-right)
+        s.push('<circle cx="' + (pcx + PUMP_R - 5) + '" cy="' + (pcy - PUMP_R + 5) + '" r="4.5" fill="' + pClr + '"/>');
+        // Pump name below circle
+        var shortName = pump.name.length > 6 ? pump.name.slice(0,6) : pump.name;
+        s.push('<text x="' + pcx + '" y="' + (pcy + PUMP_R + 12) + '"' +
+          ' text-anchor="middle" fill="' + pClr + '" font-size="8" font-weight="600">' + escHTML(shortName) + '</text>');
+      });
+    }
+  });
+
+  // ── Surface collection pipe ──
+  if (riserXList.length) {
+    var x1s = Math.min.apply(null, riserXList);
+    var x2s = Math.max.apply(null, riserXList) + 70;
+    s.push('<line x1="' + x1s + '" y1="' + SURF_Y + '" x2="' + x2s + '" y2="' + SURF_Y + '"' +
+      ' stroke="rgba(88,166,255,0.22)" stroke-width="6" stroke-linecap="round"/>');
+    if (anyWorking) {
+      s.push('<line x1="' + x1s + '" y1="' + SURF_Y + '" x2="' + x2s + '" y2="' + SURF_Y + '"' +
+        ' stroke="rgba(74,222,128,0.75)" stroke-width="2.5" stroke-dasharray="8,8" class="dpf-h"/>');
+    }
+    // Arrow head
+    s.push('<polygon points="' + x2s + ',' + SURF_Y + ' ' + (x2s-10) + ',' + (SURF_Y-6) + ' ' + (x2s-10) + ',' + (SURF_Y+6) + '"' +
+      ' fill="rgba(88,166,255,0.5)"/>');
+    // Discharge label
+    s.push('<text x="' + (x2s + 8) + '" y="' + (SURF_Y + 4) + '"' +
+      ' fill="rgba(255,255,255,0.45)" font-size="9" font-weight="600">Водосброс / отстойник</text>');
+    // Flow meter (on surface pipe between first and last riser)
+    if (riserXList.length >= 2) {
+      var fmX = Math.floor((x1s + Math.max.apply(null,riserXList)) / 2);
+      s.push('<rect x="' + (fmX-18) + '" y="' + (SURF_Y-10) + '" width="36" height="20" rx="3"' +
+        ' fill="rgba(10,18,30,0.95)" stroke="rgba(249,171,0,0.65)" stroke-width="1.5"/>');
+      s.push('<text x="' + fmX + '" y="' + (SURF_Y+4) + '"' +
+        ' text-anchor="middle" fill="rgba(249,171,0,0.9)" font-size="8" font-weight="700">RM</text>');
+    }
+  }
+
+  // ── Legend ──
+  var LEG_X = totalW - 152;
+  var LEG_Y = GY + 18;
+  s.push('<rect x="' + LEG_X + '" y="' + LEG_Y + '" width="142" height="114" rx="6"' +
+    ' fill="rgba(10,18,30,0.94)" stroke="rgba(255,255,255,0.08)"/>');
+  s.push('<text x="' + (LEG_X+10) + '" y="' + (LEG_Y+15) + '"' +
+    ' fill="rgba(255,255,255,0.4)" font-size="8" font-weight="700" letter-spacing="1">ЛЕГЕНДА</text>');
+  var leg = [
+    ['rgba(74,222,128,0.95)',  'Насос — работает'],
+    ['rgba(88,166,255,0.80)',  'Насос — резерв'],
+    ['rgba(248,81,73,0.90)',   'Насос — ремонт'],
+    ['rgba(248,81,73,0.85)',   'Уровень критич. (>3 м)'],
+    ['rgba(251,191,36,0.85)',  'Уровень повыш. (1.5–3 м)'],
+    ['rgba(88,166,255,0.85)',  'Уровень норма (< 1.5 м)'],
+  ];
+  leg.forEach(function(item, idx) {
+    var ly = LEG_Y + 28 + idx * 14;
+    s.push('<circle cx="' + (LEG_X+10) + '" cy="' + ly + '" r="4.5" fill="' + item[0] + '"/>');
+    s.push('<text x="' + (LEG_X+22) + '" y="' + (ly+4) + '" fill="rgba(255,255,255,0.45)" font-size="8">' + item[1] + '</text>');
+  });
+
+  // Assemble SVG
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg"' +
+    ' width="' + totalW + '" height="' + totalH + '"' +
+    ' viewBox="0 0 ' + totalW + ' ' + totalH + '"' +
+    ' style="font-family:inherit;display:block">' +
+    s.join('') + '</svg>';
+
+  // Toolbar
+  var toolbar =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+    '<span style="font-size:13px;font-weight:600;color:var(--txt-1)">P&ID — Схема водоотлива</span>' +
+    '<div style="display:flex;gap:6px;">' +
+    '<button class="btn btn-sm btn-outline" onclick="_dewRenderScheme()" title="Обновить">↻ Обновить</button>' +
+    '</div>' +
+    '</div>';
+
+  var footer = '<div style="margin-top:8px;font-size:11px;color:var(--txt-3)">' +
+    'Уровни воды — из вкладки «Уровни воды» · Состояние насосов — из вкладки «Зумпфы»' +
+    '</div>';
+
+  el.innerHTML = toolbar +
+    '<div style="overflow:auto;border-radius:8px;border:1px solid var(--line)">' + svg + '</div>' +
+    footer;
 }
 
 // ── Блок-схема водоотлива ────────────────────────────────────
