@@ -1690,8 +1690,8 @@ function _dewOpenFillModal(sumpId, date) {
         '<div id="dew-modal-normal-fields-' + p.id + '"' + (isReset ? ' style="display:none"' : '') + '>' +
           '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">' +
             '<div>' +
-              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">Предыдущее показание' + (prevDate ? ' · ' + prevDate : '') + '</div>' +
-              '<div style="font-size:18px;font-weight:700;color:var(--txt-2);min-width:80px">' + (prevVal != null ? prevVal.toFixed(0) + ' <span style="font-size:11px;font-weight:400">м³</span>' : '<span style="color:var(--txt-3);font-size:14px">нет данных</span>') + '</div>' +
+              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:3px">' + (prevRec && prevRec.isReset ? '🔄 Нов. счётчик, нач.' : 'Предыдущее показание') + (prevDate ? ' · ' + prevDate : '') + '</div>' +
+              '<div style="font-size:18px;font-weight:700;color:' + (prevRec && prevRec.isReset ? 'var(--gold)' : 'var(--txt-2)') + ';min-width:80px">' + (prevVal != null ? prevVal.toFixed(0) + ' <span style="font-size:11px;font-weight:400">м³</span>' : '<span style="color:var(--txt-3);font-size:14px">нет данных</span>') + '</div>' +
             '</div>' +
             '<div class="form-group" style="margin:0">' +
               '<label class="form-label" style="font-size:9px">Показание на 06:00</label>' +
@@ -2610,8 +2610,8 @@ function _dewRenderQuickEntry(date) {
           '<div id="dew-qe-normal-fields-' + p.id + '"' + (isReset ? ' style="display:none"' : '') + '>' +
             '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px">' +
               '<div>' +
-                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Пред. показание ' + (prevDate ? '(' + prevDate + ')' : '(нет данных)') + '</div>' +
-                '<div style="font-size:13px;font-weight:600;color:var(--txt-2);min-width:80px">' + (prevVal != null ? parseFloat(prevVal).toFixed(0) + ' м³' : '—') + '</div>' +
+                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">' + (prevRec && prevRec.isReset ? '🔄 Нов. счётчик, нач.' : 'Пред. показание') + ' ' + (prevDate ? '(' + prevDate + ')' : '(нет данных)') + '</div>' +
+                '<div style="font-size:13px;font-weight:600;color:' + (prevRec && prevRec.isReset ? 'var(--gold)' : 'var(--txt-2)') + ';min-width:80px">' + (prevVal != null ? parseFloat(prevVal).toFixed(0) + ' м³' : '—') + '</div>' +
               '</div>' +
               '<div>' +
                 '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Показание на 6:00 ' + (date || '') + '</div>' +
