@@ -2747,10 +2747,13 @@ function _dewQeUpdateRate(pumpId) {
 
 function _dewJrChangeDay(delta) {
   var dateEl = document.getElementById('dew-jr-date');
-  if (!dateEl) return;
-  var d = new Date(dateEl.value + 'T00:00:00');
+  if (!dateEl || !dateEl.value) return;
+  var p = dateEl.value.split('-').map(Number);
+  var d = new Date(p[0], p[1] - 1, p[2]);
   d.setDate(d.getDate() + delta);
-  var newDate = d.toISOString().slice(0, 10);
+  var newDate = d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
   _dewJFilter.date = newDate;
   dateEl.value = newDate;
   _dewRenderQuickEntry(newDate);
@@ -2805,9 +2808,12 @@ function _dewSaveQuickEntry() {
   if (saved > 0) {
     Toast.show('Сохранено: ' + saved + ' записей', 'success');
     _dewRenderReadingsTable();
-    var nextDay = new Date(date + 'T00:00:00');
-    nextDay.setDate(nextDay.getDate() + 1);
-    var nextDate = nextDay.toISOString().slice(0, 10);
+    var p = date.split('-').map(Number);
+    var nd = new Date(p[0], p[1] - 1, p[2]);
+    nd.setDate(nd.getDate() + 1);
+    var nextDate = nd.getFullYear() + '-' +
+      String(nd.getMonth() + 1).padStart(2, '0') + '-' +
+      String(nd.getDate()).padStart(2, '0');
     _dewJFilter.date = nextDate;
     var dateInp = document.getElementById('dew-jr-date');
     if (dateInp) dateInp.value = nextDate;
