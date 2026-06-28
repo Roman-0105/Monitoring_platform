@@ -86,10 +86,42 @@ var DewateringState = {
       if (results.some(function(r) { return r.error; })) return false;
       this.sumps                = results[0].data.map(rowToDewSump);
       this.sumpElevationHistory = results[1].data.map(rowToDewElev);
-      this.pumps                = results[2].data.map(rowToDewPump);
-      this.pumpEvents           = results[3].data.map(rowToDewEvt);
-      this.destinations         = results[4].data.length ? results[4].data.map(rowToDewDest) : _dewDefaultDest();
-      this.meterReadings        = results[5].data.map(rowToDewReading);
+
+      // ── Bidirectional sync for pumps ─────────────────────────────────────
+      // Local-only pumps (Supabase write failed before) are pushed up, not lost.
+      var remotePumps   = results[2].data.map(rowToDewPump);
+      var remotePumpIds = remotePumps.map(function(p) { return p.id; });
+      var orphanPumps   = this.pumps.filter(function(p) { return remotePumpIds.indexOf(p.id) === -1; });
+      orphanPumps.forEach(function(p) {
+        Api.upsertDewPump(dewPumpToRow(p)).catch(function(e) {
+          console.warn('[dewatering] failed to push orphan pump to Supabase', p.id, e);
+        });
+      });
+      this.pumps = remotePumps.concat(orphanPumps);
+
+      // ── Bidirectional sync for pump events ───────────────────────────────
+      var remoteEvts   = results[3].data.map(rowToDewEvt);
+      var remoteEvtIds = remoteEvts.map(function(e) { return e.id; });
+      var orphanEvts   = this.pumpEvents.filter(function(e) { return remoteEvtIds.indexOf(e.id) === -1; });
+      orphanEvts.forEach(function(e) {
+        Api.upsertDewPumpEvent(dewEvtToRow(e)).catch(function(err) {
+          console.warn('[dewatering] failed to push orphan pump event to Supabase', e.id, err);
+        });
+      });
+      this.pumpEvents = remoteEvts.concat(orphanEvts);
+
+      this.destinations = results[4].data.length ? results[4].data.map(rowToDewDest) : _dewDefaultDest();
+
+      // ── Bidirectional sync for meter readings ────────────────────────────
+      var remoteReadings   = results[5].data.map(rowToDewReading);
+      var remoteReadingIds = remoteReadings.map(function(r) { return r.id; });
+      var orphanReadings   = this.meterReadings.filter(function(r) { return remoteReadingIds.indexOf(r.id) === -1; });
+      orphanReadings.forEach(function(r) {
+        Api.upsertDewReading(dewReadingToRow(r)).catch(function(e) {
+          console.warn('[dewatering] failed to push orphan reading to Supabase', r.id, e);
+        });
+      });
+      this.meterReadings = remoteReadings.concat(orphanReadings);
 
       // ── Bidirectional sync for water levels ──────────────────────────────
       // If Supabase returned records – use them as source of truth.
