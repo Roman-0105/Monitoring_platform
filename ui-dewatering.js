@@ -2377,6 +2377,7 @@ function _dewOpenPumpForm(id) {
 
   _dewInitDistRows('pf-default', p ? (p.defaultDistributions || []) : []);
 
+  formEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   document.getElementById('dew-pf-cancel').onclick = function() { formEl.innerHTML = ''; };
   document.getElementById('dew-pf-save').onclick = function() {
     var name = document.getElementById('dew-pf-name').value.trim();
