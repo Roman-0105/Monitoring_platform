@@ -132,6 +132,12 @@ var _dustLogFilter = { dateFrom: '', dateTo: '', orgId: '', nozzleId: '' };
 var _dustEditLogId = null;
 var _dustVehicleFilter = '';
 
+// Journal (meter-readings style) state
+var _dustJournalDate         = '';
+var _dustJournalOrgFilter    = '';
+var _dustJournalNozzleFilter = '';
+var _dustJRowSeq             = 0;
+
 // ── Init ─────────────────────────────────────────────────────
 
 function initDustTab() {
@@ -233,40 +239,49 @@ function _dustNozzleVolumeMonth(nozzleId) {
 
 // ── Журнал ───────────────────────────────────────────────────
 
+function _dustJournalPrevDay() {
+  var inp = document.getElementById('dust-j-date');
+  if (!inp) return;
+  var d = new Date(inp.value + 'T00:00:00');
+  d.setDate(d.getDate() - 1);
+  _dustJournalDate = d.toISOString().slice(0, 10);
+  inp.value = _dustJournalDate;
+  _dustRenderJournalLeft();
+}
+
+function _dustJournalNextDay() {
+  var inp = document.getElementById('dust-j-date');
+  if (!inp) return;
+  var d = new Date(inp.value + 'T00:00:00');
+  d.setDate(d.getDate() + 1);
+  _dustJournalDate = d.toISOString().slice(0, 10);
+  inp.value = _dustJournalDate;
+  _dustRenderJournalLeft();
+}
+
 function _dustRenderJournal() {
   var el = document.getElementById('dust-panel-journal');
   if (!el) return;
 
-  var today = _dustToday();
+  if (!_dustJournalDate) _dustJournalDate = _dustToday();
 
   el.innerHTML =
+    // Top bar
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:var(--bg-2);border-radius:var(--r);border:1px solid var(--line)">' +
+      '<button class="btn btn-sm" style="padding:2px 8px;font-size:16px;line-height:1" onclick="_dustJournalPrevDay()">←</button>' +
+      '<input type="date" id="dust-j-date" class="form-control" value="' + escAttr(_dustJournalDate) + '" style="width:140px;font-size:12px" oninput="_dustJournalDate=this.value;_dustRenderJournalLeft()">' +
+      '<button class="btn btn-sm" style="padding:2px 8px;font-size:16px;line-height:1" onclick="_dustJournalNextDay()">→</button>' +
+      '<select id="dust-j-org" class="form-control" style="font-size:11px;width:140px" onchange="_dustJournalOrgFilter=this.value;_dustRenderJournalLeft()">' +
+        _dustOrgOpts(_dustJournalOrgFilter, 'Все орг.') +
+      '</select>' +
+      '<select id="dust-j-nozzle" class="form-control" style="font-size:11px;width:140px" onchange="_dustJournalNozzleFilter=this.value;_dustRenderJournalLeft()">' +
+        _dustNozzleOpts(_dustJournalNozzleFilter, 'Все гусаки') +
+      '</select>' +
+      '<button class="btn btn-sm" style="background:var(--gold);color:#000;margin-left:auto" onclick="_dustJournalSaveAll()">💾 Сохранить всё</button>' +
+    '</div>' +
+    // Two-column layout
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">' +
-      // LEFT: add form
-      '<div>' +
-        '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);margin-bottom:8px">Добавить запись</div>' +
-        '<div class="card" style="padding:14px">' +
-          _dustFld('Дата', 'date', 'dust-log-date', today, '') +
-          '<div class="form-group"><label class="form-label">Организация</label>' +
-            '<select id="dust-log-org" class="form-control" onchange="_dustOnOrgChange()">' + _dustOrgOpts('') + '</select>' +
-          '</div>' +
-          '<div class="form-group"><label class="form-label">Машина</label>' +
-            '<select id="dust-log-vehicle" class="form-control" onchange="_dustOnVehicleChange()">' + _dustVehicleOpts('', '') + '</select>' +
-          '</div>' +
-          '<div class="form-group"><label class="form-label">Гусак</label>' +
-            '<select id="dust-log-nozzle" class="form-control">' + _dustNozzleOpts('') + '</select>' +
-          '</div>' +
-          _dustFld('Рейсов', 'number', 'dust-log-trips', '', '0') +
-          '<div id="dust-log-vol-display" style="font-size:12px;color:var(--txt-2);margin-bottom:8px;min-height:20px"></div>' +
-          '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-2);cursor:pointer;margin-bottom:8px">' +
-            '<input type="checkbox" id="dust-log-manual-chk" onchange="_dustToggleManualVol()"> Ввести объём вручную' +
-          '</label>' +
-          '<div id="dust-log-manual-wrap" style="display:none">' +
-            _dustFld('Объём, м³', 'number', 'dust-log-manual-vol', '', '') +
-          '</div>' +
-          _dustFld('Примечание', 'text', 'dust-log-notes', '', '') +
-          '<button class="btn btn-sm" style="background:var(--gold);color:#000;margin-top:4px" onclick="_dustAddLog()">Добавить запись</button>' +
-        '</div>' +
-      '</div>' +
+      '<div id="dust-j-left"></div>' +
       // RIGHT: history
       '<div>' +
         '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);margin-bottom:8px">История</div>' +
@@ -283,75 +298,178 @@ function _dustRenderJournal() {
       '</div>' +
     '</div>';
 
-  document.getElementById('dust-log-trips').addEventListener('input', function() { _dustUpdateVolDisplay(); });
+  _dustRenderJournalLeft();
   _dustRenderLogTable();
 }
 
-function _dustOnOrgChange() {
-  var orgId = (document.getElementById('dust-log-org') || {}).value || '';
-  var vehicleSel = document.getElementById('dust-log-vehicle');
-  if (vehicleSel) vehicleSel.innerHTML = _dustVehicleOpts(orgId, '');
-  _dustUpdateVolDisplay();
-}
-
-function _dustOnVehicleChange() {
-  _dustUpdateVolDisplay();
-}
-
-function _dustUpdateVolDisplay() {
-  var el = document.getElementById('dust-log-vol-display');
+function _dustRenderJournalLeft() {
+  var el = document.getElementById('dust-j-left');
   if (!el) return;
-  var manualChk = document.getElementById('dust-log-manual-chk');
-  if (manualChk && manualChk.checked) { el.innerHTML = ''; return; }
-  var trips     = parseFloat((document.getElementById('dust-log-trips') || {}).value) || 0;
-  var vehicleId = (document.getElementById('dust-log-vehicle') || {}).value || '';
-  var vehicle   = vehicleId ? DustState.vehicleById(vehicleId) : null;
-  var cap       = vehicle ? (parseFloat(vehicle.capacity) || 0) : 0;
-  if (trips > 0 && cap > 0) {
-    el.innerHTML = 'Объём: <b style="color:var(--txt-1)">' + (trips * cap).toFixed(1) + ' м³</b> (' + trips + ' рейс. × ' + cap + ' м³)';
+
+  var date = _dustJournalDate || _dustToday();
+
+  var vehicles = _dustJournalOrgFilter
+    ? DustState.vehiclesOfOrg(_dustJournalOrgFilter)
+    : DustState.vehicles;
+
+  if (vehicles.length === 0) {
+    el.innerHTML = '<div style="color:var(--txt-3);font-size:12px;padding:16px 0">Нет машин. Добавьте организацию и машины.</div>';
+    return;
+  }
+
+  var html = '';
+  vehicles.forEach(function(v) {
+    var org = DustState.orgById(v.orgId);
+    var orgName = org ? org.name : '';
+    var cap = parseFloat(v.capacity) || 0;
+
+    // Existing logs for this vehicle + date
+    var existingLogs = DustState.logs.filter(function(l) {
+      return l.vehicleId === v.id && l.date === date &&
+        (!_dustJournalNozzleFilter || l.nozzleId === _dustJournalNozzleFilter);
+    });
+
+    var dayVol = existingLogs.reduce(function(a, l) { return a + _dustComputeVolume(l); }, 0);
+
+    html += '<div class="card dust-j-card" data-vehicle-id="' + escAttr(v.id) + '" style="padding:12px;margin-bottom:10px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+    html += '<div>';
+    html += '<span style="font-size:13px;font-weight:600;color:var(--txt-1)">' + escHTML(v.name) + '</span>';
+    if (v.plateNumber) html += ' <span style="font-size:11px;color:var(--txt-3)">(' + escHTML(v.plateNumber) + ')</span>';
+    if (orgName) html += ' <span style="font-size:10px;color:var(--txt-3);margin-left:4px">' + escHTML(orgName) + '</span>';
+    html += '</div>';
+    html += '<span style="font-size:12px;color:var(--txt-2)">';
+    if (dayVol > 0) html += '<b style="color:var(--gold)">' + dayVol.toFixed(1) + ' м³</b>';
+    if (cap > 0) html += '<span style="color:var(--txt-3);font-size:10px;margin-left:4px">· ' + cap + ' м³/рейс</span>';
+    html += '</span>';
+    html += '</div>';
+
+    // Rows container
+    html += '<div id="dust-jrows-' + escAttr(v.id) + '">';
+
+    if (existingLogs.length > 0) {
+      existingLogs.forEach(function(log) {
+        _dustJRowSeq++;
+        var rowId = 'djr' + _dustJRowSeq;
+        html += _dustJRowHTML(rowId, log.nozzleId, log.trips, log.notes, log.id);
+      });
+    } else {
+      // One empty row minimum
+      _dustJRowSeq++;
+      var rowId = 'djr' + _dustJRowSeq;
+      html += _dustJRowHTML(rowId, _dustJournalNozzleFilter, 0, '', '');
+    }
+
+    html += '</div>';
+
+    html += '<button class="btn btn-sm" style="font-size:11px;margin-top:6px;opacity:.7" onclick="_dustJAddRow(\'' + escAttr(v.id) + '\')">+ Гусак</button>';
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+function _dustJRowHTML(rowId, nozzleId, trips, notes, logId) {
+  var tripsVal = trips > 0 ? String(trips) : '';
+  return '<div class="dust-jr" id="' + escAttr(rowId) + '" data-log-id="' + escAttr(logId || '') + '"' +
+    ' style="display:flex;align-items:center;gap:5px;margin-bottom:5px">' +
+    '<select class="dust-jr-nozzle form-control" style="flex:1;min-width:0;font-size:11px"' +
+    ' onchange="_dustJRowUpdateVol(\'' + escAttr(rowId) + '\')">' +
+    _dustNozzleOpts(nozzleId || _dustJournalNozzleFilter, '— гусак —') +
+    '</select>' +
+    '<input class="dust-jr-trips form-control" type="number" min="0"' +
+    ' style="width:56px;font-size:12px;text-align:right" value="' + escAttr(tripsVal) + '"' +
+    ' oninput="_dustJRowUpdateVol(\'' + escAttr(rowId) + '\')">' +
+    '<span style="font-size:10px;color:var(--txt-3);white-space:nowrap">рейс.</span>' +
+    '<span id="' + escAttr(rowId) + '-v" style="font-size:10px;min-width:62px;text-align:right;white-space:nowrap">→ —</span>' +
+    '<input class="dust-jr-notes form-control" type="text" placeholder="Примечание"' +
+    ' style="width:100px;font-size:10px" value="' + escAttr(notes || '') + '">' +
+    '<button class="btn btn-sm" style="padding:1px 6px;font-size:12px;opacity:.6"' +
+    ' onclick="document.getElementById(\'' + escAttr(rowId) + '\').remove()">✕</button>' +
+    '</div>';
+}
+
+function _dustJRowUpdateVol(rowId) {
+  var rowEl = document.getElementById(rowId);
+  if (!rowEl) return;
+  var cardEl = rowEl.closest('.dust-j-card');
+  if (!cardEl) return;
+  var vehicleId = cardEl.dataset.vehicleId;
+  var vehicle = vehicleId ? DustState.vehicleById(vehicleId) : null;
+  var cap = vehicle ? (parseFloat(vehicle.capacity) || 0) : 0;
+  var trips = parseFloat((rowEl.querySelector('.dust-jr-trips') || {}).value) || 0;
+  var volEl = document.getElementById(rowId + '-v');
+  if (!volEl) return;
+  if (cap > 0 && trips > 0) {
+    volEl.textContent = '→ ' + (trips * cap).toFixed(1) + ' м³';
+    volEl.style.color = 'var(--gold)';
   } else if (cap > 0) {
-    el.innerHTML = '<span style="color:var(--txt-3)">Ёмкость машины: ' + cap + ' м³</span>';
-  } else if (vehicleId) {
-    el.innerHTML = '<span style="color:var(--txt-3)">Ёмкость не указана</span>';
+    volEl.textContent = '→ —';
+    volEl.style.color = 'var(--txt-3)';
   } else {
-    el.innerHTML = '';
+    volEl.textContent = '→ —';
+    volEl.style.color = 'var(--txt-3)';
   }
 }
 
-function _dustToggleManualVol() {
-  var chk  = document.getElementById('dust-log-manual-chk');
-  var wrap = document.getElementById('dust-log-manual-wrap');
-  if (!chk || !wrap) return;
-  wrap.style.display = chk.checked ? '' : 'none';
-  _dustUpdateVolDisplay();
+function _dustJAddRow(vehicleId) {
+  var container = document.getElementById('dust-jrows-' + vehicleId);
+  if (!container) return;
+  _dustJRowSeq++;
+  var rowId = 'djr' + _dustJRowSeq;
+  var div = document.createElement('div');
+  div.innerHTML = _dustJRowHTML(rowId, _dustJournalNozzleFilter, 0, '', '');
+  container.appendChild(div.firstChild);
 }
 
-function _dustAddLog() {
-  var date      = (document.getElementById('dust-log-date')    || {}).value || '';
-  var orgId     = (document.getElementById('dust-log-org')     || {}).value || '';
-  var vehicleId = (document.getElementById('dust-log-vehicle') || {}).value || '';
-  var nozzleId  = (document.getElementById('dust-log-nozzle')  || {}).value || '';
-  var trips     = parseFloat((document.getElementById('dust-log-trips') || {}).value) || 0;
-  var notes     = ((document.getElementById('dust-log-notes')  || {}).value || '').trim();
-  var isManual  = !!(document.getElementById('dust-log-manual-chk') || {}).checked;
-  var manualVol = parseFloat((document.getElementById('dust-log-manual-vol') || {}).value) || 0;
+function _dustJournalSaveAll() {
+  var date = _dustJournalDate || _dustToday();
+  var saved = 0;
 
-  if (!date)      { Toast.show('Укажите дату', 'warning');          return; }
-  if (!orgId)     { Toast.show('Выберите организацию', 'warning');  return; }
-  if (!vehicleId) { Toast.show('Выберите машину', 'warning');       return; }
-  if (!nozzleId)  { Toast.show('Выберите гусак', 'warning');        return; }
-  if (trips <= 0 && !isManual) { Toast.show('Укажите число рейсов', 'warning'); return; }
+  document.querySelectorAll('.dust-j-card').forEach(function(card) {
+    var vehicleId = card.dataset.vehicleId;
+    if (!vehicleId) return;
+    var vehicle = DustState.vehicleById(vehicleId);
+    if (!vehicle) return;
 
-  var vehicle = DustState.vehicleById(vehicleId);
-  var totalVolume = isManual ? manualVol : (trips * (parseFloat((vehicle || {}).capacity) || 0));
+    // Collect rows with trips > 0 and a nozzle selected
+    var rows = [];
+    card.querySelectorAll('.dust-jr').forEach(function(rowEl) {
+      var nozzleId = (rowEl.querySelector('.dust-jr-nozzle') || {}).value || '';
+      var trips    = parseFloat((rowEl.querySelector('.dust-jr-trips') || {}).value) || 0;
+      var notes    = ((rowEl.querySelector('.dust-jr-notes') || {}).value || '').trim();
+      if (!nozzleId || trips <= 0) return;
+      rows.push({ nozzleId: nozzleId, trips: trips, notes: notes });
+    });
 
-  DustState.addLog({
-    date: date, orgId: orgId, vehicleId: vehicleId, nozzleId: nozzleId,
-    trips: trips, totalVolume: totalVolume,
-    isManualVolume: isManual, manualVolume: isManual ? manualVol : null,
-    notes: notes,
+    // Delete existing logs for this vehicle + date (respecting nozzle filter)
+    var toDelete = DustState.logs.filter(function(l) {
+      return l.vehicleId === vehicleId && l.date === date &&
+        (!_dustJournalNozzleFilter || l.nozzleId === _dustJournalNozzleFilter);
+    }).map(function(l) { return l.id; });
+
+    toDelete.forEach(function(id) { DustState.deleteLog(id); });
+
+    // Add new logs
+    rows.forEach(function(row) {
+      var cap = parseFloat(vehicle.capacity) || 0;
+      DustState.addLog({
+        date: date,
+        orgId: vehicle.orgId,
+        vehicleId: vehicleId,
+        nozzleId: row.nozzleId,
+        trips: row.trips,
+        totalVolume: row.trips * cap,
+        isManualVolume: false,
+        manualVolume: null,
+        notes: row.notes,
+      });
+      saved++;
+    });
   });
-  Toast.show('Запись добавлена', 'success');
+
+  Toast.show('Сохранено: ' + saved + ' ' + (saved === 1 ? 'запись' : saved < 5 ? 'записи' : 'записей'), 'success');
+  _dustRenderJournalLeft();
   _dustRenderLogTable();
 }
 
