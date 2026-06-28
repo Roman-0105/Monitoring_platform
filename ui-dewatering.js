@@ -447,6 +447,11 @@ var _dewDiagramTheme = 'dark';
 
 function initDewateringTab() {
   DewateringState.load(); // immediate localStorage
+  // Eagerly load DustState so nozzle hexagons appear on the diagram even before
+  // the user has opened the Dust Suppression tab for the first time.
+  if (typeof DustState !== 'undefined' && typeof DustState.load === 'function') {
+    DustState.load();
+  }
   if (!_dewInited) {
     _dewInited = true;
     document.querySelectorAll('[data-dew-tab]').forEach(function(btn) {
@@ -1072,6 +1077,59 @@ function _dewDiagramAutoLayout() {
 
 }
 
+// Place only newly-appeared nodes without resetting existing positions.
+// Called when some (but not all) nodes are missing from _dewDiagramPos.
+function _dewDiagramPlaceNewNodes(missingKeys) {
+  // Find the bottom of the existing layout
+  var maxY = 100;
+  Object.keys(_dewDiagramPos).forEach(function(k) {
+    var p = _dewDiagramPos[k]; if (!p) return;
+    var h = k.indexOf('smp_') === 0 ? DEW_DN.sumpH :
+            k.indexOf('pmp_') === 0 ? DEW_DN.pumpH :
+            k.indexOf('dst_') === 0 ? DEW_DN.destH :
+            k.indexOf('qry_') === 0 ? DEW_DN.quarryH : 80;
+    maxY = Math.max(maxY, p.y + h);
+  });
+  var fallbackY = maxY + 40;
+  var fallbackX = 20;
+
+  missingKeys.forEach(function(k) {
+    if (k.indexOf('nzl_') === 0) {
+      // Place nozzle below its source sump when possible
+      var nzlId = k.slice(4);
+      if (typeof DustState !== 'undefined' && DustState.nozzles) {
+        var nzl = null;
+        for (var ni = 0; ni < DustState.nozzles.length; ni++) {
+          if (DustState.nozzles[ni].id === nzlId) { nzl = DustState.nozzles[ni]; break; }
+        }
+        if (nzl && nzl.sourceType === 'sump' && nzl.sourceId) {
+          var sp = _dewDiagramPos['smp_' + nzl.sourceId];
+          if (sp) {
+            var ny = sp.y + DEW_DN.sumpH + 30;
+            // Shift down if another placed nozzle is already nearby
+            var busy = true;
+            while (busy) {
+              busy = false;
+              var posKeys = Object.keys(_dewDiagramPos);
+              for (var pi = 0; pi < posKeys.length; pi++) {
+                if (posKeys[pi].indexOf('nzl_') !== 0) continue;
+                var op = _dewDiagramPos[posKeys[pi]];
+                if (op && Math.abs(op.x - sp.x) < 100 && Math.abs(op.y - ny) < 90) { ny += 90; busy = true; break; }
+              }
+            }
+            _dewDiagramPos[k] = { x: sp.x, y: ny };
+            return;
+          }
+        }
+      }
+    }
+    // Fallback: stack horizontally below all existing nodes
+    _dewDiagramPos[k] = { x: fallbackX, y: fallbackY };
+    fallbackX += 120;
+  });
+  _dewDiagramSavePos();
+}
+
 // Recompute quarry bounding boxes from current _dewDiagramPos (called after any position change)
 function _dewComputeQuarryBounds() {
   _dewQuarryBounds = {};
@@ -1275,7 +1333,15 @@ function _dewRenderDiagram(wrap) {
     .concat(diagNozzles.map(function(n) { return 'nzl_' + n.id; }))
     .concat(qNames.map(function(q) { return 'qry_' + q; }));
 
-  if (!allKeys.every(function(k) { return _dewDiagramPos[k]; })) _dewDiagramAutoLayout();
+  var keysMissing = allKeys.filter(function(k) { return !_dewDiagramPos[k]; });
+  if (keysMissing.length === allKeys.length) {
+    // No positions at all → first open or explicit reset → full auto-layout
+    _dewDiagramAutoLayout();
+  } else if (keysMissing.length > 0) {
+    // Some new nodes appeared (e.g. freshly added nozzles) → place only them,
+    // keep all existing positions intact so the user's layout is preserved.
+    _dewDiagramPlaceNewNodes(keysMissing);
+  }
   _dewComputeQuarryBounds(); // always recompute from current positions (even if loaded from localStorage)
 
   var canvasW = 900, canvasH = 500;
