@@ -110,7 +110,25 @@ var DewateringState = {
       });
       this.pumpEvents = remoteEvts.concat(orphanEvts);
 
-      this.destinations = results[4].data.length ? results[4].data.map(rowToDewDest) : _dewDefaultDest();
+      // ── Bidirectional sync for destinations ──────────────────────────────
+      // Local changes (new items or color/name edits whose Supabase write
+      // failed silently) must survive a reload.  Strategy:
+      //   • push ALL local items to Supabase (covers orphans + unsaved edits)
+      //   • merge remote-only items into local  (items created elsewhere)
+      //   • local wins for same-ID items        (local is always more recent)
+      var remoteDests   = results[4].data.map(rowToDewDest);
+      var remoteDestIds = remoteDests.map(function(d) { return d.id; });
+      var localDestIds  = this.destinations.map(function(d) { return d.id; });
+      this.destinations.forEach(function(d) {
+        Api.upsertDewDest(dewDestToRow(d)).catch(function(e) {
+          console.warn('[dewatering] failed to sync dest to Supabase', d.id, e);
+        });
+      });
+      var newFromRemote = remoteDests.filter(function(d) {
+        return localDestIds.indexOf(d.id) === -1;
+      });
+      this.destinations = this.destinations.concat(newFromRemote);
+      if (this.destinations.length === 0) this.destinations = _dewDefaultDest();
 
       // ── Bidirectional sync for meter readings ────────────────────────────
       var remoteReadings   = results[5].data.map(rowToDewReading);
