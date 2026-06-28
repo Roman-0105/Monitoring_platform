@@ -66,10 +66,10 @@ function rowToDewEvt(r) {
 }
 
 function dewDestToRow(d) {
-  return { id: d.id, name: d.name || '', type: d.type || '', target_sump_id: d.targetSumpId || null };
+  return { id: d.id, name: d.name || '', type: d.type || '', target_sump_id: d.targetSumpId || null, color: d.color || '' };
 }
 function rowToDewDest(r) {
-  return { id: r.id, name: r.name || '', type: r.type || '', targetSumpId: r.target_sump_id || null };
+  return { id: r.id, name: r.name || '', type: r.type || '', targetSumpId: r.target_sump_id || null, color: r.color || '' };
 }
 
 function dewReadingToRow(r) {

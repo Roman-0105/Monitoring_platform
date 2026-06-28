@@ -265,6 +265,13 @@ var DewateringState = {
     if (window.Api) Api.upsertDewDest(dewDestToRow(d)).catch(function() {});
     return d;
   },
+  updateDest: function(id, fields) {
+    var i=this.destinations.findIndex(function(d){return d.id===id;});
+    if (i<0) return;
+    Object.assign(this.destinations[i], fields);
+    this.save();
+    if (window.Api) Api.upsertDewDest(dewDestToRow(this.destinations[i])).catch(function() {});
+  },
   deleteDest: function(id) {
     this.destinations=this.destinations.filter(function(d){return d.id!==id;}); this.save();
     if (window.Api) Api.deleteDewDest(id).catch(function() {});
@@ -330,11 +337,14 @@ var DEW_PUMP_STATUS = {
 var DEW_PUMP_TYPE = { main: 'Основной', standby: 'Резервный' };
 
 var DEW_DEST_TYPE = {
-  settler:          { label: 'Отстойник / пруд',       icon: '💧' },
-  intermediate_sump:{ label: 'Промежуточный зумпф',    icon: '↕'  },
-  internal:         { label: 'Внутри карьера',         icon: '→'  },
-  reuse:            { label: 'Повторное использование', icon: '♻'  },
-  outside:          { label: 'За карьер',              icon: '⇥'  },
+  zif:              { label: 'ЗИФ',                     icon: '🏭', color: '#3b82f6' },
+  settler:          { label: 'Отстойник / пруд',        icon: '💧', color: '#22d3ee' },
+  reservoir:        { label: 'Накопитель',              icon: '🏗', color: '#f97316' },
+  relief:           { label: 'Рельеф',                  icon: '🌄', color: '#ef4444' },
+  intermediate_sump:{ label: 'Промежуточный зумпф',    icon: '↕',  color: '#22c55e' },
+  internal:         { label: 'Внутри карьера',          icon: '→',  color: '#a855f7' },
+  reuse:            { label: 'Повторное использование', icon: '♻',  color: '#10b981' },
+  outside:          { label: 'За карьер',               icon: '⇥',  color: '#f59e0b' },
 };
 
 var DEW_EVENT_TYPE = {
@@ -356,7 +366,7 @@ var _dewEditLevelId      = null;
 var _dewDiagramPos       = {};
 var _dewDiagramDrag      = null;
 var _dewDiagramFlows     = {};
-var DEW_DN               = { sumpW: 200, sumpH: 110, pumpW: 155, pumpH: 70, destW: 180, destH: 82, quarryW: 130, quarryH: 48 };
+var DEW_DN               = { sumpW: 200, sumpH: 110, pumpR: 42, pumpW: 84, pumpH: 84, destW: 180, destH: 82, quarryW: 130, quarryH: 48 };
 var _dewQuarryOrder      = []; // ordered list of quarry names (for stable coloring)
 var _dewPumpsCollapsed   = true;
 var _dewDestsCollapsed   = true;
@@ -974,6 +984,33 @@ function _dewQuarryOpts(selected) {
   }).join('');
 }
 
+function _dewDestColor(dest) {
+  if (dest && dest.color) return dest.color;
+  var info = dest && DEW_DEST_TYPE[dest.type];
+  return (info && info.color) || '#6b7280';
+}
+
+function _dewPathRounded(pts, r) {
+  if (!pts || pts.length < 2) return 'M0,0';
+  r = r || 8;
+  var d = 'M' + pts[0].x + ',' + pts[0].y;
+  for (var i = 1; i < pts.length - 1; i++) {
+    var prev = pts[i - 1], cur = pts[i], nxt = pts[i + 1];
+    var dx1 = cur.x - prev.x, dy1 = cur.y - prev.y;
+    var dx2 = nxt.x - cur.x,  dy2 = nxt.y - cur.y;
+    var len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+    var len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+    if (len1 === 0 || len2 === 0) { d += ' L' + cur.x + ',' + cur.y; continue; }
+    var rc = Math.min(r, len1 / 2, len2 / 2);
+    var t1x = cur.x - dx1 / len1 * rc, t1y = cur.y - dy1 / len1 * rc;
+    var t2x = cur.x + dx2 / len2 * rc, t2y = cur.y + dy2 / len2 * rc;
+    d += ' L' + t1x.toFixed(1) + ',' + t1y.toFixed(1);
+    d += ' Q' + cur.x + ',' + cur.y + ' ' + t2x.toFixed(1) + ',' + t2y.toFixed(1);
+  }
+  d += ' L' + pts[pts.length - 1].x + ',' + pts[pts.length - 1].y;
+  return d;
+}
+
 function _dewRenderDiagram(wrap) {
   if (!wrap) return;
   _dewDiagramLoadPos();
@@ -1127,18 +1164,14 @@ function _dewRenderDiagram(wrap) {
 
     nodesHtml +=
       '<div id="dew-dn-pmp_' + pump.id + '" class="dew-dn"' +
-      ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.pumpW + 'px;min-height:' + DEW_DN.pumpH + 'px;' +
-      'background:' + TC.nodePump.bg + ';border:1px solid ' + TC.nodePump.border + ';border-radius:var(--r);box-shadow:0 2px 6px rgba(0,0,0,.25);' + _dewNodeShadow(TC.nodePump) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.pumpW + 'px;height:' + DEW_DN.pumpH + 'px;' +
+      'cursor:move;user-select:none;z-index:2;box-sizing:border-box"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'pmp_' + pump.id + '\')">' +
-      '<div style="height:2px;background:' + stClr + ';opacity:.75"></div>' +
-      '<div style="padding:6px 8px">' +
-        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">' +
-          '<div style="font-size:10px;font-weight:600;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + escHTML(pump.name) + '</div>' +
-          '<span class="anl-pill anl-pill-' + st.cls + '" style="font-size:8px;flex-shrink:0">' + st.label + '</span>' +
-        '</div>' +
-        '<div style="display:flex;gap:8px">' +
-          '<div><div style="font-size:8px;color:var(--txt-3)">' + _dewDiagramPeriodLabel() + '</div><div style="font-size:12px;font-weight:700;color:var(--gold)">' + volDate.toFixed(0) + ' <span style="font-size:8px;font-weight:400">м³</span></div></div>' +
-          '<div><div style="font-size:8px;color:var(--txt-3)">Всего</div><div style="font-size:10px;color:var(--txt-2)">' + volTotal.toFixed(0) + ' <span style="font-size:8px">м³</span></div></div>' +
+      '<div style="position:absolute;inset:0;border-radius:50%;background:' + TC.nodePump.bg + ';border:3px solid ' + stClr + ';box-shadow:0 0 14px ' + stClr + '55,0 2px 10px rgba(0,0,0,.5)">' +
+        '<div style="position:absolute;inset:6px;border-radius:50%;border:1px solid ' + stClr + '55;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;text-align:center;gap:1px">' +
+          '<div style="font-size:8.5px;font-weight:700;color:var(--txt-1);max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;padding:0 2px">' + escHTML(pump.name) + '</div>' +
+          '<div style="width:3px;height:3px;border-radius:50%;background:' + stClr + ';flex-shrink:0"></div>' +
+          '<div style="font-size:11px;font-weight:700;color:var(--gold);line-height:1">' + volDate.toFixed(0) + '<span style="font-size:7px;font-weight:400;color:var(--txt-3)"> м³</span></div>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -1154,20 +1187,21 @@ function _dewRenderDiagram(wrap) {
       if (f.targetNodeId === 'dst_' + dest.id) { volDate += f.volDate; volTotal += f.volTotal; }
     });
 
+    var dClr = _dewDestColor(dest);
     nodesHtml +=
       '<div id="dew-dn-dst_' + dest.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.destW + 'px;min-height:' + DEW_DN.destH + 'px;' +
-      'background:' + TC.nodeDest.bg + ';border:1px solid ' + TC.nodeDest.border + ';border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);' + _dewNodeShadow(TC.nodeDest) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      'background:' + TC.nodeDest.bg + ';border:1px solid ' + dClr + '55;border-radius:var(--r);box-shadow:0 2px 10px rgba(0,0,0,.35),0 0 0 1px ' + dClr + '22;' + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'dst_' + dest.id + '\')">' +
-      '<div style="height:3px;background:' + TC.nodeDest.header + '"></div>' +
+      '<div style="height:3px;background:' + dClr + '"></div>' +
       '<div style="padding:7px 9px">' +
-        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">' +
-          '<span style="font-size:12px;line-height:1;flex-shrink:0">' + dtInfo.icon + '</span>' +
+        '<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">' +
+          '<div style="width:8px;height:8px;border-radius:50%;background:' + dClr + ';flex-shrink:0"></div>' +
           '<div style="font-size:10px;font-weight:700;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHTML(dest.name) + '</div>' +
         '</div>' +
-        '<div style="font-size:8px;color:var(--txt-3);margin-bottom:5px">' + escHTML(dtInfo.label) + '</div>' +
+        '<div style="font-size:8px;color:' + dClr + 'cc;margin-bottom:5px">' + escHTML(dtInfo.label) + '</div>' +
         '<div style="display:flex;gap:8px">' +
-          '<div><div style="font-size:8px;color:var(--txt-3)">' + _dewDiagramPeriodLabel() + '</div><div style="font-size:12px;font-weight:700;color:' + (volDate > 0 ? 'var(--ok)' : 'var(--txt-3)') + '">' + volDate.toFixed(0) + ' <span style="font-size:8px;font-weight:400">м³</span></div></div>' +
+          '<div><div style="font-size:8px;color:var(--txt-3)">' + _dewDiagramPeriodLabel() + '</div><div style="font-size:12px;font-weight:700;color:' + (volDate > 0 ? dClr : 'var(--txt-3)') + '">' + volDate.toFixed(0) + ' <span style="font-size:8px;font-weight:400">м³</span></div></div>' +
           '<div><div style="font-size:8px;color:var(--txt-3)">Всего</div><div style="font-size:10px;color:' + (volTotal > 0 ? 'var(--txt-2)' : 'var(--txt-3)') + '">' + volTotal.toFixed(0) + ' <span style="font-size:8px">м³</span></div></div>' +
         '</div>' +
       '</div>' +
@@ -1177,30 +1211,21 @@ function _dewRenderDiagram(wrap) {
   // ── Nozzle (гусак) nodes ──
   diagNozzles.forEach(function(nzl) {
     var pos = _dewDiagramPos['nzl_' + nzl.id]; if (!pos) return;
-    var nzlW = 180, nzlH = 70;
+    var nzlW = 90, nzlH = 80;
     var vols   = nozzleVolumes[nzl.id] || { volDate: 0, volTotal: 0 };
-    var sumpName = '';
-    if (nzl.sourceId && typeof DewateringState !== 'undefined') {
-      var srcSump = DewateringState.sumpById(nzl.sourceId);
-      if (srcSump) sumpName = srcSump.name;
-    }
+    var nzlBorderClr = TC.nodeNozzle.border || 'rgba(34,211,238,0.7)';
+    var nzlBgClr     = TC.nodeNozzle.bg     || '#0d1b2a';
+    var hexClip = 'polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%)';
     nodesHtml +=
       '<div id="dew-dn-nzl_' + nzl.id + '" class="dew-dn"' +
-      ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + nzlW + 'px;min-height:' + nzlH + 'px;' +
-      'background:' + TC.nodeNozzle.bg + ';border:1px solid ' + TC.nodeNozzle.border + ';border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);' + _dewNodeShadow(TC.nodeNozzle) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
+      ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + nzlW + 'px;height:' + nzlH + 'px;' +
+      'cursor:move;user-select:none;z-index:2;box-sizing:border-box"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'nzl_' + nzl.id + '\')">' +
-      '<div style="height:3px;background:' + TC.nodeNozzle.header + '"></div>' +
-      '<div style="padding:7px 9px">' +
-        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">' +
-          '<span style="font-size:10px;line-height:1;flex-shrink:0">💦</span>' +
-          '<div style="font-size:10px;font-weight:700;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">гусак</div>' +
-        '</div>' +
-        '<div style="font-size:9px;color:var(--txt-2);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHTML(nzl.name) + '</div>' +
-        (sumpName ? '<div style="font-size:8px;color:var(--txt-3);margin-bottom:4px">⛽ ' + escHTML(sumpName) + '</div>' : '') +
-        '<div style="display:flex;gap:8px">' +
-          '<div><div style="font-size:8px;color:var(--txt-3)">' + _dewDiagramPeriodLabel() + '</div><div style="font-size:11px;font-weight:700;color:' + (vols.volDate > 0 ? 'rgba(34,211,238,.9)' : 'var(--txt-3)') + '">' + vols.volDate.toFixed(0) + ' <span style="font-size:8px;font-weight:400">м³</span></div></div>' +
-          '<div><div style="font-size:8px;color:var(--txt-3)">Всего</div><div style="font-size:10px;color:' + (vols.volTotal > 0 ? 'var(--txt-2)' : 'var(--txt-3)') + '">' + vols.volTotal.toFixed(0) + ' <span style="font-size:8px">м³</span></div></div>' +
-        '</div>' +
+      '<div style="position:absolute;inset:0;clip-path:' + hexClip + ';background:' + nzlBorderClr + ';box-shadow:0 0 12px rgba(34,211,238,.3)"></div>' +
+      '<div style="position:absolute;inset:3px;clip-path:' + hexClip + ';background:' + nzlBgClr + ';display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1px">' +
+        '<div style="font-size:13px;line-height:1">💦</div>' +
+        '<div style="font-size:8px;font-weight:700;color:var(--txt-1);max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHTML(nzl.name) + '</div>' +
+        '<div style="font-size:10px;font-weight:700;color:rgba(34,211,238,.9)">' + vols.volDate.toFixed(0) + '<span style="font-size:7px;color:var(--txt-3)"> м³</span></div>' +
       '</div>' +
     '</div>';
   });
@@ -1290,7 +1315,7 @@ function _dewGetAllNodeBoxes() {
     DustState.nozzles.forEach(function(nzl) {
       if (nzl.sourceType !== 'sump' || !nzl.sourceId || !_smpIds[nzl.sourceId]) return;
       var pos = _dewDiagramPos['nzl_' + nzl.id];
-      if (pos) boxes.push({ id: 'nzl_' + nzl.id, x: pos.x, y: pos.y, w: 180, h: 70 });
+      if (pos) boxes.push({ id: 'nzl_' + nzl.id, x: pos.x, y: pos.y, w: 90, h: 80 });
     });
   }
   // Add quarry card boxes (obstacle-aware routing)
@@ -1368,13 +1393,20 @@ function _dewRouteEdge(x1, y1, x2, y2, obstacles) {
   return _dewSimplifyPath([{x:x1,y:y1},{x:midX,y:y1},{x:midX,y:y2},{x:x2,y:y2}]);
 }
 
-function _dewPathToSvg(path, stroke, sw, label, dashArray, animClass, animDuration) {
+function _dewPathToSvg(path, stroke, sw, label, dashArray, animClass, animDuration, opts) {
   if (!path || path.length < 2) return '';
-  var d = 'M' + path[0].x + ',' + path[0].y;
-  for (var i = 1; i < path.length; i++) d += ' L' + path[i].x + ',' + path[i].y;
+  opts = opts || {};
+  var d;
+  if (opts.rounded) {
+    d = _dewPathRounded(path, opts.cornerR);
+  } else {
+    d = 'M' + path[0].x + ',' + path[0].y;
+    for (var i = 1; i < path.length; i++) d += ' L' + path[i].x + ',' + path[i].y;
+  }
   var dashAttr = dashArray ? ' stroke-dasharray="' + dashArray + '"' : '';
   var animStyle = animClass ? ' style="animation:' + animClass + ' ' + (animDuration || 1.5) + 's linear infinite"' : '';
-  var out = '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round"' + dashAttr + animStyle + '/>';
+  var filterAttr = opts.filter ? ' filter="url(#' + opts.filter + ')"' : '';
+  var out = '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round"' + dashAttr + animStyle + filterAttr + '/>';
 
   var last = path[path.length - 1], prev = path[path.length - 2];
   var ang = Math.atan2(last.y - prev.y, last.x - prev.x);
@@ -1383,7 +1415,7 @@ function _dewPathToSvg(path, stroke, sw, label, dashArray, animClass, animDurati
   var ay1 = (last.y - aw * Math.sin(ang - Math.PI / 6)).toFixed(1);
   var ax2 = (last.x - aw * Math.cos(ang + Math.PI / 6)).toFixed(1);
   var ay2 = (last.y - aw * Math.sin(ang + Math.PI / 6)).toFixed(1);
-  out += '<polygon points="' + last.x + ',' + last.y + ' ' + ax1 + ',' + ay1 + ' ' + ax2 + ',' + ay2 + '" fill="' + stroke + '"/>';
+  out += '<polygon points="' + last.x + ',' + last.y + ' ' + ax1 + ',' + ay1 + ' ' + ax2 + ',' + ay2 + '" fill="' + stroke + '"' + filterAttr + '/>';
 
   if (label) {
     // Place label near the SOURCE end (first long segment) to avoid overlaps at destination
@@ -1420,6 +1452,10 @@ function _dewDiagramDrawArrows() {
     + '<pattern id="dewGridPat" width="40" height="40" patternUnits="userSpaceOnUse">'
     + '<path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>'
     + '</pattern>'
+    + '<filter id="dew-flow-glow" x="-60%" y="-60%" width="220%" height="220%">'
+    + '<feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>'
+    + '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>'
+    + '</filter>'
     + '</defs>'
     + '<rect x="-5000" y="-5000" width="20000" height="20000" fill="url(#dewGridPat)"/>';
 
@@ -1463,7 +1499,7 @@ function _dewDiagramDrawArrows() {
     arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), TC.edgeStruct, 1);
   });
 
-  // Pump → Destination/Sump flow edges (golden, width by volume, animated)
+  // Pump → Destination/Sump flow edges (colored by dest type, rounded, with glow)
   var maxVol = 0;
   Object.keys(_dewDiagramFlows).forEach(function(k) { var v = _dewDiagramFlows[k].volTotal; if (v > maxVol) maxVol = v; });
   maxVol = maxVol || 1;
@@ -1473,7 +1509,7 @@ function _dewDiagramDrawArrows() {
     var pp = _dewDiagramPos['pmp_' + f.pumpId];
     var tp = _dewDiagramPos[f.targetNodeId];
     if (!pp || !tp) return;
-    var x1 = pp.x + DEW_DN.pumpW, y1 = pp.y + DEW_DN.pumpH / 2;
+    var x1 = pp.x + DEW_DN.pumpW, y1 = pp.y + DEW_DN.pumpR;
     var tH = f.targetNodeId.indexOf('smp_') === 0 ? DEW_DN.sumpH : DEW_DN.destH;
     var x2 = tp.x, y2 = tp.y + tH / 2;
     var obs = allBoxes.filter(function(b) { return b.id !== 'pmp_' + f.pumpId && b.id !== f.targetNodeId; });
@@ -1481,7 +1517,15 @@ function _dewDiagramDrawArrows() {
     var lbl = f.volDate > 0 ? f.volDate.toFixed(0) + ' м³' : '';
     var volPct = f.volTotal / maxVol;
     var animDur = Math.max(0.4, 2.0 - (volPct * 1.5)).toFixed(2);
-    arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), TC.edgeFlow, parseFloat(sw), lbl, '8,4', 'dew-flow-fwd', animDur);
+    // Determine edge color from destination
+    var edgeClr = TC.edgeFlow;
+    if (f.targetNodeId.indexOf('dst_') === 0) {
+      var tDest = DewateringState.destById(f.targetNodeId.slice(4));
+      if (tDest) edgeClr = _dewDestColor(tDest);
+    } else if (f.targetNodeId.indexOf('smp_') === 0) {
+      edgeClr = DEW_DEST_TYPE.intermediate_sump.color;
+    }
+    arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), edgeClr, parseFloat(sw), lbl, '8,4', 'dew-flow-fwd', animDur, { rounded: true, filter: 'dew-flow-glow' });
   });
 
   // Sump → Nozzle dashed teal arrows (dust suppression flows, animated)
@@ -1495,7 +1539,7 @@ function _dewDiagramDrawArrows() {
       if (!sp || !np) return;
       var x1  = sp.x + DEW_DN.sumpW / 2;
       var y1  = sp.y + DEW_DN.sumpH;
-      var x2  = np.x + 90;
+      var x2  = np.x + 45;
       var y2  = np.y;
       var obs = allBoxes.filter(function(b) { return b.id !== 'smp_' + nzl.sourceId && b.id !== 'nzl_' + nzl.id; });
       var nzlLogs = DustState.logs.filter(function(l) { return l.nozzleId === nzl.id; });
@@ -2449,33 +2493,41 @@ function _dewRenderDestList() {
     DewateringState.destinations.map(function(d) {
       var tp = DEW_DEST_TYPE[d.type] || {};
       var targetSump = d.targetSumpId ? DewateringState.sumpById(d.targetSumpId) : null;
-      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-3);border-radius:var(--r-sm);font-size:12px">' +
-        '<span>' + (tp.icon || '•') + '</span>' +
+      var clr = _dewDestColor(d);
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-3);border-radius:var(--r-sm);font-size:12px;border-left:3px solid ' + clr + '">' +
+        '<div style="width:10px;height:10px;border-radius:50%;background:' + clr + ';flex-shrink:0"></div>' +
         '<span style="flex:1;color:var(--txt-1)">' + escHTML(d.name) + '</span>' +
-        '<span style="color:var(--txt-3);font-size:10px">' + (tp.label || '') + (targetSump ? ' → ' + escHTML(targetSump.name) : '') + '</span>' +
+        '<span style="color:var(--txt-3);font-size:10px">' + escHTML(tp.label || d.type || '') + (targetSump ? ' → ' + escHTML(targetSump.name) : '') + '</span>' +
+        '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:2px 6px" onclick="_dewOpenDestForm(\'' + d.id + '\')">✎</button>' +
         '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2)" onclick="_dewDeleteDest(\'' + d.id + '\')">✕</button>' +
       '</div>';
     }).join('') + '</div>';
 }
 
-function _dewOpenDestForm() {
+function _dewOpenDestForm(editId) {
   var formEl = document.getElementById('dew-dest-form');
   if (!formEl) return;
+  var existing = editId ? DewateringState.destById(editId) : null;
   var typeOpts = Object.keys(DEW_DEST_TYPE).map(function(k) {
-    return '<option value="' + k + '">' + DEW_DEST_TYPE[k].label + '</option>';
+    var selected = existing && existing.type === k ? ' selected' : '';
+    return '<option value="' + k + '"' + selected + '>' + DEW_DEST_TYPE[k].label + '</option>';
   }).join('');
   var sumpOpts = '<option value="">— не указан —</option>' + DewateringState.sumps.map(function(s) {
-    return '<option value="' + s.id + '">' + escHTML(s.name) + '</option>';
+    var selected = existing && existing.targetSumpId === s.id ? ' selected' : '';
+    return '<option value="' + s.id + '"' + selected + '>' + escHTML(s.name) + '</option>';
   }).join('');
+  var currentColor = existing ? _dewDestColor(existing) : '#3b82f6';
+  var currentType  = existing ? (existing.type || 'zif') : 'zif';
 
   formEl.innerHTML =
     '<div class="card" style="padding:12px;margin-top:8px;border:1px solid var(--line)">' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:flex-end">' +
-    _dewFld('Название', 'text', 'dew-df-name', '', 'Отстойник №2') +
+    '<div style="display:grid;grid-template-columns:1fr 1fr auto auto auto;gap:8px;align-items:flex-end">' +
+    _dewFld('Название', 'text', 'dew-df-name', existing ? existing.name : '', 'Отстойник №2') +
     '<div class="form-group"><label class="form-label">Тип</label><select id="dew-df-type" class="form-control" onchange="_dewDestTypeChanged()">' + typeOpts + '</select></div>' +
-    '<div class="form-group" id="dew-df-sump-wrap" style="display:none"><label class="form-label">Целевой зумпф</label><select id="dew-df-sump" class="form-control">' + sumpOpts + '</select></div>' +
+    '<div class="form-group" id="dew-df-sump-wrap" style="display:' + (currentType === 'intermediate_sump' ? 'block' : 'none') + '"><label class="form-label">Целевой зумпф</label><select id="dew-df-sump" class="form-control">' + sumpOpts + '</select></div>' +
+    '<div class="form-group"><label class="form-label">Цвет</label><input type="color" id="dew-df-color" value="' + escAttr(currentColor) + '" style="width:48px;height:32px;padding:2px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg-3);cursor:pointer"></div>' +
     '<div style="padding-bottom:4px;display:flex;gap:6px">' +
-    '<button class="btn btn-sm" style="background:var(--gold);color:#000" id="dew-df-save">Добавить</button>' +
+    '<button class="btn btn-sm" style="background:var(--gold);color:#000" id="dew-df-save">' + (existing ? 'Сохранить' : 'Добавить') + '</button>' +
     '<button class="btn btn-sm btn-outline" id="dew-df-cancel">✕</button>' +
     '</div></div></div>';
 
@@ -2485,17 +2537,35 @@ function _dewOpenDestForm() {
     if (!name) { Toast.show('Введите название', 'warning'); return; }
     var type = document.getElementById('dew-df-type').value;
     var targetSumpId = type === 'intermediate_sump' ? (document.getElementById('dew-df-sump').value || null) : null;
-    DewateringState.addDest({ name: name, type: type, targetSumpId: targetSumpId });
+    var colorEl = document.getElementById('dew-df-color');
+    var color = colorEl ? colorEl.value : '';
+    // If color matches type default, store empty (means "use type default")
+    var typeDefault = DEW_DEST_TYPE[type] ? DEW_DEST_TYPE[type].color : '';
+    if (color === typeDefault) color = '';
+    if (existing) {
+      DewateringState.updateDest(existing.id, { name: name, type: type, targetSumpId: targetSumpId, color: color });
+      Toast.show('Направление обновлено', 'success');
+    } else {
+      DewateringState.addDest({ name: name, type: type, targetSumpId: targetSumpId, color: color });
+      Toast.show('Направление добавлено', 'success');
+    }
     formEl.innerHTML = '';
     _dewRenderDestList();
-    Toast.show('Направление добавлено', 'success');
+    var dw = document.getElementById('dew-diagram-wrap');
+    if (dw) _dewRenderDiagram(dw);
   };
 }
 
 function _dewDestTypeChanged() {
-  var type = document.getElementById('dew-df-type') ? document.getElementById('dew-df-type').value : '';
+  var typeEl = document.getElementById('dew-df-type');
+  var type = typeEl ? typeEl.value : '';
   var wrap = document.getElementById('dew-df-sump-wrap');
   if (wrap) wrap.style.display = type === 'intermediate_sump' ? 'block' : 'none';
+  // Auto-set color picker to type default when type changes
+  var colorEl = document.getElementById('dew-df-color');
+  if (colorEl && DEW_DEST_TYPE[type] && DEW_DEST_TYPE[type].color) {
+    colorEl.value = DEW_DEST_TYPE[type].color;
+  }
 }
 
 function _dewDeleteDest(id) { DewateringState.deleteDest(id); _dewRenderDestList(); }
