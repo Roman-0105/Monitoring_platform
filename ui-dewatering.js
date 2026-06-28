@@ -88,16 +88,19 @@ var DewateringState = {
       this.sumpElevationHistory = results[1].data.map(rowToDewElev);
 
       // ── Bidirectional sync for pumps ─────────────────────────────────────
-      // Local-only pumps (Supabase write failed before) are pushed up, not lost.
+      // Push ALL local pumps to Supabase on every load so that local edits
+      // (e.g. defaultDistributions) that failed to save silently are re-synced.
+      // New remote-only pumps are merged into local.  Local wins for same-ID.
       var remotePumps   = results[2].data.map(rowToDewPump);
       var remotePumpIds = remotePumps.map(function(p) { return p.id; });
-      var orphanPumps   = this.pumps.filter(function(p) { return remotePumpIds.indexOf(p.id) === -1; });
-      orphanPumps.forEach(function(p) {
+      var localPumpIds  = this.pumps.map(function(p) { return p.id; });
+      this.pumps.forEach(function(p) {
         Api.upsertDewPump(dewPumpToRow(p)).catch(function(e) {
-          console.warn('[dewatering] failed to push orphan pump to Supabase', p.id, e);
+          console.warn('[dewatering] failed to sync pump to Supabase', p.id, e);
         });
       });
-      this.pumps = remotePumps.concat(orphanPumps);
+      var newRemotePumps = remotePumps.filter(function(p) { return localPumpIds.indexOf(p.id) === -1; });
+      this.pumps = this.pumps.concat(newRemotePumps);
 
       // ── Bidirectional sync for pump events ───────────────────────────────
       var remoteEvts   = results[3].data.map(rowToDewEvt);
