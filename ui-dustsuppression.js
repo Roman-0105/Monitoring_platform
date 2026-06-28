@@ -308,63 +308,98 @@ function _dustRenderJournalLeft() {
 
   var date = _dustJournalDate || _dustToday();
 
-  var vehicles = _dustJournalOrgFilter
-    ? DustState.vehiclesOfOrg(_dustJournalOrgFilter)
-    : DustState.vehicles;
+  // Determine which orgs to show
+  var orgs = _dustJournalOrgFilter
+    ? DustState.orgs.filter(function(o) { return o.id === _dustJournalOrgFilter; })
+    : DustState.orgs;
 
-  if (vehicles.length === 0) {
+  if (orgs.length === 0 || DustState.vehicles.length === 0) {
     el.innerHTML = '<div style="color:var(--txt-3);font-size:12px;padding:16px 0">Нет машин. Добавьте организацию и машины.</div>';
     return;
   }
 
   var html = '';
-  vehicles.forEach(function(v) {
-    var org = DustState.orgById(v.orgId);
-    var orgName = org ? org.name : '';
-    var cap = parseFloat(v.capacity) || 0;
+  var anyOrg = false;
 
-    // Existing logs for this vehicle + date
-    var existingLogs = DustState.logs.filter(function(l) {
-      return l.vehicleId === v.id && l.date === date &&
-        (!_dustJournalNozzleFilter || l.nozzleId === _dustJournalNozzleFilter);
+  orgs.forEach(function(org) {
+    var vehicles = DustState.vehiclesOfOrg(org.id);
+    if (vehicles.length === 0) return;
+    anyOrg = true;
+
+    // Org total volume for the day
+    var orgDayVol = 0;
+    vehicles.forEach(function(v) {
+      DustState.logs.forEach(function(l) {
+        if (l.vehicleId === v.id && l.date === date &&
+            (!_dustJournalNozzleFilter || l.nozzleId === _dustJournalNozzleFilter)) {
+          orgDayVol += _dustComputeVolume(l);
+        }
+      });
     });
 
-    var dayVol = existingLogs.reduce(function(a, l) { return a + _dustComputeVolume(l); }, 0);
-
-    html += '<div class="card dust-j-card" data-vehicle-id="' + escAttr(v.id) + '" style="padding:12px;margin-bottom:10px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
-    html += '<div>';
-    html += '<span style="font-size:13px;font-weight:600;color:var(--txt-1)">' + escHTML(v.name) + '</span>';
-    if (v.plateNumber) html += ' <span style="font-size:11px;color:var(--txt-3)">(' + escHTML(v.plateNumber) + ')</span>';
-    if (orgName) html += ' <span style="font-size:10px;color:var(--txt-3);margin-left:4px">' + escHTML(orgName) + '</span>';
-    html += '</div>';
-    html += '<span style="font-size:12px;color:var(--txt-2)">';
-    if (dayVol > 0) html += '<b style="color:var(--gold)">' + dayVol.toFixed(1) + ' м³</b>';
-    if (cap > 0) html += '<span style="color:var(--txt-3);font-size:10px;margin-left:4px">· ' + cap + ' м³/рейс</span>';
-    html += '</span>';
+    // Org section card (like sump card in meter readings)
+    html += '<div class="card" style="padding:12px 14px;margin-bottom:8px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--txt-1)">' + escHTML(org.name) + '</div>';
+    if (orgDayVol > 0) {
+      html += '<div style="font-size:11px;color:var(--gold);font-weight:600">' + orgDayVol.toFixed(1) + ' м³</div>';
+    }
     html += '</div>';
 
-    // Rows container
-    html += '<div id="dust-jrows-' + escAttr(v.id) + '">';
+    // Vehicles inside org card (like pumps inside sump card)
+    vehicles.forEach(function(v) {
+      var cap = parseFloat(v.capacity) || 0;
 
-    if (existingLogs.length > 0) {
-      existingLogs.forEach(function(log) {
+      var existingLogs = DustState.logs.filter(function(l) {
+        return l.vehicleId === v.id && l.date === date &&
+          (!_dustJournalNozzleFilter || l.nozzleId === _dustJournalNozzleFilter);
+      });
+
+      var dayVol = existingLogs.reduce(function(a, l) { return a + _dustComputeVolume(l); }, 0);
+
+      // Vehicle sub-section with top border (like pump row)
+      html += '<div class="dust-j-card" data-vehicle-id="' + escAttr(v.id) + '"' +
+        ' style="padding:8px 0;border-top:1px solid var(--line-2)">';
+
+      // Vehicle header row
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+      html += '<div style="display:flex;align-items:center;gap:6px">';
+      html += '<span style="font-size:12px;font-weight:600;color:var(--txt-1)">' + escHTML(v.name) + '</span>';
+      if (v.plateNumber) html += '<span style="font-size:10px;color:var(--txt-3)">(' + escHTML(v.plateNumber) + ')</span>';
+      html += '</div>';
+      html += '<span style="font-size:10px;color:var(--txt-3)">';
+      if (dayVol > 0) html += '<b style="color:var(--gold);margin-right:4px">' + dayVol.toFixed(1) + ' м³</b>';
+      if (cap > 0) html += cap + ' м³/рейс';
+      html += '</span>';
+      html += '</div>';
+
+      // Nozzle rows container
+      html += '<div id="dust-jrows-' + escAttr(v.id) + '">';
+
+      if (existingLogs.length > 0) {
+        existingLogs.forEach(function(log) {
+          _dustJRowSeq++;
+          var rowId = 'djr' + _dustJRowSeq;
+          html += _dustJRowHTML(rowId, log.nozzleId, log.trips, log.notes, log.id);
+        });
+      } else {
         _dustJRowSeq++;
         var rowId = 'djr' + _dustJRowSeq;
-        html += _dustJRowHTML(rowId, log.nozzleId, log.trips, log.notes, log.id);
-      });
-    } else {
-      // One empty row minimum
-      _dustJRowSeq++;
-      var rowId = 'djr' + _dustJRowSeq;
-      html += _dustJRowHTML(rowId, _dustJournalNozzleFilter, 0, '', '');
-    }
+        html += _dustJRowHTML(rowId, _dustJournalNozzleFilter, 0, '', '');
+      }
 
-    html += '</div>';
+      html += '</div>';
+      html += '<button class="btn btn-sm" style="font-size:11px;margin-top:4px;opacity:.7"' +
+        ' onclick="_dustJAddRow(\'' + escAttr(v.id) + '\')">+ Гусак</button>';
+      html += '</div>'; // end vehicle
+    });
 
-    html += '<button class="btn btn-sm" style="font-size:11px;margin-top:6px;opacity:.7" onclick="_dustJAddRow(\'' + escAttr(v.id) + '\')">+ Гусак</button>';
-    html += '</div>';
+    html += '</div>'; // end org card
   });
+
+  if (!anyOrg) {
+    html = '<div style="color:var(--txt-3);font-size:12px;padding:16px 0">Нет машин. Добавьте организацию и машины.</div>';
+  }
 
   el.innerHTML = html;
 }
