@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Схема водоотлива — Выбор концепции</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+a{color:#58a6ff}
+
+/* ── Header ── */
+.hdr{padding:28px 40px 20px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:16px}
+.hdr-icon{width:38px;height:38px;background:linear-gradient(135deg,#1e3a5f,#0d2137);border:1px solid rgba(88,166,255,.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.hdr-title{font-size:18px;font-weight:700;color:#f0f6ff}
+.hdr-sub{font-size:12px;color:#7d8590;margin-top:2px}
+.hdr-badge{margin-left:auto;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px}
+
+/* ── Body ── */
+.body{padding:32px 40px 60px}
+.intro{max-width:780px;margin-bottom:32px}
+.intro h2{font-size:22px;font-weight:700;color:#f0f6ff;margin-bottom:8px}
+.intro p{font-size:13px;color:#7d8590;line-height:1.7}
+
+/* ── Concepts grid ── */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+
+/* ── Concept card ── */
+.concept{background:#161b22;border:2px solid rgba(255,255,255,.07);border-radius:14px;overflow:hidden;transition:border-color .2s,box-shadow .2s;cursor:pointer}
+.concept:hover{border-color:rgba(88,166,255,.35);box-shadow:0 0 30px rgba(88,166,255,.07)}
+.concept.selected{border-color:#58a6ff;box-shadow:0 0 0 4px rgba(88,166,255,.15)}
+
+.c-header{padding:16px 20px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06)}
+.c-badge{font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 9px;border-radius:12px}
+.badge-a{background:rgba(88,166,255,.15);color:#58a6ff;border:1px solid rgba(88,166,255,.3)}
+.badge-b{background:rgba(74,222,128,.13);color:#4ade80;border:1px solid rgba(74,222,128,.3)}
+.badge-c{background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.25)}
+.badge-d{background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)}
+.badge-rec{background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3);margin-left:6px}
+.c-name{font-size:15px;font-weight:700;color:#f0f6ff}
+
+/* ── SVG preview area ── */
+.c-preview{background:#0d1117;position:relative;overflow:hidden}
+.c-preview svg{display:block;width:100%;height:auto}
+.c-preview-light{background:#f6f8fa}
+
+/* ── Features ── */
+.c-body{padding:16px 20px}
+.c-features{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.feat{font-size:11px;padding:3px 9px;border-radius:10px;border:1px solid rgba(255,255,255,.1);color:#8b949e}
+.feat-good{border-color:rgba(74,222,128,.3);color:#4ade80}
+
+/* ── Legend ── */
+.c-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:#7d8590}
+.leg-dot{width:10px;height:10px;border-radius:50%}
+.leg-line{width:18px;height:3px;border-radius:2px}
+
+/* ── Select button ── */
+.c-footer{padding:0 20px 18px;display:flex;gap:10px;align-items:center}
+.btn-select{padding:8px 18px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid rgba(88,166,255,.4);background:rgba(88,166,255,.1);color:#58a6ff;cursor:pointer;transition:all .15s}
+.btn-select:hover{background:rgba(88,166,255,.2);border-color:#58a6ff}
+.concept.selected .btn-select{background:#1f6feb;border-color:#388bfd;color:#fff}
+.selected-label{font-size:11px;color:#4ade80;font-weight:600;display:none}
+.concept.selected .selected-label{display:block}
+
+/* ── Result panel ── */
+.result-panel{display:none;margin-top:32px;background:#161b22;border:1px solid rgba(74,222,128,.3);border-radius:12px;padding:20px 24px}
+.result-panel.visible{display:block}
+.result-title{font-size:14px;font-weight:700;color:#4ade80;margin-bottom:6px}
+.result-text{font-size:12px;color:#7d8590;line-height:1.7}
+
+/* ── Tooltip ── */
+.c-preview-tooltip{position:absolute;bottom:8px;right:8px;font-size:9px;color:rgba(255,255,255,.25);pointer-events:none}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-icon">💧</div>
+  <div>
+    <div class="hdr-title">Схема водоотлива</div>
+    <div class="hdr-sub">Мониторинговая платформа · Журнал водоотлива</div>
+  </div>
+  <div class="hdr-badge">Выбор визуальной концепции</div>
+</div>
+
+<div class="body">
+  <div class="intro">
+    <h2>Выберите стиль схемы</h2>
+    <p>Ниже показаны 4 варианта визуализации схемы водоотлива. Все варианты включают: разные формы для типов узлов, цветовые линии по направлению откачки, стрелки на концах, авто-привязку к ближайшей стороне фигуры и 8 точек соединения. Щёлкните на карточку или кнопку «Выбрать» — и мы начнём реализацию.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- ═══════════════════════════════════ CONCEPT A ═══════════════════════════════════ -->
+    <div class="concept" onclick="select('a')">
+      <div class="c-header">
+        <span class="c-badge badge-a">A</span>
+        <span class="c-name">P&amp;ID — Промышленная схема</span>
+      </div>
+
+      <div class="c-preview">
+        <svg viewBox="0 0 700 290" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="gridA" width="30" height="30" patternUnits="userSpaceOnUse">
+              <path d="M30 0L0 0 0 30" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            </pattern>
+            <!-- arrowheads -->
+            <marker id="arrBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="#3b82f6"/>
+            </marker>
+            <marker id="arrOrange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="#f97316"/>
+            </marker>
+            <marker id="arrRed" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="#ef4444"/>
+            </marker>
+            <marker id="arrTeal" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="#22d3ee"/>
+            </marker>
+            <marker id="arrGray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="rgba(148,163,184,0.5)"/>
+            </marker>
+          </defs>
+
+          <!-- grid -->
+          <rect width="700" height="290" fill="url(#gridA)"/>
+
+          <!-- quarry card -->
+          <rect x="12" y="108" width="88" height="40" rx="5" fill="rgba(30,30,45,0.9)" stroke="rgba(148,163,184,0.35)" stroke-width="1.2"/>
+          <text x="56" y="124" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-weight="700" letter-spacing=".05em">КАРЬЕР</text>
+          <text x="56" y="137" text-anchor="middle" fill="#c9d1d9" font-size="9" font-weight="600">⛏ ЮРГ</text>
+
+          <!-- quarry → sump dashed -->
+          <path d="M100,128 L128,128 L128,100 L150,100" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrGray)"/>
+
+          <!-- sump rect -->
+          <rect x="150" y="55" width="168" height="95" rx="6" fill="rgba(12,20,40,0.95)" stroke="rgba(88,166,255,0.45)" stroke-width="1.5"/>
+          <rect x="150" y="55" width="168" height="22" rx="6" fill="rgba(88,166,255,0.18)"/>
+          <rect x="150" y="71" width="168" height="6" rx="0" fill="rgba(88,166,255,0.18)"/>
+          <text x="234" y="70" text-anchor="middle" fill="#93c5fd" font-size="8.5" font-weight="700">60 ТЫС. НАКОПИТЕЛЬ</text>
+          <text x="159" y="90" fill="#7d8590" font-size="8">💧 Уровень: -118.50 м</text>
+          <!-- water level bar -->
+          <rect x="159" y="98" width="149" height="6" rx="3" fill="rgba(255,255,255,0.06)"/>
+          <rect x="159" y="98" width="90" height="6" rx="3" fill="rgba(59,130,246,0.55)"/>
+          <text x="159" y="120" fill="#7d8590" font-size="8">2 насоса активны</text>
+          <text x="159" y="133" fill="#4ade80" font-size="8" font-weight="600">↑ Работает</text>
+
+          <!-- sump → pump1 -->
+          <path d="M318,85 L355,85" fill="none" stroke="rgba(88,166,255,0.4)" stroke-width="1.2" marker-end="url(#arrGray)"/>
+          <!-- sump → pump2 -->
+          <path d="M318,120 L335,120 L335,175 L355,175" fill="none" stroke="rgba(88,166,255,0.4)" stroke-width="1.2" marker-end="url(#arrGray)"/>
+
+          <!-- pump1 circle -->
+          <circle cx="390" cy="85" r="34" fill="rgba(12,20,40,0.95)" stroke="#4ade80" stroke-width="2"/>
+          <text x="390" y="80" text-anchor="middle" fill="#c9d1d9" font-size="7.5" font-weight="700">ЦНС 350</text>
+          <text x="390" y="90" text-anchor="middle" fill="#c9d1d9" font-size="7" font-weight="600">№1</text>
+          <text x="390" y="101" text-anchor="middle" fill="#4ade80" font-size="7">● Работает</text>
+
+          <!-- pump2 circle -->
+          <circle cx="390" cy="175" r="34" fill="rgba(12,20,40,0.95)" stroke="#4ade80" stroke-width="2"/>
+          <text x="390" y="170" text-anchor="middle" fill="#c9d1d9" font-size="7.5" font-weight="700">ЦНС 350</text>
+          <text x="390" y="180" text-anchor="middle" fill="#c9d1d9" font-size="7" font-weight="600">№2</text>
+          <text x="390" y="191" text-anchor="middle" fill="#4ade80" font-size="7">● Работает</text>
+
+          <!-- pump1 → ЗИФ (blue) -->
+          <path d="M424,70 L448,70 L448,68 L470,68" fill="none" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrBlue)"/>
+          <rect x="426" y="56" width="40" height="12" rx="3" fill="rgba(10,20,40,.85)"/>
+          <text x="446" y="65" text-anchor="middle" fill="#60a5fa" font-size="8" font-weight="600">5 000 м³</text>
+
+          <!-- pump1 → 60к (orange) -->
+          <path d="M424,95 L448,95 L448,130 L470,130" fill="none" stroke="#f97316" stroke-width="1.8" marker-end="url(#arrOrange)"/>
+          <rect x="424" y="104" width="40" height="12" rx="3" fill="rgba(10,20,40,.85)"/>
+          <text x="444" y="113" text-anchor="middle" fill="#fb923c" font-size="8" font-weight="600">1 500 м³</text>
+
+          <!-- pump2 → рельеф (red) -->
+          <path d="M424,180 L448,180 L448,192 L470,192" fill="none" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrRed)"/>
+          <rect x="424" y="186" width="40" height="12" rx="3" fill="rgba(10,20,40,.85)"/>
+          <text x="444" y="195" text-anchor="middle" fill="#f87171" font-size="8" font-weight="600">292 м³</text>
+
+          <!-- sump → hexagon (teal) -->
+          <path d="M234,150 L234,245 L569,245" fill="none" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrTeal)"/>
+
+          <!-- Dest ЗИФ -->
+          <rect x="470" y="50" width="155" height="42" rx="5" fill="rgba(10,20,40,0.95)" stroke="rgba(59,130,246,0.5)" stroke-width="1.3"/>
+          <rect x="470" y="50" width="5" height="42" rx="2" fill="#3b82f6"/>
+          <text x="483" y="66" fill="#93c5fd" font-size="8.5" font-weight="700">ЗИФ</text>
+          <text x="483" y="78" fill="#7d8590" font-size="8">Золото-извлекательная ф-ка</text>
+          <text x="483" y="88" fill="#60a5fa" font-size="8" font-weight="600">5 000 м³</text>
+
+          <!-- Dest 60к накопитель -->
+          <rect x="470" y="113" width="155" height="42" rx="5" fill="rgba(10,20,40,0.95)" stroke="rgba(249,115,22,0.5)" stroke-width="1.3"/>
+          <rect x="470" y="113" width="5" height="42" rx="2" fill="#f97316"/>
+          <text x="483" y="129" fill="#fdba74" font-size="8.5" font-weight="700">60 тыс. накопитель</text>
+          <text x="483" y="141" fill="#7d8590" font-size="8">Хвостохранилище</text>
+          <text x="483" y="151" fill="#fb923c" font-size="8" font-weight="600">1 500 м³</text>
+
+          <!-- Dest Рельеф -->
+          <rect x="470" y="176" width="155" height="42" rx="5" fill="rgba(10,20,40,0.95)" stroke="rgba(239,68,68,0.45)" stroke-width="1.3"/>
+          <rect x="470" y="176" width="5" height="42" rx="2" fill="#ef4444"/>
+          <text x="483" y="192" fill="#fca5a5" font-size="8.5" font-weight="700">На рельеф</text>
+          <text x="483" y="204" fill="#7d8590" font-size="8">Водоотведение</text>
+          <text x="483" y="214" fill="#f87171" font-size="8" font-weight="600">292 м³</text>
+
+          <!-- Hexagon (dust) -->
+          <polygon points="569,218 591,231 591,257 569,270 547,257 547,231" fill="rgba(8,30,35,0.95)" stroke="#22d3ee" stroke-width="1.5"/>
+          <text x="569" y="246" text-anchor="middle" fill="#22d3ee" font-size="7.5" font-weight="700">ПЫЛ.</text>
+          <text x="569" y="256" text-anchor="middle" fill="#7d8590" font-size="6.5">⬡</text>
+
+          <!-- labels hint -->
+          <text x="12" y="280" fill="rgba(255,255,255,0.2)" font-size="7.5">Ортогональные линии · Цвет = тип назначения · Толщина = объём</text>
+        </svg>
+        <div class="c-preview-tooltip">Превью схемы</div>
+      </div>
+
+      <div class="c-body">
+        <div class="c-legend">
+          <div class="leg-item"><div class="leg-line" style="background:#3b82f6"></div>ЗИФ</div>
+          <div class="leg-item"><div class="leg-line" style="background:#f97316"></div>Накопитель</div>
+          <div class="leg-item"><div class="leg-line" style="background:#ef4444"></div>Рельеф</div>
+          <div class="leg-item"><div class="leg-line" style="background:#22c55e"></div>Промеж.</div>
+          <div class="leg-item"><div class="leg-line" style="background:#22d3ee;border-style:dashed"></div>Пылеподавл.</div>
+        </div>
+        <div class="c-features">
+          <span class="feat feat-good">Круги для насосов</span>
+          <span class="feat feat-good">Шестигранник для пыл.</span>
+          <span class="feat feat-good">Цвет по типу назначения</span>
+          <span class="feat feat-good">Толщина = объём</span>
+          <span class="feat feat-good">Стрелки на концах</span>
+          <span class="feat">Ортогональные линии (90°)</span>
+          <span class="feat">Строгий промышленный стиль</span>
+          <span class="feat">Полоса уровня воды в зумпфе</span>
+        </div>
+      </div>
+      <div class="c-footer">
+        <button class="btn-select" onclick="event.stopPropagation();select('a')">Выбрать этот вариант</button>
+        <span class="selected-label">✓ Выбрано</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ CONCEPT B ═══════════════════════════════════ -->
+    <div class="concept" onclick="select('b')">
+      <div class="c-header">
+        <span class="c-badge badge-b">B</span>
+        <span class="c-name">Dashboard — Информационные карточки</span>
+      </div>
+
+      <div class="c-preview">
+        <svg viewBox="0 0 700 290" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="bgGradB" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0d1117"/>
+              <stop offset="100%" stop-color="#0a0f1a"/>
+            </linearGradient>
+            <linearGradient id="sumpGradB" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(88,166,255,0.2)"/>
+              <stop offset="100%" stop-color="rgba(88,166,255,0.04)"/>
+            </linearGradient>
+            <!-- glow filter -->
+            <filter id="glowBlue">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="glowOrange">
+              <feGaussianBlur stdDeviation="2.5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <rect width="700" height="290" fill="url(#bgGradB)"/>
+
+          <!-- Subtle radial glow -->
+          <radialGradient id="ctrGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="rgba(88,166,255,0.04)"/>
+            <stop offset="100%" stop-color="transparent"/>
+          </radialGradient>
+          <rect width="700" height="290" fill="url(#ctrGlow)"/>
+
+          <!-- quarry pill -->
+          <rect x="10" y="113" width="90" height="34" rx="17" fill="rgba(30,35,50,0.9)" stroke="rgba(148,163,184,0.25)" stroke-width="1"/>
+          <text x="55" y="126" text-anchor="middle" fill="#94a3b8" font-size="7.5" font-weight="700">⛏ КАРЬЕР</text>
+          <text x="55" y="138" text-anchor="middle" fill="#cbd5e1" font-size="8.5" font-weight="600">ЮРГ</text>
+
+          <!-- quarry → sump curved -->
+          <path d="M100,130 C125,130 128,92 150,92" fill="none" stroke="rgba(148,163,184,0.3)" stroke-width="1.2" stroke-dasharray="4,3"/>
+          <polygon points="150,89 145,95 155,95" fill="rgba(148,163,184,0.4)"/>
+
+          <!-- sump card with gradient header -->
+          <rect x="150" y="48" width="172" height="100" rx="8" fill="rgba(10,16,30,0.97)" stroke="rgba(88,166,255,0.3)" stroke-width="1"/>
+          <rect x="150" y="48" width="172" height="28" rx="8" fill="url(#sumpGradB)"/>
+          <rect x="150" y="68" width="172" height="8" fill="url(#sumpGradB)"/>
+          <text x="236" y="66" text-anchor="middle" fill="#93c5fd" font-size="8.5" font-weight="700" letter-spacing=".03em">60 ТЫС. НАКОПИТЕЛЬ</text>
+          <!-- water level progress -->
+          <text x="162" y="88" fill="#7d8590" font-size="7.5">Уровень воды</text>
+          <rect x="162" y="92" width="148" height="7" rx="3.5" fill="rgba(255,255,255,.06)"/>
+          <rect x="162" y="92" width="89" height="7" rx="3.5" fill="rgba(59,130,246,.6)"/>
+          <text x="314" y="99" text-anchor="end" fill="#60a5fa" font-size="7" font-weight="700">60%</text>
+          <text x="162" y="111" fill="#4b5563" font-size="7">-118.50 м абс.</text>
+          <text x="162" y="123" fill="#4ade80" font-size="7.5" font-weight="600">↑ 2 насоса работают</text>
+          <text x="162" y="136" fill="#4b5563" font-size="7">Дно: -125.0 м абс.</text>
+
+          <!-- curved connectors sump → pumps -->
+          <path d="M322,82 C342,82 348,88 360,88" fill="none" stroke="rgba(88,166,255,0.35)" stroke-width="1.3"/>
+          <path d="M322,110 C342,110 348,175 360,175" fill="none" stroke="rgba(88,166,255,0.35)" stroke-width="1.3"/>
+
+          <!-- pump1 circle with glow -->
+          <circle cx="396" cy="88" r="34" fill="rgba(8,18,35,.98)" stroke="#4ade80" stroke-width="2.5" filter="url(#glowBlue)"/>
+          <circle cx="396" cy="88" r="28" fill="rgba(74,222,128,0.05)"/>
+          <text x="396" y="83" text-anchor="middle" fill="#d1fae5" font-size="7" font-weight="700">ЦНС 350</text>
+          <text x="396" y="93" text-anchor="middle" fill="#9ca3af" font-size="7">Насос №1</text>
+          <text x="396" y="104" text-anchor="middle" fill="#34d399" font-size="8.5" font-weight="700">6 792</text>
+          <text x="396" y="112" text-anchor="middle" fill="#6b7280" font-size="6.5">м³</text>
+
+          <!-- pump2 circle -->
+          <circle cx="396" cy="175" r="34" fill="rgba(8,18,35,.98)" stroke="#4ade80" stroke-width="2.5"/>
+          <circle cx="396" cy="175" r="28" fill="rgba(74,222,128,0.05)"/>
+          <text x="396" y="170" text-anchor="middle" fill="#d1fae5" font-size="7" font-weight="700">ЦНС 350</text>
+          <text x="396" y="180" text-anchor="middle" fill="#9ca3af" font-size="7">Насос №2</text>
+          <text x="396" y="191" text-anchor="middle" fill="#34d399" font-size="8.5" font-weight="700">1 792</text>
+          <text x="396" y="199" text-anchor="middle" fill="#6b7280" font-size="6.5">м³</text>
+
+          <!-- pump1 → ЗИФ bezier (blue glow) -->
+          <path d="M430,75 C455,65 455,60 472,60" fill="none" stroke="#3b82f6" stroke-width="2.8" filter="url(#glowBlue)"/>
+          <polygon points="472,57 466,60 466,63" fill="#3b82f6"/>
+          <rect x="438" y="54" width="28" height="12" rx="5" fill="rgba(10,20,50,.9)" stroke="rgba(59,130,246,.3)" stroke-width=".7"/>
+          <text x="452" y="63" text-anchor="middle" fill="#60a5fa" font-size="7.5" font-weight="700">5 000</text>
+
+          <!-- pump1 → 60к bezier (orange) -->
+          <path d="M430,100 C455,110 455,123 472,123" fill="none" stroke="#f97316" stroke-width="2" filter="url(#glowOrange)"/>
+          <polygon points="472,120 466,123 466,126" fill="#f97316"/>
+          <rect x="438" y="110" width="28" height="12" rx="5" fill="rgba(30,15,5,.9)" stroke="rgba(249,115,22,.3)" stroke-width=".7"/>
+          <text x="452" y="119" text-anchor="middle" fill="#fb923c" font-size="7.5" font-weight="700">1 500</text>
+
+          <!-- pump2 → рельеф bezier (red) -->
+          <path d="M430,175 C455,175 455,185 472,185" fill="none" stroke="#ef4444" stroke-width="1.6"/>
+          <polygon points="472,182 466,185 466,188" fill="#ef4444"/>
+          <rect x="438" y="176" width="28" height="12" rx="5" fill="rgba(30,5,5,.9)" stroke="rgba(239,68,68,.3)" stroke-width=".7"/>
+          <text x="452" y="185" text-anchor="middle" fill="#f87171" font-size="7.5" font-weight="700">292</text>
+
+          <!-- sump → hex (teal curved) -->
+          <path d="M236,148 C236,230 545,235 568,240" fill="none" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="4,3"/>
+          <polygon points="568,237 562,241 567,245" fill="#22d3ee"/>
+
+          <!-- Dest ЗИФ card -->
+          <rect x="472" y="42" width="160" height="46" rx="7" fill="rgba(8,16,35,.97)" stroke="rgba(59,130,246,0.4)" stroke-width="1"/>
+          <rect x="472" y="42" width="160" height="16" rx="7" fill="rgba(59,130,246,0.18)"/>
+          <rect x="472" y="50" width="160" height="8" fill="rgba(59,130,246,0.18)"/>
+          <text x="484" y="53" fill="#93c5fd" font-size="7.5" font-weight="700">🏭 ЗИФ</text>
+          <text x="484" y="66" fill="#4b5563" font-size="7">Золото-извлекательная фабрика</text>
+          <text x="484" y="78" fill="#3b82f6" font-size="9" font-weight="700">5 000 м³</text>
+
+          <!-- Dest 60к card -->
+          <rect x="472" y="105" width="160" height="46" rx="7" fill="rgba(20,12,5,.97)" stroke="rgba(249,115,22,0.4)" stroke-width="1"/>
+          <rect x="472" y="105" width="160" height="16" rx="7" fill="rgba(249,115,22,0.15)"/>
+          <rect x="472" y="113" width="160" height="8" fill="rgba(249,115,22,0.15)"/>
+          <text x="484" y="116" fill="#fdba74" font-size="7.5" font-weight="700">🪣 60 тыс. накопитель</text>
+          <text x="484" y="129" fill="#4b5563" font-size="7">Хвостохранилище</text>
+          <text x="484" y="141" fill="#f97316" font-size="9" font-weight="700">1 500 м³</text>
+
+          <!-- Dest Рельеф card -->
+          <rect x="472" y="168" width="160" height="46" rx="7" fill="rgba(20,5,5,.97)" stroke="rgba(239,68,68,0.4)" stroke-width="1"/>
+          <rect x="472" y="168" width="160" height="16" rx="7" fill="rgba(239,68,68,0.12)"/>
+          <rect x="472" y="176" width="160" height="8" fill="rgba(239,68,68,0.12)"/>
+          <text x="484" y="179" fill="#fca5a5" font-size="7.5" font-weight="700">⛰ На рельеф</text>
+          <text x="484" y="192" fill="#4b5563" font-size="7">Водоотведение</text>
+          <text x="484" y="204" fill="#ef4444" font-size="9" font-weight="700">292 м³</text>
+
+          <!-- Hexagon -->
+          <polygon points="568,222 588,234 588,257 568,269 548,257 548,234" fill="rgba(4,25,30,.95)" stroke="#22d3ee" stroke-width="1.5"/>
+          <text x="568" y="245" text-anchor="middle" fill="#22d3ee" font-size="7.5" font-weight="700">Пыл.</text>
+          <text x="568" y="256" text-anchor="middle" fill="#0e7490" font-size="7">подавл.</text>
+
+          <text x="12" y="282" fill="rgba(255,255,255,0.2)" font-size="7.5">Кривые Безье · Объём внутри кружка насоса · Свечение на стрелках</text>
+        </svg>
+      </div>
+
+      <div class="c-body">
+        <div class="c-legend">
+          <div class="leg-item"><div class="leg-line" style="background:#3b82f6;box-shadow:0 0 4px #3b82f6"></div>ЗИФ</div>
+          <div class="leg-item"><div class="leg-line" style="background:#f97316;box-shadow:0 0 4px #f97316"></div>Накопитель</div>
+          <div class="leg-item"><div class="leg-line" style="background:#ef4444"></div>Рельеф</div>
+          <div class="leg-item"><div class="leg-line" style="background:#22c55e"></div>Промеж.</div>
+        </div>
+        <div class="c-features">
+          <span class="feat feat-good">Объём внутри кружка насоса</span>
+          <span class="feat feat-good">Свечение glow на стрелках</span>
+          <span class="feat feat-good">Карточки с цветной шапкой</span>
+          <span class="feat feat-good">Кривые Безье (плавные)</span>
+          <span class="feat feat-good">Полоска уровня воды %</span>
+          <span class="feat">Современный dashboard-стиль</span>
+          <span class="feat">Насыщенный визуал</span>
+        </div>
+      </div>
+      <div class="c-footer">
+        <button class="btn-select" onclick="event.stopPropagation();select('b')">Выбрать этот вариант</button>
+        <span class="selected-label">✓ Выбрано</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ CONCEPT C ═══════════════════════════════════ -->
+    <div class="concept" onclick="select('c')">
+      <div class="c-header">
+        <span class="c-badge badge-c">C</span>
+        <span class="c-name">Minimal Flow — Инженерная чертёжная</span>
+      </div>
+
+      <div class="c-preview c-preview-light">
+        <svg viewBox="0 0 700 290" xmlns="http://www.w3.org/2000/svg">
+          <rect width="700" height="290" fill="#f6f8fa"/>
+
+          <!-- subtle grid -->
+          <defs>
+            <pattern id="gridC" width="20" height="20" patternUnits="userSpaceOnUse">
+              <circle cx="0" cy="0" r="0.7" fill="rgba(0,0,0,0.08)"/>
+            </pattern>
+          </defs>
+          <rect width="700" height="290" fill="url(#gridC)"/>
+
+          <!-- quarry outline only -->
+          <rect x="10" y="110" width="88" height="36" rx="3" fill="white" stroke="#cbd5e1" stroke-width="1.5"/>
+          <text x="54" y="124" text-anchor="middle" fill="#64748b" font-size="8" font-weight="700" letter-spacing=".05em">КАРЬЕР</text>
+          <text x="54" y="137" text-anchor="middle" fill="#1e293b" font-size="9" font-weight="600">ЮРГ</text>
+
+          <path d="M98,128 L130,128 L130,95 L152,95" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,3"/>
+          <polygon points="152,92 147,95 147,98" fill="#cbd5e1"/>
+
+          <!-- sump - outline only -->
+          <rect x="152" y="58" width="162" height="85" rx="4" fill="white" stroke="#94a3b8" stroke-width="1.5"/>
+          <text x="233" y="74" text-anchor="middle" fill="#475569" font-size="8.5" font-weight="700">60 ТЫС. НАКОПИТЕЛЬ</text>
+          <line x1="162" y1="79" x2="304" y2="79" stroke="#e2e8f0" stroke-width="1"/>
+          <text x="162" y="93" fill="#64748b" font-size="7.5">Уровень: -118.50 м</text>
+          <rect x="162" y="98" width="142" height="4" rx="2" fill="#e2e8f0"/>
+          <rect x="162" y="98" width="85" height="4" rx="2" fill="#3b82f6" fill-opacity=".6"/>
+          <text x="162" y="115" fill="#64748b" font-size="7.5">2 насоса работают</text>
+          <text x="162" y="128" fill="#22c55e" font-size="8" font-weight="600">↑ Активно</text>
+
+          <!-- sump → pumps (thin gray) -->
+          <path d="M314,85 L355,88" fill="none" stroke="#94a3b8" stroke-width="1"/>
+          <path d="M314,105 L335,105 L335,172 L355,172" fill="none" stroke="#94a3b8" stroke-width="1"/>
+
+          <!-- pump1 circle - outline only -->
+          <circle cx="390" cy="88" r="33" fill="white" stroke="#22c55e" stroke-width="2"/>
+          <text x="390" y="83" text-anchor="middle" fill="#475569" font-size="7.5" font-weight="600">ЦНС 350 №1</text>
+          <text x="390" y="95" text-anchor="middle" fill="#22c55e" font-size="8.5" font-weight="700">● Работает</text>
+
+          <!-- pump2 circle -->
+          <circle cx="390" cy="172" r="33" fill="white" stroke="#22c55e" stroke-width="2"/>
+          <text x="390" y="167" text-anchor="middle" fill="#475569" font-size="7.5" font-weight="600">ЦНС 350 №2</text>
+          <text x="390" y="179" text-anchor="middle" fill="#22c55e" font-size="8.5" font-weight="700">● Работает</text>
+
+          <!-- flow lines - thin colored -->
+          <!-- pump1 → ЗИФ -->
+          <path d="M423,76 L450,76 L450,68 L472,68" fill="none" stroke="#3b82f6" stroke-width="2"/>
+          <polygon points="472,65 467,68 467,71" fill="#3b82f6"/>
+          <text x="456" y="62" text-anchor="middle" fill="#3b82f6" font-size="7.5" font-weight="600">5 000 м³</text>
+
+          <!-- pump1 → 60к -->
+          <path d="M423,100 L450,100 L450,128 L472,128" fill="none" stroke="#f97316" stroke-width="1.5"/>
+          <polygon points="472,125 467,128 467,131" fill="#f97316"/>
+          <text x="456" y="118" text-anchor="middle" fill="#f97316" font-size="7.5" font-weight="600">1 500 м³</text>
+
+          <!-- pump2 → рельеф -->
+          <path d="M423,172 L450,172 L450,188 L472,188" fill="none" stroke="#ef4444" stroke-width="1.3"/>
+          <polygon points="472,185 467,188 467,191" fill="#ef4444"/>
+          <text x="456" y="183" text-anchor="middle" fill="#ef4444" font-size="7.5" font-weight="600">292 м³</text>
+
+          <!-- sump → hex -->
+          <path d="M233,143 L233,245 L551,245" fill="none" stroke="#0891b2" stroke-width="1" stroke-dasharray="4,3"/>
+          <polygon points="551,242 546,245 546,248" fill="#0891b2"/>
+
+          <!-- Dest ЗИФ - outline only -->
+          <rect x="472" y="52" width="155" height="40" rx="3" fill="white" stroke="#3b82f6" stroke-width="1.5"/>
+          <text x="482" y="69" fill="#1d4ed8" font-size="8.5" font-weight="700">ЗИФ</text>
+          <text x="482" y="82" fill="#64748b" font-size="7.5">5 000 м³</text>
+
+          <!-- Dest 60к -->
+          <rect x="472" y="112" width="155" height="40" rx="3" fill="white" stroke="#f97316" stroke-width="1.5"/>
+          <text x="482" y="129" fill="#c2410c" font-size="8.5" font-weight="700">60 тыс. накопитель</text>
+          <text x="482" y="142" fill="#64748b" font-size="7.5">1 500 м³</text>
+
+          <!-- Dest рельеф -->
+          <rect x="472" y="172" width="155" height="40" rx="3" fill="white" stroke="#ef4444" stroke-width="1.5"/>
+          <text x="482" y="189" fill="#991b1b" font-size="8.5" font-weight="700">На рельеф</text>
+          <text x="482" y="202" fill="#64748b" font-size="7.5">292 м³</text>
+
+          <!-- Hex -->
+          <polygon points="568,222 587,233 587,255 568,266 549,255 549,233" fill="white" stroke="#0891b2" stroke-width="1.5"/>
+          <text x="568" y="248" text-anchor="middle" fill="#0e7490" font-size="7.5" font-weight="700">Пыл.п.</text>
+
+          <text x="12" y="282" fill="rgba(0,0,0,0.2)" font-size="7.5">Светлый фон · Только контуры · Минимализм · Чертёжный стиль</text>
+        </svg>
+      </div>
+
+      <div class="c-body">
+        <div class="c-legend">
+          <div class="leg-item"><div class="leg-line" style="background:#3b82f6"></div>ЗИФ</div>
+          <div class="leg-item"><div class="leg-line" style="background:#f97316"></div>Накопитель</div>
+          <div class="leg-item"><div class="leg-line" style="background:#ef4444"></div>Рельеф</div>
+          <div class="leg-item"><div class="leg-line" style="background:#0891b2;border-style:dashed"></div>Пылеподавл.</div>
+        </div>
+        <div class="c-features">
+          <span class="feat feat-good">Светлый фон — хорошо печатается</span>
+          <span class="feat feat-good">Максимум читаемости</span>
+          <span class="feat feat-good">Контурные фигуры (без заливки)</span>
+          <span class="feat">Строгий «чертёжный» вид</span>
+          <span class="feat">Минимум декора</span>
+          <span class="feat">Подходит для печати</span>
+        </div>
+      </div>
+      <div class="c-footer">
+        <button class="btn-select" onclick="event.stopPropagation();select('c')">Выбрать этот вариант</button>
+        <span class="selected-label">✓ Выбрано</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ CONCEPT D ═══════════════════════════════════ -->
+    <div class="concept" onclick="select('d')">
+      <div class="c-header">
+        <span class="c-badge badge-d">D</span>
+        <span class="c-name">Hybrid Interactive — Гибридная интерактивная</span>
+        <span class="c-badge badge-rec">★ Рекомендуется</span>
+      </div>
+
+      <div class="c-preview">
+        <svg viewBox="0 0 700 290" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="gridD" width="32" height="32" patternUnits="userSpaceOnUse">
+              <path d="M32 0L0 0 0 32" fill="none" stroke="rgba(255,255,255,0.035)" stroke-width="1"/>
+            </pattern>
+            <filter id="glowD" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <!-- Rounded corner path helper: uses Q for bends -->
+          </defs>
+
+          <rect width="700" height="290" fill="#0a0f1c"/>
+          <rect width="700" height="290" fill="url(#gridD)"/>
+
+          <!-- quarry rounded rect with subtle bg -->
+          <rect x="10" y="107" width="96" height="42" rx="7" fill="rgba(20,28,46,.95)" stroke="rgba(100,116,139,0.4)" stroke-width="1.3"/>
+          <text x="58" y="122" text-anchor="middle" fill="#94a3b8" font-size="7.5" font-weight="700" letter-spacing=".06em">КАРЬЕР</text>
+          <text x="58" y="135" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="700">⛏ ЮРГ</text>
+          <!-- 8 connection dots on quarry (right side shown) -->
+          <circle cx="106" cy="128" r="3.5" fill="#334155" stroke="#475569" stroke-width="1"/>
+
+          <!-- quarry → sump rounded-corner path -->
+          <path d="M106,128 Q130,128 130,100 L152,100" fill="none" stroke="rgba(100,116,139,0.45)" stroke-width="1.3" stroke-dasharray="5,3"/>
+          <polygon points="152,97 146,100 146,103" fill="rgba(100,116,139,0.5)"/>
+
+          <!-- sump with water-level gradient -->
+          <rect x="152" y="52" width="170" height="100" rx="8" fill="rgba(8,16,32,.98)" stroke="rgba(88,166,255,0.5)" stroke-width="1.5"/>
+          <!-- water level fill -->
+          <rect x="153" y="92" width="169" height="59" rx="0 0 7 7" fill="rgba(59,130,246,0.06)"/>
+          <rect x="153" y="112" width="169" height="39" rx="0 0 7 7" fill="rgba(59,130,246,0.08)"/>
+          <!-- header line -->
+          <rect x="152" y="52" width="170" height="24" rx="8 8 0 0" fill="rgba(59,130,246,0.18)"/>
+          <text x="237" y="67" text-anchor="middle" fill="#93c5fd" font-size="8.5" font-weight="700" letter-spacing=".03em">60 ТЫС. НАКОПИТЕЛЬ</text>
+          <!-- water level label -->
+          <text x="163" y="89" fill="#64748b" font-size="7.5">💧 -118.50 м · 60% заполнен</text>
+          <rect x="163" y="93" width="149" height="5" rx="2.5" fill="rgba(255,255,255,.06)"/>
+          <rect x="163" y="93" width="89" height="5" rx="2.5" fill="rgba(59,130,246,.55)"/>
+          <text x="163" y="107" fill="#4ade80" font-size="7.5" font-weight="600">↑ 2 насоса активны</text>
+          <text x="163" y="118" fill="#334155" font-size="7">▼ Дно: -125.0 м абс.</text>
+          <text x="163" y="130" fill="#334155" font-size="7">Запас: 6.5 м</text>
+          <text x="163" y="142" fill="#fbbf24" font-size="7.5">⚠ Подходит к допустимому уровню</text>
+          <!-- 8-point connectors on sump right side -->
+          <circle cx="322" cy="75" r="3" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+          <circle cx="322" cy="102" r="3" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+          <circle cx="322" cy="128" r="3" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+          <circle cx="322" cy="148" r="3" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+
+          <!-- sump → pump1 (rounded corner, exiting from dot) -->
+          <path d="M322,102 Q342,102 342,90 L358,90" fill="none" stroke="rgba(88,166,255,0.45)" stroke-width="1.4"/>
+          <!-- sump → pump2 (rounded corner) -->
+          <path d="M322,128 Q342,128 342,175 L358,175" fill="none" stroke="rgba(88,166,255,0.45)" stroke-width="1.4"/>
+
+          <!-- pump1 circle - with status ring -->
+          <circle cx="394" cy="90" r="35" fill="rgba(6,14,28,.97)" stroke="rgba(74,222,128,0.2)" stroke-width="5"/>
+          <circle cx="394" cy="90" r="32" fill="rgba(6,14,28,.97)" stroke="#4ade80" stroke-width="2"/>
+          <text x="394" y="82" text-anchor="middle" fill="#d1fae5" font-size="7" font-weight="700">ЦНС 350</text>
+          <text x="394" y="92" text-anchor="middle" fill="#6b7280" font-size="6.5">Насос №1</text>
+          <text x="394" y="103" text-anchor="middle" fill="#4ade80" font-size="8" font-weight="700">Работает</text>
+          <!-- 8-point connectors on pump1 -->
+          <circle cx="429" cy="78" r="3" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+          <circle cx="429" cy="102" r="3" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+
+          <!-- pump2 circle -->
+          <circle cx="394" cy="175" r="35" fill="rgba(6,14,28,.97)" stroke="rgba(74,222,128,0.2)" stroke-width="5"/>
+          <circle cx="394" cy="175" r="32" fill="rgba(6,14,28,.97)" stroke="#4ade80" stroke-width="2"/>
+          <text x="394" y="167" text-anchor="middle" fill="#d1fae5" font-size="7" font-weight="700">ЦНС 350</text>
+          <text x="394" y="177" text-anchor="middle" fill="#6b7280" font-size="6.5">Насос №2</text>
+          <text x="394" y="188" text-anchor="middle" fill="#4ade80" font-size="8" font-weight="700">Работает</text>
+          <circle cx="429" cy="165" r="3" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+          <circle cx="429" cy="185" r="3" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+
+          <!-- pump1 → ЗИФ (blue, fat line = big volume, rounded corners) -->
+          <path d="M429,78 Q450,78 450,65 L472,65" fill="none" stroke="#3b82f6" stroke-width="3" filter="url(#glowD)"/>
+          <polygon points="472,62 465,65 465,68" fill="#3b82f6"/>
+          <!-- volume pill on line -->
+          <rect x="436" y="54" width="32" height="13" rx="6" fill="#1e3a5f"/>
+          <text x="452" y="63.5" text-anchor="middle" fill="#93c5fd" font-size="7.5" font-weight="700">5 000 м³</text>
+
+          <!-- pump1 → 60к (orange, medium line) -->
+          <path d="M429,102 Q450,102 450,130 L472,130" fill="none" stroke="#f97316" stroke-width="2" filter="url(#glowD)"/>
+          <polygon points="472,127 465,130 465,133" fill="#f97316"/>
+          <rect x="436" y="112" width="32" height="13" rx="6" fill="#431407"/>
+          <text x="452" y="121.5" text-anchor="middle" fill="#fdba74" font-size="7.5" font-weight="700">1 500 м³</text>
+
+          <!-- pump2 → рельеф (red, thin = small volume) -->
+          <path d="M429,185 Q450,185 450,192 L472,192" fill="none" stroke="#ef4444" stroke-width="1.4"/>
+          <polygon points="472,189 465,192 465,195" fill="#ef4444"/>
+          <rect x="436" y="195" width="32" height="13" rx="6" fill="#450a0a"/>
+          <text x="452" y="204.5" text-anchor="middle" fill="#fca5a5" font-size="7.5" font-weight="700">292 м³</text>
+
+          <!-- sump → hexagon dust (teal, bottom exit from sump dot) -->
+          <path d="M237,152 Q237,245 555,245" fill="none" stroke="#22d3ee" stroke-width="1.3" stroke-dasharray="5,3"/>
+          <polygon points="555,242 549,245 549,248" fill="#22d3ee"/>
+
+          <!-- Dest ЗИФ -->
+          <rect x="472" y="48" width="158" height="48" rx="7" fill="rgba(8,15,35,.97)" stroke="rgba(59,130,246,0.5)" stroke-width="1.3"/>
+          <rect x="472" y="48" width="158" height="18" rx="7 7 0 0" fill="rgba(59,130,246,.18)"/>
+          <text x="484" y="61" fill="#93c5fd" font-size="8.5" font-weight="700">🏭 ЗИФ</text>
+          <text x="484" y="75" fill="#4b5563" font-size="7.5">Тип: Завод</text>
+          <text x="484" y="88" fill="#3b82f6" font-size="9.5" font-weight="700">5 000 м³</text>
+          <!-- connection dot left side -->
+          <circle cx="472" cy="65" r="3" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+
+          <!-- Dest 60к -->
+          <rect x="472" y="114" width="158" height="48" rx="7" fill="rgba(20,10,4,.97)" stroke="rgba(249,115,22,0.5)" stroke-width="1.3"/>
+          <rect x="472" y="114" width="158" height="18" rx="7 7 0 0" fill="rgba(249,115,22,.15)"/>
+          <text x="484" y="127" fill="#fdba74" font-size="8.5" font-weight="700">🪣 60 тыс. накопитель</text>
+          <text x="484" y="141" fill="#4b5563" font-size="7.5">Тип: Накопитель</text>
+          <text x="484" y="154" fill="#f97316" font-size="9.5" font-weight="700">1 500 м³</text>
+          <circle cx="472" cy="130" r="3" fill="#431407" stroke="#f97316" stroke-width="1"/>
+
+          <!-- Dest рельеф -->
+          <rect x="472" y="178" width="158" height="48" rx="7" fill="rgba(20,5,5,.97)" stroke="rgba(239,68,68,0.45)" stroke-width="1.3"/>
+          <rect x="472" y="178" width="158" height="18" rx="7 7 0 0" fill="rgba(239,68,68,.12)"/>
+          <text x="484" y="191" fill="#fca5a5" font-size="8.5" font-weight="700">⛰ На рельеф</text>
+          <text x="484" y="205" fill="#4b5563" font-size="7.5">Тип: Рельеф</text>
+          <text x="484" y="218" fill="#ef4444" font-size="9.5" font-weight="700">292 м³</text>
+          <circle cx="472" cy="192" r="3" fill="#450a0a" stroke="#ef4444" stroke-width="1"/>
+
+          <!-- Hexagon dust -->
+          <polygon points="570,222 592,235 592,260 570,273 548,260 548,235" fill="rgba(4,22,28,.95)" stroke="#22d3ee" stroke-width="1.8"/>
+          <circle cx="570" cy="248" r="12" fill="rgba(6,182,212,0.1)"/>
+          <text x="570" y="245" text-anchor="middle" fill="#22d3ee" font-size="7.5" font-weight="700">ПЫЛ.</text>
+          <text x="570" y="257" text-anchor="middle" fill="#0e7490" font-size="7">ПОДАВЛ.</text>
+
+          <!-- Legend dots hint -->
+          <text x="12" y="278" fill="rgba(255,255,255,0.2)" font-size="7">Округлые углы · Точки соединения · Толщина ∝ объём · Свечение · Уровень воды</text>
+        </svg>
+      </div>
+
+      <div class="c-body">
+        <div class="c-legend">
+          <div class="leg-item"><div class="leg-line" style="background:#3b82f6;height:4px;box-shadow:0 0 4px #3b82f6"></div>ЗИФ</div>
+          <div class="leg-item"><div class="leg-line" style="background:#f97316;height:3px"></div>60к накоп.</div>
+          <div class="leg-item"><div class="leg-line" style="background:#ef4444;height:2px"></div>Рельеф</div>
+          <div class="leg-item"><div class="leg-line" style="background:#22c55e"></div>Промеж.</div>
+          <div class="leg-item"><div class="leg-line" style="background:#22d3ee;border-style:dashed"></div>Пыл.</div>
+        </div>
+        <div class="c-features">
+          <span class="feat feat-good">Округлые углы линий (не жёсткие 90°)</span>
+          <span class="feat feat-good">8 видимых точек соединения на фигурах</span>
+          <span class="feat feat-good">Толщина линии = объём откачки</span>
+          <span class="feat feat-good">Уровень воды в зумпфе + предупреждение</span>
+          <span class="feat feat-good">Двойное кольцо насоса (статус)</span>
+          <span class="feat feat-good">Метки с объёмом на каждой линии</span>
+          <span class="feat feat-good">Свечение на линиях (glow)</span>
+          <span class="feat feat-good">Шестигранник для пылеподавления</span>
+        </div>
+      </div>
+      <div class="c-footer">
+        <button class="btn-select" onclick="event.stopPropagation();select('d')">Выбрать этот вариант</button>
+        <span class="selected-label">✓ Выбрано</span>
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+
+  <!-- Result panel -->
+  <div class="result-panel" id="resultPanel">
+    <div class="result-title" id="resultTitle">Вариант выбран</div>
+    <div class="result-text" id="resultText"></div>
+  </div>
+
+</div><!-- /body -->
+
+<script>
+var DESCRIPTIONS = {
+  a: '<b>Вариант A — P&ID (Промышленная схема)</b><br><br>Строгий промышленный стиль, похожий на схемы КИПиА. Все линии ортогональные (только горизонталь/вертикаль, перпендикулярные изломы). Насосы — круги, зумпфы и назначения — прямоугольники, шестигранник для пылеподавления. Цвет линии отражает тип назначения, толщина — объём откачки.<br><br>✅ Подходит если важна строгость и читаемость. Хорошо масштабируется на 15+ насосов.',
+  b: '<b>Вариант B — Dashboard (Информационные карточки)</b><br><br>Современный «приборный» стиль. Плавные кривые Безье вместо ломаных линий. Карточки с цветными шапками по типу назначения. Объём откачки показан непосредственно внутри кружка насоса. Свечение (glow) на важных потоках.<br><br>✅ Подходит если важна современность и «вау-эффект».',
+  c: '<b>Вариант C — Minimal Flow (Инженерная чертёжная)</b><br><br>Светлый фон, только контуры фигур без заливок. Минимализм на уровне технического чертежа. Хорошо печатается на бумаге или экспортируется в PDF.<br><br>✅ Подходит если схема должна быть максимально читаемой и нейтральной, или нужна печать.',
+  d: '<b>Вариант D — Hybrid Interactive ★ Рекомендуется</b><br><br>Сочетает лучшее от A и B: округлые углы вместо жёстких 90°, 8 видимых точек соединения на каждой фигуре (auto-snap + drag), толщина линии пропорциональна объёму, свечение glow на линиях, двойное кольцо насоса для отображения статуса, полоса уровня воды в зумпфе с предупреждением при критическом уровне.<br><br>Этот вариант наилучшим образом покрывает все запрошенные фичи: разные формы, настраиваемые цвета, гибкие точки соединения, стрелки, метки объёма.'
+};
+
+function select(id) {
+  document.querySelectorAll('.concept').forEach(function(c) {
+    c.classList.toggle('selected', c.querySelector('.c-badge').textContent.trim().toLowerCase() === id);
+  });
+  var panel = document.getElementById('resultPanel');
+  var title = document.getElementById('resultTitle');
+  var text  = document.getElementById('resultText');
+  var names = {a:'A — P&ID',b:'B — Dashboard',c:'C — Minimal',d:'D — Hybrid Interactive ★'};
+  title.textContent = '✓ Выбран вариант ' + names[id];
+  text.innerHTML = DESCRIPTIONS[id] + '<br><br><span style="color:#22d3ee">→ Отправьте в чат: «Выбираю вариант ' + id.toUpperCase() + '» — и я начну реализацию.</span>';
+  panel.classList.add('visible');
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+</script>
+</body>
+</html>
