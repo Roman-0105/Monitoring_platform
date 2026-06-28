@@ -1725,7 +1725,7 @@ function _dewOpenFillModal(sumpId, date) {
             '<label class="form-label" style="font-size:9px">Часов работы</label>' +
             '<input type="number" id="dew-modal-hrs-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.hoursWorked != null ? existing.hoursWorked : '')) + '" min="0" max="24" placeholder="ч" style="width:72px;font-size:12px">' +
           '</div>' +
-          _dewDistBlock(p.id) +
+          _dewDistBlock('modal-' + p.id) +
         '</div>' +
         '<div class="form-group" style="margin:0">' +
           '<label class="form-label" style="font-size:9px">Примечание</label>' +
@@ -1803,7 +1803,7 @@ function _dewOpenFillModal(sumpId, date) {
   // Init distribution rows for each pump
   activePumps.forEach(function(p) {
     var ex = DewateringState.readingForDate(p.id, modalDate);
-    _dewInitDistRows(p.id, ex ? DewateringState.getDistributions(ex) : []);
+    _dewInitDistRows('modal-' + p.id, ex ? DewateringState.getDistributions(ex) : (p.defaultDistributions || []));
   });
 
   // Close on overlay click
@@ -1912,14 +1912,14 @@ function _dewSaveFillModal(sumpId) {
       var resetVolEl = document.getElementById('dew-modal-reset-vol-' + p.id);
       data.manualVolume   = resetVolEl && resetVolEl.value.trim() !== '' ? (parseFloat(resetVolEl.value) || 0) : null;
       data.hoursWorked    = parseFloat((document.getElementById('dew-modal-hrs-'   + p.id) || {}).value) || null;
-      data.distributions  = _dewGetDistributions(p.id);
+      data.distributions  = _dewGetDistributions('modal-' + p.id);
       data.notes          = (((document.getElementById('dew-modal-notes-' + p.id) || {}).value) || '').trim();
     } else if (!isStopped) {
       var valEl = document.getElementById('dew-modal-val-' + p.id);
       if (!valEl || valEl.value.trim() === '') return;
       data.reading       = parseFloat(valEl.value);
       data.hoursWorked    = parseFloat((document.getElementById('dew-modal-hrs-'   + p.id) || {}).value) || null;
-      data.distributions  = _dewGetDistributions(p.id);
+      data.distributions  = _dewGetDistributions('modal-' + p.id);
       data.notes          = (((document.getElementById('dew-modal-notes-' + p.id) || {}).value) || '').trim();
     }
 
@@ -2321,10 +2321,17 @@ function _dewOpenPumpForm(id) {
       ' Учитывать показания насоса в суммарном объёме' +
     '</label>' +
     '<p style="font-size:10px;color:var(--txt-3);margin:3px 0 8px 19px">Снимите галочку, если насос перекачивает в промежуточный зумпф — чтобы избежать двойного счёта</p>' +
-    '<div style="display:flex;gap:8px;margin-top:6px">' +
+    '<div style="margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:6px">' +
+      '<div style="font-size:10px;font-weight:600;color:var(--txt-2);margin-bottom:6px">Направление откачки по умолчанию</div>' +
+      '<p style="font-size:10px;color:var(--txt-3);margin:0 0 8px">Будет предзаполнено при вводе показаний. Можно изменить вручную.</p>' +
+      _dewDistBlock('pf-default') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px">' +
     '<button class="btn btn-sm" style="background:var(--gold);color:#000" id="dew-pf-save">Сохранить</button>' +
     '<button class="btn btn-sm btn-outline" id="dew-pf-cancel">Отмена</button>' +
     '</div></div>';
+
+  _dewInitDistRows('pf-default', p ? (p.defaultDistributions || []) : []);
 
   document.getElementById('dew-pf-cancel').onclick = function() { formEl.innerHTML = ''; };
   document.getElementById('dew-pf-save').onclick = function() {
@@ -2343,6 +2350,7 @@ function _dewOpenPumpForm(id) {
       sumpId: sumpId, type: document.getElementById('dew-pf-type').value,
       status: document.getElementById('dew-pf-status').value,
       countInVolume: document.getElementById('dew-pf-countInVolume').checked,
+      defaultDistributions: _dewGetDistributions('pf-default'),
     };
     if (id) DewateringState.updatePump(id, data);
     else    DewateringState.addPump(data);
@@ -2679,7 +2687,7 @@ function _dewRenderQuickEntry(date) {
       .filter(function(p) { return p.status === 'working' || p.status === 'standby'; })
       .forEach(function(p) {
         var ex = DewateringState.readingForDate(p.id, date);
-        _dewInitDistRows(p.id, ex ? DewateringState.getDistributions(ex) : []);
+        _dewInitDistRows(p.id, ex ? DewateringState.getDistributions(ex) : (p.defaultDistributions || []));
       });
   });
 }

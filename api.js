@@ -34,7 +34,8 @@ function dewPumpToRow(p) {
     quarry: p.quarry || '', capacity: p.capacity != null ? Number(p.capacity) : null,
     head: p.head != null ? Number(p.head) : null, type: p.type || '',
     status: p.status || 'off', install_date: p.installDate || null,
-    notes: p.notes || '', count_in_volume: p.countInVolume !== false
+    notes: p.notes || '', count_in_volume: p.countInVolume !== false,
+    default_distributions: p.defaultDistributions || []
   };
 }
 function rowToDewPump(r) {
@@ -44,7 +45,8 @@ function rowToDewPump(r) {
     quarry: r.quarry || '', capacity: r.capacity != null ? Number(r.capacity) : null,
     head: r.head != null ? Number(r.head) : null, type: r.type || '',
     status: r.status || 'off', installDate: r.install_date || null,
-    notes: r.notes || '', countInVolume: r.count_in_volume !== false
+    notes: r.notes || '', countInVolume: r.count_in_volume !== false,
+    defaultDistributions: Array.isArray(r.default_distributions) ? r.default_distributions : []
   };
 }
 
