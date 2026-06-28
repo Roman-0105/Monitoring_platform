@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS dew_destinations (
   name           TEXT NOT NULL DEFAULT '',
   type           TEXT NOT NULL DEFAULT '',
   target_sump_id TEXT,
+  color          TEXT NOT NULL DEFAULT '',
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -247,3 +248,8 @@ CREATE POLICY "dust_logs_all" ON dust_logs
 CREATE INDEX IF NOT EXISTS idx_dust_logs_date ON dust_logs (date DESC);
 CREATE INDEX IF NOT EXISTS idx_dust_logs_org_id ON dust_logs (org_id);
 CREATE INDEX IF NOT EXISTS idx_dust_logs_nozzle_id ON dust_logs (nozzle_id);
+
+-- ──────────────────────────────────────────────────────────────
+-- Additive column migrations (idempotent)
+-- ──────────────────────────────────────────────────────────────
+ALTER TABLE dew_destinations ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '';
