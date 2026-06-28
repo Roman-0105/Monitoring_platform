@@ -400,6 +400,14 @@ var _dewQuarryBounds = {};
 // Feature 4: Animation toggle
 var _dewDiagramAnimPaused = false;
 
+// Feature 5: Edge connection point handles
+var _dewDiagramEdgePts     = {};   // {flowKey: {src:{nodeId,side}, dst:{nodeId,side}}}
+var _dewConnDrag           = null; // {key, end:'src'|'dst', curX, curY}
+var _dewDiagramEdgeHandles = [];   // [{key, end, cx, cy}] for hit-test
+var _dewHoverNodeId        = null;
+var _dewConnMoveHandler    = null;
+var _dewConnUpHandler      = null;
+
 // Single fixed theme (dark)
 var _dewDiagramTheme = 'dark';
 
@@ -673,6 +681,145 @@ function _dewUpdateZoomLabel() {
   if (el) el.textContent = Math.round(_dewDiagramZoom * 100) + '%';
 }
 
+// ── Connection point helpers ─────────────────────────────────
+
+function _dewEdgePtsLoad() {
+  try { _dewDiagramEdgePts = JSON.parse(localStorage.getItem('dew_edge_pts') || '{}'); }
+  catch(e) { _dewDiagramEdgePts = {}; }
+}
+function _dewEdgePtsSave() {
+  localStorage.setItem('dew_edge_pts', JSON.stringify(_dewDiagramEdgePts));
+}
+
+function _dewNodeConnPts(nodeId) {
+  var pos = _dewDiagramPos[nodeId];
+  if (!pos) return null;
+  var w, h;
+  if      (nodeId.indexOf('smp_') === 0) { w = DEW_DN.sumpW;    h = DEW_DN.sumpH; }
+  else if (nodeId.indexOf('pmp_') === 0) { w = DEW_DN.pumpW;    h = DEW_DN.pumpH; }
+  else if (nodeId.indexOf('dst_') === 0) { w = DEW_DN.destW;    h = DEW_DN.destH; }
+  else if (nodeId.indexOf('nzl_') === 0) { w = 90;              h = 80; }
+  else if (nodeId.indexOf('qry_') === 0) { w = DEW_DN.quarryW;  h = DEW_DN.quarryH; }
+  else return null;
+  var cx = pos.x + w / 2, cy = pos.y + h / 2;
+  return {
+    N:  {x: cx,      y: pos.y      },
+    NE: {x: pos.x+w, y: pos.y      },
+    E:  {x: pos.x+w, y: cy         },
+    SE: {x: pos.x+w, y: pos.y+h    },
+    S:  {x: cx,      y: pos.y+h    },
+    SW: {x: pos.x,   y: pos.y+h    },
+    W:  {x: pos.x,   y: cy         },
+    NW: {x: pos.x,   y: pos.y      },
+  };
+}
+
+function _dewNearestConnPt(x, y, snapDist) {
+  var best = null;
+  Object.keys(_dewDiagramPos).forEach(function(nodeId) {
+    var pts = _dewNodeConnPts(nodeId);
+    if (!pts) return;
+    Object.keys(pts).forEach(function(side) {
+      var pt = pts[side];
+      var dx = x - pt.x, dy = y - pt.y;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < snapDist && (!best || dist < best.dist)) {
+        best = {nodeId: nodeId, side: side, x: pt.x, y: pt.y, dist: dist};
+      }
+    });
+  });
+  return best;
+}
+
+function _dewUpdateCpLayer() {
+  var svg = document.getElementById('dew-diagram-svg');
+  if (!svg) return;
+  var cpLayer = document.getElementById('dew-cp-layer');
+  if (!cpLayer) {
+    cpLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    cpLayer.setAttribute('id', 'dew-cp-layer');
+    svg.appendChild(cpLayer);
+  }
+  var html = '';
+  if (_dewConnDrag) {
+    Object.keys(_dewDiagramPos).forEach(function(nodeId) {
+      var pts = _dewNodeConnPts(nodeId);
+      if (!pts) return;
+      Object.keys(pts).forEach(function(side) {
+        var pt = pts[side];
+        html += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="4"'
+             + ' fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.35)" stroke-width="1"/>';
+      });
+    });
+    var snap = _dewNearestConnPt(_dewConnDrag.curX, _dewConnDrag.curY, 24);
+    if (snap) {
+      html += '<circle cx="' + snap.x + '" cy="' + snap.y + '" r="8"'
+           + ' fill="none" stroke="#facc15" stroke-width="2"/>';
+      html += '<circle cx="' + snap.x + '" cy="' + snap.y + '" r="3" fill="#facc15"/>';
+    }
+    html += '<circle cx="' + _dewConnDrag.curX + '" cy="' + _dewConnDrag.curY + '" r="5"'
+         + ' fill="rgba(250,204,21,0.45)" stroke="#facc15" stroke-width="1.5"/>';
+  } else if (_dewHoverNodeId) {
+    var pts = _dewNodeConnPts(_dewHoverNodeId);
+    if (pts) {
+      Object.keys(pts).forEach(function(side) {
+        var pt = pts[side];
+        html += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="4"'
+             + ' fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>';
+      });
+    }
+  }
+  cpLayer.innerHTML = html;
+}
+
+function _dewStartEdgeDrag(e, key, end, cx, cy) {
+  _dewConnDrag = {key: key, end: end, curX: cx, curY: cy};
+  var vp = document.getElementById('dew-diagram-viewport');
+  if (_dewConnMoveHandler) document.removeEventListener('mousemove', _dewConnMoveHandler);
+  if (_dewConnUpHandler)   document.removeEventListener('mouseup',   _dewConnUpHandler);
+  _dewConnMoveHandler = function(ev) {
+    if (!_dewConnDrag || !vp) return;
+    var r = vp.getBoundingClientRect();
+    _dewConnDrag.curX = (ev.clientX - r.left - _dewDiagramPanX) / _dewDiagramZoom;
+    _dewConnDrag.curY = (ev.clientY - r.top  - _dewDiagramPanY) / _dewDiagramZoom;
+    _dewUpdateCpLayer();
+  };
+  _dewConnUpHandler = function(ev) {
+    if (!_dewConnDrag) return;
+    var r = vp ? vp.getBoundingClientRect() : null;
+    var fx = r ? (ev.clientX - r.left - _dewDiagramPanX) / _dewDiagramZoom : _dewConnDrag.curX;
+    var fy = r ? (ev.clientY - r.top  - _dewDiagramPanY) / _dewDiagramZoom : _dewConnDrag.curY;
+    var snap = _dewNearestConnPt(fx, fy, 24);
+    var k = _dewConnDrag.key, endKey = _dewConnDrag.end;
+    if (snap) {
+      if (!_dewDiagramEdgePts[k]) _dewDiagramEdgePts[k] = {};
+      _dewDiagramEdgePts[k][endKey] = {nodeId: snap.nodeId, side: snap.side};
+    } else {
+      if (_dewDiagramEdgePts[k]) {
+        delete _dewDiagramEdgePts[k][endKey];
+        if (!_dewDiagramEdgePts[k].src && !_dewDiagramEdgePts[k].dst) delete _dewDiagramEdgePts[k];
+      }
+    }
+    _dewEdgePtsSave();
+    _dewConnDrag = null;
+    document.removeEventListener('mousemove', _dewConnMoveHandler);
+    document.removeEventListener('mouseup',   _dewConnUpHandler);
+    _dewDiagramDrawArrows();
+  };
+  document.addEventListener('mousemove', _dewConnMoveHandler);
+  document.addEventListener('mouseup',   _dewConnUpHandler);
+  _dewUpdateCpLayer();
+}
+
+function _dewNodeMouseEnter(nodeId) {
+  _dewHoverNodeId = nodeId;
+  _dewUpdateCpLayer();
+}
+function _dewNodeMouseLeave() {
+  _dewHoverNodeId = null;
+  _dewUpdateCpLayer();
+}
+
 function _dewZoomIn()  { _dewZoomTarget = Math.min(3.0, _dewDiagramZoom * 1.25); _dewZoomPanTgtX = _dewDiagramPanX; _dewZoomPanTgtY = _dewDiagramPanY; if (!_dewZoomRafId) _dewZoomRafId = requestAnimationFrame(_dewZoomAnimFrame); }
 function _dewZoomOut() { _dewZoomTarget = Math.max(0.25, _dewDiagramZoom / 1.25); _dewZoomPanTgtX = _dewDiagramPanX; _dewZoomPanTgtY = _dewDiagramPanY; if (!_dewZoomRafId) _dewZoomRafId = requestAnimationFrame(_dewZoomAnimFrame); }
 function _dewZoomFit() { if (_dewZoomRafId) { cancelAnimationFrame(_dewZoomRafId); _dewZoomRafId = null; } _dewZoomTarget = 1.0; _dewDiagramZoom = 1.0; _dewZoomPanTgtX = 0; _dewZoomPanTgtY = 0; _dewDiagramPanX = 0; _dewDiagramPanY = 0; _dewDiagramApplyTransform(); _dewUpdateZoomLabel(); }
@@ -724,9 +871,36 @@ function _dewDiagramInitInteraction() {
   vp.addEventListener('mousedown', function(e) {
     if (e.target && e.target.closest && e.target.closest('.dew-dn')) return;
     e.preventDefault();
+    // Hit-test edge handles first
+    var rect = vp.getBoundingClientRect();
+    var hcx = (e.clientX - rect.left - _dewDiagramPanX) / _dewDiagramZoom;
+    var hcy = (e.clientY - rect.top  - _dewDiagramPanY) / _dewDiagramZoom;
+    for (var hi = 0; hi < _dewDiagramEdgeHandles.length; hi++) {
+      var hh = _dewDiagramEdgeHandles[hi];
+      var ddx = hcx - hh.cx, ddy = hcy - hh.cy;
+      if (ddx*ddx + ddy*ddy < 144) {
+        _dewStartEdgeDrag(e, hh.key, hh.end, hcx, hcy);
+        return;
+      }
+    }
     _dewDiagramPanning = true;
     _dewDiagramPanStart = { x: e.clientX - _dewDiagramPanX, y: e.clientY - _dewDiagramPanY };
     vp.style.cursor = 'grabbing';
+  });
+  // Cursor hint: crosshair near edge handles
+  vp.addEventListener('mousemove', function(e) {
+    if (_dewDiagramPanning || _dewConnDrag) return;
+    if (e.target && e.target.closest && e.target.closest('.dew-dn')) return;
+    var rect = vp.getBoundingClientRect();
+    var hcx = (e.clientX - rect.left - _dewDiagramPanX) / _dewDiagramZoom;
+    var hcy = (e.clientY - rect.top  - _dewDiagramPanY) / _dewDiagramZoom;
+    var near = false;
+    for (var hi = 0; hi < _dewDiagramEdgeHandles.length; hi++) {
+      var hh = _dewDiagramEdgeHandles[hi];
+      var ddx = hcx - hh.cx, ddy = hcy - hh.cy;
+      if (ddx*ddx + ddy*ddy < 144) { near = true; break; }
+    }
+    vp.style.cursor = near ? 'crosshair' : 'grab';
   });
 
   // Remove previous listeners before adding new ones — prevents accumulation on re-render
@@ -1014,6 +1188,7 @@ function _dewPathRounded(pts, r) {
 function _dewRenderDiagram(wrap) {
   if (!wrap) return;
   _dewDiagramLoadPos();
+  _dewEdgePtsLoad();
 
   var range = _dewDiagramGetRange();
   var dateFrom = range.from, dateTo = range.to;
@@ -1105,7 +1280,8 @@ function _dewRenderDiagram(wrap) {
       'background:' + qc.bg + ';border:1.5px solid ' + qc.border + ';border-radius:8px;' +
       'box-shadow:0 2px 10px rgba(0,0,0,.35),0 0 0 1px ' + qc.border.replace('0.55','0.2').replace('0.50','0.2') + ';' +
       'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;justify-content:center"' +
-      ' onmousedown="_dewDiagramStartDrag(event,\'qry_' + quarry.replace(/'/g,"\\'") + '\')">' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'qry_' + quarry.replace(/'/g,"\\'") + '\')"' +
+      ' onmouseenter="_dewNodeMouseEnter(\'qry_' + quarry.replace(/'/g,"\\'") + '\')" onmouseleave="_dewNodeMouseLeave()">' +
       '<div style="height:3px;background:' + qc.header + ';margin-bottom:4px"></div>' +
       '<div style="padding:0 10px">' +
         '<div style="font-size:9px;color:' + qc.text + ';opacity:0.7;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:2px">Карьер</div>' +
@@ -1136,7 +1312,8 @@ function _dewRenderDiagram(wrap) {
       '<div id="dew-dn-smp_' + sump.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.sumpW + 'px;min-height:' + DEW_DN.sumpH + 'px;' +
       'background:' + TC.nodeSump.bg + ';border:1px solid ' + TC.nodeSump.border + ';border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.3);' + _dewNodeShadow(TC.nodeSump) + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
-      ' onmousedown="_dewDiagramStartDrag(event,\'smp_' + sump.id + '\')">' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'smp_' + sump.id + '\')"' +
+      ' onmouseenter="_dewNodeMouseEnter(\'smp_' + sump.id + '\')" onmouseleave="_dewNodeMouseLeave()">' +
       '<div style="height:3px;background:' + TC.nodeSump.header + '"></div>' +
       '<div style="padding:7px 9px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px">' + escHTML(sump.name) + '</div>' +
@@ -1166,7 +1343,8 @@ function _dewRenderDiagram(wrap) {
       '<div id="dew-dn-pmp_' + pump.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.pumpW + 'px;height:' + DEW_DN.pumpH + 'px;' +
       'cursor:move;user-select:none;z-index:2;box-sizing:border-box"' +
-      ' onmousedown="_dewDiagramStartDrag(event,\'pmp_' + pump.id + '\')">' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'pmp_' + pump.id + '\')"' +
+      ' onmouseenter="_dewNodeMouseEnter(\'pmp_' + pump.id + '\')" onmouseleave="_dewNodeMouseLeave()">' +
       '<div style="position:absolute;inset:0;border-radius:50%;background:' + TC.nodePump.bg + ';border:3px solid ' + stClr + ';box-shadow:0 0 14px ' + stClr + '55,0 2px 10px rgba(0,0,0,.5)">' +
         '<div style="position:absolute;inset:6px;border-radius:50%;border:1px solid ' + stClr + '55;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;text-align:center;gap:1px">' +
           '<div style="font-size:8.5px;font-weight:700;color:var(--txt-1);max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;padding:0 2px">' + escHTML(pump.name) + '</div>' +
@@ -1192,7 +1370,8 @@ function _dewRenderDiagram(wrap) {
       '<div id="dew-dn-dst_' + dest.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + DEW_DN.destW + 'px;min-height:' + DEW_DN.destH + 'px;' +
       'background:' + TC.nodeDest.bg + ';border:1px solid ' + dClr + '55;border-radius:var(--r);box-shadow:0 2px 10px rgba(0,0,0,.35),0 0 0 1px ' + dClr + '22;' + 'cursor:move;user-select:none;z-index:1;box-sizing:border-box;overflow:hidden"' +
-      ' onmousedown="_dewDiagramStartDrag(event,\'dst_' + dest.id + '\')">' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'dst_' + dest.id + '\')"' +
+      ' onmouseenter="_dewNodeMouseEnter(\'dst_' + dest.id + '\')" onmouseleave="_dewNodeMouseLeave()">' +
       '<div style="height:3px;background:' + dClr + '"></div>' +
       '<div style="padding:7px 9px">' +
         '<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">' +
@@ -1220,7 +1399,8 @@ function _dewRenderDiagram(wrap) {
       '<div id="dew-dn-nzl_' + nzl.id + '" class="dew-dn"' +
       ' style="position:absolute;left:' + pos.x + 'px;top:' + pos.y + 'px;width:' + nzlW + 'px;height:' + nzlH + 'px;' +
       'cursor:move;user-select:none;z-index:2;box-sizing:border-box"' +
-      ' onmousedown="_dewDiagramStartDrag(event,\'nzl_' + nzl.id + '\')">' +
+      ' onmousedown="_dewDiagramStartDrag(event,\'nzl_' + nzl.id + '\')"' +
+      ' onmouseenter="_dewNodeMouseEnter(\'nzl_' + nzl.id + '\')" onmouseleave="_dewNodeMouseLeave()">' +
       '<div style="position:absolute;inset:0;clip-path:' + hexClip + ';background:' + nzlBorderClr + ';box-shadow:0 0 12px rgba(34,211,238,.3)"></div>' +
       '<div style="position:absolute;inset:3px;clip-path:' + hexClip + ';background:' + nzlBgClr + ';display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1px">' +
         '<div style="font-size:13px;line-height:1">💦</div>' +
@@ -1504,14 +1684,20 @@ function _dewDiagramDrawArrows() {
   Object.keys(_dewDiagramFlows).forEach(function(k) { var v = _dewDiagramFlows[k].volTotal; if (v > maxVol) maxVol = v; });
   maxVol = maxVol || 1;
 
+  _dewDiagramEdgeHandles = [];
   Object.keys(_dewDiagramFlows).forEach(function(key) {
     var f  = _dewDiagramFlows[key];
     var pp = _dewDiagramPos['pmp_' + f.pumpId];
     var tp = _dewDiagramPos[f.targetNodeId];
     if (!pp || !tp) return;
-    var x1 = pp.x + DEW_DN.pumpW, y1 = pp.y + DEW_DN.pumpR;
     var tH = f.targetNodeId.indexOf('smp_') === 0 ? DEW_DN.sumpH : DEW_DN.destH;
-    var x2 = tp.x, y2 = tp.y + tH / 2;
+    // Apply connection point overrides
+    var ov = _dewDiagramEdgePts[key] || {};
+    var x1, y1, x2, y2;
+    if (ov.src) { var sp2 = _dewNodeConnPts(ov.src.nodeId); if (sp2 && sp2[ov.src.side]) { x1 = sp2[ov.src.side].x; y1 = sp2[ov.src.side].y; } }
+    if (x1 == null) { x1 = pp.x + DEW_DN.pumpW; y1 = pp.y + DEW_DN.pumpR; }
+    if (ov.dst) { var dp2 = _dewNodeConnPts(ov.dst.nodeId); if (dp2 && dp2[ov.dst.side]) { x2 = dp2[ov.dst.side].x; y2 = dp2[ov.dst.side].y; } }
+    if (x2 == null) { x2 = tp.x; y2 = tp.y + tH / 2; }
     var obs = allBoxes.filter(function(b) { return b.id !== 'pmp_' + f.pumpId && b.id !== f.targetNodeId; });
     var sw  = (1.5 + f.volTotal / maxVol * 3.5).toFixed(1);
     var lbl = f.volDate > 0 ? f.volDate.toFixed(0) + ' м³' : '';
@@ -1526,6 +1712,13 @@ function _dewDiagramDrawArrows() {
       edgeClr = DEW_DEST_TYPE.intermediate_sump.color;
     }
     arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), edgeClr, parseFloat(sw), lbl, '8,4', 'dew-flow-fwd', animDur, { rounded: true, filter: 'dew-flow-glow' });
+    // Draggable endpoint handles
+    arrows += '<circle cx="' + x1 + '" cy="' + y1 + '" r="5"'
+           + ' fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" class="dew-eh"/>';
+    arrows += '<circle cx="' + x2 + '" cy="' + y2 + '" r="5"'
+           + ' fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" class="dew-eh"/>';
+    _dewDiagramEdgeHandles.push({key: key, end: 'src', cx: x1, cy: y1});
+    _dewDiagramEdgeHandles.push({key: key, end: 'dst', cx: x2, cy: y2});
   });
 
   // Sump → Nozzle dashed teal arrows (dust suppression flows, animated)
@@ -1573,6 +1766,11 @@ function _dewDiagramDrawArrows() {
   });
 
   svg.innerHTML = gridSvg + bgSvg + arrows;
+  // Connection point layer (always last, so it renders on top)
+  var cpLayerEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  cpLayerEl.setAttribute('id', 'dew-cp-layer');
+  svg.appendChild(cpLayerEl);
+  _dewUpdateCpLayer();
 }
 
 function _dewDiagramStartDrag(e, nid) {
