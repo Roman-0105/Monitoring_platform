@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS dew_pumps (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE dew_pumps ADD COLUMN IF NOT EXISTS default_distributions JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 ALTER TABLE dew_pumps ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "dew_pumps_all" ON dew_pumps;
