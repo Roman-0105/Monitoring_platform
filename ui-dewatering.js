@@ -134,15 +134,25 @@ var DewateringState = {
       if (this.destinations.length === 0) this.destinations = _dewDefaultDest();
 
       // ── Bidirectional sync for meter readings ────────────────────────────
+      var finalPumpIds     = this.pumps.map(function(p) { return p.id; });
       var remoteReadings   = results[5].data.map(rowToDewReading);
-      var remoteReadingIds = remoteReadings.map(function(r) { return r.id; });
+      // Drop remote readings for pumps that no longer exist; also delete them from Supabase
+      var validRemote = [], orphanedInRemote = [];
+      remoteReadings.forEach(function(r) {
+        if (finalPumpIds.indexOf(r.pumpId) !== -1) { validRemote.push(r); }
+        else { orphanedInRemote.push(r); }
+      });
+      orphanedInRemote.forEach(function(r) {
+        Api.deleteDewReading(r.id).catch(function() {});
+      });
+      var remoteReadingIds = validRemote.map(function(r) { return r.id; });
       var orphanReadings   = this.meterReadings.filter(function(r) { return remoteReadingIds.indexOf(r.id) === -1; });
       orphanReadings.forEach(function(r) {
         Api.upsertDewReading(dewReadingToRow(r)).catch(function(e) {
           console.warn('[dewatering] failed to push orphan reading to Supabase', r.id, e);
         });
       });
-      this.meterReadings = remoteReadings.concat(orphanReadings);
+      this.meterReadings = validRemote.concat(orphanReadings);
 
       // ── Bidirectional sync for water levels ──────────────────────────────
       // If Supabase returned records – use them as source of truth.
@@ -300,7 +310,10 @@ var DewateringState = {
   },
   deletePump: function(id) {
     this.pumps=this.pumps.filter(function(p){return p.id!==id;}); this.meterReadings=this.meterReadings.filter(function(r){return r.pumpId!==id;}); this.save();
-    if (window.Api) Api.deleteDewPump(id).catch(function() {});
+    if (window.Api) {
+      Api.deleteDewPump(id).catch(function() {});
+      Api.deleteDewReadingsByPumpId(id).catch(function() {});
+    }
   },
 
   addPumpEvent: function(d) {
@@ -4145,9 +4158,9 @@ function exportDewXLSX() {
       }).join(' / ');
       rRows.push([
         r.date,
-        pump ? (pump.quarry || '') : '',
-        sump ? sump.name : '',
-        pump ? pump.name : '',
+        pump ? (pump.quarry || '') : '[удалён]',
+        sump ? sump.name : '[удалён]',
+        pump ? pump.name : '[удалён: ' + r.pumpId + ']',
         st,
         prevVal != null ? prevVal : '',
         r.isStopped ? '' : (r.isReset ? '' : (r.reading != null ? r.reading : '')),

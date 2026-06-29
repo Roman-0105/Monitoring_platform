@@ -870,6 +870,7 @@ var Api = (function() {
     getDewReadings:     async function() { return client().from('dew_meter_readings').select('*').order('date', { ascending: false }); },
     upsertDewReading:   async function(row) { return client().from('dew_meter_readings').upsert(row); },
     deleteDewReading:   async function(id) { return client().from('dew_meter_readings').delete().eq('id', id); },
+    deleteDewReadingsByPumpId: async function(pumpId) { return client().from('dew_meter_readings').delete().eq('pump_id', pumpId); },
 
     getDewWaterLevels:  async function() { return client().from('dew_water_levels').select('*').order('date', { ascending: false }); },
     upsertDewLevel:     async function(row) { return client().from('dew_water_levels').upsert(row); },
