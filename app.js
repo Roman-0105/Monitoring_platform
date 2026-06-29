@@ -81,6 +81,9 @@ window.setActiveQuarry = function(name) {
   if (name === AppState.activeQuarry) return;
   AppState.activeQuarry = name;
   try { localStorage.setItem('activeQuarry', name); } catch(e) {}
+  // Reset module init flags so Supabase is re-fetched on next visit to those tabs
+  if (typeof _dewInited  !== 'undefined') _dewInited  = false;
+  if (typeof _dustInited !== 'undefined') _dustInited = false;
   _renderQuarrySwitcher();
   _reloadAllData();
 };
@@ -106,6 +109,12 @@ function _reloadAllData() {
     if (AppState.currentTab === 'map') {
       window._mapSchemeImg = null;
       if (typeof renderMap === 'function') renderMap();
+    }
+    if (AppState.currentTab === 'dewatering' && typeof initDewateringTab === 'function') {
+      initDewateringTab();
+    }
+    if (AppState.currentTab === 'dust' && typeof initDustTab === 'function') {
+      initDustTab();
     }
     hideLoader();
   }).catch(function(err) {
