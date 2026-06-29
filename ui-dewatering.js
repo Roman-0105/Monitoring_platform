@@ -441,8 +441,10 @@ var _dewDiagramDateFrom   = '';
 var _dewDiagramDateTo     = '';
 
 // Feature 1: Fullscreen
-var _dewDiagramFullscreen = false;
-var _dewDiagramEscHandler = null;
+var _dewDiagramFullscreen  = false;
+var _dewDiagramEscHandler  = null;
+// Active diagram container — null = inline wrap, set to overlay element when fullscreen
+var _dewActiveDiagramWrap  = null;
 
 // Feature 2: Zoom + Pan
 var _dewDiagramZoom     = 1.0;
@@ -700,6 +702,7 @@ function _dewDiagramToggleFullscreen() {
     document.body.removeChild(overlay);
     if (backdrop) document.body.removeChild(backdrop);
     _dewDiagramFullscreen = false;
+    _dewActiveDiagramWrap = null;
     document.removeEventListener('keydown', _dewDiagramEscHandler);
     return;
   }
@@ -730,6 +733,8 @@ function _dewDiagramToggleFullscreen() {
     'animation:dew-overlay-in 0.18s ease'
   ].join(';');
   document.body.appendChild(ov);
+  // Set active container BEFORE rendering so all helper lookups use the overlay
+  _dewActiveDiagramWrap = ov;
   _dewRenderDiagram(ov);
 
   _dewDiagramEscHandler = function(e) {
@@ -738,17 +743,32 @@ function _dewDiagramToggleFullscreen() {
   document.addEventListener('keydown', _dewDiagramEscHandler);
 }
 
+// ── Active-container helper ──────────────────────────────────
+// When fullscreen overlay is open, both the inline wrap and the overlay
+// contain elements with identical IDs.  document.getElementById() always
+// returns the FIRST match (the inline one), so ALL interactions would be
+// applied to the hidden background diagram instead of the overlay.
+// _dewDiagramEl() searches inside the active container first, eliminating
+// the duplicate-ID ambiguity.
+function _dewDiagramEl(id) {
+  if (_dewActiveDiagramWrap) {
+    var el = _dewActiveDiagramWrap.querySelector('#' + id);
+    if (el) return el;
+  }
+  return document.getElementById(id);
+}
+
 // ── Zoom + Pan ───────────────────────────────────────────────
 
 function _dewDiagramApplyTransform() {
-  var canvas = document.getElementById('dew-diagram-canvas');
+  var canvas = _dewDiagramEl('dew-diagram-canvas');
   if (!canvas) return;
   canvas.style.transform = 'translate(' + _dewDiagramPanX + 'px,' + _dewDiagramPanY + 'px) scale(' + _dewDiagramZoom + ')';
   canvas.style.transformOrigin = '0 0';
 }
 
 function _dewUpdateZoomLabel() {
-  var el = document.getElementById('dew-zoom-label');
+  var el = _dewDiagramEl('dew-zoom-label');
   if (el) el.textContent = Math.round(_dewDiagramZoom * 100) + '%';
 }
 
@@ -803,7 +823,7 @@ function _dewNearestConnPt(x, y, snapDist) {
 }
 
 function _dewUpdateCpLayer() {
-  var svg = document.getElementById('dew-diagram-svg');
+  var svg = _dewDiagramEl('dew-diagram-svg');
   if (!svg) return;
   var cpLayer = document.getElementById('dew-cp-layer');
   if (!cpLayer) {
@@ -845,7 +865,7 @@ function _dewUpdateCpLayer() {
 
 function _dewStartEdgeDrag(e, key, end, cx, cy) {
   _dewConnDrag = {key: key, end: end, curX: cx, curY: cy};
-  var vp = document.getElementById('dew-diagram-viewport');
+  var vp = _dewDiagramEl('dew-diagram-viewport');
   if (_dewConnMoveHandler) document.removeEventListener('mousemove', _dewConnMoveHandler);
   if (_dewConnUpHandler)   document.removeEventListener('mouseup',   _dewConnUpHandler);
   _dewConnMoveHandler = function(ev) {
@@ -896,8 +916,8 @@ function _dewZoomOut() { _dewZoomTarget = Math.max(0.25, _dewDiagramZoom / 1.25)
 function _dewZoomFit() { if (_dewZoomRafId) { cancelAnimationFrame(_dewZoomRafId); _dewZoomRafId = null; } _dewZoomTarget = 1.0; _dewDiagramZoom = 1.0; _dewZoomPanTgtX = 0; _dewZoomPanTgtY = 0; _dewDiagramPanX = 0; _dewDiagramPanY = 0; _dewDiagramApplyTransform(); _dewUpdateZoomLabel(); }
 
 function _dewDiagramInitInteraction() {
-  var vp = document.getElementById('dew-diagram-viewport');
-  var canvas = document.getElementById('dew-diagram-canvas');
+  var vp = _dewDiagramEl('dew-diagram-viewport');
+  var canvas = _dewDiagramEl('dew-diagram-canvas');
   if (!vp || !canvas) return;
 
   vp.addEventListener('wheel', function(e) {
@@ -988,7 +1008,7 @@ function _dewDiagramInitInteraction() {
     if (_dewDiagramPanning) {
       _dewDiagramPanning = false;
       _dewDiagramPanStart = null;
-      var vp2 = document.getElementById('dew-diagram-viewport');
+      var vp2 = _dewDiagramEl('dew-diagram-viewport');
       if (vp2) vp2.style.cursor = 'grab';
     }
   };
@@ -1000,7 +1020,7 @@ function _dewDiagramInitInteraction() {
 
 function _dewToggleAnimation() {
   _dewDiagramAnimPaused = !_dewDiagramAnimPaused;
-  var canvas = document.getElementById('dew-diagram-canvas');
+  var canvas = _dewDiagramEl('dew-diagram-canvas');
   if (canvas) {
     canvas.style.animationPlayState = _dewDiagramAnimPaused ? 'paused' : 'running';
     var paths = canvas.querySelectorAll('path[style*="animation"]');
@@ -1008,7 +1028,7 @@ function _dewToggleAnimation() {
       p.style.animationPlayState = _dewDiagramAnimPaused ? 'paused' : 'running';
     });
   }
-  var btn = document.getElementById('dew-btn-anim');
+  var btn = _dewDiagramEl('dew-btn-anim');
   if (btn) btn.textContent = _dewDiagramAnimPaused ? '▶ Анимация' : '⏸ Анимация';
 }
 
@@ -1246,7 +1266,7 @@ function _dewDiagramGetRange() {
 
 function _dewDiagramSetPreset(preset) {
   _dewDiagramDatePreset = preset;
-  var wrap = document.getElementById('dew-diagram-wrap');
+  var wrap = _dewActiveDiagramWrap || document.getElementById('dew-diagram-wrap');
   if (wrap) _dewRenderDiagram(wrap);
 }
 
@@ -1555,9 +1575,9 @@ function _dewRenderDiagram(wrap) {
   }).join('');
   var customRange = _dewDiagramDatePreset === 'custom'
     ? '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
-        '<input type="date" id="dew-diag-from" class="form-control" value="' + escAttr(_dewDiagramDateFrom) + '" style="width:135px;font-size:11px" oninput="_dewDiagramDateFrom=this.value;var w=document.getElementById(\'dew-diagram-wrap\');if(w)_dewRenderDiagram(w)">' +
+        '<input type="date" id="dew-diag-from" class="form-control" value="' + escAttr(_dewDiagramDateFrom) + '" style="width:135px;font-size:11px" oninput="_dewDiagramDateFrom=this.value;var w=_dewActiveDiagramWrap||document.getElementById(\'dew-diagram-wrap\');if(w)_dewRenderDiagram(w)">' +
         '<span style="color:var(--txt-3);font-size:11px">—</span>' +
-        '<input type="date" id="dew-diag-to" class="form-control" value="' + escAttr(_dewDiagramDateTo) + '" style="width:135px;font-size:11px" oninput="_dewDiagramDateTo=this.value;var w=document.getElementById(\'dew-diagram-wrap\');if(w)_dewRenderDiagram(w)">' +
+        '<input type="date" id="dew-diag-to" class="form-control" value="' + escAttr(_dewDiagramDateTo) + '" style="width:135px;font-size:11px" oninput="_dewDiagramDateTo=this.value;var w=_dewActiveDiagramWrap||document.getElementById(\'dew-diagram-wrap\');if(w)_dewRenderDiagram(w)">' +
       '</div>'
     : '';
 
@@ -1753,7 +1773,7 @@ function _dewPathToSvg(path, stroke, sw, label, dashArray, animClass, animDurati
 }
 
 function _dewDiagramDrawArrows() {
-  var svg = document.getElementById('dew-diagram-svg');
+  var svg = _dewDiagramEl('dew-diagram-svg');
   if (!svg) return;
   var TC = _dewGetThemeColors();
   var allBoxes = _dewGetAllNodeBoxes();
@@ -1908,7 +1928,7 @@ function _dewDiagramDrawArrows() {
 function _dewDiagramStartDrag(e, nid) {
   if (e.button !== 0) return;
   e.preventDefault();
-  var el = document.getElementById('dew-dn-' + nid);
+  var el = _dewDiagramEl('dew-dn-' + nid);
   if (!el) return;
   var p0  = _dewDiagramPos[nid] || { x: 0, y: 0 };
   var mx0 = e.clientX, my0 = e.clientY;
@@ -1916,8 +1936,9 @@ function _dewDiagramStartDrag(e, nid) {
   _dewDiagramDrag = nid;
 
   function onMove(ev) {
-    var nx = Math.max(0, nx0 + ev.clientX - mx0);
-    var ny = Math.max(0, ny0 + ev.clientY - my0);
+    var z  = _dewDiagramZoom || 1;
+    var nx = Math.max(0, nx0 + (ev.clientX - mx0) / z);
+    var ny = Math.max(0, ny0 + (ev.clientY - my0) / z);
     _dewDiagramPos[nid] = { x: nx, y: ny };
     el.style.left = nx + 'px';
     el.style.top  = ny + 'px';
@@ -1937,7 +1958,7 @@ function _dewDiagramStartDrag(e, nid) {
 function _dewDiagramReset() {
   localStorage.removeItem('dew_diagram_pos');
   _dewDiagramPos = {};
-  var wrap = document.getElementById('dew-diagram-wrap');
+  var wrap = _dewActiveDiagramWrap || document.getElementById('dew-diagram-wrap');
   if (wrap) _dewRenderDiagram(wrap);
 }
 
@@ -2882,7 +2903,7 @@ function _dewOpenDestForm(editId) {
     }
     formEl.innerHTML = '';
     _dewRenderDestList();
-    var dw = document.getElementById('dew-diagram-wrap');
+    var dw = _dewActiveDiagramWrap || document.getElementById('dew-diagram-wrap');
     if (dw) _dewRenderDiagram(dw);
   };
 }
