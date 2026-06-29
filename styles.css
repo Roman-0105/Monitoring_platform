@@ -1304,6 +1304,23 @@ body {
 }
 .dew-zoom-btn:hover { background: rgba(255,255,255,0.06); }
 
+/* Light theme overrides for diagram */
+[data-theme="light"] .dew-zoom-btn {
+  border-color: rgba(15,23,42,0.15);
+  color: var(--txt-2);
+}
+[data-theme="light"] .dew-zoom-btn:hover {
+  background: rgba(15,23,42,0.06);
+}
+[data-theme="light"] #dew-diagram-viewport {
+  border-color: rgba(15,23,42,0.12);
+  background: var(--bg-2, #f8fafc);
+}
+[data-theme="light"] #dew-diagram-overlay {
+  border-color: rgba(15,23,42,0.12);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+}
+
 #dew-zoom-label {
   font-size: 11px;
   color: var(--txt-3, #6e7681);
