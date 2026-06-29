@@ -274,6 +274,7 @@ function _dustRenderJournal() {
         _dustNozzleOpts(_dustJournalNozzleFilter, 'Все гусаки') +
       '</select>' +
       '<button class="btn btn-sm" style="background:var(--gold);color:#000;margin-left:auto" onclick="_dustJournalSaveAll()">💾 Сохранить всё</button>' +
+      '<button class="btn btn-sm btn-outline" style="font-size:11px;color:#217346;border-color:#217346" onclick="exportDustXLSX()">⬇ Excel</button>' +
     '</div>' +
     // Two-column layout
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">' +
@@ -1198,4 +1199,117 @@ function _dustChartMonths() {
         '</div>';
       }).join('') + '</div></div>';
   }).join('');
+}
+
+// ── Excel Export ─────────────────────────────────────────────
+
+function exportDustXLSX() {
+  function doExport() {
+    var XLSX = window.XLSX;
+    if (!XLSX) { Toast.show('Библиотека Excel не загрузилась', 'error'); return; }
+
+    var ts = new Date().toISOString().slice(0, 10);
+
+    // ── Лист 1: Журнал пылеподавления ────────────────────────
+    var lHdrs = ['Дата','Организация','Машина','Гос. номер','Гусак','Источник (зумпф)','Рейсов','Объём, м³','Примечание'];
+    var lRows = [lHdrs];
+    DustState.logs.slice().sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(l) {
+      var org     = DustState.orgById(l.orgId);
+      var vehicle = DustState.vehicleById(l.vehicleId);
+      var nozzle  = DustState.nozzleById(l.nozzleId);
+      var sumpName = '';
+      if (nozzle && nozzle.sourceType === 'sump' && nozzle.sourceId && typeof DewateringState !== 'undefined') {
+        var sump = DewateringState.sumpById(nozzle.sourceId);
+        if (sump) sumpName = sump.name;
+      }
+      var vol = _dustComputeVolume(l);
+      lRows.push([
+        l.date,
+        org     ? org.name              : '',
+        vehicle ? vehicle.name          : '',
+        vehicle ? (vehicle.plateNumber || '') : '',
+        nozzle  ? nozzle.name           : '',
+        sumpName,
+        l.trips || '',
+        Math.round(vol * 10) / 10,
+        l.notes || ''
+      ]);
+    });
+    var ws1 = XLSX.utils.aoa_to_sheet(lRows);
+    ws1['!cols'] = [{wch:12},{wch:20},{wch:16},{wch:12},{wch:20},{wch:18},{wch:9},{wch:12},{wch:28}];
+    lHdrs.forEach(function(_,ci) {
+      var a = XLSX.utils.encode_cell({r:0,c:ci});
+      if (ws1[a]) ws1[a].s = {font:{bold:true},fill:{fgColor:{rgb:'E2EFDA'}}};
+    });
+
+    // ── Лист 2: Реестр машин ─────────────────────────────────
+    var vHdrs = ['Машина','Гос. номер','Объём цистерны, м³','Организация','Гусак по умолчанию'];
+    var vRows = [vHdrs];
+    DustState.vehicles.slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).forEach(function(v) {
+      var org    = DustState.orgById(v.orgId);
+      var nozzle = v.defaultNozzleId ? DustState.nozzleById(v.defaultNozzleId) : null;
+      vRows.push([
+        v.name, v.plateNumber || '',
+        v.capacity != null ? v.capacity : '',
+        org ? org.name : '',
+        nozzle ? nozzle.name : ''
+      ]);
+    });
+    var ws2 = XLSX.utils.aoa_to_sheet(vRows);
+    ws2['!cols'] = [{wch:18},{wch:14},{wch:18},{wch:22},{wch:22}];
+    vHdrs.forEach(function(_,ci) {
+      var a = XLSX.utils.encode_cell({r:0,c:ci});
+      if (ws2[a]) ws2[a].s = {font:{bold:true},fill:{fgColor:{rgb:'E2EFDA'}}};
+    });
+
+    // ── Лист 3: Сводка по гусакам ────────────────────────────
+    var byNozzle = {};
+    DustState.logs.forEach(function(l) {
+      var nid = l.nozzleId || '_none';
+      if (!byNozzle[nid]) byNozzle[nid] = { trips: 0, vol: 0 };
+      byNozzle[nid].trips += parseFloat(l.trips) || 0;
+      byNozzle[nid].vol   += _dustComputeVolume(l);
+    });
+    var sHdrs = ['Гусак','Источник (зумпф)','Всего рейсов','Объём, м³'];
+    var sRows = [sHdrs];
+    Object.keys(byNozzle).forEach(function(nid) {
+      var nozzle   = nid !== '_none' ? DustState.nozzleById(nid) : null;
+      var sumpName = '';
+      if (nozzle && nozzle.sourceType === 'sump' && nozzle.sourceId && typeof DewateringState !== 'undefined') {
+        var sump = DewateringState.sumpById(nozzle.sourceId);
+        if (sump) sumpName = sump.name;
+      }
+      sRows.push([
+        nozzle ? nozzle.name : 'Не указан',
+        sumpName,
+        byNozzle[nid].trips,
+        Math.round(byNozzle[nid].vol * 10) / 10
+      ]);
+    });
+    // Sort data rows by volume desc (header stays at index 0)
+    var sHeader = sRows.shift();
+    sRows.sort(function(a,b){ return (b[3]||0) - (a[3]||0); });
+    sRows.unshift(sHeader);
+
+    var ws3 = XLSX.utils.aoa_to_sheet(sRows);
+    ws3['!cols'] = [{wch:22},{wch:18},{wch:14},{wch:12}];
+    sHdrs.forEach(function(_,ci) {
+      var a = XLSX.utils.encode_cell({r:0,c:ci});
+      if (ws3[a]) ws3[a].s = {font:{bold:true},fill:{fgColor:{rgb:'E2EFDA'}}};
+    });
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, 'Журнал');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Машины');
+    XLSX.utils.book_append_sheet(wb, ws3, 'Сводка по гусакам');
+    XLSX.writeFile(wb, 'pylepodavlenie-' + ts + '.xlsx');
+    Toast.show('Excel сохранён', 'success');
+  }
+
+  if (window.XLSX) { doExport(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = doExport;
+  s.onerror = function() { Toast.show('Не удалось загрузить библиотеку Excel', 'error'); };
+  document.head.appendChild(s);
 }

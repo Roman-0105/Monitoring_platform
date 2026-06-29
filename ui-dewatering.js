@@ -2920,6 +2920,7 @@ function _dewRenderJournal() {
           '<input type="date" id="dew-jr-date" class="form-control" value="' + _dewJFilter.date + '" style="width:150px;font-size:12px">' +
           '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(1)" style="font-size:14px;padding:1px 8px" title="Следующий день">→</button>' +
           '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px" id="dew-jr-save-all">💾 Сохранить всё</button>' +
+          '<button class="btn btn-sm btn-outline" style="font-size:11px;color:#217346;border-color:#217346;margin-left:auto" onclick="exportDewXLSX()">⬇ Excel</button>' +
         '</div>' +
         '<div id="dew-jr-quick"></div>' +
       '</div>' +
@@ -4110,6 +4111,115 @@ function _dewChartSumps() {
       }
     }
   });
+}
+
+// ── Excel Export ─────────────────────────────────────────────
+
+function exportDewXLSX() {
+  function doExport() {
+    var XLSX = window.XLSX;
+    if (!XLSX) { Toast.show('Библиотека Excel не загрузилась', 'error'); return; }
+
+    var ts = new Date().toISOString().slice(0, 10);
+
+    // ── Лист 1: Показания расходомеров ───────────────────────
+    var rHdrs = ['Дата','Карьер','Зумпф','Насос','Статус',
+      'Пред. показание, м³','Текущ. показание, м³','Объём за сутки, м³',
+      'Часов работы','Направления откачки','Простой','Примечание'];
+    var rRows = [rHdrs];
+    var readings = DewateringState.meterReadings.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    readings.forEach(function(r) {
+      var pump = DewateringState.pumpById(r.pumpId);
+      var sump = pump ? DewateringState.sumpById(pump.sumpId) : null;
+      var st   = pump ? (DEW_PUMP_STATUS[pump.status] || DEW_PUMP_STATUS.off).label : '';
+      var prevRec = DewateringState.lastActualReading(r.pumpId, r.date);
+      var prevVal = prevRec
+        ? (prevRec.isReset
+            ? (prevRec.manualVolume != null ? parseFloat(prevRec.manualVolume) : (parseFloat(prevRec.resetStartValue) || 0))
+            : parseFloat(prevRec.reading))
+        : null;
+      var vol = DewateringState.computedVolume(r);
+      var dists = DewateringState.getDistributions(r).map(function(d) {
+        var dest = DewateringState.destById(d.destinationId);
+        return (dest ? dest.name : '?') + ' ' + d.pct + '%';
+      }).join(' / ');
+      rRows.push([
+        r.date,
+        pump ? (pump.quarry || '') : '',
+        sump ? sump.name : '',
+        pump ? pump.name : '',
+        st,
+        prevVal != null ? prevVal : '',
+        r.isStopped ? '' : (r.isReset ? '' : (r.reading != null ? r.reading : '')),
+        vol != null ? Math.round(vol * 10) / 10 : '',
+        r.hoursWorked != null ? r.hoursWorked : '',
+        dists,
+        r.isStopped ? 'Простой' : (r.isReset ? 'Замена счётчика' : ''),
+        r.notes || ''
+      ]);
+    });
+    var ws1 = XLSX.utils.aoa_to_sheet(rRows);
+    ws1['!cols'] = [{wch:12},{wch:12},{wch:18},{wch:16},{wch:10},
+      {wch:16},{wch:16},{wch:14},{wch:12},{wch:30},{wch:16},{wch:24}];
+    rHdrs.forEach(function(_,ci) {
+      var a = XLSX.utils.encode_cell({r:0,c:ci});
+      if (ws1[a]) ws1[a].s = {font:{bold:true},fill:{fgColor:{rgb:'CFE2F3'}}};
+    });
+
+    // ── Лист 2: Реестр насосов ───────────────────────────────
+    var pHdrs = ['Насос','Зумпф','Карьер','Статус','Тип','Марка/Модель',
+      'Серийный №','Инв. №','Произв. м³/ч','Напор, м','Дата установки','∑ Объём, м³'];
+    var pRows = [pHdrs];
+    DewateringState.pumps.slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).forEach(function(p) {
+      var sump = DewateringState.sumpById(p.sumpId);
+      var vol  = DewateringState.totalVolumePump(p.id);
+      pRows.push([
+        p.name, sump ? sump.name : '', p.quarry || '',
+        (DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off).label,
+        DEW_PUMP_TYPE[p.type] || p.type || '',
+        p.model || '', p.serialNumber || '', p.inventoryNumber || '',
+        p.capacity != null ? p.capacity : '',
+        p.head != null ? p.head : '',
+        p.installDate || '',
+        Math.round(vol * 10) / 10
+      ]);
+    });
+    var ws2 = XLSX.utils.aoa_to_sheet(pRows);
+    ws2['!cols'] = [{wch:16},{wch:18},{wch:14},{wch:12},{wch:12},{wch:16},
+      {wch:16},{wch:14},{wch:12},{wch:10},{wch:14},{wch:14}];
+    pHdrs.forEach(function(_,ci) {
+      var a = XLSX.utils.encode_cell({r:0,c:ci});
+      if (ws2[a]) ws2[a].s = {font:{bold:true},fill:{fgColor:{rgb:'CFE2F3'}}};
+    });
+
+    // ── Лист 3: Уровни воды ──────────────────────────────────
+    var wHdrs = ['Дата','Зумпф','Отметка, м абс.','Примечание'];
+    var wRows = [wHdrs];
+    DewateringState.waterLevels.slice().sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(w) {
+      var sump = DewateringState.sumpById(w.sumpId);
+      wRows.push([w.date, sump ? sump.name : '', w.elevation != null ? w.elevation : '', w.notes || '']);
+    });
+    var ws3 = XLSX.utils.aoa_to_sheet(wRows);
+    ws3['!cols'] = [{wch:12},{wch:18},{wch:16},{wch:30}];
+    wHdrs.forEach(function(_,ci) {
+      var a = XLSX.utils.encode_cell({r:0,c:ci});
+      if (ws3[a]) ws3[a].s = {font:{bold:true},fill:{fgColor:{rgb:'CFE2F3'}}};
+    });
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, 'Показания');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Насосы');
+    XLSX.utils.book_append_sheet(wb, ws3, 'Уровни воды');
+    XLSX.writeFile(wb, 'vodootliv-' + ts + '.xlsx');
+    Toast.show('Excel сохранён', 'success');
+  }
+
+  if (window.XLSX) { doExport(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = doExport;
+  s.onerror = function() { Toast.show('Не удалось загрузить библиотеку Excel', 'error'); };
+  document.head.appendChild(s);
 }
 
 // ── Helpers ──────────────────────────────────────────────────
