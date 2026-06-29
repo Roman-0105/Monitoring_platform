@@ -668,30 +668,51 @@ function _dewDiagramSavePos() {
 // ── Theme system ─────────────────────────────────────────────
 
 function _dewGetThemeColors() {
-  var themes = {
-    dark: {
-      bg:           'var(--bg-1, #0d1117)',
-      canvasBg:     'transparent', // grid drawn in SVG for proper zoom scaling
-      nodeSump:     { bg:'rgba(12,20,35,0.95)', border:'rgba(88,166,255,0.45)', header:'rgba(88,166,255,0.6)' },
-      nodePump:     { bg:'rgba(12,20,35,0.9)',  border:'rgba(88,166,255,0.2)',  header:null },
-      nodeDest:     { bg:'rgba(10,28,20,0.95)', border:'rgba(74,222,128,0.4)',  header:'rgba(74,222,128,0.55)' },
-      nodeNozzle:   { bg:'rgba(8,25,35,0.95)',  border:'rgba(34,211,238,0.45)', header:'rgba(34,211,238,0.55)' },
-      edgeFlow:     'rgba(251,191,36,0.75)',
-      edgeStruct:   'rgba(88,166,255,0.35)',
-      edgeNozzle:   'rgba(34,211,238,0.6)',
-      arrowFlow:    'rgba(251,191,36,0.9)',
-      arrowStruct:  'rgba(88,166,255,0.5)',
-      arrowNozzle:  'rgba(34,211,238,0.7)',
-      labelText:    'rgba(255,255,255,0.7)',
-      quarryBg:     ['rgba(88,166,255,0.04)','rgba(74,222,128,0.04)','rgba(251,191,36,0.03)','rgba(188,140,255,0.03)'],
-      quarryBorder: ['rgba(88,166,255,0.15)','rgba(74,222,128,0.12)','rgba(251,191,36,0.1)','rgba(188,140,255,0.1)'],
-      quarryLabel:  ['rgba(88,166,255,0.8)','rgba(74,222,128,0.75)','rgba(251,191,36,0.8)','rgba(188,140,255,0.75)'],
-    }
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  if (isLight) {
+    return {
+      bg:           'var(--bg-1, #ffffff)',
+      canvasBg:     'transparent',
+      nodeSump:     { bg:'rgba(255,255,255,0.98)', border:'rgba(37,99,235,0.35)',  header:'rgba(37,99,235,0.65)' },
+      nodePump:     { bg:'rgba(255,255,255,0.98)', border:'rgba(37,99,235,0.2)',   header:null },
+      nodeDest:     { bg:'rgba(255,255,255,0.98)', border:'rgba(5,150,105,0.35)',  header:'rgba(5,150,105,0.65)' },
+      nodeNozzle:   { bg:'rgba(240,253,255,0.98)', border:'rgba(8,145,178,0.5)',   header:'rgba(8,145,178,0.65)' },
+      edgeFlow:     'rgba(146,64,14,0.85)',
+      edgeStruct:   'rgba(37,99,235,0.45)',
+      edgeNozzle:   'rgba(8,145,178,0.75)',
+      arrowFlow:    'rgba(146,64,14,1)',
+      arrowStruct:  'rgba(37,99,235,0.65)',
+      arrowNozzle:  'rgba(8,145,178,0.9)',
+      labelText:    'rgba(15,23,42,0.8)',
+      quarryBg:     ['rgba(37,99,235,0.06)','rgba(5,150,105,0.06)','rgba(217,119,6,0.05)','rgba(139,92,246,0.05)','rgba(239,68,68,0.05)'],
+      quarryBorder: ['rgba(37,99,235,0.22)','rgba(5,150,105,0.2)','rgba(217,119,6,0.2)','rgba(139,92,246,0.2)','rgba(239,68,68,0.2)'],
+      quarryLabel:  ['rgba(37,99,235,0.75)','rgba(5,150,105,0.75)','rgba(217,119,6,0.8)','rgba(139,92,246,0.75)','rgba(239,68,68,0.75)'],
+    };
+  }
+  return {
+    bg:           'var(--bg-1, #0d1117)',
+    canvasBg:     'transparent',
+    nodeSump:     { bg:'rgba(12,20,35,0.95)', border:'rgba(88,166,255,0.45)', header:'rgba(88,166,255,0.6)' },
+    nodePump:     { bg:'rgba(12,20,35,0.9)',  border:'rgba(88,166,255,0.2)',  header:null },
+    nodeDest:     { bg:'rgba(10,28,20,0.95)', border:'rgba(74,222,128,0.4)',  header:'rgba(74,222,128,0.55)' },
+    nodeNozzle:   { bg:'rgba(8,25,35,0.95)',  border:'rgba(34,211,238,0.45)', header:'rgba(34,211,238,0.55)' },
+    edgeFlow:     'rgba(251,191,36,0.75)',
+    edgeStruct:   'rgba(88,166,255,0.35)',
+    edgeNozzle:   'rgba(34,211,238,0.6)',
+    arrowFlow:    'rgba(251,191,36,0.9)',
+    arrowStruct:  'rgba(88,166,255,0.5)',
+    arrowNozzle:  'rgba(34,211,238,0.7)',
+    labelText:    'rgba(255,255,255,0.7)',
+    quarryBg:     ['rgba(88,166,255,0.04)','rgba(74,222,128,0.04)','rgba(251,191,36,0.03)','rgba(188,140,255,0.03)','rgba(248,81,73,0.03)'],
+    quarryBorder: ['rgba(88,166,255,0.15)','rgba(74,222,128,0.12)','rgba(251,191,36,0.1)','rgba(188,140,255,0.1)','rgba(248,81,73,0.1)'],
+    quarryLabel:  ['rgba(88,166,255,0.8)','rgba(74,222,128,0.75)','rgba(251,191,36,0.8)','rgba(188,140,255,0.75)','rgba(248,81,73,0.8)'],
   };
-  return themes.dark;
 }
 
-function _dewNodeShadow() { return ''; }
+function _dewNodeShadow() {
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  return isLight ? 'box-shadow:0 1px 4px rgba(0,0,0,0.08),0 2px 12px rgba(0,0,0,0.07);' : '';
+}
 
 // ── Fullscreen ───────────────────────────────────────────────
 
@@ -1334,6 +1355,7 @@ function _dewRenderDiagram(wrap) {
   _dewDiagramLoadPos();
   _dewEdgePtsLoad();
 
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
   var range = _dewDiagramGetRange();
   var dateFrom = range.from, dateTo = range.to;
   var sumps = DewateringState.sumps;
@@ -1414,12 +1436,18 @@ function _dewRenderDiagram(wrap) {
   var nodesHtml = '';
 
   // ── Quarry card nodes ──
-  var QUARRY_COLORS = [
-    { bg:'rgba(88,166,255,0.10)', border:'rgba(88,166,255,0.55)', header:'rgba(88,166,255,0.85)', text:'rgba(88,166,255,1)' },
-    { bg:'rgba(74,222,128,0.10)', border:'rgba(74,222,128,0.50)', header:'rgba(74,222,128,0.80)', text:'rgba(74,222,128,1)' },
-    { bg:'rgba(251,191,36,0.10)', border:'rgba(251,191,36,0.50)', header:'rgba(251,191,36,0.80)', text:'rgba(251,191,36,1)' },
-    { bg:'rgba(188,140,255,0.10)',border:'rgba(188,140,255,0.50)',header:'rgba(188,140,255,0.80)',text:'rgba(188,140,255,1)' },
-    { bg:'rgba(248,81,73,0.10)',  border:'rgba(248,81,73,0.50)',  header:'rgba(248,81,73,0.80)',  text:'rgba(248,81,73,1)' },
+  var QUARRY_COLORS = isLight ? [
+    { bg:'rgba(37,99,235,0.07)',  border:'rgba(37,99,235,0.45)',  header:'rgba(37,99,235,0.75)',  text:'rgba(37,99,235,1)',   subtext:'rgba(37,99,235,0.5)' },
+    { bg:'rgba(5,150,105,0.07)', border:'rgba(5,150,105,0.40)',  header:'rgba(5,150,105,0.70)',  text:'rgba(5,150,105,1)',   subtext:'rgba(5,150,105,0.5)' },
+    { bg:'rgba(217,119,6,0.07)', border:'rgba(217,119,6,0.40)',  header:'rgba(217,119,6,0.70)',  text:'rgba(217,119,6,1)',   subtext:'rgba(217,119,6,0.5)' },
+    { bg:'rgba(139,92,246,0.07)',border:'rgba(139,92,246,0.40)', header:'rgba(139,92,246,0.70)', text:'rgba(139,92,246,1)',  subtext:'rgba(139,92,246,0.5)' },
+    { bg:'rgba(239,68,68,0.07)', border:'rgba(239,68,68,0.40)',  header:'rgba(239,68,68,0.70)',  text:'rgba(239,68,68,1)',   subtext:'rgba(239,68,68,0.5)' },
+  ] : [
+    { bg:'rgba(88,166,255,0.10)', border:'rgba(88,166,255,0.55)', header:'rgba(88,166,255,0.85)', text:'rgba(88,166,255,1)',  subtext:'rgba(255,255,255,0.4)' },
+    { bg:'rgba(74,222,128,0.10)', border:'rgba(74,222,128,0.50)', header:'rgba(74,222,128,0.80)', text:'rgba(74,222,128,1)',  subtext:'rgba(255,255,255,0.4)' },
+    { bg:'rgba(251,191,36,0.10)', border:'rgba(251,191,36,0.50)', header:'rgba(251,191,36,0.80)', text:'rgba(251,191,36,1)',  subtext:'rgba(255,255,255,0.4)' },
+    { bg:'rgba(188,140,255,0.10)',border:'rgba(188,140,255,0.50)',header:'rgba(188,140,255,0.80)',text:'rgba(188,140,255,1)', subtext:'rgba(255,255,255,0.4)' },
+    { bg:'rgba(248,81,73,0.10)',  border:'rgba(248,81,73,0.50)',  header:'rgba(248,81,73,0.80)',  text:'rgba(248,81,73,1)',   subtext:'rgba(255,255,255,0.4)' },
   ];
   _dewQuarryOrder.forEach(function(quarry, qi) {
     var pos = _dewDiagramPos['qry_' + quarry]; if (!pos) return;
@@ -1438,7 +1466,7 @@ function _dewRenderDiagram(wrap) {
       '<div style="padding:0 10px">' +
         '<div style="font-size:9px;color:' + qc.text + ';opacity:0.7;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:2px">Карьер</div>' +
         '<div style="font-size:12px;font-weight:700;color:' + qc.text + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + escAttr(quarry) + '">' + escHTML(quarry) + '</div>' +
-        '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px">' + qSumps.length + ' зумпф' + (qSumps.length === 1 ? '' : qSumps.length < 5 ? 'а' : 'ов') + '</div>' +
+        '<div style="font-size:9px;color:' + qc.subtext + ';margin-top:2px">' + qSumps.length + ' зумпф' + (qSumps.length === 1 ? '' : qSumps.length < 5 ? 'а' : 'ов') + '</div>' +
       '</div>' +
       '</div>';
   });
@@ -1497,7 +1525,7 @@ function _dewRenderDiagram(wrap) {
       'cursor:move;user-select:none;z-index:2;box-sizing:border-box"' +
       ' onmousedown="_dewDiagramStartDrag(event,\'pmp_' + pump.id + '\')"' +
       ' onmouseenter="_dewNodeMouseEnter(\'pmp_' + pump.id + '\')" onmouseleave="_dewNodeMouseLeave()">' +
-      '<div style="position:absolute;inset:0;border-radius:50%;background:' + TC.nodePump.bg + ';border:3px solid ' + stClr + ';box-shadow:0 0 14px ' + stClr + '55,0 2px 10px rgba(0,0,0,.5)">' +
+      '<div style="position:absolute;inset:0;border-radius:50%;background:' + TC.nodePump.bg + ';border:3px solid ' + stClr + ';box-shadow:0 0 14px ' + stClr + '55,' + (isLight ? '0 2px 8px rgba(0,0,0,.12)' : '0 2px 10px rgba(0,0,0,.5)') + '">' +
         '<div style="position:absolute;inset:6px;border-radius:50%;border:1px solid ' + stClr + '55;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;text-align:center;gap:1px">' +
           '<div style="font-size:8.5px;font-weight:700;color:var(--txt-1);max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;padding:0 2px">' + escHTML(pump.name) + '</div>' +
           '<div style="width:3px;height:3px;border-radius:50%;background:' + stClr + ';flex-shrink:0"></div>' +
@@ -1557,7 +1585,7 @@ function _dewRenderDiagram(wrap) {
       '<div style="position:absolute;inset:3px;clip-path:' + hexClip + ';background:' + nzlBgClr + ';display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1px">' +
         '<div style="font-size:13px;line-height:1">💦</div>' +
         '<div style="font-size:8px;font-weight:700;color:var(--txt-1);max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHTML(nzl.name) + '</div>' +
-        '<div style="font-size:10px;font-weight:700;color:rgba(34,211,238,.9)">' + vols.volDate.toFixed(0) + '<span style="font-size:7px;color:var(--txt-3)"> м³</span></div>' +
+        '<div style="font-size:10px;font-weight:700;color:var(--gold)">' + vols.volDate.toFixed(0) + '<span style="font-size:7px;color:var(--txt-3)"> м³</span></div>' +
       '</div>' +
     '</div>';
   });
@@ -1761,10 +1789,12 @@ function _dewPathToSvg(path, stroke, sw, label, dashArray, animClass, animDurati
     var lp = path[bestI], lq = path[bestI + 1];
     var lx = (lp.x + lq.x) / 2, ly = (lp.y + lq.y) / 2;
     // Background pill for readability
+    var isLightTheme = document.documentElement.getAttribute('data-theme') === 'light';
+    var pillBg = isLightTheme ? 'rgba(248,250,252,0.92)' : 'rgba(8,14,26,0.82)';
     var tw = label.length * 5.5 + 8;
     out += '<rect x="' + (lx - tw/2) + '" y="' + (ly - 16) + '"'
         + ' width="' + tw + '" height="14" rx="3"'
-        + ' fill="rgba(8,14,26,0.82)" stroke="' + stroke + '" stroke-width="0.5" stroke-opacity="0.5"/>';
+        + ' fill="' + pillBg + '" stroke="' + stroke + '" stroke-width="0.5" stroke-opacity="0.6"/>';
     out += '<text x="' + lx + '" y="' + (ly - 6) + '"'
         + ' text-anchor="middle" font-size="8.5" fill="' + stroke + '"'
         + ' font-family="monospace" font-weight="600">' + label + '</text>';
@@ -1776,13 +1806,15 @@ function _dewDiagramDrawArrows() {
   var svg = _dewDiagramEl('dew-diagram-svg');
   if (!svg) return;
   var TC = _dewGetThemeColors();
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
   var allBoxes = _dewGetAllNodeBoxes();
   var arrows   = '';
 
   // SVG infinite grid (scales correctly with canvas zoom)
+  var gridStroke = isLight ? 'rgba(15,23,42,0.07)' : 'rgba(255,255,255,0.04)';
   var gridSvg = '<defs>'
     + '<pattern id="dewGridPat" width="40" height="40" patternUnits="userSpaceOnUse">'
-    + '<path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>'
+    + '<path d="M 40 0 L 0 0 0 40" fill="none" stroke="' + gridStroke + '" stroke-width="1"/>'
     + '</pattern>'
     + '<filter id="dew-flow-glow" x="-60%" y="-60%" width="220%" height="220%">'
     + '<feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>'
@@ -1865,10 +1897,12 @@ function _dewDiagramDrawArrows() {
     }
     arrows += _dewPathToSvg(_dewRouteEdge(x1, y1, x2, y2, obs), edgeClr, parseFloat(sw), lbl, '8,4', 'dew-flow-fwd', animDur, { rounded: true, filter: 'dew-flow-glow' });
     // Draggable endpoint handles
+    var ehFill   = isLight ? 'rgba(15,23,42,0.08)'  : 'rgba(255,255,255,0.12)';
+    var ehStroke = isLight ? 'rgba(15,23,42,0.35)'  : 'rgba(255,255,255,0.4)';
     arrows += '<circle cx="' + x1 + '" cy="' + y1 + '" r="5"'
-           + ' fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" class="dew-eh"/>';
+           + ' fill="' + ehFill + '" stroke="' + ehStroke + '" stroke-width="1.5" class="dew-eh"/>';
     arrows += '<circle cx="' + x2 + '" cy="' + y2 + '" r="5"'
-           + ' fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" class="dew-eh"/>';
+           + ' fill="' + ehFill + '" stroke="' + ehStroke + '" stroke-width="1.5" class="dew-eh"/>';
     _dewDiagramEdgeHandles.push({key: key, end: 'src', cx: x1, cy: y1});
     _dewDiagramEdgeHandles.push({key: key, end: 'dst', cx: x2, cy: y2});
   });
