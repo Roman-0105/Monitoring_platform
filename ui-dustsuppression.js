@@ -381,7 +381,8 @@ function _dustRenderJournalLeft() {
       } else {
         _dustJRowSeq++;
         var rowId = 'djr' + _dustJRowSeq;
-        html += _dustJRowHTML(rowId, _dustJournalNozzleFilter, 0, '', '');
+        // Pre-select vehicle's default nozzle, fall back to active nozzle filter
+        html += _dustJRowHTML(rowId, v.defaultNozzleId || _dustJournalNozzleFilter, 0, '', '');
       }
 
       html += '</div>';
@@ -715,16 +716,22 @@ function _dustRenderOrgs() {
           '<select id="dust-vehicle-filter-org" class="form-control" style="font-size:12px;width:200px" onchange="_dustVehicleFilter=this.value;_dustRenderVehicleList()">' + _dustOrgOpts(_dustVehicleFilter, 'Все организации') + '</select>' +
         '</div>' +
         '<div id="dust-vehicle-list"></div>' +
+        '<div id="dust-vehicle-form"></div>' +
         '<div class="card" style="padding:14px;margin-top:10px">' +
-          '<div style="font-size:11px;color:var(--txt-3);margin-bottom:8px">Добавить машину</div>' +
-          '<div class="form-group"><label class="form-label">Организация</label>' +
-            '<select id="dust-veh-org" class="form-control">' + _dustOrgOpts('') + '</select>' +
+          '<div style="font-size:11px;font-weight:600;color:var(--txt-3);margin-bottom:8px">Добавить машину</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<div class="form-group"><label class="form-label">Организация</label>' +
+              '<select id="dust-veh-org" class="form-control">' + _dustOrgOpts('') + '</select>' +
+            '</div>' +
+            _dustFld('Название', 'text', 'dust-veh-name', '', 'КамАЗ-65115') +
+            _dustFld('Гос. номер', 'text', 'dust-veh-plate', '', 'А001АА 15') +
+            _dustFld('Объём цистерны, м³', 'number', 'dust-veh-cap', '', '10') +
+            '<div class="form-group"><label class="form-label">Гусак по умолчанию</label>' +
+              '<select id="dust-veh-nozzle" class="form-control">' + _dustNozzleOpts('', 'Не задан') + '</select>' +
+            '</div>' +
+            _dustFld('Примечание', 'text', 'dust-veh-notes', '', '') +
           '</div>' +
-          _dustFld('Название', 'text', 'dust-veh-name', '', 'КамАЗ-65115') +
-          _dustFld('Гос. номер', 'text', 'dust-veh-plate', '', 'А001АА 15') +
-          _dustFld('Объём цистерны, м³', 'number', 'dust-veh-cap', '', '10') +
-          _dustFld('Примечание', 'text', 'dust-veh-notes', '', '') +
-          '<button class="btn btn-sm" style="background:var(--gold);color:#000" onclick="_dustAddVehicle()">Добавить машину</button>' +
+          '<button class="btn btn-sm" style="background:var(--gold);color:#000;margin-top:4px" onclick="_dustAddVehicle()">Добавить машину</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -771,22 +778,76 @@ function _dustRenderVehicleList() {
       '<th style="padding:6px 8px;text-align:left;font-weight:500">Гос. номер</th>' +
       '<th style="padding:6px 8px;text-align:right;font-weight:500">Объём, м³</th>' +
       '<th style="padding:6px 8px;text-align:left;font-weight:500">Организация</th>' +
+      '<th style="padding:6px 8px;text-align:left;font-weight:500">Гусак по умолч.</th>' +
       '<th style="padding:6px 8px"></th>' +
     '</tr></thead><tbody>' +
     vehicles.map(function(v) {
-      var org = DustState.orgById(v.orgId);
+      var org    = DustState.orgById(v.orgId);
+      var nozzle = v.defaultNozzleId ? DustState.nozzleById(v.defaultNozzleId) : null;
       return '<tr style="border-bottom:1px solid var(--line-2)">' +
         '<td style="padding:5px 8px;color:var(--txt-1)">' + escHTML(v.name) + '</td>' +
         '<td style="padding:5px 8px;color:var(--txt-2)">' + (v.plateNumber ? escHTML(v.plateNumber) : '—') + '</td>' +
         '<td style="padding:5px 8px;text-align:right;color:var(--txt-1);font-weight:600">' + (v.capacity != null && v.capacity !== '' ? parseFloat(v.capacity).toFixed(1) : '—') + '</td>' +
         '<td style="padding:5px 8px;color:var(--txt-3);font-size:10px">' + (org ? escHTML(org.name) : '—') + '</td>' +
+        '<td style="padding:5px 8px;color:var(--txt-2);font-size:10px">' + (nozzle ? escHTML(nozzle.name) : '<span style="color:var(--txt-3)">—</span>') + '</td>' +
         '<td style="padding:5px 8px;text-align:right;white-space:nowrap">' +
-          '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:2px 5px;margin-right:3px" onclick="_dustEditVehiclePrompt(\'' + v.id + '\')">✎</button>' +
+          '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:2px 5px;margin-right:3px" onclick="_dustOpenVehicleForm(\'' + v.id + '\')">✎</button>' +
           '<button class="btn btn-sm" style="font-size:10px;padding:2px 5px;background:rgba(248,113,113,.1);color:var(--bad);border:1px solid rgba(248,113,113,.2)" onclick="_dustDeleteVehicle(\'' + v.id + '\')">✕</button>' +
         '</td>' +
       '</tr>';
     }).join('') +
     '</tbody></table></div>';
+}
+
+function _dustOpenVehicleForm(id) {
+  var v = DustState.vehicleById(id);
+  if (!v) return;
+  var formEl = document.getElementById('dust-vehicle-form');
+  if (!formEl) return;
+
+  var orgOpts = DustState.orgs.map(function(o) {
+    return '<option value="' + escAttr(o.id) + '"' + (o.id === v.orgId ? ' selected' : '') + '>' + escHTML(o.name) + '</option>';
+  }).join('');
+
+  formEl.innerHTML =
+    '<div class="card" style="padding:14px;margin-top:8px;border:1px solid rgba(34,211,238,.3)">' +
+    '<div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:10px">Редактировать машину</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '<div class="form-group"><label class="form-label">Организация</label>' +
+        '<select id="dust-vf-org" class="form-control"><option value="">' + escHTML('— организация —') + '</option>' + orgOpts + '</select>' +
+      '</div>' +
+      _dustFld('Название', 'text', 'dust-vf-name', v.name, '') +
+      _dustFld('Гос. номер', 'text', 'dust-vf-plate', v.plateNumber || '', '') +
+      _dustFld('Объём цистерны, м³', 'number', 'dust-vf-cap', v.capacity != null ? v.capacity : '', '') +
+      '<div class="form-group"><label class="form-label">Гусак по умолчанию</label>' +
+        '<select id="dust-vf-nozzle" class="form-control">' + _dustNozzleOpts(v.defaultNozzleId || '', 'Не задан') + '</select>' +
+      '</div>' +
+      _dustFld('Примечание', 'text', 'dust-vf-notes', v.notes || '', '') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px">' +
+      '<button class="btn btn-sm" style="background:var(--gold);color:#000" id="dust-vf-save">Сохранить</button>' +
+      '<button class="btn btn-sm btn-outline" id="dust-vf-cancel">Отмена</button>' +
+    '</div></div>';
+
+  formEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  document.getElementById('dust-vf-cancel').onclick = function() { formEl.innerHTML = ''; };
+  document.getElementById('dust-vf-save').onclick = function() {
+    var name  = (document.getElementById('dust-vf-name').value || '').trim();
+    if (!name) { Toast.show('Введите название машины', 'warning'); return; }
+    var capStr = (document.getElementById('dust-vf-cap').value || '').trim();
+    DustState.updateVehicle(id, {
+      orgId:          document.getElementById('dust-vf-org').value    || v.orgId,
+      name:           name,
+      plateNumber:    (document.getElementById('dust-vf-plate').value  || '').trim(),
+      capacity:       capStr !== '' ? parseFloat(capStr) : null,
+      defaultNozzleId: document.getElementById('dust-vf-nozzle').value || '',
+      notes:          (document.getElementById('dust-vf-notes').value  || '').trim(),
+    });
+    formEl.innerHTML = '';
+    Toast.show('Машина обновлена', 'success');
+    _dustRenderVehicleList();
+  };
 }
 
 function _dustAddOrg() {
@@ -830,35 +891,21 @@ function _dustDeleteOrg(id) {
 }
 
 function _dustAddVehicle() {
-  var orgId = ((document.getElementById('dust-veh-org')   || {}).value || '').trim();
-  var name  = ((document.getElementById('dust-veh-name')  || {}).value || '').trim();
-  var plate = ((document.getElementById('dust-veh-plate') || {}).value || '').trim();
-  var cap   = ((document.getElementById('dust-veh-cap')   || {}).value || '').trim();
-  var notes = ((document.getElementById('dust-veh-notes') || {}).value || '').trim();
+  var orgId    = ((document.getElementById('dust-veh-org')    || {}).value || '').trim();
+  var name     = ((document.getElementById('dust-veh-name')   || {}).value || '').trim();
+  var plate    = ((document.getElementById('dust-veh-plate')  || {}).value || '').trim();
+  var cap      = ((document.getElementById('dust-veh-cap')    || {}).value || '').trim();
+  var nozzleId = ((document.getElementById('dust-veh-nozzle') || {}).value || '');
+  var notes    = ((document.getElementById('dust-veh-notes')  || {}).value || '').trim();
   if (!orgId) { Toast.show('Выберите организацию', 'warning');   return; }
   if (!name)  { Toast.show('Введите название машины', 'warning'); return; }
-  DustState.addVehicle({ orgId: orgId, name: name, plateNumber: plate, capacity: cap !== '' ? parseFloat(cap) : null, notes: notes });
-  document.getElementById('dust-veh-name').value  = '';
-  document.getElementById('dust-veh-plate').value = '';
-  document.getElementById('dust-veh-cap').value   = '';
-  document.getElementById('dust-veh-notes').value = '';
+  DustState.addVehicle({ orgId: orgId, name: name, plateNumber: plate, capacity: cap !== '' ? parseFloat(cap) : null, defaultNozzleId: nozzleId || '', notes: notes });
+  document.getElementById('dust-veh-name').value   = '';
+  document.getElementById('dust-veh-plate').value  = '';
+  document.getElementById('dust-veh-cap').value    = '';
+  document.getElementById('dust-veh-nozzle').value = '';
+  document.getElementById('dust-veh-notes').value  = '';
   Toast.show('Машина добавлена', 'success');
-  _dustRenderVehicleList();
-}
-
-function _dustEditVehiclePrompt(id) {
-  var v = DustState.vehicleById(id);
-  if (!v) return;
-  var name  = prompt('Название:', v.name);
-  if (name === null) return;
-  name = name.trim();
-  if (!name) { Toast.show('Название не может быть пустым', 'warning'); return; }
-  var plate = prompt('Гос. номер:', v.plateNumber || '');
-  if (plate === null) return;
-  var capStr = prompt('Объём цистерны, м³:', v.capacity != null ? v.capacity : '');
-  if (capStr === null) return;
-  DustState.updateVehicle(id, { name: name, plateNumber: plate.trim(), capacity: capStr.trim() !== '' ? parseFloat(capStr) : null });
-  Toast.show('Машина обновлена', 'success');
   _dustRenderVehicleList();
 }
 

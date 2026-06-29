@@ -122,10 +122,10 @@ function dustOrgToRow(o) { return { id: o.id, name: o.name || '', notes: o.notes
 function rowToDustOrg(r) { return { id: r.id, name: r.name || '', notes: r.notes || '' }; }
 
 function dustVehToRow(v) {
-  return { id: v.id, org_id: v.orgId, name: v.name || '', plate_number: v.plateNumber || '', capacity: v.capacity != null ? Number(v.capacity) : null, notes: v.notes || '' };
+  return { id: v.id, org_id: v.orgId, name: v.name || '', plate_number: v.plateNumber || '', capacity: v.capacity != null ? Number(v.capacity) : null, notes: v.notes || '', default_nozzle_id: v.defaultNozzleId || '' };
 }
 function rowToDustVeh(r) {
-  return { id: r.id, orgId: r.org_id, name: r.name || '', plateNumber: r.plate_number || '', capacity: r.capacity != null ? Number(r.capacity) : null, notes: r.notes || '' };
+  return { id: r.id, orgId: r.org_id, name: r.name || '', plateNumber: r.plate_number || '', capacity: r.capacity != null ? Number(r.capacity) : null, notes: r.notes || '', defaultNozzleId: r.default_nozzle_id || '' };
 }
 
 function dustNozzleToRow(n) {
