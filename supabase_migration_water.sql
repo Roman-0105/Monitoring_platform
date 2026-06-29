@@ -195,6 +195,8 @@ CREATE TABLE IF NOT EXISTS dust_vehicles (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE dust_vehicles ADD COLUMN IF NOT EXISTS default_nozzle_id TEXT NOT NULL DEFAULT '';
+
 ALTER TABLE dust_vehicles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "dust_vehicles_all" ON dust_vehicles;
