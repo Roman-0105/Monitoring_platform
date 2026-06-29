@@ -239,25 +239,21 @@ function _dustNozzleVolumeMonth(nozzleId) {
 
 // ── Журнал ───────────────────────────────────────────────────
 
-function _dustJournalPrevDay() {
+function _dustJournalGoDay(delta) {
   var inp = document.getElementById('dust-j-date');
-  if (!inp) return;
-  var d = new Date(inp.value + 'T00:00:00');
-  d.setDate(d.getDate() - 1);
-  _dustJournalDate = d.toISOString().slice(0, 10);
+  if (!inp || !inp.value) return;
+  var p = inp.value.split('-').map(Number);
+  var d = new Date(p[0], p[1] - 1, p[2]); // local midnight, no UTC shift
+  d.setDate(d.getDate() + delta);
+  _dustJournalDate = d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
   inp.value = _dustJournalDate;
   _dustRenderJournalLeft();
 }
 
-function _dustJournalNextDay() {
-  var inp = document.getElementById('dust-j-date');
-  if (!inp) return;
-  var d = new Date(inp.value + 'T00:00:00');
-  d.setDate(d.getDate() + 1);
-  _dustJournalDate = d.toISOString().slice(0, 10);
-  inp.value = _dustJournalDate;
-  _dustRenderJournalLeft();
-}
+function _dustJournalPrevDay() { _dustJournalGoDay(-1); }
+function _dustJournalNextDay() { _dustJournalGoDay(1); }
 
 function _dustRenderJournal() {
   var el = document.getElementById('dust-panel-journal');
@@ -269,7 +265,7 @@ function _dustRenderJournal() {
     // Top bar
     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:var(--bg-2);border-radius:var(--r);border:1px solid var(--line)">' +
       '<button class="btn btn-sm" style="padding:2px 8px;font-size:16px;line-height:1" onclick="_dustJournalPrevDay()">←</button>' +
-      '<input type="date" id="dust-j-date" class="form-control" value="' + escAttr(_dustJournalDate) + '" style="width:140px;font-size:12px" oninput="_dustJournalDate=this.value;_dustRenderJournalLeft()">' +
+      '<input type="date" id="dust-j-date" class="form-control" value="' + escAttr(_dustJournalDate) + '" style="width:140px;font-size:12px" onchange="_dustJournalDate=this.value;_dustRenderJournalLeft()">' +
       '<button class="btn btn-sm" style="padding:2px 8px;font-size:16px;line-height:1" onclick="_dustJournalNextDay()">→</button>' +
       '<select id="dust-j-org" class="form-control" style="font-size:11px;width:140px" onchange="_dustJournalOrgFilter=this.value;_dustRenderJournalLeft()">' +
         _dustOrgOpts(_dustJournalOrgFilter, 'Все орг.') +
@@ -504,6 +500,17 @@ function _dustJournalSaveAll() {
   });
 
   Toast.show('Сохранено: ' + saved + ' ' + (saved === 1 ? 'запись' : saved < 5 ? 'записи' : 'записей'), 'success');
+
+  // Advance to the next day (same local-safe logic as _dustJournalGoDay)
+  var dp = date.split('-').map(Number);
+  var nd = new Date(dp[0], dp[1] - 1, dp[2]);
+  nd.setDate(nd.getDate() + 1);
+  _dustJournalDate = nd.getFullYear() + '-' +
+    String(nd.getMonth() + 1).padStart(2, '0') + '-' +
+    String(nd.getDate()).padStart(2, '0');
+  var dateInp = document.getElementById('dust-j-date');
+  if (dateInp) dateInp.value = _dustJournalDate;
+
   _dustRenderJournalLeft();
   _dustRenderLogTable();
 }
