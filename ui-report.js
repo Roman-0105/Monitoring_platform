@@ -23,7 +23,7 @@ var ReportState = {
     includeMap: true, include3d: false, includeHistory: true,
     includeCompare: true, includeAI: true,
     conclusions: '', apiKey: '',
-    aiModel: 'claude-haiku-4-5-20251001',
+    aiModel: 'gemini-2.0-flash',
     aiTone: 'official',
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
@@ -251,7 +251,7 @@ function saveReportSettings() {
       watermark:    (function(){ var v=getField('rp-watermark'); return v==='custom'?getField('rp-watermark-custom'):v; })(),
       approverName: getField('rp-approver-name'),
       incSignature: getChk('rp-inc-signature'),
-      aiModel: getField('rp-ai-model') || 'claude-haiku-4-5-20251001',
+      aiModel: getField('rp-ai-model') || 'gemini-2.0-flash',
       aiTone:  getField('rp-ai-tone')  || 'official',
       filterDomains:  ReportState.settings.filterDomains  || [],
       filterHorizons: ReportState.settings.filterHorizons || [],
@@ -300,7 +300,7 @@ function bindEvents() {
   ['rp-ai-model','rp-ai-tone'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('change', function() {
-      ReportState.settings.aiModel = getField('rp-ai-model') || 'claude-haiku-4-5-20251001';
+      ReportState.settings.aiModel = getField('rp-ai-model') || 'gemini-2.0-flash';
       ReportState.settings.aiTone  = getField('rp-ai-tone')  || 'official';
       saveReportSettings();
     });
@@ -995,7 +995,7 @@ function buildSettingsUI() {
 
   // ─── Panel 4: ИИ-анализ ──────────────────────────────────
   '<div id="rp-panel-4" class="rp-step-panel" style="display:none">' +
-    '<div class="rp-panel-title">ИИ-анализ (Claude)</div>' +
+    '<div class="rp-panel-title">ИИ-анализ (Gemini)</div>' +
 
     // ── Toggle-ряд ──
     '<div class="rp-ai-toggle-row">' +
@@ -1014,8 +1014,8 @@ function buildSettingsUI() {
 
     '<div id="rp-ai-settings-body">' +
     '<div class="card" style="margin-bottom:14px">' +
-      '<label class="rp-lbl">Anthropic API ключ</label>' +
-      '<input class="form-input" id="rp-apikey" type="password" placeholder="sk-ant-..." ' +
+      '<label class="rp-lbl">Google API ключ</label>' +
+      '<input class="form-input" id="rp-apikey" type="password" placeholder="AIza..." ' +
         'style="margin-top:4px;font-family:monospace;font-size:12px">' +
       '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">Ключ хранится только в браузере</div>' +
     '</div>' +
@@ -1023,11 +1023,11 @@ function buildSettingsUI() {
     '<div class="card" style="margin-bottom:14px">' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
         '<div>' +
-          '<label class="rp-lbl">Модель Claude</label>' +
+          '<label class="rp-lbl">Модель Gemini</label>' +
           '<select class="form-select" id="rp-ai-model" style="margin-top:4px" onchange="saveReportSettings()">' +
-            '<option value="claude-haiku-4-5-20251001">Haiku 4.5 — быстро и дёшево</option>' +
-            '<option value="claude-sonnet-4-6">Sonnet 4.6 — баланс (рекомендуется)</option>' +
-            '<option value="claude-opus-4-7">Opus 4.7 — глубокий анализ</option>' +
+            '<option value="gemini-2.0-flash">Flash 2.0 — быстро и дёшево</option>' +
+            '<option value="gemini-1.5-pro">Pro 1.5 — баланс (рекомендуется)</option>' +
+            '<option value="gemini-2.0-flash-thinking-exp">Flash Thinking — глубокий анализ</option>' +
           '</select>' +
         '</div>' +
         '<div>' +
@@ -1417,7 +1417,7 @@ function getAITonePrefix(tone) {
 // ── Генерация AI заключения ───────────────────────────────
 function generateAIConclusion() {
   var apiKey = getField('rp-apikey');
-  if (!apiKey) { Toast.show('Введите Anthropic API ключ', 'error'); return; }
+  if (!apiKey) { Toast.show('Введите Google API ключ', 'error'); return; }
   var btn = document.getElementById('rp-ai-concl-btn');
   if (btn) { btn.disabled = true; btn.textContent = '✨ Генерирую...'; }
 
@@ -1443,8 +1443,8 @@ function generateAIConclusion() {
 
   var tone = getField('rp-ai-tone') || ReportState.settings.aiTone || 'official';
   prompt = getAITonePrefix(tone) + prompt;
-  var model = getField('rp-ai-model') || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
-  callClaudeAPI(apiKey, prompt, model).then(function(text) {
+  var model = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-2.0-flash';
+  callGeminiAPI(apiKey, prompt, model).then(function(text) {
     var ta = document.getElementById('rp-conclusions');
     if (ta) ta.value = text;
     Toast.show('Заключение сгенерировано', 'success');
@@ -1455,25 +1455,24 @@ function generateAIConclusion() {
   });
 }
 
-function callClaudeAPI(apiKey, prompt, model) {
-  var mdl = model || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
-  return fetch('https://api.anthropic.com/v1/messages', {
+function callGeminiAPI(apiKey, prompt, model) {
+  var mdl = model || ReportState.settings.aiModel || 'gemini-2.0-flash';
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+            mdl + ':generateContent?key=' + encodeURIComponent(apiKey);
+  return fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: mdl,
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }]
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 1500, temperature: 0.4 }
     })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    if (!data.content) throw new Error('Пустой ответ API: ' + JSON.stringify(data));
-    return (data.content && data.content[0]) ? data.content[0].text : '';
+    var candidates = data.candidates;
+    if (!candidates || !candidates.length) throw new Error('Пустой ответ Gemini API: ' + JSON.stringify(data));
+    var parts = candidates[0].content && candidates[0].content.parts;
+    if (!parts || !parts.length) throw new Error('Нет текста в ответе Gemini');
+    return parts[0].text || '';
   });
 }
 
@@ -1631,7 +1630,7 @@ function generateAIBlocks(s) {
     }
   }
 
-  return callClaudeAPI(s.apiKey, prompt, s.aiModel).then(function(text) {
+  return callGeminiAPI(s.apiKey, prompt, s.aiModel).then(function(text) {
     var clean = text.replace(/```/g,'').trim();
     var result = { summary: clean, compare: '', recommendations: '' };
     setCachedAI(cacheKey, result);
@@ -1794,13 +1793,13 @@ function captureDewDiagram() {
 
 function preGenerateAI() {
   var apiKey = getField('rp-apikey');
-  if (!apiKey) { Toast.show('Введите API-ключ Claude', 'error'); return; }
+  if (!apiKey) { Toast.show('Введите Google API ключ', 'error'); return; }
   if (!ReportState.allPoints.length) { Toast.show('Сначала загрузите данные (Шаг 1)', 'error'); return; }
 
   var btn = document.getElementById('rp-pre-ai-btn');
   var container = document.getElementById('rp-ai-preview-blocks');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
-  if (container) container.innerHTML = '<div style="font-size:12px;color:var(--txt-3);text-align:center;padding:12px">Запрос к Claude API...</div>';
+  if (container) container.innerHTML = '<div style="font-size:12px;color:var(--txt-3);text-align:center;padding:12px">Запрос к Gemini API...</div>';
 
   var s = Object.assign({}, ReportState.settings);
   s.author       = getField('rp-author');
@@ -1811,7 +1810,7 @@ function preGenerateAI() {
   s.dateB        = s.reportMode === 'single' ? s.dateA : s.dateB;
   s.apiKey       = apiKey;
   s.customPrompt = getField('rp-custom-prompt');
-  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
+  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-2.0-flash';
   s.aiTone  = getField('rp-ai-tone')  || ReportState.settings.aiTone  || 'official';
 
   var allPts = ReportState.allPoints || [];
@@ -1896,7 +1895,7 @@ function generateReport() {
   s.watermark    = wmVal === 'custom' ? getField('rp-watermark-custom') : wmVal;
   s.approverName = getField('rp-approver-name');
   s.includeSignature = getChk('rp-inc-signature');
-  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'claude-haiku-4-5-20251001';
+  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-2.0-flash';
   s.aiTone  = getField('rp-ai-tone')  || ReportState.settings.aiTone  || 'official';
   s.reportVersion  = (parseInt(s.reportVersion) || 0) + 1;
   addRpHistory(s);
