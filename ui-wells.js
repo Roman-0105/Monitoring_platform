@@ -1149,6 +1149,7 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
     e.stopPropagation();
     _hideWmTip();
     WellsState.selectedId = w.id;
+    _wellsMap.card.hidden = false;
     renderWellRegistryList();
     renderWellDetail();
   });
@@ -1267,20 +1268,25 @@ function _updateMarkerSizes() {
       num.setAttribute('font-size', numFS.toFixed(2));
     }
 
-    // Name label pill
+    // Name label pill — clamp font size so labels stay readable at any zoom
     var lbl    = g.querySelector('.wm-label');
     var pillBg = g.querySelector('.wm-pill-bg');
     if (lbl) {
-      var nameFS  = (isSel ? 10 : 8.5) * p2s;
+      var rawFS   = (isSel ? 10 : 8.5) * p2s;
+      var minFS   = isSel ? 9 : 7.5;   // minimum px in SVG units when zoomed out
+      var maxFS   = isSel ? 14 : 11;   // cap when zoomed in
+      var nameFS  = Math.max(minFS, Math.min(maxFS, rawFS));
       var nameLen = (lbl.textContent || '').length;
-      var pillW   = nameLen * nameFS * 0.55 + 10 * p2s;
+      var pillPad = Math.max(6, 10 * p2s);
+      var pillW   = nameLen * nameFS * 0.55 + pillPad;
       var pillH   = nameFS * 1.7;
-      var pillY   = cy + r + 3 * p2s;
+      var pillGap = Math.max(2, 3 * p2s);
+      var pillY   = cy + r + pillGap;
       if (pillBg) {
         pillBg.setAttribute('x', (cx - pillW / 2).toFixed(2)); pillBg.setAttribute('y', pillY.toFixed(2));
         pillBg.setAttribute('width', pillW.toFixed(2)); pillBg.setAttribute('height', pillH.toFixed(2));
         pillBg.setAttribute('rx', (pillH / 2).toFixed(2));
-        pillBg.setAttribute('stroke-width', (isSel ? 1.2 : 0.8) * p2s + '');
+        pillBg.setAttribute('stroke-width', Math.max(0.6, (isSel ? 1.2 : 0.8) * p2s) + '');
       }
       lbl.setAttribute('x', cx.toFixed(1)); lbl.setAttribute('y', (pillY + pillH * 0.68).toFixed(1));
       lbl.setAttribute('font-size', nameFS.toFixed(2));
@@ -1552,7 +1558,7 @@ function _refreshDataCard() {
   var connSvg = document.getElementById('wells-card-connector');
   var sel     = _getSelWellInfo();
 
-  if (!sel) {
+  if (!sel || _wellsMap.card.hidden) {
     if (card)    card.style.display    = 'none';
     if (connSvg) connSvg.style.display = 'none';
     return;
@@ -1608,7 +1614,10 @@ function _refreshDataCard() {
     '</div>' +
     '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">' +
       (w.status ? '<div style="font-size:9px;font-weight:700;color:' + statusColor + ';background:' + statusColor + '20;border:1px solid ' + statusColor + '44;border-radius:99px;padding:2px 7px;white-space:nowrap">● ' + escHTML(w.status) + '</div>' : '') +
+      '<div style="display:flex;gap:4px">' +
       '<button id="wells-card-col-btn" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.45);cursor:pointer;border-radius:6px;padding:1px 7px;font-size:11px;line-height:1.6;flex-shrink:0;font-family:inherit">' + (collapsed ? '＋' : '－') + '</button>' +
+      '<button id="wells-card-close-btn" title="Скрыть карточку" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.45);cursor:pointer;border-radius:6px;padding:1px 7px;font-size:11px;line-height:1.6;flex-shrink:0;font-family:inherit">✕</button>' +
+      '</div>' +
     '</div>' +
   '</div>';
 
@@ -1691,6 +1700,19 @@ function _refreshDataCard() {
       e.stopPropagation();
       _wellsMap.card.collapsed = !_wellsMap.card.collapsed;
       _refreshDataCard();
+    });
+  }
+
+  // Close (hide) card
+  var closeBtn = card.querySelector('#wells-card-close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _wellsMap.card.hidden = true;
+      var c = document.getElementById('wells-data-card');
+      var conn = document.getElementById('wells-card-connector');
+      if (c) c.style.display = 'none';
+      if (conn) conn.style.display = 'none';
     });
   }
 
