@@ -212,6 +212,7 @@ function renderMap() {
       return;
     }
     var img = new Image();
+    img.crossOrigin = 'anonymous'; // allow canvas.toDataURL() without CORS SecurityError
     img.onload = function() {
       _mapSchemeImg = img;
       // Инициализируем тепловую карту после загрузки схемы
