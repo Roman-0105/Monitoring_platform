@@ -252,10 +252,18 @@
   <!-- Горизонтальные скважины -->
   <div class="page" id="page-wells">
 
-    <!-- Подвкладки -->
-    <div class="settings-subtabs" style="margin-bottom:12px">
+    <!-- Подвкладки + кнопка отчёта -->
+    <div class="settings-subtabs" style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
       <button class="btn btn-sm btn-outline active" data-wells-tab="view">⊛ Скважина</button>
       <button class="btn btn-sm btn-outline" data-wells-tab="registry">📋 Реестр</button>
+      <button id="btn-wells-report" onclick="WellsReport && WellsReport.open()"
+              style="margin-left:auto;padding:4px 13px;border-radius:7px;border:1px solid rgba(26,115,232,.5);
+                     background:rgba(26,115,232,.1);color:#6ea8fe;font-size:12px;font-weight:500;
+                     cursor:pointer;white-space:nowrap;transition:all .15s"
+              onmouseover="this.style.background='rgba(26,115,232,.2)'"
+              onmouseout="this.style.background='rgba(26,115,232,.1)'">
+        ⬇ Отчёт PDF
+      </button>
     </div>
 
     <!-- Панель: просмотр скважины -->
@@ -847,6 +855,7 @@
 <script src="ui-report.js"></script>
 <script src="ditch-3d-fix.js"></script>
 <script src="ui-wells.js"></script>
+<script src="report-wells.js"></script>
 <script src="ui-dewatering.js"></script>
 <script src="ui-dustsuppression.js"></script>
 <script src="app.js"></script>
