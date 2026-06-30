@@ -32,7 +32,7 @@ var ReportState = {
     orientation: 'portrait',
     filterDomains:  [],   // [] = all domains
     filterHorizons: [],   // [] = all horizons
-    includeWells: false,
+    includeWells: true,
   },
   currentStep: 1,
 };
@@ -1375,7 +1375,13 @@ function loadDitchesHistory() {
 }
 
 function loadWellsForReport() {
+  // Temporarily set active quarry from report settings so Api.getWells() returns the right data
+  var rpQuarry = getField('rp-quarry-name') || (ReportState.settings && ReportState.settings.quarryName) || '';
+  var prevQuarry = window.AppState ? AppState.activeQuarry : '';
+  if (rpQuarry && window.AppState) AppState.activeQuarry = rpQuarry;
+
   return Api.getWells().then(function(wells) {
+    if (window.AppState) AppState.activeQuarry = prevQuarry; // restore
     ReportState.allWells = wells;
     if (typeof WellsState !== 'undefined') WellsState.list = wells;
     var meas = (typeof WellsState !== 'undefined') ? WellsState.measurements : {};
@@ -1388,6 +1394,7 @@ function loadWellsForReport() {
       });
     }));
   }).catch(function() {
+    if (window.AppState) AppState.activeQuarry = prevQuarry; // restore on error
     ReportState.allWells = [];
   });
 }
@@ -1689,41 +1696,66 @@ function captureMapCanvas() {
   try {
     var canvas = document.getElementById('map-canvas');
     if (!canvas) return null;
-    // Используем toDataURL без getImageData чтобы не вызывать Canvas2D readback warning.
-    // Пустой canvas JPEG ≈ 600–2000 байт base64; реально отрисованная карта — значительно больше.
     var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     return (dataUrl && dataUrl.length > 6000) ? dataUrl : null;
   } catch(e) { return null; }
 }
 
+// Получает URL схемы карьера напрямую из API (без canvas — избегаем CORS SecurityError).
+// weekKey: "2026-W13" или null (берёт последнюю). quarryName: "ЮРГ" и т.п.
+function fetchSchemeUrl(weekKey, quarryName) {
+  var qName = quarryName || (ReportState.settings && ReportState.settings.quarryName) || '';
+  var fetch$ = (qName && typeof Api !== 'undefined' && Api.getSchemesByQuarry)
+    ? Api.getSchemesByQuarry(qName)
+    : (typeof Schemes !== 'undefined' ? Promise.resolve(Schemes.getList()) : Promise.resolve([]));
+
+  return fetch$.then(function(schemes) {
+    if (!schemes || !schemes.length) return null;
+    // Sort newest first
+    var sorted = schemes.slice().sort(function(a, b) {
+      return (a.weekKey || '') > (b.weekKey || '') ? -1 : 1;
+    });
+    if (weekKey && weekKey !== 'auto') {
+      var exact = sorted.find(function(s) { return s.weekKey === weekKey; });
+      if (exact) return exact.driveUrl || null;
+      // Find closest week before weekKey
+      var before = sorted.filter(function(s) { return (s.weekKey || '') <= weekKey; });
+      if (before.length) return before[0].driveUrl || null;
+    }
+    return sorted[0].driveUrl || null;
+  }).catch(function() { return null; });
+}
+
 function captureMapForWeek(weekKey, quarryName) {
-  return new Promise(function(resolve) {
-    if (typeof switchTab !== 'function') { resolve(null); return; }
-
-    // Switch to quarry first if needed
-    var qName = quarryName || (ReportState.settings && ReportState.settings.quarryName) || '';
-    var switchQuarryPromise = (qName && typeof switchQuarry === 'function' && window.AppState && AppState.activeQuarry !== qName)
-      ? new Promise(function(res) { switchQuarry(qName, true); setTimeout(res, 800); })
-      : Promise.resolve();
-
-    switchQuarryPromise.then(function() {
-      switchTab('map');
-      if (typeof _mapSelectedWeekKey !== 'undefined') {
-        _mapSelectedWeekKey = weekKey || 'auto';
-        _mapSchemeImg = null;
-        var sel = document.getElementById('map-scheme-select');
-        if (sel) sel.value = _mapSelectedWeekKey;
-        if (typeof renderMap === 'function') renderMap();
-      }
-      var attempts = 0;
-      function tryCapture() {
-        attempts++;
-        var img = captureMapCanvas();
-        if (img) { resolve(img); return; }
-        if (attempts >= 20) { resolve(null); return; }
-        setTimeout(tryCapture, 500);
-      }
-      setTimeout(tryCapture, 800);
+  // First try to get scheme URL directly (avoids CORS canvas issues)
+  var qName = quarryName || (ReportState.settings && ReportState.settings.quarryName) || '';
+  return fetchSchemeUrl(weekKey, qName).then(function(url) {
+    if (url) return url;
+    // Fallback: try canvas capture (only works if same-origin or CORS-enabled)
+    return new Promise(function(resolve) {
+      if (typeof switchTab !== 'function') { resolve(null); return; }
+      var switchQ = (qName && typeof switchQuarry === 'function' && window.AppState && AppState.activeQuarry !== qName)
+        ? new Promise(function(res) { switchQuarry(qName, true); setTimeout(res, 800); })
+        : Promise.resolve();
+      switchQ.then(function() {
+        switchTab('map');
+        if (typeof _mapSelectedWeekKey !== 'undefined') {
+          _mapSelectedWeekKey = weekKey || 'auto';
+          _mapSchemeImg = null;
+          var sel = document.getElementById('map-scheme-select');
+          if (sel) sel.value = _mapSelectedWeekKey;
+          if (typeof renderMap === 'function') renderMap();
+        }
+        var attempts = 0;
+        function tryCapture() {
+          attempts++;
+          var img = captureMapCanvas();
+          if (img) { resolve(img); return; }
+          if (attempts >= 15) { resolve(null); return; }
+          setTimeout(tryCapture, 500);
+        }
+        setTimeout(tryCapture, 1000);
+      });
     });
   });
 }
