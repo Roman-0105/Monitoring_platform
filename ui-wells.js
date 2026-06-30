@@ -561,23 +561,109 @@ var _wmTip = null;
 function _getWmTip() {
   if (!_wmTip) {
     _wmTip = document.createElement('div');
-    _wmTip.style.cssText = 'position:fixed;pointer-events:none;display:none;background:rgba(15,20,30,.92);' +
-      'color:#e8eaed;font-size:12px;padding:5px 10px;border-radius:6px;white-space:nowrap;' +
-      'z-index:9999;border:1px solid rgba(255,255,255,.12);max-width:260px;white-space:normal';
+    _wmTip.style.cssText = [
+      'position:fixed;pointer-events:none;display:none;z-index:9999',
+      'max-width:280px;min-width:160px',
+      'background:rgba(8,12,22,.96)',
+      'border-radius:12px',
+      'border:1px solid rgba(255,255,255,.1)',
+      'box-shadow:0 12px 40px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.4)',
+      'backdrop-filter:blur(16px)',
+      'overflow:hidden',
+      'font-family:Inter,system-ui,sans-serif',
+      'transition:opacity 100ms',
+    ].join(';');
     document.body.appendChild(_wmTip);
   }
   return _wmTip;
 }
-function _showWmTip(html, e) { var t = _getWmTip(); t.innerHTML = html; t.style.display = ''; _moveWmTip(e); }
+function _showWmTip(html, e) {
+  var t = _getWmTip();
+  t.innerHTML = html;
+  t.style.display = '';
+  t.style.opacity = '0';
+  _moveWmTip(e);
+  requestAnimationFrame(function() { t.style.opacity = '1'; });
+}
 function _moveWmTip(e) {
   var t = _getWmTip();
   if (t.style.display === 'none') return;
-  var tx = e.clientX + 14, ty = e.clientY - 12;
-  if (tx + t.offsetWidth  > window.innerWidth  - 8) tx = e.clientX - t.offsetWidth  - 10;
-  if (ty + t.offsetHeight > window.innerHeight - 8) ty = e.clientY - t.offsetHeight - 8;
+  var tx = e.clientX + 16, ty = e.clientY - 8;
+  if (tx + t.offsetWidth  > window.innerWidth  - 12) tx = e.clientX - t.offsetWidth  - 12;
+  if (ty + t.offsetHeight > window.innerHeight - 12) ty = e.clientY - t.offsetHeight - 8;
   t.style.left = tx + 'px'; t.style.top = ty + 'px';
 }
-function _hideWmTip() { _getWmTip().style.display = 'none'; }
+function _hideWmTip() {
+  var t = _getWmTip();
+  t.style.opacity = '0';
+  setTimeout(function() { t.style.display = 'none'; }, 100);
+}
+
+function _buildWmTipHtml(w) {
+  var isPiezo   = w.wellType === 'piezometric';
+  var color     = isPiezo ? '#a78bfa' : (WELL_STATUS_COLORS[w.status] || '#9aa0a6');
+  var statusBg  = color + '22';
+  var meas      = WellsState.measurements[w.id] || [];
+  var lastMeas  = _getLastMeasurement(w.id);
+  var connCount = isPiezo && Array.isArray(w.sensors)
+    ? w.sensors.filter(function(s) { return s.connectedToLogger; }).length : 0;
+
+  var rows = '';
+  if (w.depth    != null) rows += _tipRow('⬇', 'Глубина',   w.depth + ' м');
+  if (w.azimuth  != null) rows += _tipRow('🧭', 'Азимут',    w.azimuth + '°');
+  if (w.horizon)          rows += _tipRow('⛰', 'Горизонт',  escHTML(w.horizon));
+  if (w.section)          rows += _tipRow('📍', 'Борт',      escHTML(w.section));
+  if (lastMeas)           rows += _tipRow('💧', 'Дебит',     '<b style="color:' + color + '">' + lastMeas.flowRate + ' м³/ч</b>');
+  if (isPiezo && w.sensors && w.sensors.length)
+    rows += _tipRow('◆', 'Датчики', w.sensors.length + ' шт. (' + connCount + ' к лог.)');
+
+  var spark = _buildMiniSparkline(meas, color);
+
+  return '<div style="border-left:3px solid ' + color + ';padding:0">' +
+    '<div style="padding:10px 14px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid rgba(255,255,255,.07)">' +
+      '<div>' +
+        '<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px">' + escHTML(w.name) + '</div>' +
+        '<div style="font-size:10px;color:#6e7681">' + (isPiezo ? 'Пьезометрическая' : 'Дренажная') + '</div>' +
+      '</div>' +
+      (w.status ? '<div style="font-size:10px;font-weight:700;color:' + color + ';background:' + statusBg + ';border:1px solid ' + color + '44;border-radius:99px;padding:2px 9px;white-space:nowrap">● ' + escHTML(w.status) + '</div>' : '') +
+    '</div>' +
+    (rows ? '<div style="padding:8px 14px;display:flex;flex-direction:column;gap:4px">' + rows + '</div>' : '') +
+    (spark ? '<div style="padding:2px 14px 10px;border-top:1px solid rgba(255,255,255,.05)">' +
+      '<div style="font-size:9px;color:#6e7681;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;margin-top:6px">Дебит (м³/ч)</div>' +
+      spark + '</div>' : '') +
+  '</div>';
+}
+
+function _tipRow(icon, label, value) {
+  return '<div style="display:flex;align-items:center;gap:8px;font-size:11px">' +
+    '<span style="width:16px;text-align:center;opacity:.6">' + icon + '</span>' +
+    '<span style="color:#6e7681;min-width:64px">' + label + '</span>' +
+    '<span style="color:#e8eaed">' + value + '</span>' +
+  '</div>';
+}
+
+function _cardRow(icon, label, value) {
+  return '<div style="display:flex;align-items:center;gap:7px;font-size:10px">' +
+    '<span style="opacity:.5;font-size:11px">' + icon + '</span>' +
+    '<span style="color:#6e7681;min-width:52px">' + label + '</span>' +
+    '<span>' + value + '</span>' +
+  '</div>';
+}
+
+function _buildClusterTipHtml(wells) {
+  var names = wells.map(function(w) {
+    var c = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
+    return '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#e8eaed">' +
+      '<span style="width:7px;height:7px;border-radius:50%;background:' + c + ';flex-shrink:0;display:inline-block"></span>' +
+      escHTML(w.name) +
+    '</div>';
+  }).join('');
+  return '<div style="padding:10px 14px">' +
+    '<div style="font-size:12px;font-weight:700;color:#9aa0a6;margin-bottom:8px">Скважин в кластере: ' + wells.length + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:4px">' + names + '</div>' +
+    '<div style="font-size:10px;color:#6e7681;margin-top:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:6px">Клик — приблизить</div>' +
+  '</div>';
+}
 
 // ── Clustering ────────────────────────────────────────────
 
@@ -820,8 +906,8 @@ function _hexPoints(cx, cy, r) {
 function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   var isSel   = w.id === WellsState.selectedId;
   var isPiezo = w.wellType === 'piezometric';
-  var color   = isPiezo ? '#7c4dff' : (WELL_STATUS_COLORS[w.status] || '#9aa0a6');
-  var r       = (isSel ? 13 : 8) * p2s;
+  var color   = isPiezo ? '#a78bfa' : (WELL_STATUS_COLORS[w.status] || '#9aa0a6');
+  var r       = (isSel ? 14 : 10) * p2s;
 
   var g = document.createElementNS(NS, 'g');
   g.setAttribute('data-well-id', w.id);
@@ -833,74 +919,91 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
   g.setAttribute('data-piezo',   isPiezo ? '1' : '0');
   g.style.cursor = 'pointer';
 
-  // Radar sweep rings (selected well only — concept B)
+  // ── Pulse / glow rings (selected) ──
   if (isSel) {
-    var radarOuter = document.createElementNS(NS, 'circle');
-    radarOuter.setAttribute('cx', cx.toFixed(2)); radarOuter.setAttribute('cy', cy.toFixed(2));
-    radarOuter.setAttribute('r', (r * 3.5).toFixed(2));
-    radarOuter.setAttribute('fill', 'none');
-    radarOuter.setAttribute('stroke', color);
-    radarOuter.setAttribute('stroke-width', (0.7 * p2s).toFixed(2));
-    radarOuter.setAttribute('stroke-dasharray', (4*p2s).toFixed(2)+','+(4*p2s).toFixed(2));
-    radarOuter.setAttribute('opacity', '.3');
-    radarOuter.setAttribute('class', 'wm-radar-ring1');
-    radarOuter.setAttribute('pointer-events', 'none');
-    g.appendChild(radarOuter);
+    // Outer glow
+    var glowEl = document.createElementNS(NS, 'circle');
+    glowEl.setAttribute('cx', cx.toFixed(2)); glowEl.setAttribute('cy', cy.toFixed(2));
+    glowEl.setAttribute('r', (r * 2.8).toFixed(2));
+    glowEl.setAttribute('fill', color); glowEl.setAttribute('opacity', '.08');
+    glowEl.setAttribute('class', 'wm-glow'); glowEl.setAttribute('pointer-events', 'none');
+    g.appendChild(glowEl);
 
+    // Animated pulse ring
+    var pulseEl = document.createElementNS(NS, 'circle');
+    pulseEl.setAttribute('cx', cx.toFixed(2)); pulseEl.setAttribute('cy', cy.toFixed(2));
+    pulseEl.setAttribute('r', (r * 1.9).toFixed(2));
+    pulseEl.setAttribute('fill', 'none');
+    pulseEl.setAttribute('stroke', color); pulseEl.setAttribute('stroke-width', (1.2 * p2s).toFixed(2));
+    pulseEl.setAttribute('opacity', '.5');
+    pulseEl.setAttribute('class', 'wm-pulse'); pulseEl.setAttribute('pointer-events', 'none');
+    var animR = document.createElementNS(NS, 'animate');
+    animR.setAttribute('attributeName', 'r');
+    animR.setAttribute('values', (r*1.9).toFixed(2)+';'+(r*3.2).toFixed(2)+';'+(r*1.9).toFixed(2));
+    animR.setAttribute('dur', '2.5s'); animR.setAttribute('repeatCount', 'indefinite');
+    var animO = document.createElementNS(NS, 'animate');
+    animO.setAttribute('attributeName', 'opacity');
+    animO.setAttribute('values', '.5;0;.5'); animO.setAttribute('dur', '2.5s');
+    animO.setAttribute('repeatCount', 'indefinite');
+    pulseEl.appendChild(animR); pulseEl.appendChild(animO);
+    g.appendChild(pulseEl);
+
+    // Radar sweep
     var radarSweep = document.createElementNS(NS, 'circle');
     radarSweep.setAttribute('cx', cx.toFixed(2)); radarSweep.setAttribute('cy', cy.toFixed(2));
-    radarSweep.setAttribute('r', (r * 3.5).toFixed(2));
+    radarSweep.setAttribute('r', (r * 2.6).toFixed(2));
     radarSweep.setAttribute('fill', 'none');
-    radarSweep.setAttribute('stroke', color);
-    radarSweep.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
-    radarSweep.setAttribute('stroke-dasharray', (r * 5).toFixed(2)+','+(r * 17).toFixed(2));
-    radarSweep.setAttribute('opacity', '.75');
-    radarSweep.setAttribute('class', 'wm-radar-sweep');
-    radarSweep.setAttribute('pointer-events', 'none');
+    radarSweep.setAttribute('stroke', color); radarSweep.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
+    radarSweep.setAttribute('stroke-dasharray', (r * 4).toFixed(2)+','+(r * 14).toFixed(2));
+    radarSweep.setAttribute('opacity', '.6');
+    radarSweep.setAttribute('class', 'wm-radar-sweep'); radarSweep.setAttribute('pointer-events', 'none');
     var animEl = document.createElementNS(NS, 'animateTransform');
-    animEl.setAttribute('attributeName', 'transform');
-    animEl.setAttribute('type', 'rotate');
+    animEl.setAttribute('attributeName', 'transform'); animEl.setAttribute('type', 'rotate');
     animEl.setAttribute('from', '0 '+cx.toFixed(2)+' '+cy.toFixed(2));
     animEl.setAttribute('to',   '360 '+cx.toFixed(2)+' '+cy.toFixed(2));
-    animEl.setAttribute('dur', '6s');
-    animEl.setAttribute('repeatCount', 'indefinite');
+    animEl.setAttribute('dur', '5s'); animEl.setAttribute('repeatCount', 'indefinite');
     radarSweep.appendChild(animEl);
     g.appendChild(radarSweep);
-
-    var radarInner = document.createElementNS(NS, 'circle');
-    radarInner.setAttribute('cx', cx.toFixed(2)); radarInner.setAttribute('cy', cy.toFixed(2));
-    radarInner.setAttribute('r', (r * 2.2).toFixed(2));
-    radarInner.setAttribute('fill', 'none');
-    radarInner.setAttribute('stroke', color);
-    radarInner.setAttribute('stroke-width', (0.5 * p2s).toFixed(2));
-    radarInner.setAttribute('opacity', '.2');
-    radarInner.setAttribute('class', 'wm-radar-ring2');
-    radarInner.setAttribute('pointer-events', 'none');
-    g.appendChild(radarInner);
+  } else {
+    // Non-selected: subtle glow on hover (static ring)
+    var hoverRing = document.createElementNS(NS, 'circle');
+    hoverRing.setAttribute('cx', cx.toFixed(2)); hoverRing.setAttribute('cy', cy.toFixed(2));
+    hoverRing.setAttribute('r', (r * 1.6).toFixed(2));
+    hoverRing.setAttribute('fill', color); hoverRing.setAttribute('opacity', '.08');
+    hoverRing.setAttribute('class', 'wm-hover-ring'); hoverRing.setAttribute('pointer-events', 'none');
+    g.appendChild(hoverRing);
   }
 
-  // Azimuth ray with depth ticks and arrowhead (concept B)
+  // ── Azimuth ray ──
   if (w.azimuth != null) {
     var azRad    = w.azimuth * Math.PI / 180;
     var adx      = Math.sin(azRad);
     var ady      = -Math.cos(azRad);
-    var arrowLen = (w.depth != null ? Math.min(60, Math.max(12, w.depth * 0.25)) : 20) * p2s;
+    var arrowLen = (w.depth != null ? Math.min(70, Math.max(14, w.depth * 0.28)) : 22) * p2s;
     var ax2 = cx + adx * arrowLen;
     var ay2 = cy + ady * arrowLen;
-    var headSz = 5 * p2s;
+    var headSz = 5.5 * p2s;
     var pvx = -ady, pvy = adx;
+
+    // Shaft glow (wider, blurred effect via opacity)
+    var shaftGlow = document.createElementNS(NS, 'line');
+    shaftGlow.setAttribute('x1', cx.toFixed(2)); shaftGlow.setAttribute('y1', cy.toFixed(2));
+    shaftGlow.setAttribute('x2', ax2.toFixed(2)); shaftGlow.setAttribute('y2', ay2.toFixed(2));
+    shaftGlow.setAttribute('stroke', color); shaftGlow.setAttribute('stroke-width', (6 * p2s).toFixed(2));
+    shaftGlow.setAttribute('stroke-linecap', 'round'); shaftGlow.setAttribute('opacity', isSel ? '.15' : '.08');
+    shaftGlow.setAttribute('pointer-events', 'none'); shaftGlow.setAttribute('class', 'wm-shaft-glow');
+    g.appendChild(shaftGlow);
 
     var shaft = document.createElementNS(NS, 'line');
     shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', cy.toFixed(2));
     shaft.setAttribute('x2', ax2.toFixed(2)); shaft.setAttribute('y2', ay2.toFixed(2));
-    shaft.setAttribute('stroke', color);
-    shaft.setAttribute('stroke-width', (2 * p2s).toFixed(2));
-    shaft.setAttribute('stroke-linecap', 'round');
-    shaft.setAttribute('pointer-events', 'none');
+    shaft.setAttribute('stroke', color); shaft.setAttribute('stroke-width', (isSel ? 2.5 : 1.8) * p2s + '');
+    shaft.setAttribute('stroke-linecap', 'round'); shaft.setAttribute('pointer-events', 'none');
+    shaft.setAttribute('opacity', isSel ? '1' : '0.7');
     shaft.setAttribute('class', 'wm-arrow-shaft');
     g.appendChild(shaft);
 
-    // Depth tick circles every 50 m along the ray
+    // Depth ticks every 50 m
     if (w.depth != null && w.depth > 50) {
       var numTicks = Math.min(5, Math.floor(w.depth / 50) - 1);
       for (var ti = 1; ti <= numTicks; ti++) {
@@ -908,102 +1011,137 @@ function _appendSingleMarker(marksG, w, cx, cy, NS, p2s) {
         var tickEl = document.createElementNS(NS, 'circle');
         tickEl.setAttribute('cx', (cx + adx * arrowLen * tratio).toFixed(2));
         tickEl.setAttribute('cy', (cy + ady * arrowLen * tratio).toFixed(2));
-        tickEl.setAttribute('r',  (1.8 * p2s).toFixed(2));
-        tickEl.setAttribute('fill', color);
-        tickEl.setAttribute('opacity', '0.5');
-        tickEl.setAttribute('pointer-events', 'none');
-        tickEl.setAttribute('class', 'wm-depth-tick');
+        tickEl.setAttribute('r',  (2 * p2s).toFixed(2));
+        tickEl.setAttribute('fill', color); tickEl.setAttribute('opacity', '0.6');
+        tickEl.setAttribute('pointer-events', 'none'); tickEl.setAttribute('class', 'wm-depth-tick');
         g.appendChild(tickEl);
       }
     }
 
+    // Arrowhead
     var arHead = document.createElementNS(NS, 'polygon');
     arHead.setAttribute('points',
       ax2.toFixed(2)+','+ay2.toFixed(2)+' '+
-      (ax2 - adx*headSz + pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + pvy*headSz*0.5).toFixed(2)+' '+
-      (ax2 - adx*headSz - pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - pvy*headSz*0.5).toFixed(2));
-    arHead.setAttribute('fill', color);
-    arHead.setAttribute('pointer-events', 'none');
+      (ax2 - adx*headSz + pvx*headSz*0.55).toFixed(2)+','+(ay2 - ady*headSz + pvy*headSz*0.55).toFixed(2)+' '+
+      (ax2 - adx*headSz - pvx*headSz*0.55).toFixed(2)+','+(ay2 - ady*headSz - pvy*headSz*0.55).toFixed(2));
+    arHead.setAttribute('fill', color); arHead.setAttribute('pointer-events', 'none');
     arHead.setAttribute('class', 'wm-arrow-head');
     g.appendChild(arHead);
 
-    // Depth label at ray tip (selected only)
+    // Depth label (selected only — at ray tip)
     if (isSel && w.depth != null) {
+      var depFS   = 9 * p2s;
+      var depText = w.depth + ' м';
+      var depBgW  = depText.length * depFS * 0.52 + 8 * p2s;
+      var depBgH  = depFS * 1.6;
+      var depBgX  = ax2 + adx * (8 * p2s) - depBgW / 2;
+      var depBgY  = ay2 + ady * (8 * p2s) - depBgH / 2;
+
+      var depBg = document.createElementNS(NS, 'rect');
+      depBg.setAttribute('x', depBgX.toFixed(2)); depBg.setAttribute('y', depBgY.toFixed(2));
+      depBg.setAttribute('width', depBgW.toFixed(2)); depBg.setAttribute('height', depBgH.toFixed(2));
+      depBg.setAttribute('rx', (depBgH / 2).toFixed(2));
+      depBg.setAttribute('fill', color); depBg.setAttribute('opacity', '.18');
+      depBg.setAttribute('pointer-events', 'none'); depBg.setAttribute('class', 'wm-dep-bg');
+      g.appendChild(depBg);
+
       var depLbl = document.createElementNS(NS, 'text');
-      depLbl.setAttribute('x', (ax2 + adx * 6 * p2s).toFixed(2));
-      depLbl.setAttribute('y', (ay2 + ady * 6 * p2s + 3 * p2s).toFixed(2));
+      depLbl.setAttribute('x', (ax2 + adx * 8 * p2s).toFixed(2));
+      depLbl.setAttribute('y', (ay2 + ady * 8 * p2s + depFS * 0.36).toFixed(2));
       depLbl.setAttribute('text-anchor', 'middle');
-      depLbl.setAttribute('font-size', (8 * p2s).toFixed(2));
-      depLbl.setAttribute('font-family', 'sans-serif');
+      depLbl.setAttribute('font-size', depFS.toFixed(2)); depLbl.setAttribute('font-weight', '700');
+      depLbl.setAttribute('font-family', 'Inter,sans-serif');
       depLbl.setAttribute('fill', color);
-      depLbl.setAttribute('stroke', 'rgba(0,0,0,.7)');
-      depLbl.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
-      depLbl.setAttribute('paint-order', 'stroke');
-      depLbl.setAttribute('pointer-events', 'none');
+      depLbl.setAttribute('stroke', 'rgba(0,0,0,.8)'); depLbl.setAttribute('stroke-width', (1.8 * p2s).toFixed(2));
+      depLbl.setAttribute('paint-order', 'stroke'); depLbl.setAttribute('pointer-events', 'none');
       depLbl.setAttribute('class', 'wm-depth-lbl');
-      depLbl.textContent = w.depth + 'м';
+      depLbl.textContent = depText;
       g.appendChild(depLbl);
     }
   }
 
-  // Shape: diamond (drainage) or hexagon (piezometric) — concept B
-  var shape = document.createElementNS(NS, 'polygon');
-  shape.setAttribute('points', isPiezo ? _hexPoints(cx, cy, r) : _diamondPoints(cx, cy, r));
-  shape.setAttribute('fill', color);
-  shape.setAttribute('stroke', 'rgba(255,255,255,.75)');
-  shape.setAttribute('stroke-width', (2 * p2s).toFixed(2));
-  shape.setAttribute('stroke-linejoin', 'round');
-  shape.setAttribute('class', 'wm-shape');
-  g.appendChild(shape);
+  // ── Main shape: circle ──
+  // Outer stroke ring
+  var ringEl = document.createElementNS(NS, 'circle');
+  ringEl.setAttribute('cx', cx.toFixed(2)); ringEl.setAttribute('cy', cy.toFixed(2));
+  ringEl.setAttribute('r', (r + 2 * p2s).toFixed(2));
+  ringEl.setAttribute('fill', 'none');
+  ringEl.setAttribute('stroke', color); ringEl.setAttribute('stroke-width', (1 * p2s).toFixed(2));
+  ringEl.setAttribute('opacity', isSel ? '.6' : '.3');
+  ringEl.setAttribute('pointer-events', 'none'); ringEl.setAttribute('class', 'wm-ring');
+  g.appendChild(ringEl);
 
-  // Number label inside shape
+  // Circle body
+  var circle = document.createElementNS(NS, 'circle');
+  circle.setAttribute('cx', cx.toFixed(2)); circle.setAttribute('cy', cy.toFixed(2));
+  circle.setAttribute('r', r.toFixed(2));
+  circle.setAttribute('fill', color);
+  circle.setAttribute('stroke', 'rgba(255,255,255,' + (isSel ? '.9' : '.6') + ')');
+  circle.setAttribute('stroke-width', (isSel ? 2.2 : 1.5) * p2s + '');
+  circle.setAttribute('class', 'wm-shape');
+  // Piezometric: dashed stroke
+  if (isPiezo) circle.setAttribute('stroke-dasharray', (3*p2s).toFixed(2)+','+(2*p2s).toFixed(2));
+  g.appendChild(circle);
+
+  // Inner dot (center)
+  var dotEl = document.createElementNS(NS, 'circle');
+  dotEl.setAttribute('cx', cx.toFixed(2)); dotEl.setAttribute('cy', cy.toFixed(2));
+  dotEl.setAttribute('r', (r * 0.28).toFixed(2));
+  dotEl.setAttribute('fill', 'rgba(0,0,0,.5)'); dotEl.setAttribute('pointer-events', 'none');
+  g.appendChild(dotEl);
+
+  // ── Number inside circle ──
   var numMatch = w.name ? w.name.match(/(\d+)/) : null;
   var numLabel = numMatch ? numMatch[1].slice(-2) : (w.name ? w.name.slice(0, 2) : '?');
-  var numFS = Math.min(9 * p2s, r * 0.85);
-  var numEl = document.createElementNS(NS, 'text');
+  var numFS    = Math.min(isSel ? 10 : 8, r * 0.75) * p2s;
+  var numEl    = document.createElementNS(NS, 'text');
   numEl.setAttribute('x', cx.toFixed(1));
   numEl.setAttribute('y', (cy + numFS * 0.38).toFixed(1));
   numEl.setAttribute('text-anchor', 'middle');
-  numEl.setAttribute('font-size', numFS.toFixed(2));
-  numEl.setAttribute('font-weight', '700');
-  numEl.setAttribute('font-family', 'sans-serif');
-  numEl.setAttribute('fill', '#ffffff');
-  numEl.setAttribute('pointer-events', 'none');
+  numEl.setAttribute('font-size', numFS.toFixed(2)); numEl.setAttribute('font-weight', '800');
+  numEl.setAttribute('font-family', 'Inter,sans-serif');
+  numEl.setAttribute('fill', '#ffffff'); numEl.setAttribute('pointer-events', 'none');
   numEl.setAttribute('class', 'wm-num');
   numEl.textContent = numLabel;
   g.appendChild(numEl);
 
-  // Name label below shape (selected only)
-  if (isSel) {
-    var nameFS = 10 * p2s;
-    var lbl = document.createElementNS(NS, 'text');
-    lbl.setAttribute('x',             cx.toFixed(1));
-    lbl.setAttribute('y',             (cy + r + nameFS + 3 * p2s).toFixed(1));
-    lbl.setAttribute('text-anchor',   'middle');
-    lbl.setAttribute('font-size',     nameFS.toFixed(2));
-    lbl.setAttribute('font-weight',   '600');
-    lbl.setAttribute('font-family',   'sans-serif');
-    lbl.setAttribute('fill',          color);
-    lbl.setAttribute('stroke',        'rgba(0,0,0,.8)');
-    lbl.setAttribute('stroke-width',  (2 * p2s).toFixed(2));
-    lbl.setAttribute('paint-order',   'stroke');
-    lbl.setAttribute('pointer-events','none');
-    lbl.setAttribute('class', 'wm-label');
-    lbl.textContent = w.name;
-    g.appendChild(lbl);
-  }
+  // ── Name label (ALL wells — pill with background) ──
+  var nameFS   = (isSel ? 10 : 8.5) * p2s;
+  var nameText = w.name || '';
+  var pillW    = nameText.length * nameFS * 0.55 + 10 * p2s;
+  var pillH    = nameFS * 1.7;
+  var pillX    = cx - pillW / 2;
+  var pillY    = cy + r + 3 * p2s;
 
-  g.appendChild(_mkC(NS, cx, cy, r * 2, 'transparent', null, 0, 'wm-hit'));
+  var pillBg = document.createElementNS(NS, 'rect');
+  pillBg.setAttribute('x', pillX.toFixed(2)); pillBg.setAttribute('y', pillY.toFixed(2));
+  pillBg.setAttribute('width', pillW.toFixed(2)); pillBg.setAttribute('height', pillH.toFixed(2));
+  pillBg.setAttribute('rx', (pillH / 2).toFixed(2));
+  pillBg.setAttribute('fill', isSel ? color : 'rgba(8,12,22,.82)');
+  pillBg.setAttribute('stroke', color);
+  pillBg.setAttribute('stroke-width', (isSel ? 1.2 : 0.8) * p2s + '');
+  pillBg.setAttribute('opacity', isSel ? '.9' : '.75');
+  pillBg.setAttribute('pointer-events', 'none'); pillBg.setAttribute('class', 'wm-pill-bg');
+  g.appendChild(pillBg);
 
-  var statusColor = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
-  var connCount = isPiezo && Array.isArray(w.sensors) ? w.sensors.filter(function(s) { return s.connectedToLogger; }).length : 0;
-  var tipHtml = '<b>' + escHTML(w.name) + '</b>' +
-    (isPiezo ? ' <span style="color:#7c4dff;font-size:11px">◆ Пьезо</span>' : '') +
-    (w.status   ? ' <span style="color:' + statusColor + '">● ' + escHTML(w.status) + '</span>' : '') +
-    (w.depth    != null ? '<br><span style="color:#9aa0a6">Глубина: ' + w.depth + ' м</span>' : '') +
-    (w.azimuth  != null ? '  ·  Аз: ' + w.azimuth + '°' : '') +
-    (isPiezo && w.sensors && w.sensors.length ? '<br><span style="color:#7c4dff">Датчики: ' + w.sensors.length + ' шт. (' + connCount + ' к лог.)</span>' : '');
+  var lbl = document.createElementNS(NS, 'text');
+  lbl.setAttribute('x',             cx.toFixed(1));
+  lbl.setAttribute('y',             (pillY + pillH * 0.68).toFixed(1));
+  lbl.setAttribute('text-anchor',   'middle');
+  lbl.setAttribute('font-size',     nameFS.toFixed(2));
+  lbl.setAttribute('font-weight',   isSel ? '700' : '600');
+  lbl.setAttribute('font-family',   'Inter,sans-serif');
+  lbl.setAttribute('fill',          isSel ? '#fff' : color);
+  lbl.setAttribute('pointer-events','none');
+  lbl.setAttribute('class', 'wm-label');
+  lbl.textContent = nameText;
+  g.appendChild(lbl);
 
+  // ── Hit area ──
+  g.appendChild(_mkC(NS, cx, cy, r * 2.2, 'transparent', null, 0, 'wm-hit'));
+
+  // ── Tooltip ──
+  var tipHtml = _buildWmTipHtml(w);
   g.addEventListener('mouseenter', function(e) { _showWmTip(tipHtml, e); });
   g.addEventListener('mousemove',  function(e) { _moveWmTip(e); });
   g.addEventListener('mouseleave', _hideWmTip);
@@ -1066,11 +1204,7 @@ function _appendClusterMarker(marksG, cluster, NS, p2s) {
   // Hit area
   g.appendChild(_mkC(NS, cx, cy, r * 2, 'transparent', null, 0, 'wm-cl-hit'));
 
-  var names = cluster.wells.map(function(w) {
-    var sc = WELL_STATUS_COLORS[w.status] || 'var(--txt-3)';
-    return '<span style="color:' + sc + '">●</span> ' + escHTML(w.name);
-  }).join('<br>');
-  var tipHtml = '<b style="color:#9aa0a6">Скважин: ' + n + '</b><br>' + names;
+  var tipHtml = _buildClusterTipHtml(cluster.wells);
 
   g.addEventListener('mouseenter', function(e) { _showWmTip(tipHtml, e); });
   g.addEventListener('mousemove',  function(e) { _moveWmTip(e); });
@@ -1100,103 +1234,118 @@ function _updateMarkerSizes() {
     var depAttr = g.getAttribute('data-depth');
     var azimuth = azAttr !== '' ? parseFloat(azAttr)  : null;
     var depth   = depAttr !== '' ? parseFloat(depAttr) : null;
-    var r       = (isSel ? 13 : 8) * p2s;
+    var r = (isSel ? 14 : 10) * p2s;
 
-    // Radar rings
-    var rr1 = g.querySelector('.wm-radar-ring1');
-    var rs  = g.querySelector('.wm-radar-sweep');
-    var rr2 = g.querySelector('.wm-radar-ring2');
-    if (rr1) {
-      rr1.setAttribute('r', (r * 3.5).toFixed(2));
-      rr1.setAttribute('stroke-dasharray', (4*p2s).toFixed(2)+','+(4*p2s).toFixed(2));
-    }
+    // Glow / pulse / radar
+    var glowEl  = g.querySelector('.wm-glow');
+    var pulseEl = g.querySelector('.wm-pulse');
+    var rs      = g.querySelector('.wm-radar-sweep');
+    var hring   = g.querySelector('.wm-hover-ring');
+    if (glowEl)  { glowEl.setAttribute('cx', cx.toFixed(2)); glowEl.setAttribute('cy', cy.toFixed(2)); glowEl.setAttribute('r', (r * 2.8).toFixed(2)); }
+    if (pulseEl) { pulseEl.setAttribute('cx', cx.toFixed(2)); pulseEl.setAttribute('cy', cy.toFixed(2)); }
+    if (hring)   { hring.setAttribute('cx', cx.toFixed(2)); hring.setAttribute('cy', cy.toFixed(2)); hring.setAttribute('r', (r * 1.6).toFixed(2)); }
     if (rs) {
-      rs.setAttribute('r', (r * 3.5).toFixed(2));
+      rs.setAttribute('cx', cx.toFixed(2)); rs.setAttribute('cy', cy.toFixed(2));
+      rs.setAttribute('r', (r * 2.6).toFixed(2));
       rs.setAttribute('stroke-width', (1.5 * p2s).toFixed(2));
-      rs.setAttribute('stroke-dasharray', (r*5).toFixed(2)+','+(r*17).toFixed(2));
+      rs.setAttribute('stroke-dasharray', (r*4).toFixed(2)+','+(r*14).toFixed(2));
       var animEl = rs.querySelector('animateTransform');
-      if (animEl) {
-        animEl.setAttribute('from', '0 '+cx.toFixed(2)+' '+cy.toFixed(2));
-        animEl.setAttribute('to',   '360 '+cx.toFixed(2)+' '+cy.toFixed(2));
-      }
+      if (animEl) { animEl.setAttribute('from', '0 '+cx.toFixed(2)+' '+cy.toFixed(2)); animEl.setAttribute('to', '360 '+cx.toFixed(2)+' '+cy.toFixed(2)); }
     }
-    if (rr2) rr2.setAttribute('r', (r * 2.2).toFixed(2));
 
-    // Shape
+    // Ring + shape (circle)
+    var ring  = g.querySelector('.wm-ring');
     var shape = g.querySelector('.wm-shape');
-    if (shape) {
-      shape.setAttribute('points', isPiezo ? _hexPoints(cx, cy, r) : _diamondPoints(cx, cy, r));
-      shape.setAttribute('stroke-width', (2 * p2s).toFixed(2));
-    }
+    if (ring)  { ring.setAttribute('cx', cx.toFixed(2)); ring.setAttribute('cy', cy.toFixed(2)); ring.setAttribute('r', (r + 2 * p2s).toFixed(2)); ring.setAttribute('stroke-width', (1 * p2s).toFixed(2)); }
+    if (shape) { shape.setAttribute('cx', cx.toFixed(2)); shape.setAttribute('cy', cy.toFixed(2)); shape.setAttribute('r', r.toFixed(2)); shape.setAttribute('stroke-width', (isSel ? 2.2 : 1.5) * p2s + ''); }
 
     // Number
     var num = g.querySelector('.wm-num');
     if (num) {
-      var numFS = Math.min(9 * p2s, r * 0.85);
-      num.setAttribute('x', cx.toFixed(1));
-      num.setAttribute('y', (cy + numFS * 0.38).toFixed(1));
+      var numFS = Math.min(isSel ? 10 : 8, r * 0.75) * p2s;
+      num.setAttribute('x', cx.toFixed(1)); num.setAttribute('y', (cy + numFS * 0.38).toFixed(1));
       num.setAttribute('font-size', numFS.toFixed(2));
+    }
+
+    // Name label pill
+    var lbl    = g.querySelector('.wm-label');
+    var pillBg = g.querySelector('.wm-pill-bg');
+    if (lbl) {
+      var nameFS  = (isSel ? 10 : 8.5) * p2s;
+      var nameLen = (lbl.textContent || '').length;
+      var pillW   = nameLen * nameFS * 0.55 + 10 * p2s;
+      var pillH   = nameFS * 1.7;
+      var pillY   = cy + r + 3 * p2s;
+      if (pillBg) {
+        pillBg.setAttribute('x', (cx - pillW / 2).toFixed(2)); pillBg.setAttribute('y', pillY.toFixed(2));
+        pillBg.setAttribute('width', pillW.toFixed(2)); pillBg.setAttribute('height', pillH.toFixed(2));
+        pillBg.setAttribute('rx', (pillH / 2).toFixed(2));
+        pillBg.setAttribute('stroke-width', (isSel ? 1.2 : 0.8) * p2s + '');
+      }
+      lbl.setAttribute('x', cx.toFixed(1)); lbl.setAttribute('y', (pillY + pillH * 0.68).toFixed(1));
+      lbl.setAttribute('font-size', nameFS.toFixed(2));
     }
 
     // Hit area
     var hit = g.querySelector('.wm-hit');
-    if (hit) {
-      hit.setAttribute('cx', cx.toFixed(1)); hit.setAttribute('cy', cy.toFixed(1));
-      hit.setAttribute('r', (r * 2).toFixed(2));
-    }
+    if (hit) { hit.setAttribute('cx', cx.toFixed(1)); hit.setAttribute('cy', cy.toFixed(1)); hit.setAttribute('r', (r * 2.2).toFixed(2)); }
 
-    // Name label (selected)
-    var lbl = g.querySelector('.wm-label');
-    if (lbl) {
-      var nameFS = 10 * p2s;
-      lbl.setAttribute('x', cx.toFixed(1));
-      lbl.setAttribute('y', (cy + r + nameFS + 3 * p2s).toFixed(1));
-      lbl.setAttribute('font-size', nameFS.toFixed(2));
-      lbl.setAttribute('stroke-width', (2 * p2s).toFixed(2));
-    }
-
-    // Azimuth shaft + arrowhead + depth label
-    var shaft  = g.querySelector('.wm-arrow-shaft');
-    var arHead = g.querySelector('.wm-arrow-head');
-    var depLbl = g.querySelector('.wm-depth-lbl');
+    // Azimuth shaft
+    var shaftGlow = g.querySelector('.wm-shaft-glow');
+    var shaft     = g.querySelector('.wm-arrow-shaft');
+    var arHead    = g.querySelector('.wm-arrow-head');
+    var depLbl    = g.querySelector('.wm-depth-lbl');
+    var depBg     = g.querySelector('.wm-dep-bg');
     if (shaft && azimuth != null) {
       var azRad    = azimuth * Math.PI / 180;
       var adx      = Math.sin(azRad);
       var ady      = -Math.cos(azRad);
-      var arrowLen = (depth != null ? Math.min(60, Math.max(12, depth * 0.25)) : 20) * p2s;
+      var arrowLen = (depth != null ? Math.min(70, Math.max(14, depth * 0.28)) : 22) * p2s;
       var ax2 = cx + adx * arrowLen;
       var ay2 = cy + ady * arrowLen;
+      if (shaftGlow) { shaftGlow.setAttribute('x1', cx.toFixed(2)); shaftGlow.setAttribute('y1', cy.toFixed(2)); shaftGlow.setAttribute('x2', ax2.toFixed(2)); shaftGlow.setAttribute('y2', ay2.toFixed(2)); shaftGlow.setAttribute('stroke-width', (6 * p2s).toFixed(2)); }
       shaft.setAttribute('x1', cx.toFixed(2)); shaft.setAttribute('y1', cy.toFixed(2));
       shaft.setAttribute('x2', ax2.toFixed(2)); shaft.setAttribute('y2', ay2.toFixed(2));
-      shaft.setAttribute('stroke-width', (2 * p2s).toFixed(2));
+      shaft.setAttribute('stroke-width', (isSel ? 2.5 : 1.8) * p2s + '');
       if (arHead) {
-        var headSz = 5 * p2s;
+        var headSz = 5.5 * p2s;
         var pvx = -ady, pvy = adx;
         arHead.setAttribute('points',
           ax2.toFixed(2)+','+ay2.toFixed(2)+' '+
-          (ax2 - adx*headSz + pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz + pvy*headSz*0.5).toFixed(2)+' '+
-          (ax2 - adx*headSz - pvx*headSz*0.5).toFixed(2)+','+(ay2 - ady*headSz - pvy*headSz*0.5).toFixed(2));
+          (ax2-adx*headSz+pvx*headSz*0.55).toFixed(2)+','+(ay2-ady*headSz+pvy*headSz*0.55).toFixed(2)+' '+
+          (ax2-adx*headSz-pvx*headSz*0.55).toFixed(2)+','+(ay2-ady*headSz-pvy*headSz*0.55).toFixed(2));
       }
       if (depLbl) {
-        depLbl.setAttribute('x', (ax2 + adx * 6 * p2s).toFixed(2));
-        depLbl.setAttribute('y', (ay2 + ady * 6 * p2s + 3 * p2s).toFixed(2));
-        depLbl.setAttribute('font-size', (8 * p2s).toFixed(2));
+        var depFS2 = 9 * p2s;
+        depLbl.setAttribute('x', (ax2 + adx * 8 * p2s).toFixed(2));
+        depLbl.setAttribute('y', (ay2 + ady * 8 * p2s + depFS2 * 0.36).toFixed(2));
+        depLbl.setAttribute('font-size', depFS2.toFixed(2));
+        depLbl.setAttribute('stroke-width', (1.8 * p2s).toFixed(2));
+      }
+      if (depBg) {
+        var depFS3 = 9 * p2s;
+        var depTxt = depLbl ? depLbl.textContent : '';
+        var dBgW = depTxt.length * depFS3 * 0.52 + 8 * p2s;
+        var dBgH = depFS3 * 1.6;
+        depBg.setAttribute('x', (ax2 + adx * 8 * p2s - dBgW / 2).toFixed(2));
+        depBg.setAttribute('y', (ay2 + ady * 8 * p2s - dBgH / 2).toFixed(2));
+        depBg.setAttribute('width', dBgW.toFixed(2)); depBg.setAttribute('height', dBgH.toFixed(2));
+        depBg.setAttribute('rx', (dBgH / 2).toFixed(2));
       }
     }
 
-    // Depth tick marks
+    // Depth ticks
     var ticks = g.querySelectorAll('.wm-depth-tick');
     if (ticks.length && azimuth != null && depth != null) {
       var azRad2 = azimuth * Math.PI / 180;
-      var adx2   = Math.sin(azRad2);
-      var ady2   = -Math.cos(azRad2);
-      var len2   = (Math.min(60, Math.max(12, depth * 0.25))) * p2s;
+      var adx2   = Math.sin(azRad2); var ady2 = -Math.cos(azRad2);
+      var len2   = (Math.min(70, Math.max(14, depth * 0.28))) * p2s;
       ticks.forEach(function(tick, ti) {
         var ratio = ((ti + 1) * 50) / depth;
         if (ratio >= 1) return;
         tick.setAttribute('cx', (cx + adx2 * len2 * ratio).toFixed(2));
         tick.setAttribute('cy', (cy + ady2 * len2 * ratio).toFixed(2));
-        tick.setAttribute('r',  (1.8 * p2s).toFixed(2));
+        tick.setAttribute('r',  (2 * p2s).toFixed(2));
       });
     }
   });
@@ -1418,7 +1567,14 @@ function _refreshDataCard() {
     body.style.position = 'relative';
     card = document.createElement('div');
     card.id = 'wells-data-card';
-    card.style.cssText = 'position:absolute;z-index:20;border-radius:10px;padding:9px 12px;min-width:160px;max-width:210px;backdrop-filter:blur(12px);user-select:none';
+    card.style.cssText = [
+      'position:absolute;z-index:20;min-width:200px;max-width:240px',
+      'border-radius:14px;overflow:hidden',
+      'backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)',
+      'user-select:none',
+      'font-family:Inter,system-ui,sans-serif',
+      'transition:box-shadow 300ms',
+    ].join(';');
     body.appendChild(card);
   }
   if (!connSvg) {
@@ -1430,56 +1586,75 @@ function _refreshDataCard() {
 
   card.style.display    = '';
   connSvg.style.display = '';
-  card.style.background = 'rgba(8,12,20,.92)';
-  card.style.border     = '1px solid ' + color + '80';
-  card.style.boxShadow  = '0 0 20px ' + color + '33,0 4px 20px rgba(0,0,0,.7)';
+  card.style.background = 'rgba(8,12,22,.94)';
+  card.style.border     = '1px solid ' + color + '55';
+  card.style.boxShadow  = '0 0 32px ' + color + '28, 0 8px 32px rgba(0,0,0,.7), 0 0 0 1px ' + color + '15';
 
   var meas      = WellsState.measurements[w.id] || [];
   var spark     = _buildMiniSparkline(meas, color);
   var lastMeas  = _getLastMeasurement(w.id);
   var collapsed = _wellsMap.card.collapsed;
 
-  var html = '<div id="wells-card-hdr" style="display:flex;justify-content:space-between;align-items:center;' + (collapsed ? '' : 'margin-bottom:6px;') + 'cursor:move;gap:6px">' +
-    '<span style="font-size:12px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHTML(w.name) + '</span>' +
-    '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">' +
-      (w.status ? '<span style="font-size:9px;background:' + statusColor + '22;color:' + statusColor + ';border-radius:3px;padding:1px 5px;font-weight:600;white-space:nowrap">● ' + escHTML(w.status) + '</span>' : '') +
-      '<button id="wells-card-col-btn" style="background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);cursor:pointer;border-radius:3px;padding:0 5px;font-size:11px;line-height:1.7;flex-shrink:0">' + (collapsed ? '+' : '−') + '</button>' +
+  // ── Header ──
+  var html = '<div id="wells-card-hdr" style="' +
+    'display:flex;justify-content:space-between;align-items:flex-start;' +
+    'padding:11px 13px ' + (collapsed ? '11px' : '9px') + ';' +
+    'cursor:move;gap:8px;' +
+    'background:linear-gradient(135deg,' + color + '18 0%,transparent 70%);' +
+    'border-bottom:1px solid rgba(255,255,255,.06)" >' +
+    '<div style="min-width:0">' +
+      '<div style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHTML(w.name) + '</div>' +
+      '<div style="font-size:10px;color:#6e7681">' + (isPiezo ? '◆ Пьезометрическая' : '⊛ Дренажная') + '</div>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">' +
+      (w.status ? '<div style="font-size:9px;font-weight:700;color:' + statusColor + ';background:' + statusColor + '20;border:1px solid ' + statusColor + '44;border-radius:99px;padding:2px 7px;white-space:nowrap">● ' + escHTML(w.status) + '</div>' : '') +
+      '<button id="wells-card-col-btn" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.45);cursor:pointer;border-radius:6px;padding:1px 7px;font-size:11px;line-height:1.6;flex-shrink:0;font-family:inherit">' + (collapsed ? '＋' : '－') + '</button>' +
     '</div>' +
   '</div>';
 
   if (!collapsed) {
-    html += '<div>';
-    if (w.depth != null || w.azimuth != null) {
-      html += '<div style="font-size:10px;color:#6e7681;margin-bottom:5px">' +
-        (w.depth   != null ? '⬇ <b style="color:#e8eaed">' + w.depth + 'м</b>' : '') +
-        (w.depth != null && w.azimuth != null ? '&nbsp;·&nbsp;' : '') +
-        (w.azimuth != null ? '🧭 <b style="color:#e8eaed">' + w.azimuth + '°</b>' : '') +
-        (isPiezo && w.sensors && w.sensors.length ? '&nbsp;·&nbsp;<span style="color:#7c4dff">◆&nbsp;' + w.sensors.length + 'дат.</span>' : '') +
-      '</div>';
+    // ── Meta rows ──
+    if (w.depth != null || w.azimuth != null || w.horizon || (isPiezo && w.sensors && w.sensors.length)) {
+      html += '<div style="padding:8px 13px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid rgba(255,255,255,.06)">';
+      if (w.depth    != null) html += _cardRow('⬇', 'Глубина',  '<b style="color:#e8eaed">' + w.depth + ' м</b>');
+      if (w.azimuth  != null) html += _cardRow('🧭', 'Азимут',  '<b style="color:#e8eaed">' + w.azimuth + '°</b>');
+      if (w.horizon)           html += _cardRow('⛰', 'Гориз.',  '<span style="color:#e8eaed">' + escHTML(w.horizon) + '</span>');
+      if (isPiezo && w.sensors && w.sensors.length) html += _cardRow('◆', 'Датчики', '<span style="color:' + color + '">' + w.sensors.length + ' шт.</span>');
+      html += '</div>';
     }
+
+    // ── Sparkline ──
     if (spark) {
-      html += '<div style="font-size:9px;color:#6e7681;margin-bottom:2px">Дебит (м³/ч)</div>' + spark;
+      html += '<div style="padding:8px 13px 6px">';
+      html += '<div style="font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#6e7681;margin-bottom:5px">Дебит (м³/ч)</div>';
+      html += spark;
       if (lastMeas) {
-        html += '<div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px">' +
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-top:4px">' +
           '<span style="color:#6e7681">' + (lastMeas.measurementDate ? formatDate(lastMeas.measurementDate) : '') + '</span>' +
-          '<span style="color:#f9ab00;font-weight:700">→&nbsp;' + lastMeas.flowRate + '&nbsp;м³/ч</span>' +
+          '<span style="color:' + color + ';font-weight:700;font-size:12px">' + lastMeas.flowRate + ' м³/ч</span>' +
         '</div>';
       }
+      html += '</div>';
     } else if (!isPiezo) {
-      html += '<div style="font-size:10px;color:#6e7681;margin-top:2px">Замеры отсутствуют</div>';
+      html += '<div style="padding:8px 13px;font-size:10px;color:#6e7681;font-style:italic">Замеры отсутствуют</div>';
     }
+
+    // ── Piezometric sensors ──
     if (isPiezo && w.sensors && w.sensors.length) {
-      html += '<div style="border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding-top:5px">';
+      html += '<div style="padding:6px 13px 10px;border-top:1px solid rgba(255,255,255,.06)">';
+      html += '<div style="font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#6e7681;margin-bottom:5px">Датчики VWP</div>';
       w.sensors.forEach(function(s) {
         var sc = s.connectedToLogger ? '#4caf7d' : '#9aa0a6';
-        html += '<div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px">' +
-          '<span style="color:' + sc + '">◆ ' + escHTML(s.name || '—') + '</span>' +
-          '<span style="color:#6e7681">' + (s.depth != null ? s.depth + 'м' : '') + (s.connectedToLogger ? ' · лог.' : ' · нет') + '</span>' +
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-top:4px">' +
+          '<span style="color:' + sc + ';display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:' + sc + ';display:inline-block"></span>' + escHTML(s.name || '—') + '</span>' +
+          '<span style="color:#6e7681">' + (s.depth != null ? s.depth + ' м' : '') + (s.connectedToLogger ? ' · <span style="color:#4caf7d">лог.</span>' : ' · нет') + '</span>' +
         '</div>';
       });
       html += '</div>';
     }
-    html += '</div>';
+
+    // ── Footer hint ──
+    html += '<div style="padding:5px 13px 8px;font-size:9px;color:#4a5060;border-top:1px solid rgba(255,255,255,.04)">Тянуть за заголовок · Дбл-клик — приблизить</div>';
   }
 
   card.innerHTML = html;
