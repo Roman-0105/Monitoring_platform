@@ -73,6 +73,20 @@ function initWellsTab() {
     });
   }
 
+  // Переключение паспорт / координаты
+  document.querySelectorAll('[data-info-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var tab = this.dataset.infoTab;
+      document.querySelectorAll('[data-info-tab]').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.infoTab === tab);
+      });
+      var infoEl   = document.getElementById('wells-info-body');
+      var coordsEl = document.getElementById('wells-coords-body');
+      if (infoEl)   infoEl.style.display   = tab === 'passport' ? '' : 'none';
+      if (coordsEl) coordsEl.style.display = tab === 'coords'   ? '' : 'none';
+    });
+  });
+
   _switchWellsSubTab('view');
 }
 
@@ -84,8 +98,12 @@ function _switchWellsSubTab(name) {
   var panels = { view: 'wells-panel-view', registry: 'wells-panel-registry' };
   Object.keys(panels).forEach(function(k) {
     var el = document.getElementById(panels[k]);
-    if (el) el.style.display = k === name ? '' : 'none';
+    if (el) el.style.display = k === name ? (k === 'view' ? '' : 'flex') : 'none';
   });
+  var actBar = document.getElementById('wells-registry-actions');
+  if (actBar) actBar.style.display = name === 'registry' ? 'flex' : 'none';
+  var chartBar = document.getElementById('wells-chart-bar');
+  if (chartBar) chartBar.style.display = name === 'view' ? '' : 'none';
   if (name === 'view') {
     renderWellsPage();
   } else if (name === 'registry') {
