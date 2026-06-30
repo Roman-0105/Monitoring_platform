@@ -23,7 +23,7 @@ var ReportState = {
     includeMap: true, include3d: false, includeHistory: true,
     includeCompare: true, includeAI: true,
     conclusions: '', apiKey: '',
-    aiModel: 'gemini-2.0-flash',
+    aiModel: 'gemini-1.5-flash',
     aiTone: 'official',
     quarryName: 'ЮРГ',
     objectName: 'Пулково-42',
@@ -251,7 +251,7 @@ function saveReportSettings() {
       watermark:    (function(){ var v=getField('rp-watermark'); return v==='custom'?getField('rp-watermark-custom'):v; })(),
       approverName: getField('rp-approver-name'),
       incSignature: getChk('rp-inc-signature'),
-      aiModel: getField('rp-ai-model') || 'gemini-2.0-flash',
+      aiModel: getField('rp-ai-model') || 'gemini-1.5-flash',
       aiTone:  getField('rp-ai-tone')  || 'official',
       filterDomains:  ReportState.settings.filterDomains  || [],
       filterHorizons: ReportState.settings.filterHorizons || [],
@@ -300,7 +300,7 @@ function bindEvents() {
   ['rp-ai-model','rp-ai-tone'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('change', function() {
-      ReportState.settings.aiModel = getField('rp-ai-model') || 'gemini-2.0-flash';
+      ReportState.settings.aiModel = getField('rp-ai-model') || 'gemini-1.5-flash';
       ReportState.settings.aiTone  = getField('rp-ai-tone')  || 'official';
       saveReportSettings();
     });
@@ -617,6 +617,28 @@ function addRpHistory(s) {
   try { localStorage.setItem('rp-report-history', JSON.stringify(hist)); } catch(e) {}
 }
 
+// ── Быстрые кнопки выбора карьера ────────────────────────
+function _rpQuarryBtns() {
+  var quarries = (window.AppState && AppState.quarries) || [];
+  if (!quarries.length) return '';
+  return quarries.slice(0, 4).map(function(q) {
+    return '<button type="button" onclick="rpSelectQuarry(' + JSON.stringify(q.name) + ')" ' +
+      'style="padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15);' +
+      'background:rgba(255,255,255,.06);color:var(--txt-2);font-size:11px;cursor:pointer;white-space:nowrap">' +
+      escHTML(q.name) + '</button>';
+  }).join('');
+}
+
+function rpSelectQuarry(name) {
+  var inp = document.getElementById('rp-quarry-name');
+  if (inp) { inp.value = name; }
+  /* Переключаем activeQuarry чтобы карта и данные подтянулись */
+  if (window.AppState && typeof switchQuarry === 'function') {
+    switchQuarry(name, true /* suppressReload */);
+  }
+  saveReportSettings();
+}
+
 // ── Переключение шагов ────────────────────────────────────
 function switchStep(n) {
   ReportState.currentStep = n;
@@ -842,7 +864,14 @@ function buildSettingsUI() {
     '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-3);margin-bottom:8px">Объект и составитель</div>' +
     '<div class="card" style="margin-bottom:16px">' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
-        '<div><label class="rp-lbl">Название карьера</label><input class="form-input" id="rp-quarry-name" placeholder="ЮРГ" style="margin-top:4px"></div>' +
+        '<div><label class="rp-lbl">Карьер</label>' +
+          '<div style="display:flex;gap:6px;margin-top:4px;align-items:center">' +
+            '<div style="display:flex;gap:4px" id="rp-quarry-btns">' +
+              _rpQuarryBtns() +
+            '</div>' +
+            '<input class="form-input" id="rp-quarry-name" placeholder="ЮРГ" style="flex:1;min-width:0">' +
+          '</div>' +
+        '</div>' +
         '<div><label class="rp-lbl">Объект / участок</label><input class="form-input" id="rp-object-name" placeholder="Пулково-42" style="margin-top:4px"></div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">' +
@@ -1025,9 +1054,9 @@ function buildSettingsUI() {
         '<div>' +
           '<label class="rp-lbl">Модель Gemini</label>' +
           '<select class="form-select" id="rp-ai-model" style="margin-top:4px" onchange="saveReportSettings()">' +
-            '<option value="gemini-2.0-flash">Flash 2.0 — быстро и дёшево</option>' +
-            '<option value="gemini-1.5-pro">Pro 1.5 — баланс (рекомендуется)</option>' +
-            '<option value="gemini-2.0-flash-thinking-exp">Flash Thinking — глубокий анализ</option>' +
+            '<option value="gemini-1.5-flash">Flash 1.5 — быстро (рекомендуется)</option>' +
+            '<option value="gemini-2.0-flash">Flash 2.0 — новее</option>' +
+            '<option value="gemini-1.5-pro">Pro 1.5 — глубокий анализ</option>' +
           '</select>' +
         '</div>' +
         '<div>' +
@@ -1443,7 +1472,7 @@ function generateAIConclusion() {
 
   var tone = getField('rp-ai-tone') || ReportState.settings.aiTone || 'official';
   prompt = getAITonePrefix(tone) + prompt;
-  var model = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-2.0-flash';
+  var model = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-1.5-flash';
   callGeminiAPI(apiKey, prompt, model).then(function(text) {
     var ta = document.getElementById('rp-conclusions');
     if (ta) ta.value = text;
@@ -1455,8 +1484,9 @@ function generateAIConclusion() {
   });
 }
 
-function callGeminiAPI(apiKey, prompt, model) {
-  var mdl = model || ReportState.settings.aiModel || 'gemini-2.0-flash';
+function callGeminiAPI(apiKey, prompt, model, _attempt) {
+  var mdl = model || ReportState.settings.aiModel || 'gemini-1.5-flash';
+  var attempt = _attempt || 1;
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
             mdl + ':generateContent?key=' + encodeURIComponent(apiKey);
   return fetch(url, {
@@ -1466,13 +1496,26 @@ function callGeminiAPI(apiKey, prompt, model) {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { maxOutputTokens: 1500, temperature: 0.4 }
     })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    var candidates = data.candidates;
-    if (!candidates || !candidates.length) throw new Error('Пустой ответ Gemini API: ' + JSON.stringify(data));
-    var parts = candidates[0].content && candidates[0].content.parts;
-    if (!parts || !parts.length) throw new Error('Нет текста в ответе Gemini');
-    return parts[0].text || '';
+  }).then(function(r) {
+    if (r.status === 429 && attempt <= 4) {
+      var delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s, 16s
+      return new Promise(function(resolve) { setTimeout(resolve, delay); })
+        .then(function() { return callGeminiAPI(apiKey, prompt, mdl, attempt + 1); });
+    }
+    return r.json().then(function(data) {
+      if (data.error) {
+        var msg = data.error.message || JSON.stringify(data.error);
+        if (data.error.code === 429) {
+          throw new Error('Превышен лимит запросов Gemini (429). Подождите минуту и попробуйте снова, или используйте другой API-ключ.');
+        }
+        throw new Error(msg);
+      }
+      var candidates = data.candidates;
+      if (!candidates || !candidates.length) throw new Error('Пустой ответ Gemini API: ' + JSON.stringify(data));
+      var parts = candidates[0].content && candidates[0].content.parts;
+      if (!parts || !parts.length) throw new Error('Нет текста в ответе Gemini');
+      return parts[0].text || '';
+    });
   });
 }
 
@@ -1653,26 +1696,35 @@ function captureMapCanvas() {
   } catch(e) { return null; }
 }
 
-function captureMapForWeek(weekKey) {
+function captureMapForWeek(weekKey, quarryName) {
   return new Promise(function(resolve) {
     if (typeof switchTab !== 'function') { resolve(null); return; }
-    switchTab('map');
-    if (typeof _mapSelectedWeekKey !== 'undefined') {
-      _mapSelectedWeekKey = weekKey || 'auto';
-      _mapSchemeImg = null;
-      var sel = document.getElementById('map-scheme-select');
-      if (sel) sel.value = _mapSelectedWeekKey;
-      if (typeof renderMap === 'function') renderMap();
-    }
-    var attempts = 0;
-    function tryCapture() {
-      attempts++;
-      var img = captureMapCanvas();
-      if (img) { resolve(img); return; }
-      if (attempts >= 15) { resolve(null); return; }
-      setTimeout(tryCapture, 400);
-    }
-    setTimeout(tryCapture, 600);
+
+    // Switch to quarry first if needed
+    var qName = quarryName || (ReportState.settings && ReportState.settings.quarryName) || '';
+    var switchQuarryPromise = (qName && typeof switchQuarry === 'function' && window.AppState && AppState.activeQuarry !== qName)
+      ? new Promise(function(res) { switchQuarry(qName, true); setTimeout(res, 800); })
+      : Promise.resolve();
+
+    switchQuarryPromise.then(function() {
+      switchTab('map');
+      if (typeof _mapSelectedWeekKey !== 'undefined') {
+        _mapSelectedWeekKey = weekKey || 'auto';
+        _mapSchemeImg = null;
+        var sel = document.getElementById('map-scheme-select');
+        if (sel) sel.value = _mapSelectedWeekKey;
+        if (typeof renderMap === 'function') renderMap();
+      }
+      var attempts = 0;
+      function tryCapture() {
+        attempts++;
+        var img = captureMapCanvas();
+        if (img) { resolve(img); return; }
+        if (attempts >= 20) { resolve(null); return; }
+        setTimeout(tryCapture, 500);
+      }
+      setTimeout(tryCapture, 800);
+    });
   });
 }
 
@@ -1810,7 +1862,7 @@ function preGenerateAI() {
   s.dateB        = s.reportMode === 'single' ? s.dateA : s.dateB;
   s.apiKey       = apiKey;
   s.customPrompt = getField('rp-custom-prompt');
-  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-2.0-flash';
+  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-1.5-flash';
   s.aiTone  = getField('rp-ai-tone')  || ReportState.settings.aiTone  || 'official';
 
   var allPts = ReportState.allPoints || [];
@@ -1895,7 +1947,7 @@ function generateReport() {
   s.watermark    = wmVal === 'custom' ? getField('rp-watermark-custom') : wmVal;
   s.approverName = getField('rp-approver-name');
   s.includeSignature = getChk('rp-inc-signature');
-  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-2.0-flash';
+  s.aiModel = getField('rp-ai-model') || ReportState.settings.aiModel || 'gemini-1.5-flash';
   s.aiTone  = getField('rp-ai-tone')  || ReportState.settings.aiTone  || 'official';
   s.reportVersion  = (parseInt(s.reportVersion) || 0) + 1;
   addRpHistory(s);
@@ -3714,7 +3766,7 @@ function getReportCSS(theme, orientation) {
 
   /* PAGE LAYOUT */
   '.pages-wrap { padding: 32px 0 64px; display: flex; flex-direction: column; align-items: center; gap: 32px; }',
-  '.page { background: #fff; width: ' + (orientation==='landscape'?'1123px':'794px') + '; min-height: ' + (orientation==='landscape'?'794px':'1123px') + '; box-shadow: 0 4px 24px rgba(0,0,0,.18); position: relative; overflow: hidden; padding: ' + (orientation==='landscape'?'36px 52px 48px':'48px 52px 60px') + '; font-size: 13px; color: #1a1a2e; }',
+  '.page { background: #fff; width: ' + (orientation==='landscape'?'1123px':'794px') + '; height: ' + (orientation==='landscape'?'794px':'1123px') + '; box-shadow: 0 4px 24px rgba(0,0,0,.18); position: relative; overflow: hidden; padding: ' + (orientation==='landscape'?'36px 52px 48px':'48px 52px 60px') + '; font-size: 13px; color: #1a1a2e; box-sizing: border-box; }',
 
   /* WATERMARK — content injected per-report via inline <style> only when s.watermark is set */
   '.page::before { content: \'\'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-45deg); font-size: 72px; font-weight: 800; color: rgba(220,53,69,.07); white-space: nowrap; pointer-events: none; z-index: 0; letter-spacing: .1em; }',
