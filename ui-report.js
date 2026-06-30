@@ -145,7 +145,7 @@ function restoreSettings() {
   restoreChk('rp-inc-compare',    s.incCompare);
   restoreChk('rp-inc-ai',         s.incAI);
   restoreChk('rp-inc-dewatering', s.incDewatering);
-  restoreChk('rp-inc-wells',      s.incWells);
+  restoreChk('rp-inc-wells',      s.incWells !== false ? true : false); // default true
   // Sync the AI toggle and collapse body if disabled
   var aiCb = document.getElementById('rp-inc-ai-cb');
   if (aiCb && s.incAI !== undefined) {
@@ -1727,35 +1727,37 @@ function fetchSchemeUrl(weekKey, quarryName) {
 }
 
 function captureMapForWeek(weekKey, quarryName) {
-  // First try to get scheme URL directly (avoids CORS canvas issues)
   var qName = quarryName || (ReportState.settings && ReportState.settings.quarryName) || '';
-  return fetchSchemeUrl(weekKey, qName).then(function(url) {
-    if (url) return url;
-    // Fallback: try canvas capture (only works if same-origin or CORS-enabled)
-    return new Promise(function(resolve) {
-      if (typeof switchTab !== 'function') { resolve(null); return; }
-      var switchQ = (qName && typeof switchQuarry === 'function' && window.AppState && AppState.activeQuarry !== qName)
-        ? new Promise(function(res) { switchQuarry(qName, true); setTimeout(res, 800); })
-        : Promise.resolve();
-      switchQ.then(function() {
-        switchTab('map');
-        if (typeof _mapSelectedWeekKey !== 'undefined') {
-          _mapSelectedWeekKey = weekKey || 'auto';
-          _mapSchemeImg = null;
-          var sel = document.getElementById('map-scheme-select');
-          if (sel) sel.value = _mapSelectedWeekKey;
-          if (typeof renderMap === 'function') renderMap();
+
+  // Primary: render map canvas with monitoring points drawn on it.
+  // crossOrigin='anonymous' is set on the scheme image in ui-map.js so toDataURL() works.
+  return new Promise(function(resolve) {
+    if (typeof switchTab !== 'function') { resolve(null); return; }
+    var switchQ = (qName && typeof switchQuarry === 'function' && window.AppState && AppState.activeQuarry !== qName)
+      ? new Promise(function(res) { switchQuarry(qName, true); setTimeout(res, 800); })
+      : Promise.resolve();
+    switchQ.then(function() {
+      switchTab('map');
+      if (typeof _mapSelectedWeekKey !== 'undefined') {
+        _mapSelectedWeekKey = weekKey || 'auto';
+        _mapSchemeImg = null;
+        var sel = document.getElementById('map-scheme-select');
+        if (sel) sel.value = _mapSelectedWeekKey;
+        if (typeof renderMap === 'function') renderMap();
+      }
+      var attempts = 0;
+      function tryCapture() {
+        attempts++;
+        var img = captureMapCanvas();
+        if (img) { resolve(img); return; }
+        if (attempts >= 20) {
+          // Fallback: return scheme URL directly (without monitoring points)
+          fetchSchemeUrl(weekKey, qName).then(resolve);
+          return;
         }
-        var attempts = 0;
-        function tryCapture() {
-          attempts++;
-          var img = captureMapCanvas();
-          if (img) { resolve(img); return; }
-          if (attempts >= 15) { resolve(null); return; }
-          setTimeout(tryCapture, 500);
-        }
-        setTimeout(tryCapture, 1000);
-      });
+        setTimeout(tryCapture, 500);
+      }
+      setTimeout(tryCapture, 1000);
     });
   });
 }
@@ -2045,15 +2047,18 @@ function generateReport() {
     var html = buildReportHTML(s);
     Toast.done('rp-gen', 'Отчёт сформирован — открываю...');
 
-    var win = window.open('', '_blank');
-    if (win) { win.document.write(html); win.document.close(); }
-    else {
-      var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'report-yrg-v' + s.reportVersion + '.html';
-      a.click();
-    }
+    // Always download as file AND open preview in new tab
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var blobUrl = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = 'report-' + escAttr((s.quarryName||'yrg').toLowerCase().replace(/\s+/g,'_')) +
+                 '-v' + s.reportVersion + '.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Also open preview
+    setTimeout(function() { window.open(blobUrl, '_blank'); }, 300);
   }).catch(function(err) {
     var msg = err && err.message ? err.message : String(err);
     console.error('[generateReport] ошибка:', msg, err);
