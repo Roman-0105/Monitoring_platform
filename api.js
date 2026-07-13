@@ -485,40 +485,56 @@ var Api = (function() {
       throw new Error('Файл схемы пустой (' + blob.size + ' байт) — проверьте исходный файл');
     }
 
-    // Получаем текущий storage_path чтобы удалить старый файл
     var _uploadQuarry = params.quarry
       || (window.AppState && AppState.activeQuarry)
       || (window.AppState && AppState.quarries && AppState.quarries[0] && AppState.quarries[0].name)
       || '';
-    var { data: existing } = await client()
-      .from('schemes').select('storage_path')
-      .eq('week_key', params.weekKey)
-      .eq('quarry', _uploadQuarry)
-      .maybeSingle();
 
-    if (existing && existing.storage_path && existing.storage_path !== path) {
-      await client().storage.from('schemes').remove([existing.storage_path]).catch(function() {});
+    // Find existing row by week_key + quarry to get old storage_path for cleanup.
+    // Also check week_key-only in case old data has no quarry field (legacy).
+    var { data: existingRows } = await client()
+      .from('schemes').select('id, storage_path, quarry')
+      .eq('week_key', params.weekKey);
+
+    var existingRow = null;
+    if (existingRows && existingRows.length) {
+      // Prefer exact quarry match; fall back to any row with empty quarry (legacy)
+      existingRow = existingRows.find(function(r) { return (r.quarry || '') === _uploadQuarry; })
+                 || existingRows.find(function(r) { return !r.quarry; })
+                 || null;
     }
 
+    // Remove old storage file
+    if (existingRow && existingRow.storage_path && existingRow.storage_path !== path) {
+      await client().storage.from('schemes').remove([existingRow.storage_path]).catch(function() {});
+    }
+
+    // Upload new file (upsert:true in case path collision)
     var { error: uploadError } = await client().storage
-      .from('schemes').upload(path, blob, { upsert: false, contentType: params.mimeType });
+      .from('schemes').upload(path, blob, { upsert: true, contentType: params.mimeType });
     if (uploadError) throw new Error('Storage: ' + uploadError.message + ' (status ' + (uploadError.statusCode || uploadError.status || '?') + ')');
 
-    // Delete old DB row if one existed, then insert fresh (avoids needing a unique constraint)
-    if (existing) {
-      await client().from('schemes')
-        .delete()
-        .eq('week_key', params.weekKey)
-        .eq('quarry', _uploadQuarry);
+    if (existingRow) {
+      // Update existing row in-place (avoids PK conflict regardless of composite key structure)
+      var { error: dbError } = await client().from('schemes')
+        .update({
+          storage_path: path,
+          uploaded_at:  new Date().toISOString(),
+          uploaded_by:  params.uploadedBy || '',
+          quarry:       _uploadQuarry,
+        })
+        .eq('id', existingRow.id);
+      if (dbError) throw new Error(dbError.message);
+    } else {
+      var { error: dbError } = await client().from('schemes').insert({
+        week_key:     params.weekKey,
+        storage_path: path,
+        uploaded_at:  new Date().toISOString(),
+        uploaded_by:  params.uploadedBy || '',
+        quarry:       _uploadQuarry,
+      });
+      if (dbError) throw new Error(dbError.message);
     }
-    var { error: dbError } = await client().from('schemes').insert({
-      week_key:     params.weekKey,
-      storage_path: path,
-      uploaded_at:  new Date().toISOString(),
-      uploaded_by:  params.uploadedBy || '',
-      quarry:       _uploadQuarry,
-    });
-    if (dbError) throw new Error(dbError.message);
   }
 
   // ── Photos (Supabase Storage) ─────────────────────────────
