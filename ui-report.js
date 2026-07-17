@@ -2020,7 +2020,7 @@ function generateReport() {
 
   mapPromise.then(function(mapImgs) {
     ReportState.mapImgs = mapImgs || { imgA: null, imgB: null };
-    // Capture wells SVG map if wells section is enabled
+    // Capture wells map: try SVG first (exists if user visited wells tab), else use scheme URL directly
     if (s.includeWells) {
       var wellsSvgEl = document.getElementById('wells-map-svg');
       if (wellsSvgEl) {
@@ -2028,7 +2028,9 @@ function generateReport() {
           var svgStr = new XMLSerializer().serializeToString(wellsSvgEl);
           ReportState.wellsMapSvg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
         } catch(e) { ReportState.wellsMapSvg = null; }
-      } else { ReportState.wellsMapSvg = null; }
+      } else {
+        ReportState.wellsMapSvg = null;
+      }
     }
     if (s.includePhotos) {
       Toast.progress('rp-gen', 'Загрузка фотографий...');
@@ -2937,13 +2939,19 @@ function buildWellsSection(s, isSingle, secNum) {
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div style="font-size:10px;color:#aaa;margin-top:2px;margin-bottom:14px">↑ — ближайший замер до выбранной даты</div>';
   var wellsSvgHtml = '';
-  if (ReportState.wellsMapSvg) {
-    var wellsMapMaxH = (s.orientation === 'landscape' ? 794 - 36 - 48 - 36 - 52 : 1123 - 48 - 60 - 36 - 52) + 'px';
+  var wellsMapMaxH = (s.orientation === 'landscape' ? 794 - 36 - 48 - 36 - 56 : 1123 - 48 - 60 - 36 - 56) + 'px';
+  var wellsSchemeUrl = ReportState.wellsMapSvg ||
+    ((ReportState.mapImgs||{}).imgB) ||
+    ((ReportState.mapImgs||{}).imgA) || null;
+  if (wellsSchemeUrl) {
     wellsSvgHtml = '<div class="sec-sub" style="margin-bottom:8px">Схема расположения скважин</div>' +
       '<div style="text-align:center;margin-bottom:14px">' +
-        '<img src="' + ReportState.wellsMapSvg + '" alt="Схема скважин" ' +
+        '<img src="' + wellsSchemeUrl + '" alt="Схема скважин" ' +
           'style="max-width:100%;max-height:' + wellsMapMaxH + ';height:auto;object-fit:contain;border:1px solid #e0e0e0;border-radius:4px">' +
-      '</div>';
+      '</div>' +
+      (ReportState.wellsMapSvg ? '' :
+        '<div style="font-size:10px;color:#aaa;text-align:center;margin-top:-8px">* Схема скважин не захвачена — отображена общая схема карьера.<br>' +
+        'Для захвата схемы скважин откройте вкладку «Скважины» перед генерацией отчёта.</div>');
   }
   var page2 = '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">⊛</span> Горизонтальные скважины — продолжение</div>' +
     wellBarsHtml + domainHtml;
@@ -3685,11 +3693,18 @@ function buildReportHTML(s) {
         var qDB2 = dB2.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
         var domHdr = '<div class="sec-head"><span class="sec-num" style="font-size:9px">Д</span> ' + escAttr(dom) +
           ' <span style="font-size:10px;font-weight:500;color:#555">· Q = ' + qDB2.toFixed(2) + ' л/с · ' + dB2.length + ' точек</span></div>';
+        var totalChunks = Math.ceil(cards.length / maxCardsPerPage);
         for (var ci = 0; ci < cards.length; ci += maxCardsPerPage) {
+          var chunkIdx = Math.floor(ci / maxCardsPerPage);
           var chunk = cards.slice(ci, ci + maxCardsPerPage).join('');
+          var contHdr = chunkIdx === 0 ? domHdr :
+            '<div class="sec-head" style="font-size:10px">' +
+              '<span class="sec-num" style="font-size:8px">Д</span> ' + escAttr(dom) +
+              ' <span style="font-size:9px;color:#888;font-weight:400">продолжение (' + (chunkIdx+1) + '/' + totalChunks + ')</span>' +
+            '</div>';
           pages.push(
             '<div class="page">' +
-              (ci === 0 ? domHdr : '') +
+              contHdr +
               '<div style="' + (isLandscape ? 'display:grid;grid-template-columns:1fr 1fr;gap:14px;' : '') + 'padding:0">' +
                 chunk +
               '</div>' +
