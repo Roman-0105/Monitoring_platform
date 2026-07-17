@@ -4023,7 +4023,8 @@ function getReportCSS(theme, orientation) {
   '  .domen-block, .ditch-block, .photo-row, .kpi-grid { page-break-inside: avoid; break-inside: avoid; }',
   '  .photo-img-wrap { flex: 0 0 200px !important; }',
   '  .photo-img { width: 200px !important; height: 150px !important; }',
-  '  .map-wrap img, .ditch-block img { max-width: 100% !important; height: auto !important; max-height: 220px !important; }',
+  '  .map-wrap img { width: 100% !important; max-height: none !important; height: auto !important; object-fit: contain !important; }',
+  '  .ditch-block img { max-width: 100% !important; height: auto !important; max-height: 220px !important; }',
   '}'
   ].join('\n');
 }
