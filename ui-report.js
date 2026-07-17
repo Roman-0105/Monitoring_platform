@@ -2945,9 +2945,13 @@ function buildWellsSection(s, isSingle, secNum) {
           'style="max-width:100%;max-height:' + wellsMapMaxH + ';height:auto;object-fit:contain;border:1px solid #e0e0e0;border-radius:4px">' +
       '</div>';
   }
-  var page2 = wellBarsHtml + domainHtml;
-  var page3 = wellsSvgHtml;
-  if (page3) return [page1, page2, page3];
+  var page2 = '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">⊛</span> Горизонтальные скважины — продолжение</div>' +
+    wellBarsHtml + domainHtml;
+  if (wellsSvgHtml) {
+    var page3 = '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">⊛</span> Схема расположения скважин</div>' +
+      wellsSvgHtml;
+    return [page1, page2, page3];
+  }
   return [page1, page2];
 }
 
@@ -3591,8 +3595,8 @@ function buildReportHTML(s) {
     var isLandscape = s.orientation === 'landscape';
 
     // Page A: overview table for all domains (no cards), paginated
-    // Estimate height per domain: header 40px + table header 32px + rows*30px + margin 14px
-    var domPageH = isLandscape ? (794 - 36 - 48 - 36 - 52) : (1123 - 48 - 60 - 36 - 52); // usable px
+    // Usable height = page height - padding-top - padding-bottom - footer - section header (first page) - safety margin
+    var domPageH = isLandscape ? (794 - 36 - 48 - 36 - 56 - 20) : (1123 - 48 - 60 - 36 - 56 - 20); // usable px
     var domBlocks = [];
     domenKeys.forEach(function(dom) {
       var dA = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
@@ -3633,7 +3637,8 @@ function buildReportHTML(s) {
           '<th>Цвет</th><th>Метод</th>' +
         '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
       '</div>';
-      var estimH = 40 + 32 + dB.length * 30 + 14;
+      // Header ~40px, table thead ~36px, each row ~34px, margin 20px (generous estimate)
+      var estimH = 40 + 36 + dB.length * 34 + 20;
       domBlocks.push({ html: blockHtml, h: estimH });
     });
     // Split domain blocks across pages
@@ -3656,8 +3661,11 @@ function buildReportHTML(s) {
     });
     secNum++;
 
-    // Pages B+: point cards per domain, paginated (max 2 per page landscape, 3 portrait)
-    var maxCardsPerPage = isLandscape ? 2 : 3;
+    // Pages B+: point cards per domain, paginated
+    // Cards contain photos (195px) + info + history — roughly 280-350px each
+    // Landscape usable height ~622px → max 2 cards side-by-side in grid (effectively 1 row)
+    // Portrait usable height ~927px → max 2 cards stacked
+    var maxCardsPerPage = isLandscape ? 2 : 2;
     if (s.includePhotos || s.includeHistory) {
       domenKeys.forEach(function(dom) {
         var dA2 = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
@@ -3794,9 +3802,8 @@ function buildReportHTML(s) {
     }
   }
 
-  // ── ANALYTICS: Domain / wall / horizon / wells + anomalies / Q-stats / AI ──
+  // ── ANALYTICS: wall / horizon / wells + anomalies / Q-stats / AI (one page) ──
   var anlDomainHtml =
-    buildDomainStatusMatrix(ptsB) +
     buildWallDistribution(ptsB) +
     buildHorizonQBars(ptsB, ptsA, isSingle) +
     buildWellAnalysisBlock(s, isSingle);
