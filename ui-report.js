@@ -3670,10 +3670,10 @@ function buildReportHTML(s) {
     secNum++;
 
     // Pages B+: point cards per domain, paginated
-    // Cards contain photos (195px) + info + history — roughly 280-350px each
-    // Landscape usable height ~622px → max 2 cards side-by-side in grid (effectively 1 row)
-    // Portrait usable height ~927px → max 2 cards stacked
-    var maxCardsPerPage = isLandscape ? 2 : 2;
+    // Each card: header 35px + photo 260px + chart 180px + KPI 55px + comment ~75px ≈ 600px
+    // Portrait usable height ~979px: 1 card fits (600px), 2 stacked = 1200px → overflow
+    // Landscape usable height ~622px: 2 cards SIDE-BY-SIDE in grid → max height = tallest card
+    var maxCardsPerPage = isLandscape ? 2 : 1;
     if (s.includePhotos || s.includeHistory) {
       domenKeys.forEach(function(dom) {
         var dA2 = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
