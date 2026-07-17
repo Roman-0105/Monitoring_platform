@@ -2025,8 +2025,18 @@ function generateReport() {
       var wellsSvgEl = document.getElementById('wells-map-svg');
       if (wellsSvgEl) {
         try {
+          // Inline the background image so it renders inside an embedded SVG data URI
+          var bgEl = wellsSvgEl.querySelector('#wells-map-bg');
+          var bgUrl = (ReportState.mapImgs && (ReportState.mapImgs.imgB || ReportState.mapImgs.imgA)) || null;
+          var origHref = null;
+          if (bgEl && bgUrl) {
+            origHref = bgEl.getAttribute('href') || bgEl.getAttribute('xlink:href') || null;
+            bgEl.setAttribute('href', bgUrl);
+            bgEl.removeAttribute('xlink:href');
+          }
           var svgStr = new XMLSerializer().serializeToString(wellsSvgEl);
           ReportState.wellsMapSvg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+          if (bgEl && origHref !== null) bgEl.setAttribute('href', origHref);
         } catch(e) { ReportState.wellsMapSvg = null; }
       } else {
         ReportState.wellsMapSvg = null;
@@ -3579,7 +3589,7 @@ function buildReportHTML(s) {
   var secNum = 2;
   // Usable height for map image: page height - top padding - bottom padding - footer - sec-head
   var mapMaxH = (s.orientation === 'landscape' ? 794 - 36 - 48 - 36 - 52 : 1123 - 48 - 60 - 36 - 52) + 'px';
-  var mapImgStyle = 'max-width:100%;max-height:' + mapMaxH + ';width:auto;height:auto;object-fit:contain;border:1px solid #e0e0e0;border-radius:4px;display:block;margin:0 auto';
+  var mapImgStyle = 'width:100%;max-height:' + mapMaxH + ';object-fit:contain;border:1px solid #e0e0e0;border-radius:4px;display:block;margin:0 auto';
   if (s.includeMap && (imgs.imgA || imgs.imgB)) {
     if (isSingle && imgs.imgB) {
       pages.push(
