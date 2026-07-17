@@ -2952,27 +2952,21 @@ function buildWellsSection(s, isSingle, secNum) {
     '<div style="font-size:10px;color:#aaa;margin-top:2px;margin-bottom:14px">↑ — ближайший замер до выбранной даты</div>';
   var wellsSvgHtml = '';
   var wellsMapMaxH = (s.orientation === 'landscape' ? 794 - 36 - 48 - 36 - 56 : 1123 - 48 - 60 - 36 - 56) + 'px';
-  var wellsSchemeUrl = ReportState.wellsMapSvg ||
-    ((ReportState.mapImgs||{}).imgB) ||
-    ((ReportState.mapImgs||{}).imgA) || null;
-  if (wellsSchemeUrl) {
-    wellsSvgHtml = '<div class="sec-sub" style="margin-bottom:8px">Схема расположения скважин</div>' +
-      '<div style="text-align:center;margin-bottom:14px">' +
-        '<img src="' + wellsSchemeUrl + '" alt="Схема скважин" ' +
-          'style="max-width:100%;max-height:' + wellsMapMaxH + ';height:auto;object-fit:contain;border:1px solid #e0e0e0;border-radius:4px">' +
-      '</div>' +
-      (ReportState.wellsMapSvg ? '' :
-        '<div style="font-size:10px;color:#aaa;text-align:center;margin-top:-8px">* Схема скважин не захвачена — отображена общая схема карьера.<br>' +
-        'Для захвата схемы скважин откройте вкладку «Скважины» перед генерацией отчёта.</div>');
+  if (ReportState.wellsMapSvg) {
+    wellsSvgHtml = '<div style="text-align:center;margin-bottom:14px">' +
+        '<img src="' + ReportState.wellsMapSvg + '" alt="Схема горизонтальных скважин" ' +
+          'style="width:100%;max-height:' + wellsMapMaxH + ';height:auto;object-fit:contain;border:1px solid #e0e0e0;border-radius:4px">' +
+      '</div>';
+  } else {
+    wellsSvgHtml = '<div style="font-size:11px;color:#aaa;text-align:center;padding:30px;border:1px dashed #e0e0e0;border-radius:4px;margin-bottom:14px">' +
+      'Схема горизонтальных скважин не захвачена.<br>' +
+      'Для отображения откройте вкладку «Скважины» перед генерацией отчёта.</div>';
   }
   var page2 = '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">⊛</span> Горизонтальные скважины — продолжение</div>' +
     wellBarsHtml + domainHtml;
-  if (wellsSvgHtml) {
-    var page3 = '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">⊛</span> Схема расположения скважин</div>' +
-      wellsSvgHtml;
-    return [page1, page2, page3];
-  }
-  return [page1, page2];
+  var page3 = '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">⊛</span> Схема расположения горизонтальных скважин</div>' +
+    wellsSvgHtml;
+  return [page1, page2, page3];
 }
 
 // ── Горизонтальный бар-чарт по доменам ───────────────────
@@ -3850,16 +3844,7 @@ function buildReportHTML(s) {
       '</div>'
     );
   }
-  var anlStatsHtml = buildAnalyticsContent(s, ptsA, ptsB, isSingle, ai);
-  if (anlStatsHtml) {
-    pages.push(
-      '<div class="page">' +
-        '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">' + secNum + '</span> Аналитика — статистика и аномалии</div>' +
-        anlStatsHtml + footer() +
-      '</div>'
-    );
-  }
-  if (anlDomainHtml || anlStatsHtml) secNum++;
+  if (anlDomainHtml) secNum++;
 
   // ── CONCLUSION ──
   var conclAI = ai.recommendations
