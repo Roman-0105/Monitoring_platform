@@ -2020,6 +2020,16 @@ function generateReport() {
 
   mapPromise.then(function(mapImgs) {
     ReportState.mapImgs = mapImgs || { imgA: null, imgB: null };
+    // Capture wells SVG map if wells section is enabled
+    if (s.includeWells) {
+      var wellsSvgEl = document.getElementById('wells-map-svg');
+      if (wellsSvgEl) {
+        try {
+          var svgStr = new XMLSerializer().serializeToString(wellsSvgEl);
+          ReportState.wellsMapSvg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+        } catch(e) { ReportState.wellsMapSvg = null; }
+      } else { ReportState.wellsMapSvg = null; }
+    }
     if (s.includePhotos) {
       Toast.progress('rp-gen', 'Загрузка фотографий...');
       return preloadAllPhotos(ReportState.ptsA, ReportState.ptsB, ReportState.dtsA, ReportState.dtsB);
@@ -2914,7 +2924,8 @@ function buildWellsSection(s, isSingle, secNum) {
       '</tr></thead><tbody>' + domRows + '</tbody></table>';
   }
 
-  return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Горизонтальные скважины</div>' +
+  // Return array of [page1_content, page2_content?] to allow caller to build multiple pages
+  var page1 = '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Горизонтальные скважины</div>' +
     kpiHtml +
     '<table><thead><tr>' +
       '<th>Скважина</th><th>Домен</th><th>Участок</th><th>Статус</th>' +
@@ -2924,8 +2935,20 @@ function buildWellsSection(s, isSingle, secNum) {
       (!isSingle ? '<th>Δ, м³/ч</th>' : '') +
       '<th style="text-align:right">Дата замера</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
-    '<div style="font-size:10px;color:#aaa;margin-top:2px;margin-bottom:14px">↑ — ближайший замер до выбранной даты</div>' +
-    wellBarsHtml + domainHtml;
+    '<div style="font-size:10px;color:#aaa;margin-top:2px;margin-bottom:14px">↑ — ближайший замер до выбранной даты</div>';
+  var wellsSvgHtml = '';
+  if (ReportState.wellsMapSvg) {
+    var wellsMapMaxH = (s.orientation === 'landscape' ? 794 - 36 - 48 - 36 - 52 : 1123 - 48 - 60 - 36 - 52) + 'px';
+    wellsSvgHtml = '<div class="sec-sub" style="margin-bottom:8px">Схема расположения скважин</div>' +
+      '<div style="text-align:center;margin-bottom:14px">' +
+        '<img src="' + ReportState.wellsMapSvg + '" alt="Схема скважин" ' +
+          'style="max-width:100%;max-height:' + wellsMapMaxH + ';height:auto;object-fit:contain;border:1px solid #e0e0e0;border-radius:4px">' +
+      '</div>';
+  }
+  var page2 = wellBarsHtml + domainHtml;
+  var page3 = wellsSvgHtml;
+  if (page3) return [page1, page2, page3];
+  return [page1, page2];
 }
 
 // ── Горизонтальный бар-чарт по доменам ───────────────────
@@ -3334,7 +3357,7 @@ function buildWellAnalysisBlock(s, isSingle) {
     (wd.length > 8 ? '<div style="font-size:10px;color:#aaa;margin-top:6px">Показаны топ-8 из ' + wd.length + ' скважин с данными</div>' : '');
 }
 
-function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) {
+function buildAnalyticsContent(s, ptsA, ptsB, isSingle, ai) {
   var STATUS_COLORS = { 'Новая':'#4f8dff','Активная':'#39d98a','Иссякает':'#f3bf4a','Пересохла':'#ff6b6b','Паводковая':'#a78bfa','Перелив':'#38bdf8' };
 
   // Аномалии: точки с изменением ≥ 30% (только compare)
@@ -3410,8 +3433,7 @@ function buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum) 
 
   if (!anomaliesHtml && !statsHtml && !aiBlock) return '';
 
-  return '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика — Статистика</div>' +
-    anomaliesHtml + statsHtml + aiBlock;
+  return anomaliesHtml + statsHtml + aiBlock;
 }
 
 // ── Основной HTML отчёта ──────────────────────────────────
@@ -3532,24 +3554,29 @@ function buildReportHTML(s) {
 
   // ── MAP PAGE ──
   var secNum = 2;
+  // Usable height for map image: page height - top padding - bottom padding - footer - sec-head
+  var mapMaxH = (s.orientation === 'landscape' ? 794 - 36 - 48 - 36 - 52 : 1123 - 48 - 60 - 36 - 52) + 'px';
+  var mapImgStyle = 'max-width:100%;max-height:' + mapMaxH + ';width:auto;height:auto;object-fit:contain;border:1px solid #e0e0e0;border-radius:4px;display:block;margin:0 auto';
   if (s.includeMap && (imgs.imgA || imgs.imgB)) {
     if (isSingle && imgs.imgB) {
       pages.push(
         '<div class="page">' +
           '<div class="sec-head"><span class="sec-num" style="font-size:9px">M</span> Схема карьера — ' + escHTML(s.quarryName||'') + ' · ' + fmtDate(s.dateB) + '</div>' +
-          '<div class="map-wrap"><img src="' + imgs.imgB + '" alt="Схема" style="width:100%;border:1px solid #e0e0e0;border-radius:4px">' +
+          '<div class="map-wrap"><img src="' + imgs.imgB + '" alt="Схема" style="' + mapImgStyle + '">' +
             '<div class="map-caption">Рис. 1. Схема карьера · ' + fmtDate(s.dateB) + ' (' + escHTML(s.weekB) + ')</div></div>' +
           footer() +
         '</div>'
       );
     } else {
+      var cmpMapH = (s.orientation === 'landscape' ? 794 - 36 - 48 - 36 - 52 : 1123 - 48 - 60 - 36 - 52) + 'px';
+      var cmpMapImgStyle = 'width:100%;max-height:' + cmpMapH + ';object-fit:contain;border:1px solid #e0e0e0;border-radius:4px;display:block';
       pages.push(
         '<div class="page">' +
           '<div class="sec-head"><span class="sec-num" style="font-size:9px">M</span> Схемы карьера — сравнение нед. А / нед. Б</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
-            (imgs.imgA ? '<div class="map-wrap"><img src="' + imgs.imgA + '" alt="Нед.А" style="width:100%;border:1px solid #e0e0e0;border-radius:4px"><div class="map-caption">Нед. А · ' + fmtDate(s.dateA) + ' (' + escHTML(s.weekA) + ')</div></div>'
+            (imgs.imgA ? '<div class="map-wrap"><img src="' + imgs.imgA + '" alt="Нед.А" style="' + cmpMapImgStyle + '"><div class="map-caption">Нед. А · ' + fmtDate(s.dateA) + ' (' + escHTML(s.weekA) + ')</div></div>'
               : '<div style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;padding:40px;text-align:center;color:#aaa;font-size:12px">Схема нед. А не загружена</div>') +
-            (imgs.imgB ? '<div class="map-wrap"><img src="' + imgs.imgB + '" alt="Нед.Б" style="width:100%;border:2px solid #1a73e8;border-radius:4px"><div class="map-caption" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + ' (' + escHTML(s.weekB) + ')</div></div>'
+            (imgs.imgB ? '<div class="map-wrap"><img src="' + imgs.imgB + '" alt="Нед.Б" style="' + cmpMapImgStyle.replace('border:1px','border:2px') + ';border-color:#1a73e8"><div class="map-caption" style="color:#1a73e8">Нед. Б · ' + fmtDate(s.dateB) + ' (' + escHTML(s.weekB) + ')</div></div>'
               : '<div style="background:#e8f0fe;border:2px solid #1a73e8;border-radius:4px;padding:40px;text-align:center;color:#1a73e8;font-size:12px">Схема нед. Б не загружена</div>') +
           '</div>' +
           footer() +
@@ -3563,8 +3590,10 @@ function buildReportHTML(s) {
   if (s.includeDomens) {
     var isLandscape = s.orientation === 'landscape';
 
-    // Page A: overview table for all domains (no cards)
-    var domOverviewContent = '<div class="sec-head"><span class="sec-num">' + secNum + '</span> По доменам</div>';
+    // Page A: overview table for all domains (no cards), paginated
+    // Estimate height per domain: header 40px + table header 32px + rows*30px + margin 14px
+    var domPageH = isLandscape ? (794 - 36 - 48 - 36 - 52) : (1123 - 48 - 60 - 36 - 52); // usable px
+    var domBlocks = [];
     domenKeys.forEach(function(dom) {
       var dA = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
       var dB = ptsB.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
@@ -3589,7 +3618,7 @@ function buildReportHTML(s) {
           '<td>' + escAttr(pb.measureMethod||'—') + '</td>' +
         '</tr>';
       }).join('');
-      domOverviewContent += '<div class="domen-block">' +
+      var blockHtml = '<div class="domen-block">' +
         '<div class="domen-hdr">' +
           '<div class="domen-hdr-name">' + escAttr(dom) + '</div>' +
           '<span class="domen-hdr-badge">' + (isSingle?dB.length:dA.length+'→'+dB.length) + ' точек</span>' +
@@ -3604,38 +3633,62 @@ function buildReportHTML(s) {
           '<th>Цвет</th><th>Метод</th>' +
         '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
       '</div>';
+      var estimH = 40 + 32 + dB.length * 30 + 14;
+      domBlocks.push({ html: blockHtml, h: estimH });
     });
-    pages.push('<div class="page">' + domOverviewContent + footer() + '</div>');
+    // Split domain blocks across pages
+    var domPages = [];
+    var curPageBlocks = [], curH = 0;
+    domBlocks.forEach(function(blk) {
+      if (curH + blk.h > domPageH && curPageBlocks.length) {
+        domPages.push(curPageBlocks);
+        curPageBlocks = [];
+        curH = 0;
+      }
+      curPageBlocks.push(blk.html);
+      curH += blk.h;
+    });
+    if (curPageBlocks.length) domPages.push(curPageBlocks);
+    if (!domPages.length) domPages = [[]];
+    domPages.forEach(function(pageBlocks, idx) {
+      var hdr = idx === 0 ? '<div class="sec-head"><span class="sec-num">' + secNum + '</span> По доменам</div>' : '';
+      pages.push('<div class="page">' + hdr + pageBlocks.join('') + footer() + '</div>');
+    });
     secNum++;
 
-    // Pages B+: one page per domain with point cards (1 or 2 col)
+    // Pages B+: point cards per domain, paginated (max 2 per page landscape, 3 portrait)
+    var maxCardsPerPage = isLandscape ? 2 : 3;
     if (s.includePhotos || s.includeHistory) {
       domenKeys.forEach(function(dom) {
         var dA2 = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
         var dB2 = ptsB.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
         if (!dB2.length) return;
-        var hasAnyCard = dB2.some(function(pb) {
+        var cards = [];
+        dB2.forEach(function(pb) {
           var cache = ReportState.photoCache || {};
           var hasPhoto = cache['pt_' + pb.pointNumber + '_0_b'] || cache['pt_' + pb.pointNumber + '_0_a'];
           var hasHist  = ((ReportState.ptHistory||{})[String(pb.pointNumber)]||[]).length > 0;
-          return (s.includePhotos && hasPhoto) || (s.includeHistory && hasHist);
+          if ((s.includePhotos && hasPhoto) || (s.includeHistory && hasHist)) {
+            var pa = dA2.find(function(p){ return p.pointNumber===pb.pointNumber; });
+            cards.push(buildPointCard(pb, pa||null, s));
+          }
         });
-        if (!hasAnyCard) return;
+        if (!cards.length) return;
         var qDB2 = dB2.reduce(function(a,p){ return a+(parseFloat(p.flowRate)||0); },0);
-        var pointCards = dB2.map(function(pb) {
-          var pa = dA2.find(function(p){ return p.pointNumber===pb.pointNumber; });
-          return buildPointCard(pb, pa||null, s);
-        }).join('');
-        pages.push(
-          '<div class="page">' +
-            '<div class="sec-head"><span class="sec-num" style="font-size:9px">Д</span> ' + escAttr(dom) +
-              ' <span style="font-size:10px;font-weight:500;color:#555">· Q = ' + qDB2.toFixed(2) + ' л/с · ' + dB2.length + ' точек</span></div>' +
-            '<div style="' + (isLandscape ? 'display:grid;grid-template-columns:1fr 1fr;gap:14px;' : '') + 'padding:0">' +
-              pointCards +
-            '</div>' +
-            footer() +
-          '</div>'
-        );
+        var domHdr = '<div class="sec-head"><span class="sec-num" style="font-size:9px">Д</span> ' + escAttr(dom) +
+          ' <span style="font-size:10px;font-weight:500;color:#555">· Q = ' + qDB2.toFixed(2) + ' л/с · ' + dB2.length + ' точек</span></div>';
+        for (var ci = 0; ci < cards.length; ci += maxCardsPerPage) {
+          var chunk = cards.slice(ci, ci + maxCardsPerPage).join('');
+          pages.push(
+            '<div class="page">' +
+              (ci === 0 ? domHdr : '') +
+              '<div style="' + (isLandscape ? 'display:grid;grid-template-columns:1fr 1fr;gap:14px;' : '') + 'padding:0">' +
+                chunk +
+              '</div>' +
+              footer() +
+            '</div>'
+          );
+        }
       });
     }
   }
@@ -3732,33 +3785,30 @@ function buildReportHTML(s) {
 
   // ── WELLS ──
   if (s.includeWells) {
-    var wellsContent = buildWellsSection(s, isSingle, secNum);
-    if (wellsContent) {
-      pages.push('<div class="page">' + wellsContent + footer() + '</div>');
+    var wellsPages = buildWellsSection(s, isSingle, secNum);
+    if (wellsPages && wellsPages[0]) {
+      wellsPages.forEach(function(pgContent) {
+        if (pgContent) pages.push('<div class="page">' + pgContent + footer() + '</div>');
+      });
       secNum++;
     }
   }
 
-  // ── ANALYTICS PAGE 1: Domain / wall / horizon / wells ──
+  // ── ANALYTICS: Domain / wall / horizon / wells + anomalies / Q-stats / AI ──
   var anlDomainHtml =
     buildDomainStatusMatrix(ptsB) +
     buildWallDistribution(ptsB) +
     buildHorizonQBars(ptsB, ptsA, isSingle) +
     buildWellAnalysisBlock(s, isSingle);
-  if (anlDomainHtml) {
+  var anlStatsHtml = buildAnalyticsContent(s, ptsA, ptsB, isSingle, ai);
+  var anlCombined = anlDomainHtml + anlStatsHtml;
+  if (anlCombined) {
     pages.push(
       '<div class="page">' +
         '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика</div>' +
-        anlDomainHtml + footer() +
+        anlCombined + footer() +
       '</div>'
     );
-    secNum++;
-  }
-
-  // ── ANALYTICS PAGE 2: Anomalies / Q-stats / AI ──
-  var analyticsContent = buildAnalyticsSection(s, ptsA, ptsB, dtsA, dtsB, isSingle, ai, secNum);
-  if (analyticsContent) {
-    pages.push('<div class="page">' + analyticsContent + footer() + '</div>');
     secNum++;
   }
 
