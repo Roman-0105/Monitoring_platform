@@ -2380,10 +2380,12 @@ function buildPointCard(pb, pa, s) {
     return cache['pt_' + pointNum + '_0_' + suffix] || null;
   }
 
+  // Compact photo height: 140px to allow 2 cards per portrait page
+  var PHOTO_H = '140px';
   function photoBlock(src, weekLabel, dateLabel, labelBg) {
     var imgHtml = src
-      ? '<img src="' + src + '" style="width:100%;height:190px;object-fit:cover;display:block" alt="' + escAttr(weekLabel) + '">'
-      : '<div style="height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f8f9fa">' +
+      ? '<img src="' + src + '" style="width:100%;height:' + PHOTO_H + ';object-fit:cover;display:block" alt="' + escAttr(weekLabel) + '">'
+      : '<div style="height:' + PHOTO_H + ';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f8f9fa">' +
           '<div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;' +
             'background:' + (labelBg === '#888' ? '#e8e8e8' : '#e8f0fe') + ';color:' + labelBg + '">' +
             (labelBg === '#888' ? 'А' : 'Б') + '</div>' +
@@ -2391,8 +2393,8 @@ function buildPointCard(pb, pa, s) {
         '</div>';
     return '<div style="flex:1;min-width:0">' +
       imgHtml +
-      '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-top:1px solid #e0e6f0">' +
-        '<span style="width:8px;height:8px;border-radius:50%;background:' + labelBg + ';flex-shrink:0"></span>' +
+      '<div style="display:flex;align-items:center;gap:6px;padding:3px 8px;border-top:1px solid #e0e6f0">' +
+        '<span style="width:7px;height:7px;border-radius:50%;background:' + labelBg + ';flex-shrink:0"></span>' +
         '<span style="font-size:10px;font-weight:600;color:#444">' + escAttr(weekLabel) + '</span>' +
         '<span style="font-size:10px;color:#888;margin-left:auto">' + escAttr(dateLabel) + '</span>' +
       '</div>' +
@@ -2433,8 +2435,8 @@ function buildPointCard(pb, pa, s) {
     var srcB2 = getPhotoSrc(pb.pointNumber, 'b') || getPhotoSrc(pb.pointNumber, 'a');
     if (srcB2) {
       photosRow = '<div style="border-bottom:1px solid #e0e6f0">' +
-        '<img src="' + srcB2 + '" style="width:100%;max-height:200px;object-fit:cover;display:block">' +
-        '<div style="padding:4px 10px;font-size:10px;color:#888;background:#f8f9fa">' + fmtDate(s.dateB) + ' · ' + escAttr(s.weekB) + '</div>' +
+        '<img src="' + srcB2 + '" style="width:100%;height:' + PHOTO_H + ';object-fit:cover;display:block">' +
+        '<div style="padding:3px 10px;font-size:10px;color:#888;background:#f8f9fa">' + fmtDate(s.dateB) + ' · ' + escAttr(s.weekB) + '</div>' +
       '</div>';
     }
   }
@@ -2444,8 +2446,8 @@ function buildPointCard(pb, pa, s) {
   if (s.includeHistory) {
     var chartHtml = buildPointHistoryChart(pb.pointNumber, s.dateA, s.dateB);
     if (chartHtml) {
-      chartRow = '<div style="padding:12px 16px;border-bottom:1px solid #e0e6f0">' +
-        '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:8px">Динамика водопритока Q, л/с</div>' +
+      chartRow = '<div style="padding:6px 12px 8px;border-bottom:1px solid #e0e6f0">' +
+        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px">Динамика водопритока Q, л/с</div>' +
         chartHtml +
       '</div>';
     }
@@ -2455,31 +2457,31 @@ function buildPointCard(pb, pa, s) {
   var numHist = ((ReportState.ptHistory || {})[String(pb.pointNumber)] || []).length;
   var metricsRow = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e0e6f0">' +
     (qa != null
-      ? '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">' + (isSingle && pa && pa.monitoringDate ? normDateISO(pa.monitoringDate).slice(5).split('-').reverse().join('.') : 'Q нед. А') + '</div>' +
-          '<div style="font-size:14px;font-weight:700;color:#1a1a2e">' + qa.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>'
-      : '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Метод</div>' +
+      ? '<div style="background:#fff;padding:5px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:2px">' + (isSingle && pa && pa.monitoringDate ? normDateISO(pa.monitoringDate).slice(5).split('-').reverse().join('.') : 'Q нед. А') + '</div>' +
+          '<div style="font-size:13px;font-weight:700;color:#1a1a2e">' + qa.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>'
+      : '<div style="background:#fff;padding:5px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:2px">Метод</div>' +
           '<div style="font-size:11px;color:#555">' + escAttr(pb.measureMethod || '—') + '</div></div>') +
-    '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">' + (isSingle && pb.monitoringDate ? normDateISO(pb.monitoringDate).slice(5).split('-').reverse().join('.') : 'Q нед. Б') + '</div>' +
-      '<div style="font-size:14px;font-weight:700;color:#1a73e8">' + qb.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>' +
-    '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Изменение</div>' +
-      '<div style="font-size:14px;font-weight:700;color:' + trendColor + '">' +
+    '<div style="background:#fff;padding:5px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:2px">' + (isSingle && pb.monitoringDate ? normDateISO(pb.monitoringDate).slice(5).split('-').reverse().join('.') : 'Q нед. Б') + '</div>' +
+      '<div style="font-size:13px;font-weight:700;color:#1a73e8">' + qb.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span></div></div>' +
+    '<div style="background:#fff;padding:5px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:2px">Изменение</div>' +
+      '<div style="font-size:13px;font-weight:700;color:' + trendColor + '">' +
         (delta != null ? trendArrow + ' ' + (delta >= 0 ? '+' : '') + delta.toFixed(2) + ' <span style="font-size:10px;color:#aaa">л/с</span>' : '—') +
       '</div></div>' +
-    '<div style="background:#fff;padding:8px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:3px">Замеров в истории</div>' +
-      '<div style="font-size:14px;font-weight:700;color:#555">' + numHist + '</div></div>' +
+    '<div style="background:#fff;padding:5px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#aaa;margin-bottom:2px">Замеров в истории</div>' +
+      '<div style="font-size:13px;font-weight:700;color:#555">' + numHist + '</div></div>' +
   '</div>';
 
   // ── Комментарий (полевое описание — гидрогеологическое наблюдение)
   var commentRow = pb.comment
-    ? '<div style="padding:10px 16px;border-top:1px solid #e0e6f0;' +
+    ? '<div style="padding:6px 12px;border-top:1px solid #e0e6f0;' +
         'background:#fffde7;border-left:3px solid #f9ab00">' +
         '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;' +
-          'color:#b8860b;font-weight:700;margin-bottom:4px">Полевое наблюдение</div>' +
-        '<div style="font-size:12px;line-height:1.6;color:#333">' + escAttr(pb.comment) + '</div>' +
+          'color:#b8860b;font-weight:700;margin-bottom:2px">Полевое наблюдение</div>' +
+        '<div style="font-size:11px;line-height:1.5;color:#333">' + escAttr(pb.comment) + '</div>' +
       '</div>'
     : '';
 
-  return '<div style="border:1px solid #e0e6f0;border-radius:8px;overflow:hidden;margin-bottom:14px;page-break-inside:avoid;break-inside:avoid">' +
+  return '<div style="border:1px solid #e0e6f0;border-radius:8px;overflow:hidden;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid">' +
     header + photosRow + chartRow + metricsRow + commentRow +
   '</div>';
 }
@@ -3548,16 +3550,25 @@ function buildReportHTML(s) {
     '</div>' +
   '</div>';
 
+  var summaryHdr = '<div class="sec-head"><span class="sec-num">1</span> Итоговая сводка' +
+    (isSingle ? ' — ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escHTML(s.weekB) + ')' : '') :
+      ' — нед. А: ' + fmtDate(s.dateA) + ' / нед. Б: ' + fmtDate(s.dateB)) + '</div>';
+  // Page 1a: AI summary + KPIs + donuts + domain bars
   pages.push(
     '<div class="page">' +
-      '<div class="sec-head"><span class="sec-num">1</span> Итоговая сводка' +
-        (isSingle ? ' — ' + fmtDate(s.dateB) + (s.weekB ? ' (' + escHTML(s.weekB) + ')' : '') :
-          ' — нед. А: ' + fmtDate(s.dateA) + ' / нед. Б: ' + fmtDate(s.dateB)) + '</div>' +
+      summaryHdr +
       aiSummaryHtml +
       buildKPIBlock(s, isSingle, qA, qB, dQ, ptsA, ptsB, dtsA, dtsB) +
       donutsHtml +
       buildDomainBarsChart(ptsA, ptsB, isSingle) +
       (isSingle ? '' : buildTopChangesChart(ptsA, ptsB)) +
+      footer() +
+    '</div>'
+  );
+  // Page 1b: timeline + summary tables
+  pages.push(
+    '<div class="page">' +
+      '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">1</span> Итоговая сводка — детализация</div>' +
       buildSummaryTimeline(s) +
       summaryTablesHtml +
       footer() +
@@ -3669,11 +3680,10 @@ function buildReportHTML(s) {
     });
     secNum++;
 
-    // Pages B+: point cards per domain, paginated
-    // Each card: header 35px + photo 260px + chart 180px + KPI 55px + comment ~75px ≈ 600px
-    // Portrait usable height ~979px: 1 card fits (600px), 2 stacked = 1200px → overflow
-    // Landscape usable height ~622px: 2 cards SIDE-BY-SIDE in grid → max height = tallest card
-    var maxCardsPerPage = isLandscape ? 2 : 1;
+    // Pages B+: compact cards (photo 140px, tight padding) → ~420px each
+    // Portrait 979px usable: 2 stacked cards (~840px) + header 52px + gap 8px = ~900px ✓
+    // Landscape 622px usable: 2 side-by-side in grid, tallest card ≤ 622px ✓
+    var maxCardsPerPage = 2;
     if (s.includePhotos || s.includeHistory) {
       domenKeys.forEach(function(dom) {
         var dA2 = ptsA.filter(function(p){ return (p.domain||p.domen||'—')===dom; });
@@ -3817,22 +3827,29 @@ function buildReportHTML(s) {
     }
   }
 
-  // ── ANALYTICS: wall / horizon / wells + anomalies / Q-stats / AI (one page) ──
+  // ── ANALYTICS: two pages — visual charts / then stats + AI ──
   var anlDomainHtml =
     buildWallDistribution(ptsB) +
     buildHorizonQBars(ptsB, ptsA, isSingle) +
     buildWellAnalysisBlock(s, isSingle);
-  var anlStatsHtml = buildAnalyticsContent(s, ptsA, ptsB, isSingle, ai);
-  var anlCombined = anlDomainHtml + anlStatsHtml;
-  if (anlCombined) {
+  if (anlDomainHtml) {
     pages.push(
       '<div class="page">' +
         '<div class="sec-head"><span class="sec-num">' + secNum + '</span> Аналитика</div>' +
-        anlCombined + footer() +
+        anlDomainHtml + footer() +
       '</div>'
     );
-    secNum++;
   }
+  var anlStatsHtml = buildAnalyticsContent(s, ptsA, ptsB, isSingle, ai);
+  if (anlStatsHtml) {
+    pages.push(
+      '<div class="page">' +
+        '<div class="sec-head" style="font-size:10px"><span class="sec-num" style="font-size:8px">' + secNum + '</span> Аналитика — статистика и аномалии</div>' +
+        anlStatsHtml + footer() +
+      '</div>'
+    );
+  }
+  if (anlDomainHtml || anlStatsHtml) secNum++;
 
   // ── CONCLUSION ──
   var conclAI = ai.recommendations
