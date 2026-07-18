@@ -126,6 +126,7 @@ CREATE TABLE dbo.GEOLOCATION_CONTACTS (
 |---|---|---|---|
 | `GET /calllog` | список обращений (с расшифровкой риска/индикатора/уровня/участка) | — | `[{id, fname, phone, comments, photo, ip, closed, xwgs, ywgs, zwgs, ddate, plotNameId, plotName, indicatorId, indicator, fixedRiskId, fixedRisk, levelId, level}, ...]` |
 | `GET /calllog/:id` | одно обращение | — | тот же объект, что в списке |
+| `PUT /calllog/:id` | редактирование полей обращения администратором | `{fname, phone, comments, plotName, indicator, level, ddate, xwgs, ywgs, zwgs, xLocal, yLocal}` | обновлённая запись |
 | `GET /calllog/:id/actions` | история действий по обращению | — | `[{id, todo, date, photo, calllogId}, ...]` |
 | `POST /calllog/:id/close` | закрыть обращение | `{todo, photo}` (`photo` — base64 data URL или уже загруженный файл) | созданная запись действия |
 | `POST /calllog/:id/reopen` | вернуть в статус «открыто» | — | `204` |

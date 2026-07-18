@@ -88,8 +88,12 @@ var JOURNAL_COLS = [
   { key: 'indicator', label: 'Индикатор опасности' },
   { key: 'level', label: 'Уровень опасности' },
   { key: 'ddate', label: 'Дата обращения' },
-  { key: 'closed', label: 'Открыто' },
+  { key: 'closed', label: 'Статус' },
 ];
+
+function statusBadge(closed) {
+  return closed ? '<span class="ri-badge ri-badge-ok">✓ Закрыто</span>' : '<span class="ri-badge ri-badge-bad">● Открыто</span>';
+}
 
 function renderJournalTable() {
   var wrap = document.getElementById('ri-j-table');
@@ -111,7 +115,7 @@ function renderJournalTable() {
       '<td class="ri-td-wrap">' + escHTML(r.indicator) + '</td>' +
       '<td>' + (r.level ? levelBadge(r.level) : '') + '</td>' +
       '<td class="ri-td-muted">' + formatDate(r.ddate) + '</td>' +
-      '<td>' + (r.closed ? '<span class="ri-open-mark">×</span>' : '') + '</td>' +
+      '<td>' + statusBadge(r.closed) + '</td>' +
       '</tr>';
   }).join('') : '<tr class="ri-empty-row"><td colspan="' + JOURNAL_COLS.length + '">Нет обращений</td></tr>';
 
@@ -145,25 +149,43 @@ async function openJournalDetail(id) {
   var row = await RiskApi.calllog.get(id);
   if (!row) { Toast.show('Обращение не найдено', 'error'); return; }
   var actions = await RiskApi.calllog.actions(id);
-  var mapUrl = (row.xwgs && row.ywgs) ? 'https://maps.google.com/?q=' + row.xwgs + ',' + row.ywgs : '';
+  var plots = await RiskApi.plotNames.list();
+  var allIndicators = await RiskApi.indicators.list();
+  var levels = await RiskApi.levels.list();
+  var fixedRisks = await RiskApi.fixedRisks.list();
 
   var infoPanel =
     (row.photo ? '<div class="ri-detail-photo-wrap"><img class="ri-detail-photo" src="' + row.photoUrl + '" alt="Фото"></div>' : '') +
-    '<div class="ri-detail-grid">' +
-      detailItem('Фамилия, Имя', escHTML(row.fname)) +
-      detailItem('Телефон', escHTML(row.phone)) +
-      detailItem('Название участка', escHTML(row.plotName)) +
-      detailItem('Зафиксированный риск', escHTML(row.fixedRisk)) +
-      detailItem('Индикатор опасности', escHTML(row.indicator)) +
-      detailItem('Уровень опасности', row.level ? levelBadge(row.level) : '—') +
-      detailItem('Дата обращения', formatDate(row.ddate)) +
-      detailItem('IP устройства', escHTML(row.ip) || '—') +
-      detailItem('X (СК-42)', row.xLocal != null ? row.xLocal.toFixed(4) : '—') +
-      detailItem('Y (СК-42)', row.yLocal != null ? row.yLocal.toFixed(4) : '—') +
-      detailItem('Z', row.zwgs != null ? row.zwgs.toFixed(2) : '—') +
-      detailItem('Координаты (WGS-84)', mapUrl ? '<a class="ri-map-link" href="' + mapUrl + '" target="_blank" rel="noopener">' + row.xwgs.toFixed(5) + ', ' + row.ywgs.toFixed(5) + ' ↗</a>' : '—') +
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">Фамилия, Имя</label><input class="ri-input" id="ri-e-fname" value="' + escAttr(row.fname) + '"></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Телефон</label><input class="ri-input" id="ri-e-phone" value="' + escAttr(row.phone) + '"></div>' +
     '</div>' +
-    (row.comments ? '<div class="ri-form-group"><span class="ri-form-label">Комментарий заявителя</span><div class="ri-detail-value">' + escHTML(row.comments) + '</div></div>' : '');
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">Название участка</label><div id="ri-e-plot"></div></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Уровень опасности</label><div id="ri-e-level"></div></div>' +
+    '</div>' +
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">Индикатор опасности</label><div id="ri-e-indicator"></div></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Зафиксированный риск</label><input class="ri-input" id="ri-e-risk" value="' + escAttr(row.fixedRisk) + '" disabled></div>' +
+    '</div>' +
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">Дата обращения</label><input type="datetime-local" class="ri-input" id="ri-e-ddate" value="' + toDatetimeLocalValue(row.ddate) + '"></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">IP устройства</label><input class="ri-input" id="ri-e-ip" value="' + escAttr(row.ip) + '" disabled></div>' +
+    '</div>' +
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">X (СК-42)</label><input type="number" step="any" class="ri-input" id="ri-e-xlocal" value="' + (row.xLocal != null ? row.xLocal : '') + '"></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Y (СК-42)</label><input type="number" step="any" class="ri-input" id="ri-e-ylocal" value="' + (row.yLocal != null ? row.yLocal : '') + '"></div>' +
+    '</div>' +
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">X (WGS-84)</label><input type="number" step="any" class="ri-input" id="ri-e-xwgs" value="' + (row.xwgs != null ? row.xwgs : '') + '"></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Y (WGS-84)</label><input type="number" step="any" class="ri-input" id="ri-e-ywgs" value="' + (row.ywgs != null ? row.ywgs : '') + '"></div>' +
+    '</div>' +
+    ((row.xwgs && row.ywgs) ? '<a class="ri-map-link" href="https://maps.google.com/?q=' + row.xwgs + ',' + row.ywgs + '" target="_blank" rel="noopener">↗ Открыть на карте</a>' : '') +
+    '<div class="ri-form-group"><label class="ri-form-label">Z</label><input type="number" step="any" class="ri-input" id="ri-e-z" value="' + (row.zwgs != null ? row.zwgs : '') + '"></div>' +
+    '<div class="ri-form-group"><label class="ri-form-label">Комментарий заявителя</label><textarea class="ri-textarea" id="ri-e-comments">' + escHTML(row.comments) + '</textarea></div>' +
+    '<div class="ri-modal-actions">' +
+      '<button type="button" class="ri-btn" id="ri-e-save" disabled>💾 Сохранить изменения</button>' +
+    '</div>';
 
   var statusPanel =
     '<div class="ri-status-row">' +
@@ -199,7 +221,10 @@ async function openJournalDetail(id) {
   });
 
   if (row.closed) {
-    overlay.querySelector('#ri-j-reopen').addEventListener('click', async function() {
+    var reopenBtn = overlay.querySelector('#ri-j-reopen');
+    reopenBtn.addEventListener('click', async function() {
+      if (reopenBtn.disabled) return;
+      reopenBtn.disabled = true;
       await RiskApi.calllog.reopen(id);
       Toast.show('Обращение возобновлено', 'success');
       closeModal(overlay);
@@ -208,10 +233,64 @@ async function openJournalDetail(id) {
   } else {
     wireCloseForm(overlay, id);
   }
+
+  wireInfoForm(overlay, row, plots, allIndicators, levels, fixedRisks);
 }
 
-function detailItem(label, value) {
-  return '<div class="ri-detail-item"><span class="ri-detail-label">' + escHTML(label) + '</span><span class="ri-detail-value">' + (value || '—') + '</span></div>';
+function toDatetimeLocalValue(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function fromDatetimeLocalValue(val) { return val ? val + ':00' : null; }
+
+function wireInfoForm(overlay, row, plots, allIndicators, levels, fixedRisks) {
+  var plotSel = initSearchSelect(overlay.querySelector('#ri-e-plot'),
+    plots.map(function(p) { return { value: p.id, label: p.plotName }; }), { value: row.plotNameId });
+  var levelSel = initSearchSelect(overlay.querySelector('#ri-e-level'),
+    levels.map(function(l) { return { value: l.id, label: l.level }; }), { value: row.levelId, placeholder: '— нет —' });
+  var indicatorSel = initSearchSelect(overlay.querySelector('#ri-e-indicator'),
+    allIndicators.map(function(i) { return { value: i.id, label: i.indicator }; }), {
+      value: row.indicatorId,
+      onChange: function(indId) {
+        var ind = allIndicators.find(function(i) { return String(i.id) === String(indId); });
+        var risk = ind ? fixedRisks.find(function(r) { return r.id === ind.fixedRisk; }) : null;
+        overlay.querySelector('#ri-e-risk').value = risk ? risk.fixedRisk : '';
+        markDirty();
+      },
+    });
+
+  var saveBtn = overlay.querySelector('#ri-e-save');
+  function markDirty() {
+    saveBtn.disabled = false;
+    saveBtn.classList.add('ri-btn-primary');
+  }
+  overlay.querySelectorAll('#ri-e-fname, #ri-e-phone, #ri-e-ddate, #ri-e-xlocal, #ri-e-ylocal, #ri-e-xwgs, #ri-e-ywgs, #ri-e-z, #ri-e-comments')
+    .forEach(function(el) { el.addEventListener('input', markDirty); });
+  overlay.querySelector('#ri-e-plot').addEventListener('mousedown', function() { setTimeout(markDirty, 0); });
+  overlay.querySelector('#ri-e-level').addEventListener('mousedown', function() { setTimeout(markDirty, 0); });
+
+  saveBtn.addEventListener('click', async function() {
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;
+    var num = function(id) { var v = overlay.querySelector(id).value; return v === '' ? null : Number(v); };
+    await RiskApi.calllog.update(row.id, {
+      fname: overlay.querySelector('#ri-e-fname').value.trim(),
+      phone: overlay.querySelector('#ri-e-phone').value.trim(),
+      comments: overlay.querySelector('#ri-e-comments').value.trim(),
+      plotName: Number(plotSel.getValue()),
+      indicator: Number(indicatorSel.getValue()),
+      level: levelSel.getValue() ? Number(levelSel.getValue()) : null,
+      ddate: fromDatetimeLocalValue(overlay.querySelector('#ri-e-ddate').value),
+      xLocal: num('#ri-e-xlocal'), yLocal: num('#ri-e-ylocal'),
+      xwgs: num('#ri-e-xwgs'), ywgs: num('#ri-e-ywgs'), zwgs: num('#ri-e-z'),
+    });
+    Toast.show('Изменения сохранены', 'success');
+    saveBtn.classList.remove('ri-btn-primary');
+    reloadJournal();
+  });
 }
 
 function closeFormHTML() {
@@ -239,9 +318,12 @@ function wireCloseForm(overlay, id) {
     overlay.querySelector('#ri-j-close-preview').innerHTML =
       '<img class="ri-detail-photo" style="margin-top:8px;max-height:200px" src="' + photoDataUrl + '">';
   });
-  overlay.querySelector('#ri-j-close-submit').addEventListener('click', async function() {
+  var submitBtn = overlay.querySelector('#ri-j-close-submit');
+  submitBtn.addEventListener('click', async function() {
+    if (submitBtn.disabled) return;
     var todo = overlay.querySelector('#ri-j-todo').value.trim();
     if (!todo) { Toast.show('Опишите, что было сделано', 'warning'); return; }
+    submitBtn.disabled = true;
     await RiskApi.calllog.close(id, { todo: todo, photo: photoDataUrl });
     Toast.show('Обращение закрыто', 'success');
     closeModal(overlay);
