@@ -210,7 +210,7 @@ function seedDb() {
       id: 1, deleted: 0, recordVersion: 0, plotName: 1,
       image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ'),
       xMin: 16000, xMax: 18000, yMin: 46000, yMax: 48000,
-      uploadedAt: '2026-04-01T09:00:00',
+      uploadedAt: '2026-04-01T09:00:00', uploadedBy: 'Roman Yukin',
     },
   ];
 

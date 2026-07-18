@@ -21,7 +21,7 @@
  *   GEOLOCATION_NOTIFICATION_RECIPIENTS(ID, DELETED, NOTIFICATION_ID, EMAIL)
  *   GEOLOCATION_CONTACTS(ID, DELETED, RECORD_VERSION, FNAME, POSITION, PHONE, EMAIL)
  *   GEOLOCATION_SCHEMES(ID, DELETED, RECORD_VERSION, PLOT_NAME, IMAGE,
- *                        X_MIN, X_MAX, Y_MIN, Y_MAX, UPLOADED_AT)
+ *                        X_MIN, X_MAX, Y_MIN, Y_MAX, UPLOADED_AT, UPLOADED_BY)
  *     — одна активная схема (план участка) на PLOT_NAME; X_MIN..Y_MAX —
  *       границы в той же системе координат, что и CALLLOG.X/CALLLOG.Y
  *       (СК-42), для проекции точек обращений на схему. Порт того же
@@ -291,15 +291,16 @@ var RiskApi = (function() {
     },
     upload: async function(plotId, image) {
       // image: сжатая data-URL картинки схемы
-      if (isRemote()) return remoteCall('POST', '/schemes/' + plotId, { image: image });
+      var uploadedBy = (cfg().CURRENT_USER) || '';
+      if (isRemote()) return remoteCall('POST', '/schemes/' + plotId, { image: image, uploadedBy: uploadedBy });
       var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
       if (row) {
-        row.image = image; row.uploadedAt = new Date().toISOString();
+        row.image = image; row.uploadedAt = new Date().toISOString(); row.uploadedBy = uploadedBy;
         row.recordVersion = (row.recordVersion || 0) + 1;
       } else {
         row = {
           id: nextId('schemes'), deleted: 0, recordVersion: 0, plotName: plotId,
-          image: image, uploadedAt: new Date().toISOString(),
+          image: image, uploadedAt: new Date().toISOString(), uploadedBy: uploadedBy,
           xMin: null, xMax: null, yMin: null, yMax: null,
         };
         db.schemes.push(row);
@@ -316,6 +317,13 @@ var RiskApi = (function() {
       row.recordVersion = (row.recordVersion || 0) + 1;
       persist();
       return Object.assign({}, row);
+    },
+    remove: async function(plotId) {
+      if (isRemote()) return remoteCall('DELETE', '/schemes/' + plotId);
+      var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
+      if (!row) return;
+      row.deleted = 1;
+      persist();
     },
   };
 

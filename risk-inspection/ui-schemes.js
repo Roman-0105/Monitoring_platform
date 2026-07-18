@@ -52,7 +52,8 @@ async function renderSchemeContent(panelEl) {
   contentEl.innerHTML =
     (scheme
       ? '<img class="ri-scheme-preview" id="ri-sch-preview-img" src="' + scheme.image + '" alt="Схема участка">' +
-        '<p class="ri-form-hint" style="margin:8px 0 16px">Загружено: ' + formatDate(scheme.uploadedAt) + '</p>'
+        '<p class="ri-form-hint" style="margin:8px 0 16px">Загружено: ' + formatDate(scheme.uploadedAt) +
+          (scheme.uploadedBy ? ' · ' + escHTML(scheme.uploadedBy) : '') + '</p>'
       : '<p class="ri-form-hint" style="margin-bottom:12px">Для этого участка ещё не загружена схема.</p>') +
     '<div class="ri-form-group"><label class="ri-form-label">' + (scheme ? 'Заменить изображение схемы' : 'Загрузить изображение схемы') + '</label>' +
       '<div id="ri-sch-dropzone"></div>' +
@@ -69,6 +70,7 @@ async function renderSchemeContent(panelEl) {
       '<div class="ri-modal-actions" style="justify-content:flex-start">' +
         '<button type="button" class="ri-btn ri-btn-primary" id="ri-sch-save-bounds">💾 Сохранить границы</button>' +
         '<button type="button" class="ri-btn ri-btn-outline" id="ri-sch-calibrate">📐 Откалибровать по точкам</button>' +
+        '<button type="button" class="ri-btn ri-btn-danger" id="ri-sch-delete">🗑 Удалить схему</button>' +
       '</div>'
     ) : '');
 
@@ -108,6 +110,16 @@ async function renderSchemeContent(panelEl) {
     });
     contentEl.querySelector('#ri-sch-calibrate').addEventListener('click', function() {
       openCalibrationModal(plotId, scheme, function() { renderSchemeContent(panelEl); });
+    });
+    contentEl.querySelector('#ri-sch-delete').addEventListener('click', function() {
+      var plotLabel = (SchemesState.plots.find(function(p) { return p.id === plotId; }) || {}).plotName || 'участка';
+      confirmDialog('Удалить схему для «' + plotLabel + '»? На карте перестанут отображаться точки этого участка, пока не загрузите новую схему.', async function() {
+        try {
+          await RiskApi.schemes.remove(plotId);
+        } catch (err) { return; } // ошибка уже показана тостом внутри RiskApi
+        Toast.show('Схема удалена', 'success');
+        await renderSchemeContent(panelEl);
+      });
     });
   }
 }
