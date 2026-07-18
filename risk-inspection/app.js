@@ -75,10 +75,16 @@ function initHeaderMenus() {
 
 function initTheme() {
   var saved = localStorage.getItem('ri_theme') || 'dark';
-  document.documentElement.setAttribute('data-ri-theme', saved);
-  document.getElementById('ri-theme-toggle').addEventListener('click', function() {
+  var btn = document.getElementById('ri-theme-toggle');
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-ri-theme', theme);
+    btn.textContent = theme === 'light' ? '🌙' : '☀️';
+    btn.title = theme === 'light' ? 'Переключить на тёмную тему' : 'Переключить на светлую тему';
+  }
+  applyTheme(saved);
+  btn.addEventListener('click', function() {
     var cur = document.documentElement.getAttribute('data-ri-theme') === 'light' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-ri-theme', cur);
+    applyTheme(cur);
     localStorage.setItem('ri_theme', cur);
   });
 }

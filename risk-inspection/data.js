@@ -5,8 +5,10 @@
  * (выгружены из Power BI, схема dbo):
  *
  *   GEOLOCATION_CALLLOG(ID, DELETED, RECORD_VERSION, FNAME, PHONE, COMMENTS,
- *                        PHOTO, IP, CLOSED, XWGS, YWGS, ZWGS, DDATE,
+ *                        PHOTO, IP, CLOSED, XWGS, YWGS, ZWGS, X, Y, DDATE,
  *                        PLOT_NAME, INDICATOR, LEVEL)
+ *     — XWGS/YWGS/ZWGS: GPS (широта/долгота/высота); X/Y: локальные
+ *       координаты СК-42 (видны в исходной форме обращения предприятия).
  *   GEOLOCATION_ACTIONS(ID, DELETED, TODO, DATE, PHOTO, CALLLOGID)
  *   GEOLOCATION_FIXED_RISKS(ID, DELETED, RECORD_VERSION, FIXED_RISK)
  *   GEOLOCATION_INDICATORS(ID, DELETED, RECORD_VERSION, INDICATOR, FIXED_RISK)
@@ -88,6 +90,7 @@ var RiskApi = (function() {
       ip: row.ip,
       closed: !!row.closed,
       xwgs: row.xwgs, ywgs: row.ywgs, zwgs: row.zwgs,
+      xLocal: row.xLocal, yLocal: row.yLocal,
       ddate: row.ddate,
       plotNameId: row.plotName,
       plotName: plot ? plot.plotName : '',
