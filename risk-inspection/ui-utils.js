@@ -233,17 +233,23 @@ function compressImage(file, maxSize, quality) {
   });
 }
 
-/* ---------- Зона загрузки фото: клик ИЛИ перетаскивание файла ---------- */
-function initPhotoDropzone(container, onFile) {
+/* ---------- Зона загрузки фото: клик ИЛИ перетаскивание файла ----------
+ * opts.accept — атрибут accept у <input type=file> (по умолчанию только изображения)
+ * opts.validate(file) — своя проверка типа файла (по умолчанию только изображения)
+ * opts.hint — текст подсказки в зоне
+ */
+function initPhotoDropzone(container, onFile, opts) {
+  opts = opts || {};
+  var validate = opts.validate || function(file) { return file.type.indexOf('image') === 0; };
   container.classList.add('ri-dropzone');
   container.innerHTML =
     '<span class="ri-dropzone-icon">📷</span>' +
-    '<span>Перетащите фото сюда или нажмите, чтобы выбрать файл</span>' +
-    '<input type="file" accept="image/*">';
+    '<span>' + (opts.hint || 'Перетащите фото сюда или нажмите, чтобы выбрать файл') + '</span>' +
+    '<input type="file" accept="' + (opts.accept || 'image/*') + '">';
   var input = container.querySelector('input[type="file"]');
 
   function handleFile(file) {
-    if (!file || file.type.indexOf('image') !== 0) { Toast.show('Выберите файл изображения', 'warning'); return; }
+    if (!file || !validate(file)) { Toast.show('Неподходящий тип файла', 'warning'); return; }
     onFile(file);
   }
 
@@ -287,6 +293,56 @@ function xyToPixel(x, y, bounds, imgW, imgH) {
     px: (x - bounds.xMin) / (bounds.xMax - bounds.xMin) * imgW,
     py: (bounds.yMax - y) / (bounds.yMax - bounds.yMin) * imgH,
   };
+}
+
+/* ---------- Сжатие файла схемы: PDF/SVG/растр -> data-URL картинки ----------
+ * Порт compressScheme() из schemes.js (проект "Гидрогеологический мониторинг"):
+ * PDF рендерится первой страницей через PDF.js в PNG, SVG передаётся как есть,
+ * растровые изображения — как в compressImage().
+ */
+function compressSchemeFile(file) {
+  var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  var isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
+
+  if (isPdf) {
+    return new Promise(function(resolve, reject) {
+      if (typeof pdfjsLib === 'undefined') { reject(new Error('PDF.js не загружен — проверьте подключение к интернету')); return; }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var typedArr = new Uint8Array(e.target.result);
+        pdfjsLib.getDocument({ data: typedArr }).promise.then(function(pdf) {
+          return pdf.getPage(1);
+        }).then(function(page) {
+          var vp0 = page.getViewport({ scale: 1 });
+          if (!vp0 || vp0.width <= 0 || vp0.height <= 0) { reject(new Error('PDF-страница имеет нулевые размеры')); return; }
+          var MAX_DIM = 4096;
+          var scale = Math.max(0.5, Math.min(4, MAX_DIM / Math.max(vp0.width, vp0.height)));
+          var vp = page.getViewport({ scale: scale });
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(vp.width);
+          canvas.height = Math.round(vp.height);
+          var ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('Не удалось создать canvas (недостаточно памяти)')); return; }
+          page.render({ canvasContext: ctx, viewport: vp }).promise.then(function() {
+            resolve(canvas.toDataURL('image/png'));
+          }).catch(function(err) { reject(new Error('Ошибка рендеринга PDF: ' + err.message)); });
+        }).catch(function(err) { reject(new Error('Ошибка чтения PDF: ' + err.message)); });
+      };
+      reader.onerror = function() { reject(new Error('Ошибка чтения файла')); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  if (isSvg) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function(e) { resolve(e.target.result); };
+      reader.onerror = function() { reject(new Error('Ошибка чтения файла')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  return compressImage(file, 2048, 0.85);
 }
 
 /* ---------- Бейдж уровня опасности ---------- */
