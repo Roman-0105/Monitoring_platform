@@ -15,6 +15,21 @@ function riPlaceholderPhoto(label, hue) {
   return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 }
 
+function riPlaceholderScheme(width, height, label) {
+  var lines = [];
+  var step = 100;
+  for (var gx = 0; gx <= width; gx += step) lines.push('<line x1="' + gx + '" y1="0" x2="' + gx + '" y2="' + height + '" stroke="rgba(148,163,184,.25)" stroke-width="1"/>');
+  for (var gy = 0; gy <= height; gy += step) lines.push('<line x1="0" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="rgba(148,163,184,.25)" stroke-width="1"/>');
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
+    '<rect width="100%" height="100%" fill="#1a2130"/>' +
+    lines.join('') +
+    '<rect x="6" y="6" width="' + (width - 12) + '" height="' + (height - 12) + '" fill="none" stroke="rgba(34,211,238,.5)" stroke-width="3"/>' +
+    '<text x="50%" y="47%" font-family="sans-serif" font-size="30" fill="rgba(226,232,240,.6)" text-anchor="middle">🗺 ' + label.replace(/&/g, '&amp;') + '</text>' +
+    '<text x="50%" y="55%" font-family="sans-serif" font-size="16" fill="rgba(148,163,184,.6)" text-anchor="middle">демо-схема участка</text>' +
+    '</svg>';
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
 function seedDb() {
   var fixedRisks = [
     { id: 1, deleted: 0, recordVersion: 0, fixedRisk: 'Геотехнические и гидрогеологические риски' },
@@ -187,10 +202,22 @@ function seedDb() {
     { id: 3, deleted: 0, recordVersion: 0, fname: 'Акимеев Жанибек', position: 'Начальник участка', phone: '+7 701 111 2233', email: 'Zhanibek.Akimeyev@rggold.kz' },
   ];
 
+  // Демо-схема только для Карьер ЮРГ (id 1) — границы подобраны так, чтобы
+  // покрыть диапазон сгенерированных xLocal/yLocal выше. СРГ и ДСК — без
+  // схемы, чтобы показать состояние "схема ещё не загружена".
+  var schemes = [
+    {
+      id: 1, deleted: 0, recordVersion: 0, plotName: 1,
+      image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ'),
+      xMin: 16000, xMax: 18000, yMin: 46000, yMax: 48000,
+      uploadedAt: '2026-04-01T09:00:00',
+    },
+  ];
+
   return {
     calllog: calllog, actions: actions,
     fixedRisks: fixedRisks, indicators: indicators, levels: levels, plotNames: plotNames,
     notifications: notifications, notificationRecipients: notificationRecipients,
-    contacts: contacts,
+    contacts: contacts, schemes: schemes,
   };
 }

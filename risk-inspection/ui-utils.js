@@ -263,6 +263,32 @@ function initPhotoDropzone(container, onFile) {
   });
 }
 
+/* ---------- Калибровка схемы: реальные координаты <-> пиксели ----------
+ * Порт того же линейного (по осям, без поворота) расчёта, что
+ * используется в проекте "Гидрогеологический мониторинг"
+ * (map.js: xyToPixel/pixelToXY; ui-settings.js: _computeBoundsFromCalibration).
+ */
+function computeBoundsFromCalibration(p1, p2, imgW, imgH) {
+  // p1, p2: {px, py, rx, ry} — пиксель на исходном изображении + реальные X/Y
+  if (Math.abs(p2.px - p1.px) < 1 || Math.abs(p2.py - p1.py) < 1) {
+    throw new Error('Точки слишком близко друг к другу. Выберите точки подальше.');
+  }
+  var scaleX = (p2.rx - p1.rx) / (p2.px - p1.px);
+  var xMin = p1.rx - p1.px * scaleX;
+  var xMax = xMin + imgW * scaleX;
+  // Ось Y изображения растёт вниз, реальная Y — вверх, отсюда инверсия.
+  var scaleY = (p1.ry - p2.ry) / (p2.py - p1.py);
+  var yMax = p1.ry + p1.py * scaleY;
+  var yMin = yMax - imgH * scaleY;
+  return { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax };
+}
+function xyToPixel(x, y, bounds, imgW, imgH) {
+  return {
+    px: (x - bounds.xMin) / (bounds.xMax - bounds.xMin) * imgW,
+    py: (bounds.yMax - y) / (bounds.yMax - bounds.yMin) * imgH,
+  };
+}
+
 /* ---------- Бейдж уровня опасности ---------- */
 function levelBadge(levelLabel) {
   if (!levelLabel) return '';
