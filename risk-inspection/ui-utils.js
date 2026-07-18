@@ -269,6 +269,23 @@ function initPhotoDropzone(container, onFile, opts) {
   });
 }
 
+/* ---------- Недели (для схем и фильтра точек на карте) ----------
+ * Порт currentWeekKey()/formatWeekKey() из schemes.js гидро-проекта,
+ * обобщённый на произвольную дату — нужно, чтобы находить, к какой
+ * неделе относится и схема, и дата обращения (CALLLOG.DDATE).
+ */
+function weekKeyForDate(d) {
+  var jan1 = new Date(d.getFullYear(), 0, 1);
+  var week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+  return d.getFullYear() + '-W' + (week < 10 ? '0' + week : week);
+}
+function currentWeekKey() { return weekKeyForDate(new Date()); }
+function formatWeekKey(weekKey) {
+  var parts = (weekKey || '').split('-W');
+  if (parts.length === 2) return 'Неделя ' + parts[1] + ', ' + parts[0];
+  return weekKey || '';
+}
+
 /* ---------- Калибровка схемы: реальные координаты <-> пиксели ----------
  * Порт того же линейного (по осям, без поворота) расчёта, что
  * используется в проекте "Гидрогеологический мониторинг"

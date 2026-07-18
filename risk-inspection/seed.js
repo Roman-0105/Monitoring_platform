@@ -202,15 +202,25 @@ function seedDb() {
     { id: 3, deleted: 0, recordVersion: 0, fname: 'Акимеев Жанибек', position: 'Начальник участка', phone: '+7 701 111 2233', email: 'Zhanibek.Akimeyev@rggold.kz' },
   ];
 
-  // Демо-схема только для Карьер ЮРГ (id 1) — границы подобраны так, чтобы
-  // покрыть диапазон сгенерированных xLocal/yLocal выше. СРГ и ДСК — без
-  // схемы, чтобы показать состояние "схема ещё не загружена".
+  // Демо-схемы только для Карьер ЮРГ (id 1), по неделям — показывает и
+  // сам принцип "участок + неделя", и то, что переключение недели меняет
+  // набор точек на карте. Границы подобраны так, чтобы покрыть диапазон
+  // сгенерированных xLocal/yLocal выше. СРГ и ДСК — без схем, чтобы
+  // показать состояние "схема ещё не загружена".
+  var demoWeekLatest = weekKeyForDate(new Date(toIso('04.07.2026 07:44')));
+  var demoWeekPrev = weekKeyForDate(new Date(toIso('27.06.2026 09:26')));
   var schemes = [
     {
-      id: 1, deleted: 0, recordVersion: 0, plotName: 1,
-      image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ'),
+      id: 1, deleted: 0, recordVersion: 0, plotName: 1, weekKey: demoWeekLatest,
+      image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ · ' + demoWeekLatest),
       xMin: 16000, xMax: 18000, yMin: 46000, yMax: 48000,
-      uploadedAt: '2026-04-01T09:00:00',
+      uploadedAt: '2026-07-04T09:00:00', uploadedBy: 'Roman Yukin',
+    },
+    {
+      id: 2, deleted: 0, recordVersion: 0, plotName: 1, weekKey: demoWeekPrev,
+      image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ · ' + demoWeekPrev),
+      xMin: 16000, xMax: 18000, yMin: 46000, yMax: 48000,
+      uploadedAt: '2026-06-27T09:00:00', uploadedBy: 'Roman Yukin',
     },
   ];
 

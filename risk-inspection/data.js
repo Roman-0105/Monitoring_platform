@@ -20,12 +20,14 @@
  *   GEOLOCATION_NOTIFICATIONS(ID, DELETED, RECORD_VERSION, FIXED_RISK, LEVEL)
  *   GEOLOCATION_NOTIFICATION_RECIPIENTS(ID, DELETED, NOTIFICATION_ID, EMAIL)
  *   GEOLOCATION_CONTACTS(ID, DELETED, RECORD_VERSION, FNAME, POSITION, PHONE, EMAIL)
- *   GEOLOCATION_SCHEMES(ID, DELETED, RECORD_VERSION, PLOT_NAME, IMAGE,
- *                        X_MIN, X_MAX, Y_MIN, Y_MAX, UPLOADED_AT)
- *     — одна активная схема (план участка) на PLOT_NAME; X_MIN..Y_MAX —
- *       границы в той же системе координат, что и CALLLOG.X/CALLLOG.Y
- *       (СК-42), для проекции точек обращений на схему. Порт того же
- *       2-точечного калибровочного расчёта, что используется в проекте
+ *   GEOLOCATION_SCHEMES(ID, DELETED, RECORD_VERSION, PLOT_NAME, WEEK_KEY, IMAGE,
+ *                        X_MIN, X_MAX, Y_MIN, Y_MAX, UPLOADED_AT, UPLOADED_BY)
+ *     — одна схема на PLOT_NAME + WEEK_KEY (напр. "2026-W29"), новая
+ *       неделя = новая запись, а не замена; X_MIN..Y_MAX — границы в той
+ *       же системе координат, что и CALLLOG.X/CALLLOG.Y (СК-42), для
+ *       проекции точек обращений (тоже отфильтрованных по неделе — см.
+ *       CALLLOG.DDATE) на схему. Порт того же 2-точечного калибровочного
+ *       расчёта, что используется в проекте
  *       "Гидрогеологический мониторинг" (map.js/ui-settings.js).
  *
  * ВАЖНОЕ ДОПУЩЕНИЕ (требует подтверждения у IT при подключении реального API):
@@ -283,39 +285,74 @@ var RiskApi = (function() {
 
   /* ---------------- Схемы участков (одна активная схема на участок) ---------------- */
 
+  function findSchemeRow(plotId, weekKey) {
+    return db.schemes.find(function(s) { return s.plotName === plotId && s.weekKey === weekKey && !s.deleted; });
+  }
+  function listSchemeRows(plotId) {
+    return db.schemes.filter(function(s) { return s.plotName === plotId && !s.deleted; })
+      .sort(function(a, b) { return b.weekKey.localeCompare(a.weekKey); }); // новые недели сверху
+  }
+
   var schemesApi = {
-    getByPlot: async function(plotId) {
-      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId);
-      var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
+    // Все загруженные недели схем для участка, от новой к старой.
+    listWeeks: async function(plotId) {
+      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId + '/weeks');
+      return listSchemeRows(plotId).map(function(s) { return Object.assign({}, s); });
+    },
+    // Схема конкретной недели (или null).
+    getByPlotWeek: async function(plotId, weekKey) {
+      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId + '/' + weekKey);
+      var row = findSchemeRow(plotId, weekKey);
       return row ? Object.assign({}, row) : null;
     },
-    upload: async function(plotId, image) {
+    // Самая свежая загруженная неделя для участка (или null) — используется
+    // и как "неделя по умолчанию" на карте, и как источник границ при
+    // создании схемы для ещё не существовавшей недели (перенос калибровки).
+    getLatest: async function(plotId) {
+      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId + '/latest');
+      var rows = listSchemeRows(plotId);
+      return rows.length ? Object.assign({}, rows[0]) : null;
+    },
+    upload: async function(plotId, weekKey, image) {
       // image: сжатая data-URL картинки схемы
-      if (isRemote()) return remoteCall('POST', '/schemes/' + plotId, { image: image });
-      var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
+      var uploadedBy = (cfg().CURRENT_USER) || '';
+      if (isRemote()) return remoteCall('POST', '/schemes/' + plotId + '/' + weekKey, { image: image, uploadedBy: uploadedBy });
+      var row = findSchemeRow(plotId, weekKey);
       if (row) {
-        row.image = image; row.uploadedAt = new Date().toISOString();
+        // Повторная загрузка на ТУ ЖЕ неделю — заменяет картинку, границы не трогаем.
+        row.image = image; row.uploadedAt = new Date().toISOString(); row.uploadedBy = uploadedBy;
         row.recordVersion = (row.recordVersion || 0) + 1;
       } else {
+        // Новая неделя — переносим границы с последней существующей недели
+        // этого участка (админ может их подправить, не калибровать с нуля).
+        var latest = listSchemeRows(plotId)[0];
         row = {
-          id: nextId('schemes'), deleted: 0, recordVersion: 0, plotName: plotId,
-          image: image, uploadedAt: new Date().toISOString(),
-          xMin: null, xMax: null, yMin: null, yMax: null,
+          id: nextId('schemes'), deleted: 0, recordVersion: 0, plotName: plotId, weekKey: weekKey,
+          image: image, uploadedAt: new Date().toISOString(), uploadedBy: uploadedBy,
+          xMin: latest ? latest.xMin : null, xMax: latest ? latest.xMax : null,
+          yMin: latest ? latest.yMin : null, yMax: latest ? latest.yMax : null,
         };
         db.schemes.push(row);
       }
       persist();
       return Object.assign({}, row);
     },
-    saveBounds: async function(plotId, bounds) {
+    saveBounds: async function(plotId, weekKey, bounds) {
       // bounds: {xMin, xMax, yMin, yMax}
-      if (isRemote()) return remoteCall('PUT', '/schemes/' + plotId + '/bounds', bounds);
-      var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
-      if (!row) throw new Error('Сначала загрузите изображение схемы');
+      if (isRemote()) return remoteCall('PUT', '/schemes/' + plotId + '/' + weekKey + '/bounds', bounds);
+      var row = findSchemeRow(plotId, weekKey);
+      if (!row) throw new Error('Сначала загрузите изображение схемы для этой недели');
       row.xMin = bounds.xMin; row.xMax = bounds.xMax; row.yMin = bounds.yMin; row.yMax = bounds.yMax;
       row.recordVersion = (row.recordVersion || 0) + 1;
       persist();
       return Object.assign({}, row);
+    },
+    remove: async function(plotId, weekKey) {
+      if (isRemote()) return remoteCall('DELETE', '/schemes/' + plotId + '/' + weekKey);
+      var row = findSchemeRow(plotId, weekKey);
+      if (!row) return;
+      row.deleted = 1;
+      persist();
     },
   };
 

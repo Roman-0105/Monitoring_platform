@@ -14,4 +14,5 @@ window.RISK_CONFIG = {
   API_BASE_URL: null, // например: 'https://geoadmin.rggold.kz/api'
   PHOTO_BASE_URL: 'https://geoadmin.rggold.kz/static/files/',
   API_KEY: null, // см. BACKEND_INTEGRATION.md, раздел "Аутентификация"
+  CURRENT_USER: 'Roman Yukin', // TODO: заменить на реального пользователя, когда появится вход
 };

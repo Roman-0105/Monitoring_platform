@@ -1,11 +1,12 @@
-/* Карта: схема участка + точки обращений по их X/Y (СК-42).
+/* Карта: схема участка + точки обращений по их X/Y (СК-42), обе — с
+ * фильтром по неделе (та же неделя, что и у схемы в "Схемы участков").
  * Проекция координат на пиксели — тот же расчёт, что и в калибровке
  * (см. xyToPixel в ui-utils.js), zoom/pan — упрощённая версия того же
  * canvas-подхода, что в проекте "Гидрогеологический мониторинг" (map.js/ui-map.js).
  */
 
 var MapState = {
-  plotId: null, plots: [], img: null, bounds: null, points: [],
+  plotId: null, weekKey: null, weeks: [], plots: [], img: null, bounds: null, points: [],
   scale: 1, offX: 0, offY: 0, minScale: 0.05, maxScale: 8,
   dragging: false, dragMoved: false, lastX: 0, lastY: 0,
 };
@@ -19,6 +20,7 @@ async function initMapPanel(panelEl) {
         '<button class="ri-btn ri-btn-icon" id="ri-map-refresh" title="Обновить (подхватить новую схему/границы)" style="margin-left:auto">🔄</button>' +
       '</div>' +
       '<div class="ri-panel-body" style="padding:12px;display:flex;flex-direction:column">' +
+        '<div class="ri-week-bar" id="ri-map-week-bar"></div>' +
         '<div class="ri-map-wrap" id="ri-map-wrap">' +
           '<canvas id="ri-map-canvas"></canvas>' +
           '<div id="ri-map-empty" class="ri-map-empty" hidden></div>' +
@@ -73,24 +75,54 @@ function renderMapTabs(panelEl) {
   });
 }
 
+/* Загружает список недель для участка и открывает самую свежую
+ * (или текущую календарную неделю, если для участка ещё нет ни одной схемы). */
 async function loadMapForPlot(panelEl, plotId) {
   MapState.plotId = plotId;
   renderMapTabs(panelEl);
-  MapState.img = null; MapState.bounds = null; MapState.points = [];
 
+  MapState.weeks = await RiskApi.schemes.listWeeks(plotId);
+  MapState.weekKey = MapState.weeks.length ? MapState.weeks[0].weekKey : currentWeekKey();
+
+  await loadMapForWeek(panelEl, plotId, MapState.weekKey);
+}
+
+function renderMapWeekBar(panelEl) {
+  var bar = panelEl.querySelector('#ri-map-week-bar');
+  bar.innerHTML =
+    '<input type="week" class="ri-input" id="ri-map-week-input" value="' + escAttr(MapState.weekKey) + '" style="max-width:180px">' +
+    (MapState.weeks.length ? '<div class="ri-week-chips">' + MapState.weeks.map(function(w) {
+      var active = w.weekKey === MapState.weekKey ? ' active' : '';
+      return '<button type="button" class="ri-week-chip' + active + '" data-week="' + escAttr(w.weekKey) + '">' + formatWeekKey(w.weekKey) + '</button>';
+    }).join('') + '</div>' : '<span class="ri-form-hint">Для этого участка ещё нет ни одной загруженной недели</span>');
+
+  bar.querySelector('#ri-map-week-input').addEventListener('change', function(e) {
+    if (!e.target.value) return;
+    loadMapForWeek(panelEl, MapState.plotId, e.target.value);
+  });
+  bar.querySelectorAll('.ri-week-chip').forEach(function(chip) {
+    chip.addEventListener('click', function() { loadMapForWeek(panelEl, MapState.plotId, chip.dataset.week); });
+  });
+}
+
+async function loadMapForWeek(panelEl, plotId, weekKey) {
+  MapState.weekKey = weekKey;
+  renderMapWeekBar(panelEl);
+
+  MapState.img = null; MapState.bounds = null; MapState.points = [];
   var emptyEl = panelEl.querySelector('#ri-map-empty');
-  var scheme = await RiskApi.schemes.getByPlot(plotId);
+  var scheme = await RiskApi.schemes.getByPlotWeek(plotId, weekKey);
 
   if (!scheme) {
     emptyEl.hidden = false;
-    emptyEl.innerHTML = '<p>Для этого участка ещё не загружена схема.</p>' +
+    emptyEl.innerHTML = '<p>Для «' + formatWeekKey(weekKey) + '» на этом участке ещё не загружена схема.</p>' +
       '<button type="button" class="ri-btn ri-btn-primary" onclick="openTab(\'schemes\')">Загрузить схему</button>';
     redrawMap();
     return;
   }
   if (scheme.xMin == null || scheme.xMax == null || scheme.yMin == null || scheme.yMax == null) {
     emptyEl.hidden = false;
-    emptyEl.innerHTML = '<p>Схема загружена, но не откалибрована.</p>' +
+    emptyEl.innerHTML = '<p>Схема этой недели загружена, но не откалибрована.</p>' +
       '<button type="button" class="ri-btn ri-btn-primary" onclick="openTab(\'schemes\')">Откалибровать</button>';
     redrawMap();
     return;
@@ -100,7 +132,10 @@ async function loadMapForPlot(panelEl, plotId) {
   MapState.bounds = { xMin: scheme.xMin, xMax: scheme.xMax, yMin: scheme.yMin, yMax: scheme.yMax };
 
   var allCallLog = await RiskApi.calllog.list();
-  MapState.points = allCallLog.filter(function(r) { return r.plotNameId === plotId && r.xLocal != null && r.yLocal != null; });
+  MapState.points = allCallLog.filter(function(r) {
+    if (r.plotNameId !== plotId || r.xLocal == null || r.yLocal == null || !r.ddate) return false;
+    return weekKeyForDate(new Date(r.ddate)) === weekKey;
+  });
 
   var img = new Image();
   img.onload = function() {
