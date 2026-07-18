@@ -315,7 +315,13 @@ function compressSchemeFile(file) {
         }).then(function(page) {
           var vp0 = page.getViewport({ scale: 1 });
           if (!vp0 || vp0.width <= 0 || vp0.height <= 0) { reject(new Error('PDF-страница имеет нулевые размеры')); return; }
-          var MAX_DIM = 4096;
+          // В "Гидрогеологическом мониторинге" схемы лежат в Supabase Storage,
+          // поэтому там MAX_DIM=4096 и вывод в PNG. Здесь (тестовая модель)
+          // изображение целиком уходит в localStorage браузера (лимит ~5-10 МБ
+          // на весь сайт) — держим картинку заметно компактнее и в JPEG,
+          // чтобы не упереться в квоту. При переходе на боевой API (см.
+          // BACKEND_INTEGRATION.md) это ограничение снимается.
+          var MAX_DIM = 1600;
           var scale = Math.max(0.5, Math.min(4, MAX_DIM / Math.max(vp0.width, vp0.height)));
           var vp = page.getViewport({ scale: scale });
           var canvas = document.createElement('canvas');
@@ -323,8 +329,10 @@ function compressSchemeFile(file) {
           canvas.height = Math.round(vp.height);
           var ctx = canvas.getContext('2d');
           if (!ctx) { reject(new Error('Не удалось создать canvas (недостаточно памяти)')); return; }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
           page.render({ canvasContext: ctx, viewport: vp }).promise.then(function() {
-            resolve(canvas.toDataURL('image/png'));
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
           }).catch(function(err) { reject(new Error('Ошибка рендеринга PDF: ' + err.message)); });
         }).catch(function(err) { reject(new Error('Ошибка чтения PDF: ' + err.message)); });
       };
@@ -342,7 +350,7 @@ function compressSchemeFile(file) {
     });
   }
 
-  return compressImage(file, 2048, 0.85);
+  return compressImage(file, 1600, 0.82);
 }
 
 /* ---------- Бейдж уровня опасности ---------- */

@@ -75,7 +75,11 @@ var RiskApi = (function() {
   }
   function persist() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
-    catch (e) { Toast.show('Не удалось сохранить локальные данные (переполнено хранилище браузера)', 'error'); }
+    catch (e) {
+      Toast.show('Не удалось сохранить: переполнено хранилище браузера. Попробуйте изображение меньшего размера.', 'error');
+      e.alreadyToasted = true; // чтобы вызывающий код не показывал поверх свой (менее понятный) тост
+      throw e;
+    }
   }
   function resetToSeed() { db = seedDb(); persist(); }
 

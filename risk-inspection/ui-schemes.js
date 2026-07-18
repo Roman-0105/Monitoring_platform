@@ -80,7 +80,9 @@ async function renderSchemeContent(panelEl) {
       Toast.show(err.message, 'error');
       return;
     }
-    await RiskApi.schemes.upload(plotId, image);
+    try {
+      await RiskApi.schemes.upload(plotId, image);
+    } catch (err) { return; } // ошибка уже показана тостом внутри RiskApi
     Toast.show('Схема загружена', 'success');
     await renderSchemeContent(panelEl);
   }, {
@@ -99,7 +101,9 @@ async function renderSchemeContent(panelEl) {
       if (xMin == null || xMax == null || yMin == null || yMax == null || xMin >= xMax || yMin >= yMax) {
         Toast.show('Проверьте границы: min должен быть меньше max', 'warning'); return;
       }
-      await RiskApi.schemes.saveBounds(plotId, { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax });
+      try {
+        await RiskApi.schemes.saveBounds(plotId, { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax });
+      } catch (err) { return; } // ошибка уже показана тостом внутри RiskApi
       Toast.show('Границы сохранены', 'success');
     });
     contentEl.querySelector('#ri-sch-calibrate').addEventListener('click', function() {
@@ -181,7 +185,7 @@ function openCalibrationModal(plotId, scheme, onSaved) {
       closeModal(overlay);
       onSaved();
     } catch (err) {
-      Toast.show(err.message, 'error');
+      if (!err.alreadyToasted) Toast.show(err.message, 'error');
     }
   });
 
