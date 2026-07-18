@@ -16,6 +16,7 @@ async function initMapPanel(panelEl) {
       '<div class="ri-panel-toolbar">' +
         '<span class="ri-panel-title">Карта</span>' +
         '<div class="ri-site-tabs" id="ri-map-tabs" style="margin-left:16px"></div>' +
+        '<button class="ri-btn ri-btn-icon" id="ri-map-refresh" title="Обновить (подхватить новую схему/границы)" style="margin-left:auto">🔄</button>' +
       '</div>' +
       '<div class="ri-panel-body" style="padding:12px;display:flex;flex-direction:column">' +
         '<div class="ri-map-wrap" id="ri-map-wrap">' +
@@ -40,8 +41,25 @@ async function initMapPanel(panelEl) {
   renderMapTabs(panelEl);
   setupMapInteraction(panelEl);
   window.addEventListener('resize', function() { sizeMapCanvas(panelEl); redrawMap(); });
+  panelEl.querySelector('#ri-map-refresh').addEventListener('click', function() {
+    RiskApi.plotNames.list().then(function(plots) {
+      MapState.plots = plots;
+      renderMapTabs(panelEl);
+      loadMapForPlot(panelEl, MapState.plotId != null ? MapState.plotId : plots[0].id);
+    });
+  });
 
   await loadMapForPlot(panelEl, MapState.plots[0].id);
+}
+
+/* Вызывается из app.js при каждом переключении на вкладку "Карта" —
+ * так подхватывается схема/границы, загруженные позже во вкладке
+ * "Схемы участков" (initMapPanel выполняется только один раз при
+ * первом открытии вкладки, а не при каждой активации). */
+function reloadActiveMapTab() {
+  var panelEl = document.getElementById('ri-panel-map');
+  if (!panelEl || MapState.plotId == null) return;
+  loadMapForPlot(panelEl, MapState.plotId);
 }
 
 function renderMapTabs(panelEl) {
