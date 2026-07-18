@@ -1691,6 +1691,54 @@ function generateAIBlocks(s) {
   });
 }
 
+// ── Захват схемы скважин (SVG с чистым фоном без точек мониторинга) ──
+function _serializeWellsSvg(el) {
+  try {
+    var s = new XMLSerializer().serializeToString(el);
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(s)));
+  } catch(e) { return null; }
+}
+
+function _fetchAsBase64(url) {
+  return new Promise(function(resolve) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.responseType = 'blob';
+    xhr.onload = function() {
+      var r = new FileReader();
+      r.onload = function(e) { resolve(e.target.result); };
+      r.onerror = function() { resolve(null); };
+      r.readAsDataURL(xhr.response);
+    };
+    xhr.onerror = function() { resolve(null); };
+    xhr.send();
+  });
+}
+
+function _captureWellsSvgWithCleanBg(wellsSvgEl) {
+  var bgEl = wellsSvgEl.querySelector('#wells-map-bg');
+  var origHref = bgEl ? (bgEl.getAttribute('href') || bgEl.getAttribute('xlink:href') || null) : null;
+
+  // Fetch the CLEAN raw scheme (no monitoring points, no domain canvas overlays)
+  var schemePromise = (typeof Schemes !== 'undefined' && Schemes.getCurrentImage)
+    ? Schemes.getCurrentImage()
+    : Promise.resolve(origHref);
+
+  return schemePromise.then(function(schemeUrl) {
+    if (!bgEl || !schemeUrl) return _serializeWellsSvg(wellsSvgEl);
+    return _fetchAsBase64(schemeUrl).then(function(b64) {
+      if (b64) {
+        bgEl.setAttribute('href', b64);
+        bgEl.removeAttribute('xlink:href');
+      }
+      var dataUri = _serializeWellsSvg(wellsSvgEl);
+      // Restore original href so live map is unaffected
+      if (origHref !== null) { bgEl.setAttribute('href', origHref); bgEl.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', origHref); }
+      return dataUri;
+    });
+  });
+}
+
 // ── Захват карты ──────────────────────────────────────────
 function captureMapCanvas() {
   try {
@@ -2020,28 +2068,19 @@ function generateReport() {
 
   mapPromise.then(function(mapImgs) {
     ReportState.mapImgs = mapImgs || { imgA: null, imgB: null };
-    // Capture wells map: try SVG first (exists if user visited wells tab), else use scheme URL directly
     if (s.includeWells) {
       var wellsSvgEl = document.getElementById('wells-map-svg');
       if (wellsSvgEl) {
-        try {
-          // Inline the background image so it renders inside an embedded SVG data URI
-          var bgEl = wellsSvgEl.querySelector('#wells-map-bg');
-          var bgUrl = (ReportState.mapImgs && (ReportState.mapImgs.imgB || ReportState.mapImgs.imgA)) || null;
-          var origHref = null;
-          if (bgEl && bgUrl) {
-            origHref = bgEl.getAttribute('href') || bgEl.getAttribute('xlink:href') || null;
-            bgEl.setAttribute('href', bgUrl);
-            bgEl.removeAttribute('xlink:href');
-          }
-          var svgStr = new XMLSerializer().serializeToString(wellsSvgEl);
-          ReportState.wellsMapSvg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
-          if (bgEl && origHref !== null) bgEl.setAttribute('href', origHref);
-        } catch(e) { ReportState.wellsMapSvg = null; }
+        return _captureWellsSvgWithCleanBg(wellsSvgEl).then(function(dataUri) {
+          ReportState.wellsMapSvg = dataUri;
+        });
       } else {
         ReportState.wellsMapSvg = null;
       }
     }
+    return Promise.resolve();
+
+  }).then(function() {
     if (s.includePhotos) {
       Toast.progress('rp-gen', 'Загрузка фотографий...');
       return preloadAllPhotos(ReportState.ptsA, ReportState.ptsB, ReportState.dtsA, ReportState.dtsB);
