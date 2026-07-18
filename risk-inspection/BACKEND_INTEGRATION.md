@@ -101,7 +101,28 @@ CREATE TABLE dbo.GEOLOCATION_CONTACTS (
   PHONE           NVARCHAR(50),
   EMAIL           NVARCHAR(200)
 );
+
+-- Одна активная схема (план участка) на PLOT_NAME + границы координат
+-- для проекции точек CALLLOG.X/CALLLOG.Y на изображение схемы.
+CREATE TABLE dbo.GEOLOCATION_SCHEMES (
+  ID              INT IDENTITY PRIMARY KEY,
+  DELETED         INT NOT NULL DEFAULT 0,
+  RECORD_VERSION  INT NOT NULL DEFAULT 0,
+  PLOT_NAME       INT NOT NULL REFERENCES dbo.GEOLOCATION_PLOT_NAMES(ID),
+  IMAGE           NVARCHAR(400) NOT NULL,  -- имя файла, как в CALLLOG.PHOTO — полный URL = PHOTO_BASE_URL + IMAGE
+  X_MIN           FLOAT NULL,
+  X_MAX           FLOAT NULL,
+  Y_MIN           FLOAT NULL,
+  Y_MAX           FLOAT NULL,
+  UPLOADED_AT     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
 ```
+
+> В тестовой модели изображение схемы хранится как base64 прямо в
+> localStorage (`risk-inspection/data.js`, `RiskApi.schemes`). В боевом
+> API изображение, как и фото обращений, должно лежать файлом на
+> сервере (тот же `geoadmin.rggold.kz/static/files/`), а `IMAGE` —
+> хранить только имя файла, не сами байты.
 
 ### 2.3 Отправка e-mail при новом обращении
 
@@ -138,6 +159,9 @@ CREATE TABLE dbo.GEOLOCATION_CONTACTS (
 | `POST /notifications` | создать/обновить (если передан `id`) | `{id?, fixedRisk, level, recipients:[email,...]}` | запись |
 | `DELETE /notifications/:id` | удалить | — | `204` |
 | `GET /contacts` `POST /contacts` `PUT .../:id` `DELETE .../:id` | справочник контактов | `{fname, position, phone, email}` | запись/список |
+| `GET /schemes/:plotId` | текущая схема участка (или `null`) | — | `{id, plotName, image, xMin, xMax, yMin, yMax, uploadedAt}` |
+| `POST /schemes/:plotId` | загрузить/заменить изображение схемы | `{image}` (base64 или уже загруженный файл) | запись |
+| `PUT /schemes/:plotId/bounds` | сохранить границы координат (ручной ввод или расчёт калибровки) | `{xMin, xMax, yMin, yMax}` | запись |
 
 Все `DELETE` — это soft-delete (`UPDATE ... SET DELETED = 1`), а не
 физическое удаление строки — так же, как это уже сделано в существующих

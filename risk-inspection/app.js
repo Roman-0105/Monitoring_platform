@@ -2,10 +2,12 @@
 
 var TAB_DEFS = {
   journal: { title: 'Журнал Обращений', init: initJournalPanel },
+  map: { title: 'Карта', init: initMapPanel },
   plotNames: { title: 'Названия участков', init: initPlotNamesPanel },
   fixedRisks: { title: 'Зафиксированные риски', init: initFixedRisksPanel },
   indicators: { title: 'Индикаторы опасностей', init: initIndicatorsPanel },
   levels: { title: 'Уровни опасности', init: initLevelsPanel },
+  schemes: { title: 'Схемы участков', init: initSchemesPanel },
   notifications: { title: 'Уведомления', init: initNotificationsPanel },
   contacts: { title: 'Контакты', init: initContactsPanel },
 };

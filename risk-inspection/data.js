@@ -20,6 +20,13 @@
  *   GEOLOCATION_NOTIFICATIONS(ID, DELETED, RECORD_VERSION, FIXED_RISK, LEVEL)
  *   GEOLOCATION_NOTIFICATION_RECIPIENTS(ID, DELETED, NOTIFICATION_ID, EMAIL)
  *   GEOLOCATION_CONTACTS(ID, DELETED, RECORD_VERSION, FNAME, POSITION, PHONE, EMAIL)
+ *   GEOLOCATION_SCHEMES(ID, DELETED, RECORD_VERSION, PLOT_NAME, IMAGE,
+ *                        X_MIN, X_MAX, Y_MIN, Y_MAX, UPLOADED_AT)
+ *     — одна активная схема (план участка) на PLOT_NAME; X_MIN..Y_MAX —
+ *       границы в той же системе координат, что и CALLLOG.X/CALLLOG.Y
+ *       (СК-42), для проекции точек обращений на схему. Порт того же
+ *       2-точечного калибровочного расчёта, что используется в проекте
+ *       "Гидрогеологический мониторинг" (map.js/ui-settings.js).
  *
  * ВАЖНОЕ ДОПУЩЕНИЕ (требует подтверждения у IT при подключении реального API):
  * поля CALLLOG.PLOT_NAME / .INDICATOR / .LEVEL и INDICATORS.FIXED_RISK трактуются
@@ -259,6 +266,44 @@ var RiskApi = (function() {
 
   var contactsApi = makeRefApi('contacts', ['fname', 'position', 'phone', 'email']);
 
+  /* ---------------- Схемы участков (одна активная схема на участок) ---------------- */
+
+  var schemesApi = {
+    getByPlot: async function(plotId) {
+      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId);
+      var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
+      return row ? Object.assign({}, row) : null;
+    },
+    upload: async function(plotId, image) {
+      // image: сжатая data-URL картинки схемы
+      if (isRemote()) return remoteCall('POST', '/schemes/' + plotId, { image: image });
+      var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
+      if (row) {
+        row.image = image; row.uploadedAt = new Date().toISOString();
+        row.recordVersion = (row.recordVersion || 0) + 1;
+      } else {
+        row = {
+          id: nextId('schemes'), deleted: 0, recordVersion: 0, plotName: plotId,
+          image: image, uploadedAt: new Date().toISOString(),
+          xMin: null, xMax: null, yMin: null, yMax: null,
+        };
+        db.schemes.push(row);
+      }
+      persist();
+      return Object.assign({}, row);
+    },
+    saveBounds: async function(plotId, bounds) {
+      // bounds: {xMin, xMax, yMin, yMax}
+      if (isRemote()) return remoteCall('PUT', '/schemes/' + plotId + '/bounds', bounds);
+      var row = db.schemes.find(function(s) { return s.plotName === plotId && !s.deleted; });
+      if (!row) throw new Error('Сначала загрузите изображение схемы');
+      row.xMin = bounds.xMin; row.xMax = bounds.xMax; row.yMin = bounds.yMin; row.yMax = bounds.yMax;
+      row.recordVersion = (row.recordVersion || 0) + 1;
+      persist();
+      return Object.assign({}, row);
+    },
+  };
+
   load();
 
   return {
@@ -269,6 +314,7 @@ var RiskApi = (function() {
     plotNames: plotNamesApi,
     notifications: notificationsApi,
     contacts: contactsApi,
+    schemes: schemesApi,
     photoUrl: photoUrl,
     _debugResetSeed: resetToSeed,
   };
