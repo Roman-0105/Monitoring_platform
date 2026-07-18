@@ -218,7 +218,6 @@ table.ri-table td.ri-td-wrap { white-space: normal; max-width: 320px; }
 .ri-td-link { color: var(--ri-accent); }
 .ri-empty-row td { text-align: center; padding: 40px; color: var(--ri-txt-3); }
 
-.ri-open-mark { color: var(--ri-bad); font-weight: 700; text-align: center; display: block; }
 
 /* ---------------- Pager ---------------- */
 .ri-pager { display: flex; align-items: center; gap: 10px; justify-content: center; }
@@ -281,6 +280,7 @@ table.ri-table td.ri-td-wrap { white-space: normal; max-width: 320px; }
   outline: none; border-color: var(--ri-accent); box-shadow: 0 0 0 3px var(--ri-accent-glow);
 }
 .ri-textarea { resize: vertical; min-height: 70px; font-family: inherit; }
+.ri-input:disabled { background: var(--ri-bg-3); color: var(--ri-txt-3); cursor: not-allowed; }
 .ri-form-hint { font-size: 11px; color: var(--ri-txt-3); }
 
 /* Поисковый select */
@@ -314,13 +314,9 @@ table.ri-table td.ri-td-wrap { white-space: normal; max-width: 320px; }
 .ri-chip-add .ri-input { flex: 1; }
 
 /* Карточка деталей обращения */
-.ri-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-bottom: 14px; }
-.ri-detail-item { display: flex; flex-direction: column; gap: 3px; }
-.ri-detail-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ri-txt-3); }
-.ri-detail-value { font-size: 13.5px; color: var(--ri-txt-1); }
 .ri-detail-photo { width: 100%; border-radius: var(--ri-r); border: 1px solid var(--ri-line); display: block; max-height: 320px; object-fit: cover; background: var(--ri-bg-2); }
 .ri-detail-photo-wrap { margin-bottom: 14px; }
-.ri-map-link { font-size: 12px; color: var(--ri-accent); text-decoration: none; }
+.ri-map-link { font-size: 12px; color: var(--ri-accent); text-decoration: none; display: inline-block; margin: -6px 0 12px; }
 .ri-map-link:hover { text-decoration: underline; }
 
 .ri-actions-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 14px; }

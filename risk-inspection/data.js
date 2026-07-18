@@ -144,6 +144,19 @@ var RiskApi = (function() {
     return action;
   }
 
+  async function updateCallLog(id, data) {
+    // data: { fname, phone, comments, plotName, indicator, level, ddate, xwgs, ywgs, zwgs, xLocal, yLocal }
+    if (isRemote()) return remoteCall('PUT', '/calllog/' + id, data);
+    var row = db.calllog.find(function(r) { return r.id === id; });
+    if (!row) throw new Error('Обращение не найдено');
+    ['fname', 'phone', 'comments', 'plotName', 'indicator', 'level', 'ddate', 'xwgs', 'ywgs', 'zwgs', 'xLocal', 'yLocal'].forEach(function(f) {
+      if (data[f] !== undefined) row[f] = data[f];
+    });
+    row.recordVersion = (row.recordVersion || 0) + 1;
+    persist();
+    return decorateCallLog(row);
+  }
+
   async function reopenCallLog(calllogId) {
     if (isRemote()) return remoteCall('POST', '/calllog/' + calllogId + '/reopen');
     var row = db.calllog.find(function(r) { return r.id === calllogId; });
@@ -249,7 +262,7 @@ var RiskApi = (function() {
   load();
 
   return {
-    calllog: { list: getCallLog, get: getCallLogById, close: closeCallLog, reopen: reopenCallLog, actions: getActionsByCallLogId },
+    calllog: { list: getCallLog, get: getCallLogById, close: closeCallLog, reopen: reopenCallLog, actions: getActionsByCallLogId, update: updateCallLog },
     fixedRisks: fixedRisksApi,
     indicators: indicatorsApi,
     levels: levelsApi,
