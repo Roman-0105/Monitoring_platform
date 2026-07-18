@@ -73,10 +73,23 @@ async function renderSchemeContent(panelEl) {
     ) : '');
 
   initPhotoDropzone(contentEl.querySelector('#ri-sch-dropzone'), async function(file) {
-    var image = await compressImage(file, 2048, 0.85);
+    var image;
+    try {
+      image = await compressSchemeFile(file);
+    } catch (err) {
+      Toast.show(err.message, 'error');
+      return;
+    }
     await RiskApi.schemes.upload(plotId, image);
     Toast.show('Схема загружена', 'success');
     await renderSchemeContent(panelEl);
+  }, {
+    accept: 'image/*,application/pdf,.pdf,image/svg+xml,.svg',
+    hint: 'Перетащите PDF/изображение схемы сюда или нажмите, чтобы выбрать файл',
+    validate: function(file) {
+      return file.type.indexOf('image') === 0 || file.type === 'application/pdf' ||
+        /\.(pdf|svg)$/i.test(file.name);
+    },
   });
 
   if (scheme) {
