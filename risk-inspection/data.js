@@ -54,10 +54,21 @@ var RiskApi = (function() {
     return max + 1;
   }
 
+  var TABLES = ['calllog', 'actions', 'fixedRisks', 'indicators', 'levels', 'plotNames',
+    'notifications', 'notificationRecipients', 'contacts', 'schemes'];
+
+  function ensureTables(d) {
+    // Заполняет отсутствующие таблицы пустыми массивами — нужно, если в
+    // localStorage лежат данные, сохранённые до появления новой сущности
+    // (например, "schemes" добавили позже, чем у пользователя уже был кэш).
+    TABLES.forEach(function(t) { if (!Array.isArray(d[t])) d[t] = []; });
+    return d;
+  }
+
   function load() {
     try {
       var raw = localStorage.getItem(LS_KEY);
-      if (raw) { db = JSON.parse(raw); return; }
+      if (raw) { db = ensureTables(JSON.parse(raw)); return; }
     } catch (e) { /* ignore corrupt storage */ }
     db = seedDb();
     persist();
