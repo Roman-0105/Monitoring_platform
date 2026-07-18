@@ -1,10 +1,12 @@
-/* Справочники -> Схемы участков: загрузка плана участка + калибровка
- * координат (порт того же 2-точечного расчёта, что в проекте
+/* Справочники -> Схемы участков: загрузка плана участка по неделям +
+ * калибровка координат (порт того же 2-точечного расчёта, что в проекте
  * "Гидрогеологический мониторинг" — см. computeBoundsFromCalibration
- * в ui-utils.js).
+ * в ui-utils.js). Схема хранится по паре "участок + неделя" — каждую
+ * неделю загружается новая, старые остаются в истории и доступны через
+ * выбор недели, а не затираются.
  */
 
-var SchemesState = { plots: [], activePlotId: null };
+var SchemesState = { plots: [], activePlotId: null, activeWeekKey: null };
 
 async function initSchemesPanel(panelEl) {
   panelEl.innerHTML =
@@ -26,7 +28,7 @@ async function initSchemesPanel(panelEl) {
   SchemesState.activePlotId = SchemesState.plots[0].id;
 
   renderSchemeTabs(panelEl);
-  await renderSchemeContent(panelEl);
+  await selectDefaultWeekAndRender(panelEl);
 }
 
 function renderSchemeTabs(panelEl) {
@@ -39,23 +41,41 @@ function renderSchemeTabs(panelEl) {
     btn.addEventListener('click', async function() {
       SchemesState.activePlotId = Number(btn.dataset.plot);
       renderSchemeTabs(panelEl);
-      await renderSchemeContent(panelEl);
+      await selectDefaultWeekAndRender(panelEl);
     });
   });
+}
+
+// При переключении участка — открываем его самую свежую загруженную
+// неделю, а если схем ещё нет вовсе — текущую календарную неделю.
+async function selectDefaultWeekAndRender(panelEl) {
+  var latest = await RiskApi.schemes.getLatest(SchemesState.activePlotId);
+  SchemesState.activeWeekKey = latest ? latest.weekKey : currentWeekKey();
+  await renderSchemeContent(panelEl);
 }
 
 async function renderSchemeContent(panelEl) {
   var contentEl = panelEl.querySelector('#ri-sch-content');
   var plotId = SchemesState.activePlotId;
-  var scheme = await RiskApi.schemes.getByPlot(plotId);
+  var weeks = await RiskApi.schemes.listWeeks(plotId);
+  var weekKey = SchemesState.activeWeekKey;
+  var scheme = await RiskApi.schemes.getByPlotWeek(plotId, weekKey);
 
   contentEl.innerHTML =
+    '<div class="ri-week-bar">' +
+      '<input type="week" class="ri-input" id="ri-sch-week-input" value="' + escAttr(weekKey) + '" style="max-width:180px">' +
+      '<button type="button" class="ri-btn ri-btn-sm ri-btn-outline" id="ri-sch-week-today">Текущая неделя</button>' +
+      (weeks.length ? '<div class="ri-week-chips">' + weeks.map(function(w) {
+        var active = w.weekKey === weekKey ? ' active' : '';
+        return '<button type="button" class="ri-week-chip' + active + '" data-week="' + escAttr(w.weekKey) + '">' + formatWeekKey(w.weekKey) + '</button>';
+      }).join('') + '</div>' : '') +
+    '</div>' +
     (scheme
       ? '<img class="ri-scheme-preview" id="ri-sch-preview-img" src="' + scheme.image + '" alt="Схема участка">' +
         '<p class="ri-form-hint" style="margin:8px 0 16px">Загружено: ' + formatDate(scheme.uploadedAt) +
           (scheme.uploadedBy ? ' · ' + escHTML(scheme.uploadedBy) : '') + '</p>'
-      : '<p class="ri-form-hint" style="margin-bottom:12px">Для этого участка ещё не загружена схема.</p>') +
-    '<div class="ri-form-group"><label class="ri-form-label">' + (scheme ? 'Заменить изображение схемы' : 'Загрузить изображение схемы') + '</label>' +
+      : '<p class="ri-form-hint" style="margin:12px 0">Для «' + formatWeekKey(weekKey) + '» ещё не загружена схема.</p>') +
+    '<div class="ri-form-group"><label class="ri-form-label">' + (scheme ? 'Заменить изображение схемы этой недели' : 'Загрузить изображение схемы на эту неделю') + '</label>' +
       '<div id="ri-sch-dropzone"></div>' +
     '</div>' +
     (scheme ? (
@@ -70,9 +90,25 @@ async function renderSchemeContent(panelEl) {
       '<div class="ri-modal-actions" style="justify-content:flex-start">' +
         '<button type="button" class="ri-btn ri-btn-primary" id="ri-sch-save-bounds">💾 Сохранить границы</button>' +
         '<button type="button" class="ri-btn ri-btn-outline" id="ri-sch-calibrate">📐 Откалибровать по точкам</button>' +
-        '<button type="button" class="ri-btn ri-btn-danger" id="ri-sch-delete">🗑 Удалить схему</button>' +
+        '<button type="button" class="ri-btn ri-btn-danger" id="ri-sch-delete">🗑 Удалить схему этой недели</button>' +
       '</div>'
     ) : '');
+
+  contentEl.querySelector('#ri-sch-week-input').addEventListener('change', async function(e) {
+    if (!e.target.value) return;
+    SchemesState.activeWeekKey = e.target.value;
+    await renderSchemeContent(panelEl);
+  });
+  contentEl.querySelector('#ri-sch-week-today').addEventListener('click', async function() {
+    SchemesState.activeWeekKey = currentWeekKey();
+    await renderSchemeContent(panelEl);
+  });
+  contentEl.querySelectorAll('.ri-week-chip').forEach(function(chip) {
+    chip.addEventListener('click', async function() {
+      SchemesState.activeWeekKey = chip.dataset.week;
+      await renderSchemeContent(panelEl);
+    });
+  });
 
   initPhotoDropzone(contentEl.querySelector('#ri-sch-dropzone'), async function(file) {
     var image;
@@ -83,7 +119,7 @@ async function renderSchemeContent(panelEl) {
       return;
     }
     try {
-      await RiskApi.schemes.upload(plotId, image);
+      await RiskApi.schemes.upload(plotId, weekKey, image);
     } catch (err) { return; } // ошибка уже показана тостом внутри RiskApi
     Toast.show('Схема загружена', 'success');
     await renderSchemeContent(panelEl);
@@ -104,18 +140,18 @@ async function renderSchemeContent(panelEl) {
         Toast.show('Проверьте границы: min должен быть меньше max', 'warning'); return;
       }
       try {
-        await RiskApi.schemes.saveBounds(plotId, { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax });
+        await RiskApi.schemes.saveBounds(plotId, weekKey, { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax });
       } catch (err) { return; } // ошибка уже показана тостом внутри RiskApi
       Toast.show('Границы сохранены', 'success');
     });
     contentEl.querySelector('#ri-sch-calibrate').addEventListener('click', function() {
-      openCalibrationModal(plotId, scheme, function() { renderSchemeContent(panelEl); });
+      openCalibrationModal(plotId, weekKey, scheme, function() { renderSchemeContent(panelEl); });
     });
     contentEl.querySelector('#ri-sch-delete').addEventListener('click', function() {
       var plotLabel = (SchemesState.plots.find(function(p) { return p.id === plotId; }) || {}).plotName || 'участка';
-      confirmDialog('Удалить схему для «' + plotLabel + '»? На карте перестанут отображаться точки этого участка, пока не загрузите новую схему.', async function() {
+      confirmDialog('Удалить схему «' + plotLabel + '» за ' + formatWeekKey(weekKey) + '? На карте за эту неделю перестанут отображаться точки этого участка, пока не загрузите схему заново.', async function() {
         try {
-          await RiskApi.schemes.remove(plotId);
+          await RiskApi.schemes.remove(plotId, weekKey);
         } catch (err) { return; } // ошибка уже показана тостом внутри RiskApi
         Toast.show('Схема удалена', 'success');
         await renderSchemeContent(panelEl);
@@ -126,7 +162,7 @@ async function renderSchemeContent(panelEl) {
 
 /* ---------------- Инструмент калибровки: 2 точки на изображении ---------------- */
 
-function openCalibrationModal(plotId, scheme, onSaved) {
+function openCalibrationModal(plotId, weekKey, scheme, onSaved) {
   var body =
     '<p class="ri-form-hint" style="margin-bottom:10px">Кликните 2 точки на схеме с известными реальными координатами (чем дальше друг от друга — тем точнее), затем укажите их X/Y.</p>' +
     '<div class="ri-cal-wrap" id="ri-cal-wrap">' +
@@ -146,7 +182,7 @@ function openCalibrationModal(plotId, scheme, onSaved) {
       '<button type="button" class="ri-btn ri-btn-primary" id="ri-cal-compute" disabled>Вычислить и сохранить границы</button>' +
     '</div>';
 
-  var overlay = buildModal('Калибровка схемы', body, { width: '760px' });
+  var overlay = buildModal('Калибровка схемы — ' + formatWeekKey(weekKey), body, { width: '760px' });
   var img = overlay.querySelector('#ri-cal-img');
   var markersEl = overlay.querySelector('#ri-cal-markers');
   var wrap = overlay.querySelector('#ri-cal-wrap');
@@ -192,7 +228,7 @@ function openCalibrationModal(plotId, scheme, onSaved) {
     calPts[0].rx = x1; calPts[0].ry = y1; calPts[1].rx = x2; calPts[1].ry = y2;
     try {
       var bounds = computeBoundsFromCalibration(calPts[0], calPts[1], img.naturalWidth, img.naturalHeight);
-      await RiskApi.schemes.saveBounds(plotId, bounds);
+      await RiskApi.schemes.saveBounds(plotId, weekKey, bounds);
       Toast.show('Границы вычислены и сохранены', 'success');
       closeModal(overlay);
       onSaved();
