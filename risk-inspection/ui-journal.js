@@ -147,22 +147,30 @@ async function openJournalDetail(id) {
   var actions = await RiskApi.calllog.actions(id);
   var mapUrl = (row.xwgs && row.ywgs) ? 'https://maps.google.com/?q=' + row.xwgs + ',' + row.ywgs : '';
 
-  var body =
+  var infoPanel =
     (row.photo ? '<div class="ri-detail-photo-wrap"><img class="ri-detail-photo" src="' + row.photoUrl + '" alt="Фото"></div>' : '') +
     '<div class="ri-detail-grid">' +
-      detailItem('Фамилия, Имя', row.fname) +
-      detailItem('Телефон', row.phone) +
-      detailItem('Участок', row.plotName) +
-      detailItem('Статус', row.closed ? levelBadgeStatus(true) : levelBadgeStatus(false)) +
-      detailItem('Зафиксированный риск', row.fixedRisk) +
-      detailItem('Индикатор опасности', row.indicator) +
+      detailItem('Фамилия, Имя', escHTML(row.fname)) +
+      detailItem('Телефон', escHTML(row.phone)) +
+      detailItem('Название участка', escHTML(row.plotName)) +
+      detailItem('Зафиксированный риск', escHTML(row.fixedRisk)) +
+      detailItem('Индикатор опасности', escHTML(row.indicator)) +
       detailItem('Уровень опасности', row.level ? levelBadge(row.level) : '—') +
       detailItem('Дата обращения', formatDate(row.ddate)) +
-      detailItem('IP устройства', row.ip || '—') +
-      detailItem('Координаты', mapUrl ? '<a class="ri-map-link" href="' + mapUrl + '" target="_blank" rel="noopener">' + row.xwgs.toFixed(5) + ', ' + row.ywgs.toFixed(5) + ' ↗</a>' : '—') +
+      detailItem('IP устройства', escHTML(row.ip) || '—') +
+      detailItem('X (СК-42)', row.xLocal != null ? row.xLocal.toFixed(4) : '—') +
+      detailItem('Y (СК-42)', row.yLocal != null ? row.yLocal.toFixed(4) : '—') +
+      detailItem('Z', row.zwgs != null ? row.zwgs.toFixed(2) : '—') +
+      detailItem('Координаты (WGS-84)', mapUrl ? '<a class="ri-map-link" href="' + mapUrl + '" target="_blank" rel="noopener">' + row.xwgs.toFixed(5) + ', ' + row.ywgs.toFixed(5) + ' ↗</a>' : '—') +
     '</div>' +
-    (row.comments ? '<div class="ri-form-group"><span class="ri-form-label">Комментарий заявителя</span><div class="ri-detail-value">' + escHTML(row.comments) + '</div></div>' : '') +
-    (actions.length ? '<div class="ri-form-label" style="margin-top:8px">История действий</div><div class="ri-actions-list">' +
+    (row.comments ? '<div class="ri-form-group"><span class="ri-form-label">Комментарий заявителя</span><div class="ri-detail-value">' + escHTML(row.comments) + '</div></div>' : '');
+
+  var statusPanel =
+    '<div class="ri-status-row">' +
+      '<span class="ri-form-label">Статус обращения:</span>' +
+      (row.closed ? '<span class="ri-badge ri-badge-ok">✓ Закрыто</span>' : '<span class="ri-badge ri-badge-bad">● Открыто</span>') +
+    '</div>' +
+    (actions.length ? '<div class="ri-form-label" style="margin-bottom:8px">Что сделано</div><div class="ri-actions-list">' +
       actions.map(function(a) {
         return '<div class="ri-action-item"><div class="ri-action-date">' + formatDate(a.date) + '</div>' +
           '<div>' + escHTML(a.todo) + '</div>' +
@@ -173,7 +181,22 @@ async function openJournalDetail(id) {
       ? '<div class="ri-modal-actions"><button type="button" class="ri-btn ri-btn-outline" id="ri-j-reopen">↺ Возобновить</button></div>'
       : closeFormHTML());
 
-  var overlay = buildModal('Обращение №' + row.id, body, { width: '620px' });
+  var body =
+    '<div class="ri-dtabs">' +
+      '<button type="button" class="ri-dtab active" data-dtab="info">Информация по обращению №' + row.id + '</button>' +
+      '<button type="button" class="ri-dtab" data-dtab="status">Статус обращения</button>' +
+    '</div>' +
+    '<div class="ri-dtab-panel active" data-dtab-panel="info">' + infoPanel + '</div>' +
+    '<div class="ri-dtab-panel" data-dtab-panel="status">' + statusPanel + '</div>';
+
+  var overlay = buildModal('Обращение №' + row.id, body, { width: '640px' });
+
+  overlay.querySelectorAll('.ri-dtab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      overlay.querySelectorAll('.ri-dtab').forEach(function(t) { t.classList.toggle('active', t === tab); });
+      overlay.querySelectorAll('.ri-dtab-panel').forEach(function(p) { p.classList.toggle('active', p.dataset.dtabPanel === tab.dataset.dtab); });
+    });
+  });
 
   if (row.closed) {
     overlay.querySelector('#ri-j-reopen').addEventListener('click', async function() {
@@ -190,9 +213,6 @@ async function openJournalDetail(id) {
 function detailItem(label, value) {
   return '<div class="ri-detail-item"><span class="ri-detail-label">' + escHTML(label) + '</span><span class="ri-detail-value">' + (value || '—') + '</span></div>';
 }
-function levelBadgeStatus(closed) {
-  return closed ? '<span class="ri-badge ri-badge-ok">Закрыто</span>' : '<span class="ri-badge ri-badge-bad">Открыто</span>';
-}
 
 function closeFormHTML() {
   return '<div style="margin-top:6px;border-top:1px solid var(--ri-line);padding-top:14px">' +
@@ -202,8 +222,8 @@ function closeFormHTML() {
       '<textarea class="ri-textarea" id="ri-j-todo" placeholder="Опишите выполненные работы..."></textarea>' +
     '</div>' +
     '<div class="ri-form-group">' +
-      '<label class="ri-form-label">Фото подтверждения</label>' +
-      '<input type="file" accept="image/*" capture="environment" id="ri-j-close-photo">' +
+      '<label class="ri-form-label">Фото с результатом</label>' +
+      '<div id="ri-j-close-dropzone"></div>' +
       '<div id="ri-j-close-preview"></div>' +
     '</div>' +
     '<div class="ri-modal-actions">' +
@@ -214,12 +234,10 @@ function closeFormHTML() {
 
 function wireCloseForm(overlay, id) {
   var photoDataUrl = '';
-  var fileInput = overlay.querySelector('#ri-j-close-photo');
-  fileInput.addEventListener('change', async function() {
-    var f = fileInput.files && fileInput.files[0];
-    if (!f) return;
-    photoDataUrl = await compressImage(f);
-    overlay.querySelector('#ri-j-close-preview').innerHTML = '<img class="ri-detail-photo" style="margin-top:8px;max-height:160px" src="' + photoDataUrl + '">';
+  initPhotoDropzone(overlay.querySelector('#ri-j-close-dropzone'), async function(file) {
+    photoDataUrl = await compressImage(file);
+    overlay.querySelector('#ri-j-close-preview').innerHTML =
+      '<img class="ri-detail-photo" style="margin-top:8px;max-height:200px" src="' + photoDataUrl + '">';
   });
   overlay.querySelector('#ri-j-close-submit').addEventListener('click', async function() {
     var todo = overlay.querySelector('#ri-j-todo').value.trim();

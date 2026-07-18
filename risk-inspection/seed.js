@@ -128,6 +128,7 @@ function seedDb() {
       ip: '95.82.' + (70 + (idx % 20)) + '.' + (100 + idx),
       closed: r[5] ? 1 : 0,
       xwgs: 52.47 + (idx % 10) * 0.002, ywgs: 69.58 + (idx % 7) * 0.003, zwgs: 200 + (idx % 15) * 8,
+      xLocal: 16400 + idx * 37.4, yLocal: 46300 + idx * 52.1,
       ddate: toIso(r[4]),
       plotName: r[1], indicator: r[2], level: r[3],
     });
@@ -150,6 +151,7 @@ function seedDb() {
       ip: '95.82.' + (60 + (i % 20)) + '.' + (50 + i),
       closed: i % 5 === 0 ? 1 : 0,
       xwgs: 52.46 + (i % 12) * 0.0025, ywgs: 69.59 + (i % 9) * 0.0031, zwgs: 210 + (i % 18) * 6,
+      xLocal: 16200 + i * 41.7, yLocal: 46150 + i * 33.8,
       ddate: dstr,
       plotName: plotNames[i % plotNames.length].id, indicator: ind.id, level: lvl,
     });

@@ -233,6 +233,36 @@ function compressImage(file, maxSize, quality) {
   });
 }
 
+/* ---------- Зона загрузки фото: клик ИЛИ перетаскивание файла ---------- */
+function initPhotoDropzone(container, onFile) {
+  container.classList.add('ri-dropzone');
+  container.innerHTML =
+    '<span class="ri-dropzone-icon">📷</span>' +
+    '<span>Перетащите фото сюда или нажмите, чтобы выбрать файл</span>' +
+    '<input type="file" accept="image/*">';
+  var input = container.querySelector('input[type="file"]');
+
+  function handleFile(file) {
+    if (!file || file.type.indexOf('image') !== 0) { Toast.show('Выберите файл изображения', 'warning'); return; }
+    onFile(file);
+  }
+
+  input.addEventListener('change', function() {
+    var f = input.files && input.files[0];
+    if (f) handleFile(f);
+  });
+  ['dragenter', 'dragover'].forEach(function(evt) {
+    container.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); container.classList.add('ri-dropzone-drag'); });
+  });
+  ['dragleave', 'drop'].forEach(function(evt) {
+    container.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); container.classList.remove('ri-dropzone-drag'); });
+  });
+  container.addEventListener('drop', function(e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+}
+
 /* ---------- Бейдж уровня опасности ---------- */
 function levelBadge(levelLabel) {
   if (!levelLabel) return '';
