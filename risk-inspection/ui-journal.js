@@ -1,0 +1,301 @@
+/* Журнал Обращений — главный экран панели */
+
+var JournalState = {
+  rows: [], filtered: [], page: 1, pageSize: 20,
+  sortKey: 'ddate', sortDir: -1, search: '', selectedId: null,
+};
+
+async function initJournalPanel(panelEl) {
+  panelEl.innerHTML =
+    '<div class="ri-panel-card">' +
+      '<div class="ri-panel-toolbar">' +
+        '<span class="ri-panel-title">Журнал Обращений</span>' +
+        '<input type="text" class="ri-input" id="ri-j-search" placeholder="Поиск: ФИО, участок, риск..." style="max-width:260px">' +
+        '<button class="ri-btn ri-btn-icon" id="ri-j-refresh" title="Обновить">🔄</button>' +
+      '</div>' +
+      '<div class="ri-panel-body"><div class="ri-table-wrap" id="ri-j-table"></div></div>' +
+      '<div class="ri-panel-footer">' +
+        '<div class="ri-panel-footer-left" id="ri-j-pager"></div>' +
+        '<button class="ri-btn ri-btn-danger" id="ri-j-del">🗑 Удалить</button>' +
+        '<button class="ri-btn" id="ri-j-edit">✎ Изменить</button>' +
+        '<button class="ri-btn ri-btn-primary" id="ri-j-add">＋ Добавить</button>' +
+      '</div>' +
+    '</div>';
+
+  panelEl.querySelector('#ri-j-refresh').addEventListener('click', reloadJournal);
+  panelEl.querySelector('#ri-j-search').addEventListener('input', function(e) {
+    JournalState.search = e.target.value.toLowerCase();
+    JournalState.page = 1;
+    applyFilter();
+  });
+  panelEl.querySelector('#ri-j-edit').addEventListener('click', function() {
+    if (JournalState.selectedId != null) openJournalDetail(JournalState.selectedId);
+    else Toast.show('Выберите строку в таблице', 'warning');
+  });
+  panelEl.querySelector('#ri-j-add').addEventListener('click', openJournalAddModal);
+  panelEl.querySelector('#ri-j-del').addEventListener('click', function() {
+    if (JournalState.selectedId == null) { Toast.show('Выберите строку в таблице', 'warning'); return; }
+    var id = JournalState.selectedId;
+    confirmDialog('Удалить выбранное обращение из журнала?', async function() {
+      await riDeleteCallLog(id);
+      JournalState.selectedId = null;
+      Toast.show('Обращение удалено', 'success');
+      reloadJournal();
+    });
+  });
+
+  await reloadJournal();
+}
+
+async function riDeleteCallLog(id) {
+  // локальный мок: помечаем как deleted напрямую через RiskApi (нет отдельного метода — используем reopen/close слой)
+  if (window.RISK_CONFIG && window.RISK_CONFIG.API_BASE_URL) return;
+  var raw = JSON.parse(localStorage.getItem('ri_db_v1'));
+  var row = raw.calllog.find(function(r) { return r.id === id; });
+  if (row) row.deleted = 1;
+  localStorage.setItem('ri_db_v1', JSON.stringify(raw));
+}
+
+async function reloadJournal() {
+  JournalState.rows = await RiskApi.calllog.list();
+  applyFilter();
+}
+
+function applyFilter() {
+  var q = JournalState.search;
+  JournalState.filtered = !q ? JournalState.rows.slice() : JournalState.rows.filter(function(r) {
+    return (r.fname + ' ' + r.plotName + ' ' + r.fixedRisk + ' ' + r.indicator + ' ' + r.level).toLowerCase().indexOf(q) !== -1;
+  });
+  sortRows();
+}
+
+function sortRows() {
+  var key = JournalState.sortKey, dir = JournalState.sortDir;
+  JournalState.filtered.sort(function(a, b) {
+    var av = a[key], bv = b[key];
+    if (key === 'ddate') { av = new Date(av); bv = new Date(bv); }
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+  renderJournalTable();
+}
+
+var JOURNAL_COLS = [
+  { key: 'fname', label: 'Фамилия, Имя' },
+  { key: 'plotName', label: 'Название участка' },
+  { key: 'fixedRisk', label: 'Зафиксированный риск' },
+  { key: 'indicator', label: 'Индикатор опасности' },
+  { key: 'level', label: 'Уровень опасности' },
+  { key: 'ddate', label: 'Дата обращения' },
+  { key: 'closed', label: 'Открыто' },
+];
+
+function renderJournalTable() {
+  var wrap = document.getElementById('ri-j-table');
+  if (!wrap) return;
+  var pag = paginate(JournalState.filtered, JournalState.page, JournalState.pageSize);
+  JournalState.page = pag.page;
+
+  var thead = '<thead><tr>' + JOURNAL_COLS.map(function(c) {
+    var ind = JournalState.sortKey === c.key ? (JournalState.sortDir === 1 ? '▲' : '▼') : '';
+    return '<th data-key="' + c.key + '">' + c.label + '<span class="ri-sort-ind">' + ind + '</span></th>';
+  }).join('') + '</tr></thead>';
+
+  var body = pag.pageItems.length ? pag.pageItems.map(function(r) {
+    var sel = r.id === JournalState.selectedId ? ' ri-row-selected' : '';
+    return '<tr class="' + sel.trim() + '" data-id="' + r.id + '">' +
+      '<td>' + escHTML(r.fname) + '</td>' +
+      '<td>' + escHTML(r.plotName) + '</td>' +
+      '<td class="ri-td-wrap">' + escHTML(r.fixedRisk) + '</td>' +
+      '<td class="ri-td-wrap">' + escHTML(r.indicator) + '</td>' +
+      '<td>' + (r.level ? levelBadge(r.level) : '') + '</td>' +
+      '<td class="ri-td-muted">' + formatDate(r.ddate) + '</td>' +
+      '<td>' + (r.closed ? '<span class="ri-open-mark">×</span>' : '') + '</td>' +
+      '</tr>';
+  }).join('') : '<tr class="ri-empty-row"><td colspan="' + JOURNAL_COLS.length + '">Нет обращений</td></tr>';
+
+  wrap.innerHTML = '<table class="ri-table">' + thead + '<tbody>' + body + '</tbody></table>';
+
+  wrap.querySelectorAll('thead th').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var key = th.dataset.key;
+      if (JournalState.sortKey === key) JournalState.sortDir *= -1;
+      else { JournalState.sortKey = key; JournalState.sortDir = 1; }
+      sortRows();
+    });
+  });
+  wrap.querySelectorAll('tbody tr[data-id]').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      JournalState.selectedId = Number(tr.dataset.id);
+      wrap.querySelectorAll('tbody tr').forEach(function(t) { t.classList.remove('ri-row-selected'); });
+      tr.classList.add('ri-row-selected');
+    });
+    tr.addEventListener('dblclick', function() { openJournalDetail(Number(tr.dataset.id)); });
+  });
+
+  renderPager(document.getElementById('ri-j-pager'), pag.page, pag.pageCount, function(p) {
+    JournalState.page = p; renderJournalTable();
+  });
+}
+
+/* ---------------- Детали обращения ---------------- */
+
+async function openJournalDetail(id) {
+  var row = await RiskApi.calllog.get(id);
+  if (!row) { Toast.show('Обращение не найдено', 'error'); return; }
+  var actions = await RiskApi.calllog.actions(id);
+  var mapUrl = (row.xwgs && row.ywgs) ? 'https://maps.google.com/?q=' + row.xwgs + ',' + row.ywgs : '';
+
+  var body =
+    (row.photo ? '<div class="ri-detail-photo-wrap"><img class="ri-detail-photo" src="' + row.photoUrl + '" alt="Фото"></div>' : '') +
+    '<div class="ri-detail-grid">' +
+      detailItem('Фамилия, Имя', row.fname) +
+      detailItem('Телефон', row.phone) +
+      detailItem('Участок', row.plotName) +
+      detailItem('Статус', row.closed ? levelBadgeStatus(true) : levelBadgeStatus(false)) +
+      detailItem('Зафиксированный риск', row.fixedRisk) +
+      detailItem('Индикатор опасности', row.indicator) +
+      detailItem('Уровень опасности', row.level ? levelBadge(row.level) : '—') +
+      detailItem('Дата обращения', formatDate(row.ddate)) +
+      detailItem('IP устройства', row.ip || '—') +
+      detailItem('Координаты', mapUrl ? '<a class="ri-map-link" href="' + mapUrl + '" target="_blank" rel="noopener">' + row.xwgs.toFixed(5) + ', ' + row.ywgs.toFixed(5) + ' ↗</a>' : '—') +
+    '</div>' +
+    (row.comments ? '<div class="ri-form-group"><span class="ri-form-label">Комментарий заявителя</span><div class="ri-detail-value">' + escHTML(row.comments) + '</div></div>' : '') +
+    (actions.length ? '<div class="ri-form-label" style="margin-top:8px">История действий</div><div class="ri-actions-list">' +
+      actions.map(function(a) {
+        return '<div class="ri-action-item"><div class="ri-action-date">' + formatDate(a.date) + '</div>' +
+          '<div>' + escHTML(a.todo) + '</div>' +
+          (a.photo ? '<img class="ri-detail-photo" style="margin-top:8px;max-height:160px" src="' + RiskApi.photoUrl(a.photo) + '">' : '') +
+          '</div>';
+      }).join('') + '</div>' : '') +
+    (row.closed
+      ? '<div class="ri-modal-actions"><button type="button" class="ri-btn ri-btn-outline" id="ri-j-reopen">↺ Возобновить</button></div>'
+      : closeFormHTML());
+
+  var overlay = buildModal('Обращение №' + row.id, body, { width: '620px' });
+
+  if (row.closed) {
+    overlay.querySelector('#ri-j-reopen').addEventListener('click', async function() {
+      await RiskApi.calllog.reopen(id);
+      Toast.show('Обращение возобновлено', 'success');
+      closeModal(overlay);
+      reloadJournal();
+    });
+  } else {
+    wireCloseForm(overlay, id);
+  }
+}
+
+function detailItem(label, value) {
+  return '<div class="ri-detail-item"><span class="ri-detail-label">' + escHTML(label) + '</span><span class="ri-detail-value">' + (value || '—') + '</span></div>';
+}
+function levelBadgeStatus(closed) {
+  return closed ? '<span class="ri-badge ri-badge-ok">Закрыто</span>' : '<span class="ri-badge ri-badge-bad">Открыто</span>';
+}
+
+function closeFormHTML() {
+  return '<div style="margin-top:6px;border-top:1px solid var(--ri-line);padding-top:14px">' +
+    '<div class="ri-form-label" style="margin-bottom:8px">Закрыть обращение</div>' +
+    '<div class="ri-form-group">' +
+      '<label class="ri-form-label" for="ri-j-todo">Что сделано <span class="ri-req">*</span></label>' +
+      '<textarea class="ri-textarea" id="ri-j-todo" placeholder="Опишите выполненные работы..."></textarea>' +
+    '</div>' +
+    '<div class="ri-form-group">' +
+      '<label class="ri-form-label">Фото подтверждения</label>' +
+      '<input type="file" accept="image/*" capture="environment" id="ri-j-close-photo">' +
+      '<div id="ri-j-close-preview"></div>' +
+    '</div>' +
+    '<div class="ri-modal-actions">' +
+      '<button type="button" class="ri-btn ri-btn-primary" id="ri-j-close-submit">✓ Закрыть обращение</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function wireCloseForm(overlay, id) {
+  var photoDataUrl = '';
+  var fileInput = overlay.querySelector('#ri-j-close-photo');
+  fileInput.addEventListener('change', async function() {
+    var f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    photoDataUrl = await compressImage(f);
+    overlay.querySelector('#ri-j-close-preview').innerHTML = '<img class="ri-detail-photo" style="margin-top:8px;max-height:160px" src="' + photoDataUrl + '">';
+  });
+  overlay.querySelector('#ri-j-close-submit').addEventListener('click', async function() {
+    var todo = overlay.querySelector('#ri-j-todo').value.trim();
+    if (!todo) { Toast.show('Опишите, что было сделано', 'warning'); return; }
+    await RiskApi.calllog.close(id, { todo: todo, photo: photoDataUrl });
+    Toast.show('Обращение закрыто', 'success');
+    closeModal(overlay);
+    reloadJournal();
+  });
+}
+
+/* ---------------- Ручное добавление обращения ---------------- */
+
+async function openJournalAddModal() {
+  var plots = await RiskApi.plotNames.list();
+  var risks = await RiskApi.fixedRisks.list();
+  var levels = await RiskApi.levels.list();
+
+  var body =
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">Фамилия, Имя <span class="ri-req">*</span></label><input class="ri-input" id="ri-a-fname"></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Телефон</label><input class="ri-input" id="ri-a-phone"></div>' +
+    '</div>' +
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">Участок <span class="ri-req">*</span></label><div id="ri-a-plot"></div></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Уровень опасности</label><div id="ri-a-level"></div></div>' +
+    '</div>' +
+    '<div class="ri-form-row">' +
+      '<div class="ri-form-group"><label class="ri-form-label">Зафиксированный риск <span class="ri-req">*</span></label><div id="ri-a-risk"></div></div>' +
+      '<div class="ri-form-group"><label class="ri-form-label">Индикатор опасности <span class="ri-req">*</span></label><div id="ri-a-indicator"></div></div>' +
+    '</div>' +
+    '<div class="ri-form-group"><label class="ri-form-label">Комментарий</label><textarea class="ri-textarea" id="ri-a-comments"></textarea></div>' +
+    '<div class="ri-modal-actions">' +
+      '<button type="button" class="ri-btn ri-btn-outline" data-act="cancel">Отмена</button>' +
+      '<button type="button" class="ri-btn ri-btn-primary" data-act="save">Добавить</button>' +
+    '</div>';
+
+  var overlay = buildModal('Новое обращение (ручной ввод)', body, { width: '560px' });
+
+  var plotSel = initSearchSelect(overlay.querySelector('#ri-a-plot'), plots.map(function(p) { return { value: p.id, label: p.plotName }; }), {});
+  var levelSel = initSearchSelect(overlay.querySelector('#ri-a-level'), levels.map(function(l) { return { value: l.id, label: l.level }; }), {});
+  var riskSel, indicatorSel;
+  var allIndicators = await RiskApi.indicators.list();
+  indicatorSel = initSearchSelect(overlay.querySelector('#ri-a-indicator'), [], { placeholder: 'сначала выберите риск' });
+  riskSel = initSearchSelect(overlay.querySelector('#ri-a-risk'), risks.map(function(r) { return { value: r.id, label: r.fixedRisk }; }), {
+    onChange: function(riskId) {
+      var opts = allIndicators.filter(function(i) { return String(i.fixedRisk) === String(riskId); })
+        .map(function(i) { return { value: i.id, label: i.indicator }; });
+      indicatorSel.setOptions(opts);
+      indicatorSel.setValue('');
+    },
+  });
+
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', function() { closeModal(overlay); });
+  overlay.querySelector('[data-act="save"]').addEventListener('click', async function() {
+    var fname = overlay.querySelector('#ri-a-fname').value.trim();
+    var plotId = Number(plotSel.getValue());
+    var riskId = riskSel.getValue();
+    var indicatorId = Number(indicatorSel.getValue());
+    if (!fname || !plotId || !riskId || !indicatorId) {
+      Toast.show('Заполните обязательные поля', 'warning'); return;
+    }
+    var raw = JSON.parse(localStorage.getItem('ri_db_v1'));
+    var maxId = raw.calllog.reduce(function(m, r) { return Math.max(m, r.id); }, 0);
+    raw.calllog.push({
+      id: maxId + 1, deleted: 0, recordVersion: 0,
+      fname: fname, phone: overlay.querySelector('#ri-a-phone').value.trim(),
+      comments: overlay.querySelector('#ri-a-comments').value.trim(),
+      photo: '', ip: 'manual-entry', closed: 0,
+      xwgs: null, ywgs: null, zwgs: null,
+      ddate: new Date().toISOString(),
+      plotName: plotId, indicator: indicatorId, level: levelSel.getValue() ? Number(levelSel.getValue()) : null,
+    });
+    localStorage.setItem('ri_db_v1', JSON.stringify(raw));
+    Toast.show('Обращение добавлено', 'success');
+    closeModal(overlay);
+    reloadJournal();
+  });
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Инспекция участков — Геоаналитика рисков</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="ri-app">
+
+  <header class="ri-header">
+    <div class="ri-brand"><span class="ri-brand-dot"></span>Инспекция участков</div>
+
+    <nav class="ri-menu">
+      <div class="ri-menu-item">
+        <button type="button" class="ri-menu-btn" data-open-tab="journal">Журнал Обращений</button>
+      </div>
+
+      <div class="ri-menu-item" data-dropdown>
+        <button type="button" class="ri-menu-btn">Справочники <span class="ri-menu-caret">▾</span></button>
+        <div class="ri-dropdown">
+          <button type="button" class="ri-dropdown-item" data-open-tab="plotNames">Названия участков</button>
+          <button type="button" class="ri-dropdown-item" data-open-tab="fixedRisks">Зафиксированные риски</button>
+          <button type="button" class="ri-dropdown-item" data-open-tab="indicators">Индикаторы опасностей</button>
+          <button type="button" class="ri-dropdown-item" data-open-tab="levels">Уровни опасности</button>
+        </div>
+      </div>
+
+      <div class="ri-menu-item" data-dropdown>
+        <button type="button" class="ri-menu-btn">Службы <span class="ri-menu-caret">▾</span></button>
+        <div class="ri-dropdown">
+          <button type="button" class="ri-dropdown-item" data-open-tab="notifications">Уведомления</button>
+          <button type="button" class="ri-dropdown-item" data-open-tab="contacts">Контакты</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="ri-header-spacer"></div>
+
+    <div class="ri-header-right">
+      <button type="button" class="ri-icon-btn" id="ri-theme-toggle" title="Тема">🌗</button>
+      <span class="ri-user">Admin <b>Roman Yukin</b></span>
+      <button type="button" class="ri-icon-btn" id="ri-logout" title="Выход">⏻</button>
+    </div>
+  </header>
+
+  <div class="ri-tabstrip" id="ri-tabstrip"></div>
+
+  <main class="ri-content" id="ri-content"></main>
+
+</div>
+
+<script src="config.js"></script>
+<script src="ui-utils.js"></script>
+<script src="seed.js"></script>
+<script src="data.js"></script>
+<script src="ui-journal.js"></script>
+<script src="ui-reference.js"></script>
+<script src="ui-notifications.js"></script>
+<script src="ui-contacts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
