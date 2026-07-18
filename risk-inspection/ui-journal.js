@@ -148,7 +148,6 @@ function renderJournalTable() {
 async function openJournalDetail(id) {
   var row = await RiskApi.calllog.get(id);
   if (!row) { Toast.show('Обращение не найдено', 'error'); return; }
-  var actions = await RiskApi.calllog.actions(id);
   var plots = await RiskApi.plotNames.list();
   var allIndicators = await RiskApi.indicators.list();
   var levels = await RiskApi.levels.list();
@@ -192,13 +191,6 @@ async function openJournalDetail(id) {
       '<span class="ri-form-label">Статус обращения:</span>' +
       (row.closed ? '<span class="ri-badge ri-badge-ok">✓ Закрыто</span>' : '<span class="ri-badge ri-badge-bad">● Открыто</span>') +
     '</div>' +
-    (actions.length ? '<div class="ri-form-label" style="margin-bottom:8px">Что сделано</div><div class="ri-actions-list">' +
-      actions.map(function(a) {
-        return '<div class="ri-action-item"><div class="ri-action-date">' + formatDate(a.date) + '</div>' +
-          '<div>' + escHTML(a.todo) + '</div>' +
-          (a.photo ? '<img class="ri-detail-photo" style="margin-top:8px;max-height:160px" src="' + RiskApi.photoUrl(a.photo) + '">' : '') +
-          '</div>';
-      }).join('') + '</div>' : '') +
     (row.closed
       ? '<div class="ri-modal-actions"><button type="button" class="ri-btn ri-btn-outline" id="ri-j-reopen">↺ Возобновить</button></div>'
       : closeFormHTML());
