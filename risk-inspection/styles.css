@@ -395,15 +395,29 @@ table.ri-table td.ri-td-wrap { white-space: normal; max-width: 320px; }
 .ri-map-wrap { position: relative; flex: 1; min-height: 420px; border-radius: var(--ri-r-lg); border: 1px solid var(--ri-line); background: var(--ri-bg-2); overflow: hidden; }
 .ri-map-wrap canvas { display: block; width: 100%; height: 100%; }
 .ri-map-controls { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; }
-.ri-map-legend {
-  position: absolute; left: 12px; bottom: 12px; display: flex; gap: 14px; padding: 8px 12px;
-  background: var(--ri-glass); border: 1px solid var(--ri-line); border-radius: var(--ri-r-sm);
-  font-size: 11.5px; color: var(--ri-txt-2);
-}
-.ri-map-legend span { display: flex; align-items: center; gap: 6px; }
 .ri-map-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .ri-map-dot-open { background: var(--ri-bad); }
 .ri-map-dot-closed { background: var(--ri-ok); }
+
+/* Условные обозначения схемы — попап от кнопки 📋 в .ri-map-controls */
+.ri-map-legend-panel {
+  position: absolute; top: 12px; right: 56px; width: 280px;
+  background: var(--ri-glass); border: 1px solid var(--ri-line); border-radius: var(--ri-r);
+  box-shadow: var(--ri-shadow); padding: 12px 14px; z-index: 25;
+  animation: riDropdownIn 160ms var(--ri-tr) both;
+}
+.ri-map-legend-panel[hidden] { display: none; }
+.ri-map-legend-panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ri-txt-3); margin-bottom: 8px; }
+.ri-map-legend-item { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ri-txt-2); padding: 4px 0; }
+.ri-map-legend-divider { height: 1px; background: var(--ri-line); margin: 6px 0; }
+.ri-map-legend-line {
+  width: 26px; height: 8px; flex: 0 0 auto; border-radius: 2px; border: 1px solid var(--ri-line);
+}
+.ri-map-legend-line-dark { background: #0f172a; border: 1px solid rgba(148,163,184,.45); }
+.ri-map-legend-hatch {
+  width: 26px; height: 14px; flex: 0 0 auto; border-radius: 2px; border: 1.5px solid var(--hc);
+  background-image: repeating-linear-gradient(45deg, var(--hc) 0, var(--hc) 1.5px, transparent 1.5px, transparent 6px);
+}
 .ri-map-empty {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 14px; color: var(--ri-txt-2); font-size: 13.5px; text-align: center; padding: 20px;
