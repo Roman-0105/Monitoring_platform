@@ -143,7 +143,7 @@ function seedDb() {
       ip: '95.82.' + (70 + (idx % 20)) + '.' + (100 + idx),
       closed: r[5] ? 1 : 0,
       xwgs: 52.47 + (idx % 10) * 0.002, ywgs: 69.58 + (idx % 7) * 0.003, zwgs: 200 + (idx % 15) * 8,
-      xLocal: 16400 + idx * 37.4, yLocal: 46300 + idx * 52.1,
+      xLocal: 45900 + idx * 56, yLocal: 15850 + idx * 58,
       ddate: toIso(r[4]),
       plotName: r[1], indicator: r[2], level: r[3],
     });
@@ -166,7 +166,7 @@ function seedDb() {
       ip: '95.82.' + (60 + (i % 20)) + '.' + (50 + i),
       closed: i % 5 === 0 ? 1 : 0,
       xwgs: 52.46 + (i % 12) * 0.0025, ywgs: 69.59 + (i % 9) * 0.0031, zwgs: 210 + (i % 18) * 6,
-      xLocal: 16200 + i * 41.7, yLocal: 46150 + i * 33.8,
+      xLocal: 45950 + i * 40, yLocal: 15900 + i * 42,
       ddate: dstr,
       plotName: plotNames[i % plotNames.length].id, indicator: ind.id, level: lvl,
     });
@@ -204,26 +204,26 @@ function seedDb() {
 
   // Демо-схемы только для Карьер ЮРГ (id 1), по неделям — показывает и
   // сам принцип "участок + неделя", и то, что переключение недели меняет
-  // набор точек на карте. Границы расширены (были 16000-18000/46000-48000)
-  // так, чтобы вместить и сгенерированные xLocal/yLocal обращений выше
-  // (макс. ~17335/47603 у реальных строк, ~17576/47265 у догенерированных),
-  // и реальную геологию карьера ЮРГ из RI_FAULTS_SEED/RI_DOMAINS_SEED
-  // (bbox после перестановки осей: ~15849-17269 x, ~45953-47317 y —
-  // см. seed-geology.js). СРГ и ДСК — без схем и геологии, чтобы
-  // показать состояние "схема ещё не загружена".
+  // набор точек на карте. Границы: X 45850-47350, Y 15800-17350 — тот же
+  // диапазон, что в docstring domens.js (реальная геология, БЕЗ
+  // перестановки осей — см. seed-geology.js) и что администратор реально
+  // вводит при калибровке настоящей схемы этого участка; xLocal/yLocal
+  // обращений выше подобраны так, чтобы попадать в эти же границы.
+  // СРГ и ДСК — без схем и геологии, чтобы показать состояние "схема
+  // ещё не загружена".
   var demoWeekLatest = weekKeyForDate(new Date(toIso('04.07.2026 07:44')));
   var demoWeekPrev = weekKeyForDate(new Date(toIso('27.06.2026 09:26')));
   var schemes = [
     {
       id: 1, deleted: 0, recordVersion: 0, plotName: 1, weekKey: demoWeekLatest,
       image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ · ' + demoWeekLatest),
-      xMin: 15800, xMax: 17650, yMin: 45900, yMax: 47700,
+      xMin: 45850, xMax: 47350, yMin: 15800, yMax: 17350,
       uploadedAt: '2026-07-04T09:00:00', uploadedBy: 'Roman Yukin',
     },
     {
       id: 2, deleted: 0, recordVersion: 0, plotName: 1, weekKey: demoWeekPrev,
       image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ · ' + demoWeekPrev),
-      xMin: 15800, xMax: 17650, yMin: 45900, yMax: 47700,
+      xMin: 45850, xMax: 47350, yMin: 15800, yMax: 17350,
       uploadedAt: '2026-06-27T09:00:00', uploadedBy: 'Roman Yukin',
     },
   ];
@@ -253,5 +253,8 @@ function seedDb() {
     contacts: contacts, schemes: schemes,
     faults: faults, domains: domains,
     colors: {},
+    // Геология уже засеяна напрямую выше — не даём data.js повторно (хоть и
+    // безвредно) перевставлять её через миграцию migrateGeologySeedV2.
+    meta: { geologySeededV2: true },
   };
 }
