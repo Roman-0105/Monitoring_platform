@@ -59,6 +59,8 @@ var RiskApi = (function() {
   var TABLES = ['calllog', 'actions', 'fixedRisks', 'indicators', 'levels', 'plotNames',
     'notifications', 'notificationRecipients', 'contacts', 'schemes', 'faults', 'domains'];
 
+  var GEOLOGY_IMPORT_LABEL = 'Импорт ГИС (DXF, карьер ЮРГ)';
+
   function ensureTables(d) {
     // Заполняет отсутствующие таблицы пустыми массивами — нужно, если в
     // localStorage лежат данные, сохранённые до появления новой сущности
@@ -66,7 +68,7 @@ var RiskApi = (function() {
     TABLES.forEach(function(t) { if (!Array.isArray(d[t])) d[t] = []; });
     if (!d.colors || typeof d.colors !== 'object') d.colors = {};
     if (!d.meta || typeof d.meta !== 'object') d.meta = {};
-    migrateGeologySeed(d);
+    migrateGeologySeedV2(d);
     return d;
   }
 
@@ -74,32 +76,43 @@ var RiskApi = (function() {
   // часть пользователей могла успеть открыть панель — у них в localStorage
   // faults/domains уже существуют как пустые массивы (см. TABLES.forEach
   // выше), поэтому обычная "довалидация отсутствующих таблиц" их не
-  // подхватывает. Разовая миграция (флаг d.meta.geologySeeded) доливает
+  // подхватывает. Разовая миграция (флаг d.meta.geologySeededV2) доливает
   // реальную геологию в УЖЕ существующую базу, не трогая остальные данные
-  // (в т.ч. уже загруженную/откалиброванную пользователем схему); дальше
-  // флаг не даёт повторно навязывать удалённые пользователем разломы/домены.
-  function migrateGeologySeed(d) {
-    if (d.meta.geologySeeded) return;
+  // (в т.ч. уже загруженную/откалиброванную пользователем схему).
+  //
+  // V2, а не V1: первая версия (флаг geologySeeded, теперь не используется)
+  // ошибочно переставляла оси X/Y местами — совпадение с собственными
+  // придуманными демо-границами приняли за подтверждение, а реальная
+  // калибровка администратора (X: 45850-47350, Y: 15800-17350 — точно
+  // диапазон из docstring domens.js) показала, что переставлять было не
+  // нужно. V2 не просто доливает недостающее, а сначала СНОСИТ все ранее
+  // авто-импортированные записи (по createdBy === GEOLOGY_IMPORT_LABEL —
+  // руками нарисованные пользователем фигуры не трогает) и вставляет их
+  // заново уже с исправленными (см. RI_FAULTS_SEED/RI_DOMAINS_SEED в
+  // seed-geology.js) координатами. Флаг не даёт повторно навязывать
+  // удалённые пользователем разломы/домены после этой разовой правки.
+  function migrateGeologySeedV2(d) {
+    if (d.meta.geologySeededV2) return;
     // Если seed-geology.js почему-то ещё не подгрузился (нарушен порядок
     // <script> в index.html) — не выставляем флаг, попробуем снова при
     // следующей загрузке страницы, а не потеряем шанс смигрировать навсегда.
     if (typeof RI_FAULTS_SEED === 'undefined' || typeof RI_DOMAINS_SEED === 'undefined') return;
-    d.meta.geologySeeded = true;
+    d.meta.geologySeededV2 = true;
     var plot = d.plotNames.find(function(p) { return p.plotName === 'Карьер ЮРГ' && !p.deleted; });
     if (!plot) return;
-    if (d.faults.some(function(f) { return f.plotName === plot.id; })) return;
-    if (d.domains.some(function(x) { return x.plotName === plot.id; })) return;
-    RI_FAULTS_SEED.forEach(function(points, i) {
+    d.faults = d.faults.filter(function(f) { return !(f.plotName === plot.id && f.createdBy === GEOLOGY_IMPORT_LABEL); });
+    d.domains = d.domains.filter(function(x) { return !(x.plotName === plot.id && x.createdBy === GEOLOGY_IMPORT_LABEL); });
+    RI_FAULTS_SEED.forEach(function(points) {
       d.faults.push({
         id: nextLocalId(d.faults), deleted: 0, recordVersion: 0, plotName: plot.id,
-        name: '', points: points, createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+        name: '', points: points, createdAt: '2026-06-01T00:00:00', createdBy: GEOLOGY_IMPORT_LABEL,
       });
     });
     RI_DOMAINS_SEED.forEach(function(dm) {
       d.domains.push({
         id: nextLocalId(d.domains), deleted: 0, recordVersion: 0, plotName: plot.id,
         name: dm.name, points: dm.pts, color: dm.color,
-        createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+        createdAt: '2026-06-01T00:00:00', createdBy: GEOLOGY_IMPORT_LABEL,
       });
     });
   }
@@ -116,10 +129,10 @@ var RiskApi = (function() {
       var raw = localStorage.getItem(LS_KEY);
       if (raw) {
         var parsed = JSON.parse(raw);
-        var before = parsed.meta && parsed.meta.geologySeeded;
+        var before = parsed.meta && parsed.meta.geologySeededV2;
         db = ensureTables(parsed);
         // ensureTables() может дозаполнить недостающие таблицы и разово
-        // смигрировать геологию (migrateGeologySeed) — сохраняем сразу,
+        // смигрировать геологию (migrateGeologySeedV2) — сохраняем сразу,
         // а не откладываем до следующего "естественного" persist(),
         // иначе миграция будет молча повторяться в памяти на каждой
         // перезагрузке страницы, так и не попав в localStorage.
