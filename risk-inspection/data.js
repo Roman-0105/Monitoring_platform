@@ -91,15 +91,36 @@ var RiskApi = (function() {
   // заново уже с исправленными (см. RI_FAULTS_SEED/RI_DOMAINS_SEED в
   // seed-geology.js) координатами. Флаг не даёт повторно навязывать
   // удалённые пользователем разломы/домены после этой разовой правки.
+  function findYurgPlot(d) {
+    // Точное совпадение сначала; затем без учёта регистра/пробелов (мало ли
+    // лишний пробел или другой регистр закрался при ручном редактировании
+    // справочника); и только в самом крайнем случае — id=1, как в исходном
+    // сиде (см. seed.js: plotNames[0] всегда "Карьер ЮРГ"). Раньше здесь было
+    // только точное совпадение, а флаг migrateGeologySeededV2 всё равно
+    // выставлялся как "готово" даже если участок не нашёлся — из-за этого
+    // при малейшем расхождении строки геология не могла домигрировать
+    // никогда. Теперь ищем настойчивее, а не сдаёмся после первой попытки.
+    var byExact = d.plotNames.find(function(p) { return !p.deleted && p.plotName === 'Карьер ЮРГ'; });
+    if (byExact) return byExact;
+    var norm = function(s) { return (s || '').trim().toLowerCase().replace(/\s+/g, ' '); };
+    var byLoose = d.plotNames.find(function(p) { return !p.deleted && norm(p.plotName) === 'карьер юрг'; });
+    if (byLoose) return byLoose;
+    return d.plotNames.find(function(p) { return !p.deleted && p.id === 1; }) || null;
+  }
+
   function migrateGeologySeedV2(d) {
     if (d.meta.geologySeededV2) return;
     // Если seed-geology.js почему-то ещё не подгрузился (нарушен порядок
     // <script> в index.html) — не выставляем флаг, попробуем снова при
     // следующей загрузке страницы, а не потеряем шанс смигрировать навсегда.
     if (typeof RI_FAULTS_SEED === 'undefined' || typeof RI_DOMAINS_SEED === 'undefined') return;
-    d.meta.geologySeededV2 = true;
-    var plot = d.plotNames.find(function(p) { return p.plotName === 'Карьер ЮРГ' && !p.deleted; });
+    var plot = findYurgPlot(d);
+    // Если участок в принципе не нашёлся ни одним из трёх способов (например,
+    // у пользователя вообще нет ни одного участка) — тоже не выставляем флаг:
+    // это значит попробовать ещё раз при следующей загрузке имеет смысл
+    // (участок мог появиться позже), а не "успешно смигрировать ничего".
     if (!plot) return;
+    d.meta.geologySeededV2 = true;
     d.faults = d.faults.filter(function(f) { return !(f.plotName === plot.id && f.createdBy === GEOLOGY_IMPORT_LABEL); });
     d.domains = d.domains.filter(function(x) { return !(x.plotName === plot.id && x.createdBy === GEOLOGY_IMPORT_LABEL); });
     RI_FAULTS_SEED.forEach(function(points) {
