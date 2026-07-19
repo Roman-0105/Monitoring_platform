@@ -197,6 +197,7 @@ html, body {
 .ri-btn-outline { background: transparent; }
 .ri-btn-sm { padding: 5px 9px; font-size: 11.5px; }
 .ri-btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; }
+.ri-btn-active { background: var(--ri-accent-glow); border-color: var(--ri-accent); color: var(--ri-accent); }
 
 /* ---------------- Data grid ---------------- */
 .ri-table-wrap { overflow: auto; height: 100%; }
@@ -423,6 +424,57 @@ table.ri-table td.ri-td-wrap { white-space: normal; max-width: 320px; }
   gap: 14px; color: var(--ri-txt-2); font-size: 13.5px; text-align: center; padding: 20px;
 }
 .ri-map-empty[hidden] { display: none; }
+
+/* Панель "Слои" (разломы/домены) — попап от кнопки 🧩, та же механика, что у легенды */
+.ri-map-layers-panel {
+  position: absolute; top: 12px; right: 56px; width: 300px; max-height: 70%; overflow: auto;
+  background: var(--ri-glass); border: 1px solid var(--ri-line); border-radius: var(--ri-r);
+  box-shadow: var(--ri-shadow); padding: 12px 14px; z-index: 25;
+  animation: riDropdownIn 160ms var(--ri-tr) both;
+}
+.ri-map-layers-panel[hidden] { display: none; }
+.ri-map-layers-section { margin-bottom: 14px; }
+.ri-map-layers-section:last-child { margin-bottom: 0; }
+.ri-map-layers-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ri-map-layers-head label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ri-txt-1); cursor: pointer; }
+.ri-map-layers-list { display: flex; flex-direction: column; gap: 4px; }
+.ri-map-layers-item {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ri-txt-2);
+  background: var(--ri-bg-2); border: 1px solid var(--ri-line); border-radius: var(--ri-r-xs); padding: 5px 8px;
+}
+.ri-map-layers-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ri-map-layers-swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
+.ri-map-layers-del {
+  width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(248,113,113,.15);
+  color: var(--ri-bad); font-size: 10px; cursor: pointer; flex: 0 0 auto;
+}
+.ri-map-layers-del:hover { background: rgba(248,113,113,.3); }
+
+/* Раскраска точек — небольшая панель под week-bar */
+.ri-map-color-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ri-map-color-mode-label { display: flex; align-items: center; font-size: 12.5px; color: var(--ri-txt-2); }
+
+/* Панель инструмента рисования разломов/доменов */
+.ri-map-draw-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 12px;
+  background: var(--ri-accent-glow); border: 1px solid var(--ri-accent); border-radius: var(--ri-r);
+  font-size: 12.5px; color: var(--ri-txt-1);
+}
+.ri-map-draw-bar[hidden] { display: none; }
+.ri-map-draw-count { color: var(--ri-txt-2); margin-left: auto; }
+.ri-btn-xs { padding: 4px 10px; font-size: 11px; }
+
+/* ---------------- Настройка цветов ---------------- */
+.ri-color-section { margin-bottom: 22px; }
+.ri-color-section:last-child { margin-bottom: 0; }
+.ri-color-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ri-txt-3); margin-bottom: 10px; }
+.ri-color-list { display: flex; flex-direction: column; gap: 6px; }
+.ri-color-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: var(--ri-bg-2); border: 1px solid var(--ri-line); border-radius: var(--ri-r-sm);
+}
+.ri-color-input { width: 34px; height: 26px; padding: 0; border-radius: var(--ri-r-xs); border: 1px solid var(--ri-line); background: none; cursor: pointer; flex: 0 0 auto; }
+.ri-color-row-label { font-size: 13px; color: var(--ri-txt-1); }
 
 .ri-map-tooltip {
   position: absolute; z-index: 20; width: 220px; pointer-events: none;

@@ -57,13 +57,14 @@ var RiskApi = (function() {
   }
 
   var TABLES = ['calllog', 'actions', 'fixedRisks', 'indicators', 'levels', 'plotNames',
-    'notifications', 'notificationRecipients', 'contacts', 'schemes'];
+    'notifications', 'notificationRecipients', 'contacts', 'schemes', 'faults', 'domains'];
 
   function ensureTables(d) {
     // Заполняет отсутствующие таблицы пустыми массивами — нужно, если в
     // localStorage лежат данные, сохранённые до появления новой сущности
     // (например, "schemes" добавили позже, чем у пользователя уже был кэш).
     TABLES.forEach(function(t) { if (!Array.isArray(d[t])) d[t] = []; });
+    if (!d.colors || typeof d.colors !== 'object') d.colors = {};
     return d;
   }
 
@@ -72,7 +73,7 @@ var RiskApi = (function() {
       var raw = localStorage.getItem(LS_KEY);
       if (raw) { db = ensureTables(JSON.parse(raw)); return; }
     } catch (e) { /* ignore corrupt storage */ }
-    db = seedDb();
+    db = ensureTables(seedDb());
     persist();
   }
   function persist() {
@@ -356,6 +357,139 @@ var RiskApi = (function() {
     },
   };
 
+  /* ---------------- Разломы и домены (геологические слои на карте) ----------------
+   * Порт логики отрисовки Faults.draw/Domens.draw из проекта
+   * "Гидрогеологический мониторинг" (map.js/faults.js/domens.js). В отличие
+   * от оригинала (геометрия — единоразовый хардкод из DXF, без интерфейса
+   * создания), здесь разломы/домены создаются прямо на карте (см. ui-map.js,
+   * режим рисования) и хранятся по участку — координаты в той же локальной
+   * системе X/Y, что и GEOLOCATION_SCHEMES.X_MIN..Y_MAX/CALLLOG.X,Y.
+   */
+
+  var faultsApi = {
+    listByPlot: async function(plotId) {
+      if (isRemote()) return remoteCall('GET', '/faults/' + plotId);
+      return db.faults.filter(function(f) { return f.plotName === plotId && !f.deleted; })
+        .map(function(f) { return Object.assign({}, f); });
+    },
+    add: async function(plotId, points, name) {
+      // points: [[x,y], [x,y], ...] — минимум 2 точки
+      var createdBy = cfg().CURRENT_USER || '';
+      if (isRemote()) return remoteCall('POST', '/faults/' + plotId, { points: points, name: name, createdBy: createdBy });
+      var row = {
+        id: nextId('faults'), deleted: 0, recordVersion: 0, plotName: plotId,
+        name: name || '', points: points, createdAt: new Date().toISOString(), createdBy: createdBy,
+      };
+      db.faults.push(row);
+      persist();
+      return Object.assign({}, row);
+    },
+    remove: async function(id) {
+      if (isRemote()) return remoteCall('DELETE', '/faults/item/' + id);
+      var row = db.faults.find(function(f) { return f.id === id; });
+      if (!row) return;
+      row.deleted = 1;
+      persist();
+    },
+  };
+
+  var domainsApi = {
+    listByPlot: async function(plotId) {
+      if (isRemote()) return remoteCall('GET', '/domains/' + plotId);
+      return db.domains.filter(function(d) { return d.plotName === plotId && !d.deleted; })
+        .map(function(d) { return Object.assign({}, d); });
+    },
+    // Все домены по всем участкам сразу, с названием участка — для вкладки
+    // "Настройка цветов" (там нужно показать/перекрасить их одним списком).
+    listAll: async function() {
+      if (isRemote()) return remoteCall('GET', '/domains');
+      return db.domains.filter(function(d) { return !d.deleted; }).map(function(d) {
+        var plot = db.plotNames.find(function(p) { return p.id === d.plotName; });
+        return Object.assign({}, d, { plotLabel: plot ? plot.plotName : '' });
+      });
+    },
+    add: async function(plotId, points, name, color) {
+      // points: [[x,y], ...] — минимум 3 точки (замкнутый полигон)
+      var createdBy = cfg().CURRENT_USER || '';
+      if (isRemote()) return remoteCall('POST', '/domains/' + plotId, { points: points, name: name, color: color, createdBy: createdBy });
+      var row = {
+        id: nextId('domains'), deleted: 0, recordVersion: 0, plotName: plotId,
+        name: name || ('Домен ' + (db.domains.length + 1)), points: points, color: color || '#1a73e8',
+        createdAt: new Date().toISOString(), createdBy: createdBy,
+      };
+      db.domains.push(row);
+      persist();
+      return Object.assign({}, row);
+    },
+    update: async function(id, data) {
+      // data: {name?, color?}
+      if (isRemote()) return remoteCall('PUT', '/domains/item/' + id, data);
+      var row = db.domains.find(function(d) { return d.id === id; });
+      if (!row) throw new Error('Домен не найден');
+      if (data.name !== undefined) row.name = data.name;
+      if (data.color !== undefined) row.color = data.color;
+      row.recordVersion = (row.recordVersion || 0) + 1;
+      persist();
+      return Object.assign({}, row);
+    },
+    remove: async function(id) {
+      if (isRemote()) return remoteCall('DELETE', '/domains/item/' + id);
+      var row = db.domains.find(function(d) { return d.id === id; });
+      if (!row) return;
+      row.deleted = 1;
+      persist();
+    },
+  };
+
+  /* ---------------- Настройка цветов (уровни/риски/разломы) ----------------
+   * Цвета доменов хранятся прямо в записи домена (domainsApi.update) — как
+   * в Domens.setColors оригинала, только без промежуточного слоя "карта
+   * имя->цвет", потому что домены здесь и так объекты с собственным id.
+   */
+
+  var DEFAULT_LEVEL_PALETTE = ['#fbbf24', '#fb923c', '#f87171', '#a78bfa', '#f472b6'];
+  var DEFAULT_RISK_PALETTE = ['#22d3ee', '#a78bfa', '#fb923c', '#34d399', '#f472b6', '#facc15', '#60a5fa', '#f87171'];
+  var DEFAULT_FAULT_COLOR = '#e05c5c'; // как в faults.js гидро-проекта
+
+  var colorsApi = {
+    getLevelColorMap: async function() {
+      var levels = await levelsApi.list();
+      var map = {};
+      levels.forEach(function(l, i) {
+        map[l.id] = (db.colors.levels && db.colors.levels[l.id]) || DEFAULT_LEVEL_PALETTE[i % DEFAULT_LEVEL_PALETTE.length];
+      });
+      return map;
+    },
+    setLevelColor: async function(levelId, hex) {
+      if (isRemote()) return remoteCall('PUT', '/colors/levels/' + levelId, { color: hex });
+      if (!db.colors.levels) db.colors.levels = {};
+      db.colors.levels[levelId] = hex;
+      persist();
+    },
+    getRiskColorMap: async function() {
+      var risks = await fixedRisksApi.list();
+      var map = {};
+      risks.forEach(function(r, i) {
+        map[r.id] = (db.colors.risks && db.colors.risks[r.id]) || DEFAULT_RISK_PALETTE[i % DEFAULT_RISK_PALETTE.length];
+      });
+      return map;
+    },
+    setRiskColor: async function(riskId, hex) {
+      if (isRemote()) return remoteCall('PUT', '/colors/risks/' + riskId, { color: hex });
+      if (!db.colors.risks) db.colors.risks = {};
+      db.colors.risks[riskId] = hex;
+      persist();
+    },
+    getFaultColor: async function() {
+      return (db.colors && db.colors.fault) || DEFAULT_FAULT_COLOR;
+    },
+    setFaultColor: async function(hex) {
+      if (isRemote()) return remoteCall('PUT', '/colors/fault', { color: hex });
+      db.colors.fault = hex;
+      persist();
+    },
+  };
+
   load();
 
   return {
@@ -367,6 +501,9 @@ var RiskApi = (function() {
     notifications: notificationsApi,
     contacts: contactsApi,
     schemes: schemesApi,
+    faults: faultsApi,
+    domains: domainsApi,
+    colors: colorsApi,
     photoUrl: photoUrl,
     _debugResetSeed: resetToSeed,
   };

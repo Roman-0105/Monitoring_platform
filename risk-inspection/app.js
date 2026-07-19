@@ -8,6 +8,7 @@ var TAB_DEFS = {
   indicators: { title: 'Индикаторы опасностей', init: initIndicatorsPanel },
   levels: { title: 'Уровни опасности', init: initLevelsPanel },
   schemes: { title: 'Схемы участков', init: initSchemesPanel },
+  colors: { title: 'Настройка цветов', init: initColorsPanel },
   notifications: { title: 'Уведомления', init: initNotificationsPanel },
   contacts: { title: 'Контакты', init: initContactsPanel },
 };
