@@ -270,14 +270,20 @@ function initPhotoDropzone(container, onFile, opts) {
 }
 
 /* ---------- Недели (для схем и фильтра точек на карте) ----------
- * Порт currentWeekKey()/formatWeekKey() из schemes.js гидро-проекта,
- * обобщённый на произвольную дату — нужно, чтобы находить, к какой
- * неделе относится и схема, и дата обращения (CALLLOG.DDATE).
+ * ISO-8601 (неделя с понедельника, неделя 1 — та, что содержит первый
+ * четверг года) — тот же стандарт, что использует нативный
+ * <input type="week"> в браузере (см. ri-sch-week-input/ri-map-week-input).
+ * Здесь важно, чтобы номер недели для даты обращения (CALLLOG.DDATE)
+ * совпадал именно с тем, что выбирает админ в этом поле при загрузке
+ * схемы — иначе точки "не находятся" за выбранную неделю.
  */
 function weekKeyForDate(d) {
-  var jan1 = new Date(d.getFullYear(), 0, 1);
-  var week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
-  return d.getFullYear() + '-W' + (week < 10 ? '0' + week : week);
+  var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  var dayNum = date.getUTCDay() || 7; // понедельник = 1 ... воскресенье = 7
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum); // переносим на четверг этой же недели
+  var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  var week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return date.getUTCFullYear() + '-W' + (week < 10 ? '0' + week : week);
 }
 function currentWeekKey() { return weekKeyForDate(new Date()); }
 function formatWeekKey(weekKey) {
