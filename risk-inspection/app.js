@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function() {
     el.addEventListener('click', function() { openTab(el.dataset.openTab); });
   });
   document.getElementById('ri-logout').addEventListener('click', function() {
-    Toast.show('Выход из тестовой модели — авторизация подключается вместе с боевым API', 'info');
+    Toast.show('Выход из тестовой модели — авторизация подключается вместе с производственным API', 'info');
   });
   openTab('journal');
 });
