@@ -410,6 +410,19 @@ table.ri-table td.ri-td-wrap { white-space: normal; max-width: 320px; }
 }
 .ri-map-empty[hidden] { display: none; }
 
+.ri-map-tooltip {
+  position: absolute; z-index: 20; width: 220px; pointer-events: none;
+  background: var(--ri-bg-1); border: 1px solid var(--ri-line); border-radius: var(--ri-r);
+  box-shadow: var(--ri-shadow); overflow: hidden;
+  animation: riDropdownIn 120ms var(--ri-tr) both;
+}
+.ri-map-tooltip-photo { display: block; width: 100%; height: 100px; object-fit: cover; background: var(--ri-bg-2); }
+.ri-map-tooltip-body { padding: 10px 12px; }
+.ri-map-tooltip-title { font-size: 12.5px; font-weight: 600; color: var(--ri-txt-1); margin-bottom: 4px; }
+.ri-map-tooltip-row { font-size: 11.5px; color: var(--ri-txt-2); margin-bottom: 4px; }
+.ri-map-tooltip-date { font-size: 10.5px; color: var(--ri-txt-3); }
+.ri-map-tooltip[hidden] { display: none; }
+
 /* ---------------- Scrollbars ---------------- */
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-track { background: transparent; }

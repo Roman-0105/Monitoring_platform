@@ -9,6 +9,7 @@ var MapState = {
   plotId: null, weekKey: null, weeks: [], plots: [], img: null, bounds: null, points: [],
   scale: 1, offX: 0, offY: 0, minScale: 0.05, maxScale: 8,
   dragging: false, dragMoved: false, lastX: 0, lastY: 0,
+  hoveredPointId: null,
 };
 
 async function initMapPanel(panelEl) {
@@ -33,6 +34,7 @@ async function initMapPanel(panelEl) {
             '<span><i class="ri-map-dot ri-map-dot-open"></i>Открыто</span>' +
             '<span><i class="ri-map-dot ri-map-dot-closed"></i>Закрыто</span>' +
           '</div>' +
+          '<div id="ri-map-tooltip" class="ri-map-tooltip" hidden></div>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -43,13 +45,7 @@ async function initMapPanel(panelEl) {
   renderMapTabs(panelEl);
   setupMapInteraction(panelEl);
   window.addEventListener('resize', function() { sizeMapCanvas(panelEl); redrawMap(); });
-  panelEl.querySelector('#ri-map-refresh').addEventListener('click', function() {
-    RiskApi.plotNames.list().then(function(plots) {
-      MapState.plots = plots;
-      renderMapTabs(panelEl);
-      loadMapForPlot(panelEl, MapState.plotId != null ? MapState.plotId : plots[0].id);
-    });
-  });
+  panelEl.querySelector('#ri-map-refresh').addEventListener('click', reloadActiveMapTab);
 
   await loadMapForPlot(panelEl, MapState.plots[0].id);
 }
@@ -61,7 +57,15 @@ async function initMapPanel(panelEl) {
 function reloadActiveMapTab() {
   var panelEl = document.getElementById('ri-panel-map');
   if (!panelEl || MapState.plotId == null) return;
-  loadMapForPlot(panelEl, MapState.plotId);
+  // Список участков тоже подгружаем заново — не только текущую схему —
+  // чтобы новые участки (или переименования/удаления) появлялись на
+  // вкладке без ручной перезагрузки страницы.
+  RiskApi.plotNames.list().then(function(plots) {
+    MapState.plots = plots;
+    if (!plots.length) { renderMapTabs(panelEl); return; }
+    var stillExists = plots.some(function(p) { return p.id === MapState.plotId; });
+    loadMapForPlot(panelEl, stillExists ? MapState.plotId : plots[0].id);
+  });
 }
 
 function renderMapTabs(panelEl) {
@@ -205,6 +209,39 @@ function mapPointAt(canvasX, canvasY) {
   return found;
 }
 
+/* ---------------- Всплывающая карточка точки при наведении ---------------- */
+
+function mapTooltipHTML(pt) {
+  return (pt.photo ? '<img class="ri-map-tooltip-photo" src="' + pt.photoUrl + '" alt="">' : '') +
+    '<div class="ri-map-tooltip-body">' +
+      '<div class="ri-map-tooltip-title">' + escHTML(pt.fname) + '</div>' +
+      '<div class="ri-map-tooltip-row">' + escHTML(pt.fixedRisk) + '</div>' +
+      (pt.level ? '<div class="ri-map-tooltip-row">' + levelBadge(pt.level) + '</div>' : '') +
+      '<div class="ri-map-tooltip-date">' + formatDate(pt.ddate) + '</div>' +
+    '</div>';
+}
+
+function showMapTooltip(panelEl, pt, x, y) {
+  var tip = panelEl.querySelector('#ri-map-tooltip');
+  if (!tip) return;
+  if (MapState.hoveredPointId !== pt.id) {
+    tip.innerHTML = mapTooltipHTML(pt);
+    MapState.hoveredPointId = pt.id;
+  }
+  tip.hidden = false;
+  var wrap = panelEl.querySelector('#ri-map-wrap');
+  var left = Math.min(x + 16, Math.max(8, wrap.clientWidth - tip.offsetWidth - 8));
+  var top = Math.min(y + 16, Math.max(8, wrap.clientHeight - tip.offsetHeight - 8));
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+
+function hideMapTooltip(panelEl) {
+  var tip = panelEl.querySelector('#ri-map-tooltip');
+  if (tip) tip.hidden = true;
+  MapState.hoveredPointId = null;
+}
+
 function setupMapInteraction(panelEl) {
   var canvas = panelEl.querySelector('#ri-map-canvas');
   var wrap = panelEl.querySelector('#ri-map-wrap');
@@ -212,6 +249,7 @@ function setupMapInteraction(panelEl) {
   canvas.addEventListener('wheel', function(e) {
     e.preventDefault();
     if (!MapState.img) return;
+    hideMapTooltip(panelEl);
     var rect = canvas.getBoundingClientRect();
     var mx = e.clientX - rect.left, my = e.clientY - rect.top;
     var wx = (mx - MapState.offX) / MapState.scale, wy = (my - MapState.offY) / MapState.scale;
@@ -226,6 +264,7 @@ function setupMapInteraction(panelEl) {
     MapState.dragging = true; MapState.dragMoved = false;
     MapState.lastX = e.clientX; MapState.lastY = e.clientY;
     canvas.style.cursor = 'grabbing';
+    hideMapTooltip(panelEl);
   });
   window.addEventListener('mousemove', function(e) {
     if (!MapState.dragging) return;
@@ -239,6 +278,16 @@ function setupMapInteraction(panelEl) {
     if (MapState.dragging) canvas.style.cursor = 'grab';
     MapState.dragging = false;
   });
+
+  canvas.addEventListener('mousemove', function(e) {
+    if (MapState.dragging) return;
+    var rect = canvas.getBoundingClientRect();
+    var x = e.clientX - rect.left, y = e.clientY - rect.top;
+    var pt = mapPointAt(x, y);
+    if (pt) { canvas.style.cursor = 'pointer'; showMapTooltip(panelEl, pt, x, y); }
+    else { canvas.style.cursor = 'grab'; hideMapTooltip(panelEl); }
+  });
+  canvas.addEventListener('mouseleave', function() { hideMapTooltip(panelEl); });
 
   canvas.addEventListener('click', function(e) {
     if (MapState.dragMoved) return;

@@ -13,12 +13,15 @@ async function initSchemesPanel(panelEl) {
     '<div class="ri-panel-card">' +
       '<div class="ri-panel-toolbar">' +
         '<span class="ri-panel-title">Схемы участков</span>' +
+        '<button class="ri-btn ri-btn-icon" id="ri-sch-refresh" title="Обновить список участков" style="margin-left:auto">🔄</button>' +
       '</div>' +
       '<div class="ri-panel-body">' +
         '<div class="ri-site-tabs" id="ri-sch-tabs"></div>' +
         '<div id="ri-sch-content" style="padding:16px"></div>' +
       '</div>' +
     '</div>';
+
+  panelEl.querySelector('#ri-sch-refresh').addEventListener('click', reloadActiveSchemesTab);
 
   SchemesState.plots = await RiskApi.plotNames.list();
   if (!SchemesState.plots.length) {
@@ -29,6 +32,28 @@ async function initSchemesPanel(panelEl) {
 
   renderSchemeTabs(panelEl);
   await selectDefaultWeekAndRender(panelEl);
+}
+
+/* Вызывается из app.js при каждой активации вкладки "Схемы участков" —
+ * подхватывает участки, добавленные/удалённые/переименованные позже в
+ * справочнике "Названия участков" (initSchemesPanel выполняется только
+ * один раз, при первом открытии вкладки). */
+function reloadActiveSchemesTab() {
+  var panelEl = document.getElementById('ri-panel-schemes');
+  if (!panelEl) return;
+  RiskApi.plotNames.list().then(async function(plots) {
+    SchemesState.plots = plots;
+    var contentEl = panelEl.querySelector('#ri-sch-content');
+    if (!plots.length) {
+      panelEl.querySelector('#ri-sch-tabs').innerHTML = '';
+      contentEl.innerHTML = '<p class="ri-form-hint">Сначала добавьте участок в справочнике «Названия участков».</p>';
+      return;
+    }
+    var stillExists = plots.some(function(p) { return p.id === SchemesState.activePlotId; });
+    if (!stillExists) SchemesState.activePlotId = plots[0].id;
+    renderSchemeTabs(panelEl);
+    await selectDefaultWeekAndRender(panelEl);
+  });
 }
 
 function renderSchemeTabs(panelEl) {
