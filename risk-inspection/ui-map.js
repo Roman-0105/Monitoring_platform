@@ -29,10 +29,18 @@ async function initMapPanel(panelEl) {
             '<button type="button" class="ri-btn ri-btn-icon" id="ri-map-zoom-in" title="Приблизить">＋</button>' +
             '<button type="button" class="ri-btn ri-btn-icon" id="ri-map-zoom-out" title="Отдалить">－</button>' +
             '<button type="button" class="ri-btn ri-btn-icon" id="ri-map-fit" title="По размеру">⤢</button>' +
+            '<button type="button" class="ri-btn ri-btn-icon" id="ri-map-legend-toggle" title="Условные обозначения">📋</button>' +
           '</div>' +
-          '<div class="ri-map-legend">' +
-            '<span><i class="ri-map-dot ri-map-dot-open"></i>Открыто</span>' +
-            '<span><i class="ri-map-dot ri-map-dot-closed"></i>Закрыто</span>' +
+          '<div class="ri-map-legend-panel" id="ri-map-legend-panel" hidden>' +
+            '<div class="ri-map-legend-panel-title">Условные обозначения</div>' +
+            '<div class="ri-map-legend-item"><i class="ri-map-legend-line" style="background:#ef4444"></i>Контур карьера на конец отработки по поверхности</div>' +
+            '<div class="ri-map-legend-item"><i class="ri-map-legend-line ri-map-legend-line-dark"></i>Фактическое положение горных работ на дату схемы</div>' +
+            '<div class="ri-map-legend-item"><i class="ri-map-legend-hatch" style="--hc:#ef4444"></i>Особо опасные участки</div>' +
+            '<div class="ri-map-legend-item"><i class="ri-map-legend-hatch" style="--hc:#f59e0b"></i>Опасные участки</div>' +
+            '<div class="ri-map-legend-item"><i class="ri-map-legend-hatch" style="--hc:#22c55e"></i>Неопасные участки</div>' +
+            '<div class="ri-map-legend-divider"></div>' +
+            '<div class="ri-map-legend-item"><i class="ri-map-dot ri-map-dot-open"></i>Обращение открыто</div>' +
+            '<div class="ri-map-legend-item"><i class="ri-map-dot ri-map-dot-closed"></i>Обращение закрыто</div>' +
           '</div>' +
           '<div id="ri-map-tooltip" class="ri-map-tooltip" hidden></div>' +
         '</div>' +
@@ -304,4 +312,14 @@ function setupMapInteraction(panelEl) {
     MapState.scale = Math.max(MapState.minScale, MapState.scale / 1.3); redrawMap();
   });
   panelEl.querySelector('#ri-map-fit').addEventListener('click', function() { fitMap(panelEl); });
+
+  var legendToggle = panelEl.querySelector('#ri-map-legend-toggle');
+  var legendPanel = panelEl.querySelector('#ri-map-legend-panel');
+  legendToggle.addEventListener('click', function(e) {
+    e.stopPropagation();
+    legendPanel.hidden = !legendPanel.hidden;
+  });
+  document.addEventListener('click', function(e) {
+    if (!legendPanel.hidden && !legendPanel.contains(e.target) && e.target !== legendToggle) legendPanel.hidden = true;
+  });
 }
