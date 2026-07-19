@@ -65,13 +65,67 @@ var RiskApi = (function() {
     // (например, "schemes" добавили позже, чем у пользователя уже был кэш).
     TABLES.forEach(function(t) { if (!Array.isArray(d[t])) d[t] = []; });
     if (!d.colors || typeof d.colors !== 'object') d.colors = {};
+    if (!d.meta || typeof d.meta !== 'object') d.meta = {};
+    migrateGeologySeed(d);
     return d;
+  }
+
+  // Разломы/домены карьера ЮРГ добавились в seedDb() уже ПОСЛЕ того, как
+  // часть пользователей могла успеть открыть панель — у них в localStorage
+  // faults/domains уже существуют как пустые массивы (см. TABLES.forEach
+  // выше), поэтому обычная "довалидация отсутствующих таблиц" их не
+  // подхватывает. Разовая миграция (флаг d.meta.geologySeeded) доливает
+  // реальную геологию в УЖЕ существующую базу, не трогая остальные данные
+  // (в т.ч. уже загруженную/откалиброванную пользователем схему); дальше
+  // флаг не даёт повторно навязывать удалённые пользователем разломы/домены.
+  function migrateGeologySeed(d) {
+    if (d.meta.geologySeeded) return;
+    // Если seed-geology.js почему-то ещё не подгрузился (нарушен порядок
+    // <script> в index.html) — не выставляем флаг, попробуем снова при
+    // следующей загрузке страницы, а не потеряем шанс смигрировать навсегда.
+    if (typeof RI_FAULTS_SEED === 'undefined' || typeof RI_DOMAINS_SEED === 'undefined') return;
+    d.meta.geologySeeded = true;
+    var plot = d.plotNames.find(function(p) { return p.plotName === 'Карьер ЮРГ' && !p.deleted; });
+    if (!plot) return;
+    if (d.faults.some(function(f) { return f.plotName === plot.id; })) return;
+    if (d.domains.some(function(x) { return x.plotName === plot.id; })) return;
+    RI_FAULTS_SEED.forEach(function(points, i) {
+      d.faults.push({
+        id: nextLocalId(d.faults), deleted: 0, recordVersion: 0, plotName: plot.id,
+        name: '', points: points, createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+      });
+    });
+    RI_DOMAINS_SEED.forEach(function(dm) {
+      d.domains.push({
+        id: nextLocalId(d.domains), deleted: 0, recordVersion: 0, plotName: plot.id,
+        name: dm.name, points: dm.pts, color: dm.color,
+        createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+      });
+    });
+  }
+  // То же, что nextId(table), но принимает массив напрямую — на этом этапе
+  // (внутри ensureTables) модульная переменная db ещё не назначена.
+  function nextLocalId(rows) {
+    var max = 0;
+    rows.forEach(function(r) { if (r.id > max) max = r.id; });
+    return max + 1;
   }
 
   function load() {
     try {
       var raw = localStorage.getItem(LS_KEY);
-      if (raw) { db = ensureTables(JSON.parse(raw)); return; }
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        var before = parsed.meta && parsed.meta.geologySeeded;
+        db = ensureTables(parsed);
+        // ensureTables() может дозаполнить недостающие таблицы и разово
+        // смигрировать геологию (migrateGeologySeed) — сохраняем сразу,
+        // а не откладываем до следующего "естественного" persist(),
+        // иначе миграция будет молча повторяться в памяти на каждой
+        // перезагрузке страницы, так и не попав в localStorage.
+        if (!before) persist();
+        return;
+      }
     } catch (e) { /* ignore corrupt storage */ }
     db = ensureTables(seedDb());
     persist();
