@@ -204,8 +204,12 @@ function seedDb() {
 
   // Демо-схемы только для Карьер ЮРГ (id 1), по неделям — показывает и
   // сам принцип "участок + неделя", и то, что переключение недели меняет
-  // набор точек на карте. Границы подобраны так, чтобы покрыть диапазон
-  // сгенерированных xLocal/yLocal выше. СРГ и ДСК — без схем, чтобы
+  // набор точек на карте. Границы расширены (были 16000-18000/46000-48000)
+  // так, чтобы вместить и сгенерированные xLocal/yLocal обращений выше
+  // (макс. ~17335/47603 у реальных строк, ~17576/47265 у догенерированных),
+  // и реальную геологию карьера ЮРГ из RI_FAULTS_SEED/RI_DOMAINS_SEED
+  // (bbox после перестановки осей: ~15849-17269 x, ~45953-47317 y —
+  // см. seed-geology.js). СРГ и ДСК — без схем и геологии, чтобы
   // показать состояние "схема ещё не загружена".
   var demoWeekLatest = weekKeyForDate(new Date(toIso('04.07.2026 07:44')));
   var demoWeekPrev = weekKeyForDate(new Date(toIso('27.06.2026 09:26')));
@@ -213,23 +217,41 @@ function seedDb() {
     {
       id: 1, deleted: 0, recordVersion: 0, plotName: 1, weekKey: demoWeekLatest,
       image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ · ' + demoWeekLatest),
-      xMin: 16000, xMax: 18000, yMin: 46000, yMax: 48000,
+      xMin: 15800, xMax: 17650, yMin: 45900, yMax: 47700,
       uploadedAt: '2026-07-04T09:00:00', uploadedBy: 'Roman Yukin',
     },
     {
       id: 2, deleted: 0, recordVersion: 0, plotName: 1, weekKey: demoWeekPrev,
       image: riPlaceholderScheme(1200, 800, 'Карьер ЮРГ · ' + demoWeekPrev),
-      xMin: 16000, xMax: 18000, yMin: 46000, yMax: 48000,
+      xMin: 15800, xMax: 17650, yMin: 45900, yMax: 47700,
       uploadedAt: '2026-06-27T09:00:00', uploadedBy: 'Roman Yukin',
     },
   ];
+
+  // Реальные разломы/домены карьера ЮРГ (см. seed-geology.js) — привязаны
+  // к участку целиком (не к неделе), поэтому одна и та же геометрия видна
+  // на карте независимо от выбранной недели.
+  var faults = RI_FAULTS_SEED.map(function(points, i) {
+    return {
+      id: i + 1, deleted: 0, recordVersion: 0, plotName: 1,
+      name: '', points: points,
+      createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+    };
+  });
+  var domains = RI_DOMAINS_SEED.map(function(d, i) {
+    return {
+      id: i + 1, deleted: 0, recordVersion: 0, plotName: 1,
+      name: d.name, points: d.pts, color: d.color,
+      createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+    };
+  });
 
   return {
     calllog: calllog, actions: actions,
     fixedRisks: fixedRisks, indicators: indicators, levels: levels, plotNames: plotNames,
     notifications: notifications, notificationRecipients: notificationRecipients,
     contacts: contacts, schemes: schemes,
-    faults: [], domains: [],
+    faults: faults, domains: domains,
     colors: {},
   };
 }
