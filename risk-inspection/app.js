@@ -44,9 +44,12 @@ function activateTab(key) {
   document.querySelectorAll('.ri-mtab').forEach(function(t) { t.classList.toggle('active', t.dataset.key === key); });
   document.querySelectorAll('.ri-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'ri-panel-' + key); });
   // Вкладки инициализируются один раз при первом открытии (см. openTab),
-  // поэтому карте нужно отдельно подхватывать схему/границы, изменённые
-  // позже в другой вкладке ("Схемы участков"), при каждом переключении на неё.
-  if (key === 'map' && !wasAlreadyActive && typeof reloadActiveMapTab === 'function') reloadActiveMapTab();
+  // поэтому карте и схемам нужно отдельно подхватывать изменения,
+  // сделанные в других вкладках (новый/удалённый участок, новая схема),
+  // при каждом переключении на них.
+  if (wasAlreadyActive) return;
+  if (key === 'map' && typeof reloadActiveMapTab === 'function') reloadActiveMapTab();
+  if (key === 'schemes' && typeof reloadActiveSchemesTab === 'function') reloadActiveSchemesTab();
 }
 
 function closeTab(key) {
