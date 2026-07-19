@@ -317,6 +317,24 @@ function xyToPixel(x, y, bounds, imgW, imgH) {
     py: (bounds.yMax - y) / (bounds.yMax - bounds.yMin) * imgH,
   };
 }
+/* Обратная проекция — для инструмента рисования разломов/доменов
+ * (клик по канве в реальных пиксельных координатах схемы -> X/Y СК-42). */
+function pixelToXY(px, py, bounds, imgW, imgH) {
+  return {
+    x: bounds.xMin + (px / imgW) * (bounds.xMax - bounds.xMin),
+    y: bounds.yMax - (py / imgH) * (bounds.yMax - bounds.yMin),
+  };
+}
+
+/* ---------- hex -> rgba (для полупрозрачной заливки доменов) ---------- */
+function hexToRgba(hex, alpha) {
+  var h = (hex || '').replace('#', '');
+  if (h.length !== 6) return 'rgba(120,120,120,' + alpha + ')';
+  var r = parseInt(h.slice(0, 2), 16);
+  var g = parseInt(h.slice(2, 4), 16);
+  var b = parseInt(h.slice(4, 6), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
 
 /* ---------- Сжатие файла схемы: PDF/SVG/растр -> data-URL картинки ----------
  * Порт compressScheme() из schemes.js (проект "Гидрогеологический мониторинг"):

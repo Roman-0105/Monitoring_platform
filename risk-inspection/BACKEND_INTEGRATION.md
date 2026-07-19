@@ -127,7 +127,63 @@ CREATE TABLE dbo.GEOLOCATION_SCHEMES (
 -- участок-неделю", что уже реализовано в клиенте (upload на ту же
 -- неделю заменяет существующую строку, а не плодит новые).
 CREATE UNIQUE INDEX UX_SCHEMES_PLOT_WEEK_ACTIVE ON dbo.GEOLOCATION_SCHEMES(PLOT_NAME, WEEK_KEY) WHERE DELETED = 0;
+
+-- Разломы (линии) и домены (полигоны) — геологические слои на карте
+-- участка (вкладка "Карта", кнопка 🧩 "Слои"). В отличие от проекта
+-- "Гидрогеологический мониторинг" (там это единоразовый хардкод из DXF,
+-- без интерфейса создания), здесь геометрия рисуется прямо в браузере —
+-- см. ui-map.js, режим рисования (клик по калиброванной схеме добавляет
+-- точку линии/контура). Координаты — та же локальная система X/Y, что и
+-- GEOLOCATION_SCHEMES.X_MIN..Y_MAX / CALLLOG.X,Y, поэтому привязаны к
+-- участку (PLOT_NAME), а не к конкретной неделе — это относительно
+-- статичные геологические особенности, а не еженедельный срез.
+-- POINTS хранится как JSON-массив пар [[x,y], [x,y], ...] (аналог
+-- NVARCHAR(MAX) с CHECK ISJSON(POINTS) = 1, либо отдельная
+-- таблица-компаньон *_VERTICES(FAULT_ID/DOMAIN_ID, SEQ, X, Y), если в
+-- команде принято не хранить JSON в колонках).
+CREATE TABLE dbo.GEOLOCATION_FAULTS (
+  ID              INT IDENTITY PRIMARY KEY,
+  DELETED         INT NOT NULL DEFAULT 0,
+  RECORD_VERSION  INT NOT NULL DEFAULT 0,
+  PLOT_NAME       INT NOT NULL REFERENCES dbo.GEOLOCATION_PLOT_NAMES(ID),
+  NAME            NVARCHAR(200) NULL,
+  POINTS          NVARCHAR(MAX) NOT NULL,  -- JSON: [[x,y], ...], минимум 2 точки
+  CREATED_AT      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  CREATED_BY      NVARCHAR(200) NULL
+);
+
+CREATE TABLE dbo.GEOLOCATION_DOMAINS (
+  ID              INT IDENTITY PRIMARY KEY,
+  DELETED         INT NOT NULL DEFAULT 0,
+  RECORD_VERSION  INT NOT NULL DEFAULT 0,
+  PLOT_NAME       INT NOT NULL REFERENCES dbo.GEOLOCATION_PLOT_NAMES(ID),
+  NAME            NVARCHAR(200) NOT NULL,
+  COLOR           CHAR(7) NOT NULL DEFAULT '#1a73e8',  -- hex, используется и для заливки (с прозрачностью на клиенте), и для обводки/подписи
+  POINTS          NVARCHAR(MAX) NOT NULL,  -- JSON: [[x,y], ...], минимум 3 точки (замкнутый контур)
+  CREATED_AT      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  CREATED_BY      NVARCHAR(200) NULL
+);
+
+-- Настраиваемые цвета для раскраски карты (вкладка "Настройка цветов"):
+-- по одной строке на цель — уровень опасности, тип риска или разлом
+-- (TARGET_ID = NULL для разлома, т.к. он один общий на всю панель, не
+-- per-участок). Цвета доменов НЕ здесь — они хранятся прямо в
+-- GEOLOCATION_DOMAINS.COLOR у каждой записи.
+CREATE TABLE dbo.GEOLOCATION_COLOR_SETTINGS (
+  ID          INT IDENTITY PRIMARY KEY,
+  TARGET_TYPE VARCHAR(10) NOT NULL,  -- 'level' | 'risk' | 'fault'
+  TARGET_ID   INT NULL,              -- FK на GEOLOCATION_LEVELS/GEOLOCATION_FIXED_RISKS.ID, либо NULL для 'fault'
+  COLOR       CHAR(7) NOT NULL
+);
+CREATE UNIQUE INDEX UX_COLOR_SETTINGS_TARGET ON dbo.GEOLOCATION_COLOR_SETTINGS(TARGET_TYPE, TARGET_ID);
 ```
+
+> Если строка для конкретного уровня/риска ещё не сохранена в
+> `GEOLOCATION_COLOR_SETTINGS`, API (как и `RiskApi.colors` в
+> `data.js` сейчас) должен возвращать цвет по умолчанию из
+> фиксированной палитры (см. `DEFAULT_LEVEL_PALETTE` /
+> `DEFAULT_RISK_PALETTE` / `DEFAULT_FAULT_COLOR` в начале `data.js`) —
+> админ настраивает точечно только то, что хочет изменить.
 
 > В тестовой модели изображение схемы хранится как base64 прямо в
 > localStorage (`risk-inspection/data.js`, `RiskApi.schemes`) — из-за
@@ -249,6 +305,18 @@ WHERE PLOT_NAME = :plotId AND WEEK_KEY = :weekKey AND DELETED = 0`. Если
 | `POST /schemes/:plotId/:weekKey` | загрузить/заменить изображение схемы этой недели (замена — со старым файлом на диске; новая неделя — с переносом границ с прошлой, см. раздел 2.4) | `{image, uploadedBy}` (base64 или уже загруженный файл) | запись |
 | `PUT /schemes/:plotId/:weekKey/bounds` | сохранить границы координат этой недели (ручной ввод или расчёт калибровки) | `{xMin, xMax, yMin, yMax}` | запись |
 | `DELETE /schemes/:plotId/:weekKey` | удалить схему этой недели (см. раздел 2.4 — включая файл на диске); другие недели участка не затрагивает | — | `204` |
+| `GET /faults/:plotId` | список разломов участка | — | `[{id, plotName, name, points:[[x,y],...], createdAt, createdBy}, ...]` |
+| `POST /faults/:plotId` | создать разлом (нарисован в UI) | `{points:[[x,y],...], name?, createdBy}` | запись |
+| `DELETE /faults/item/:id` | удалить разлом | — | `204` |
+| `GET /domains/:plotId` | список доменов участка | — | `[{id, plotName, name, color, points:[[x,y],...], createdAt, createdBy}, ...]` |
+| `GET /domains` | все домены по всем участкам сразу (для вкладки «Настройка цветов») | — | тот же объект + `plotLabel` (название участка) |
+| `POST /domains/:plotId` | создать домен (нарисован в UI) | `{points:[[x,y],...], name?, color?, createdBy}` | запись |
+| `PUT /domains/item/:id` | переименовать / перекрасить домен | `{name?, color?}` | запись |
+| `DELETE /domains/item/:id` | удалить домен | — | `204` |
+| `GET /colors/levels` `GET /colors/risks` | текущая раскраска точек по уровням/типам риска (с учётом умолчаний, см. раздел 2.2) | — | `{[id]: '#hex', ...}` |
+| `PUT /colors/levels/:levelId` `PUT /colors/risks/:riskId` | задать цвет уровня/риска | `{color}` | `204` |
+| `GET /colors/fault` | текущий цвет линий разломов | — | `{color}` |
+| `PUT /colors/fault` | задать цвет линий разломов | `{color}` | `204` |
 
 Все `DELETE` — это soft-delete (`UPDATE ... SET DELETED = 1`), а не
 физическое удаление строки — так же, как это уже сделано в существующих
@@ -319,7 +387,10 @@ window.RISK_CONFIG = {
 
 1. Подтвердить/поправить допущение о типах полей `CALLLOG.PLOT_NAME`,
    `.INDICATOR`, `.LEVEL` (раздел 2.1).
-2. Создать 4 новые таблицы из раздела 2.2 (включая `GEOLOCATION_SCHEMES`).
+2. Создать новые таблицы из раздела 2.2 (`GEOLOCATION_NOTIFICATIONS`,
+   `GEOLOCATION_NOTIFICATION_RECIPIENTS`, `GEOLOCATION_CONTACTS`,
+   `GEOLOCATION_SCHEMES`, `GEOLOCATION_FAULTS`, `GEOLOCATION_DOMAINS`,
+   `GEOLOCATION_COLOR_SETTINGS`).
 3. Поднять REST API (Node/.NET/что угодно) с эндпоинтами из раздела 3,
    на том же сервере/сети, где стоит SQL Server.
 4. Для схем — реализовать именно логику из раздела 2.4 (замена файла на

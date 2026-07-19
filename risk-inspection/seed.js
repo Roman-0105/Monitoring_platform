@@ -229,5 +229,7 @@ function seedDb() {
     fixedRisks: fixedRisks, indicators: indicators, levels: levels, plotNames: plotNames,
     notifications: notifications, notificationRecipients: notificationRecipients,
     contacts: contacts, schemes: schemes,
+    faults: [], domains: [],
+    colors: {},
   };
 }
