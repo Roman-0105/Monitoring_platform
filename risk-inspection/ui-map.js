@@ -11,7 +11,10 @@ var MapState = {
   dragging: false, dragMoved: false, lastX: 0, lastY: 0,
   hoveredPointId: null,
   colorMode: 'status', levelColorMap: {}, riskColorMap: {},
-  faults: [], domains: [], showFaults: false, showDomains: false, faultColor: '#e05c5c',
+  // Домены видны по умолчанию, разломы — нет: та же асимметрия умолчаний,
+  // что в domens.js (_visible=true) и faults.js (_visible=false) проекта
+  // "Гидрогеологический мониторинг".
+  faults: [], domains: [], showFaults: false, showDomains: true, faultColor: '#e05c5c',
   drawMode: null, drawPts: [],
 };
 
@@ -72,7 +75,7 @@ async function initMapPanel(panelEl) {
             '</div>' +
             '<div class="ri-map-layers-section">' +
               '<div class="ri-map-layers-head">' +
-                '<label><input type="checkbox" id="ri-layer-domains-toggle"> 🗺️ Домены</label>' +
+                '<label><input type="checkbox" id="ri-layer-domains-toggle" checked> 🗺️ Домены</label>' +
                 '<button type="button" class="ri-btn ri-btn-outline ri-btn-xs" id="ri-domain-draw-btn">✏️ Добавить</button>' +
               '</div>' +
               '<div class="ri-map-layers-list" id="ri-domains-list"></div>' +
