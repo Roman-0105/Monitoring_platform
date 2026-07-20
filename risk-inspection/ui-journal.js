@@ -37,7 +37,7 @@ async function initJournalPanel(panelEl) {
     if (JournalState.selectedId == null) { Toast.show('Выберите строку в таблице', 'warning'); return; }
     var id = JournalState.selectedId;
     confirmDialog('Удалить выбранное обращение из журнала?', async function() {
-      await riDeleteCallLog(id);
+      await RiskApi.calllog.remove(id);
       JournalState.selectedId = null;
       Toast.show('Обращение удалено', 'success');
       reloadJournal();
@@ -45,15 +45,6 @@ async function initJournalPanel(panelEl) {
   });
 
   await reloadJournal();
-}
-
-async function riDeleteCallLog(id) {
-  // локальный мок: помечаем как deleted напрямую через RiskApi (нет отдельного метода — используем reopen/close слой)
-  if (window.RISK_CONFIG && window.RISK_CONFIG.API_BASE_URL) return;
-  var raw = JSON.parse(localStorage.getItem('ri_db_v1'));
-  var row = raw.calllog.find(function(r) { return r.id === id; });
-  if (row) row.deleted = 1;
-  localStorage.setItem('ri_db_v1', JSON.stringify(raw));
 }
 
 async function reloadJournal() {
@@ -73,7 +64,14 @@ function sortRows() {
   var key = JournalState.sortKey, dir = JournalState.sortDir;
   JournalState.filtered.sort(function(a, b) {
     var av = a[key], bv = b[key];
-    if (key === 'ddate') { av = new Date(av); bv = new Date(bv); }
+    if (key === 'ddate') {
+      // Невалидная дата -> Invalid Date; сравнения (<,>) с ней всегда false,
+      // так что такая строка не бросает исключение, но и не сортируется
+      // предсказуемо — сводим её к 0 (начало эпохи), как и в data.js:getCallLog.
+      var at = new Date(av).getTime(), bt = new Date(bv).getTime();
+      av = isNaN(at) ? 0 : at;
+      bv = isNaN(bt) ? 0 : bt;
+    }
     if (av < bv) return -1 * dir;
     if (av > bv) return 1 * dir;
     return 0;
@@ -154,7 +152,7 @@ async function openJournalDetail(id) {
   var fixedRisks = await RiskApi.fixedRisks.list();
 
   var infoPanel =
-    (row.photo ? '<div class="ri-detail-photo-wrap"><img class="ri-detail-photo" src="' + row.photoUrl + '" alt="Фото"></div>' : '') +
+    (row.photo ? '<div class="ri-detail-photo-wrap"><img class="ri-detail-photo" src="' + escAttr(row.photoUrl) + '" alt="Фото"></div>' : '') +
     '<div class="ri-form-row">' +
       '<div class="ri-form-group"><label class="ri-form-label">Фамилия, Имя</label><input class="ri-input" id="ri-e-fname" value="' + escAttr(row.fname) + '"></div>' +
       '<div class="ri-form-group"><label class="ri-form-label">Телефон</label><input class="ri-input" id="ri-e-phone" value="' + escAttr(row.phone) + '"></div>' +
@@ -179,7 +177,7 @@ async function openJournalDetail(id) {
       '<div class="ri-form-group"><label class="ri-form-label">X (WGS-84)</label><input type="number" step="any" class="ri-input" id="ri-e-xwgs" value="' + (row.xwgs != null ? row.xwgs : '') + '"></div>' +
       '<div class="ri-form-group"><label class="ri-form-label">Y (WGS-84)</label><input type="number" step="any" class="ri-input" id="ri-e-ywgs" value="' + (row.ywgs != null ? row.ywgs : '') + '"></div>' +
     '</div>' +
-    ((row.xwgs && row.ywgs) ? '<a class="ri-map-link" href="https://maps.google.com/?q=' + row.xwgs + ',' + row.ywgs + '" target="_blank" rel="noopener">↗ Открыть на карте</a>' : '') +
+    ((row.xwgs && row.ywgs) ? '<a class="ri-map-link" href="' + escAttr('https://maps.google.com/?q=' + row.xwgs + ',' + row.ywgs) + '" target="_blank" rel="noopener">↗ Открыть на карте</a>' : '') +
     '<div class="ri-form-group"><label class="ri-form-label">Z</label><input type="number" step="any" class="ri-input" id="ri-e-z" value="' + (row.zwgs != null ? row.zwgs : '') + '"></div>' +
     '<div class="ri-form-group"><label class="ri-form-label">Комментарий заявителя</label><textarea class="ri-textarea" id="ri-e-comments">' + escHTML(row.comments) + '</textarea></div>' +
     '<div class="ri-modal-actions">' +
@@ -374,18 +372,11 @@ async function openJournalAddModal() {
     if (!fname || !plotId || !riskId || !indicatorId) {
       Toast.show('Заполните обязательные поля', 'warning'); return;
     }
-    var raw = JSON.parse(localStorage.getItem('ri_db_v1'));
-    var maxId = raw.calllog.reduce(function(m, r) { return Math.max(m, r.id); }, 0);
-    raw.calllog.push({
-      id: maxId + 1, deleted: 0, recordVersion: 0,
+    await RiskApi.calllog.add({
       fname: fname, phone: overlay.querySelector('#ri-a-phone').value.trim(),
       comments: overlay.querySelector('#ri-a-comments').value.trim(),
-      photo: '', ip: 'manual-entry', closed: 0,
-      xwgs: null, ywgs: null, zwgs: null,
-      ddate: new Date().toISOString(),
       plotName: plotId, indicator: indicatorId, level: levelSel.getValue() ? Number(levelSel.getValue()) : null,
     });
-    localStorage.setItem('ri_db_v1', JSON.stringify(raw));
     Toast.show('Обращение добавлено', 'success');
     closeModal(overlay);
     reloadJournal();

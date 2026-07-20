@@ -292,10 +292,10 @@ function formatWeekKey(weekKey) {
   return weekKey || '';
 }
 
-/* ---------- Калибровка схемы: реальные координаты <-> пиксели ----------
+/* ---------- Калибровка схемы: реальные координаты -> пиксели ----------
  * Порт того же линейного (по осям, без поворота) расчёта, что
  * используется в проекте "Гидрогеологический мониторинг"
- * (map.js: xyToPixel/pixelToXY; ui-settings.js: _computeBoundsFromCalibration).
+ * (map.js: xyToPixel; ui-settings.js: _computeBoundsFromCalibration).
  */
 function computeBoundsFromCalibration(p1, p2, imgW, imgH) {
   // p1, p2: {px, py, rx, ry} — пиксель на исходном изображении + реальные X/Y
@@ -317,15 +317,6 @@ function xyToPixel(x, y, bounds, imgW, imgH) {
     py: (bounds.yMax - y) / (bounds.yMax - bounds.yMin) * imgH,
   };
 }
-/* Обратная проекция — для инструмента рисования разломов/доменов
- * (клик по канве в реальных пиксельных координатах схемы -> X/Y СК-42). */
-function pixelToXY(px, py, bounds, imgW, imgH) {
-  return {
-    x: bounds.xMin + (px / imgW) * (bounds.xMax - bounds.xMin),
-    y: bounds.yMax - (py / imgH) * (bounds.yMax - bounds.yMin),
-  };
-}
-
 /* ---------- hex -> rgba (для полупрозрачной заливки доменов) ---------- */
 function hexToRgba(hex, alpha) {
   var h = (hex || '').replace('#', '');
