@@ -525,3 +525,73 @@ table.ri-table td.ri-td-wrap { white-space: normal; max-width: 320px; }
 @media (max-width: 720px) {
   .ri-form-row { grid-template-columns: 1fr; }
 }
+
+/* ---------------- Отчёты ---------------- */
+.ri-report-settings {
+  background: var(--ri-bg-2); border: 1px solid var(--ri-line); border-radius: var(--ri-r-lg);
+  padding: 16px 18px; margin-bottom: 20px;
+}
+.ri-report-settings-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 4px; }
+.ri-report-settings-row .ri-form-group { min-width: 140px; margin-bottom: 12px; }
+.ri-report-presets { display: flex; gap: 6px; }
+.ri-report-preset-btn {
+  font-family: inherit; font-size: 12px; padding: 8px 12px; border-radius: var(--ri-r-sm);
+  border: 1px solid var(--ri-line); background: var(--ri-bg-1); color: var(--ri-txt-2);
+  cursor: pointer; transition: all var(--ri-tr); white-space: nowrap;
+}
+.ri-report-preset-btn:hover { color: var(--ri-txt-1); border-color: var(--ri-accent); }
+.ri-report-preset-btn.active { background: var(--ri-accent-glow); color: var(--ri-accent); border-color: var(--ri-accent); font-weight: 600; }
+.ri-report-plot-checklist { display: flex; flex-wrap: wrap; gap: 14px; }
+.ri-report-plot-checklist label, .ri-report-layer-toggles label {
+  display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ri-txt-1); cursor: pointer; white-space: nowrap;
+}
+.ri-report-layer-toggles { display: flex; gap: 14px; padding-top: 9px; }
+
+.ri-report-header { margin-bottom: 18px; }
+.ri-report-title { font-size: 20px; font-weight: 700; color: var(--ri-txt-1); margin: 0 0 4px; }
+.ri-report-period { font-size: 12.5px; color: var(--ri-txt-2); margin: 0; }
+
+.ri-report-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.ri-report-kpi-card {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 16px;
+  background: var(--ri-bg-2); border: 1px solid var(--ri-line); border-radius: var(--ri-r-lg);
+}
+.ri-report-kpi-value { font-size: 24px; font-weight: 700; color: var(--ri-txt-1); }
+.ri-report-kpi-label { font-size: 11px; color: var(--ri-txt-3); text-transform: uppercase; letter-spacing: .03em; }
+
+.ri-report-block { margin-bottom: 20px; }
+.ri-report-block-title { font-size: 13.5px; font-weight: 600; color: var(--ri-txt-1); margin: 0 0 10px; }
+.ri-report-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ri-report-table th, .ri-report-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--ri-line); }
+.ri-report-table th { color: var(--ri-txt-3); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; }
+.ri-report-table td { color: var(--ri-txt-1); }
+
+.ri-report-plot-section {
+  padding: 20px 0; margin-bottom: 8px; border-top: 2px solid var(--ri-line);
+}
+.ri-report-plot-title { font-size: 17px; font-weight: 700; color: var(--ri-accent); margin: 0 0 14px; }
+
+.ri-report-maps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.ri-report-map-card { margin: 0; border: 1px solid var(--ri-line); border-radius: var(--ri-r-lg); overflow: hidden; background: var(--ri-bg-2); }
+.ri-report-map-card img { display: block; width: 100%; height: auto; background: #fff; }
+.ri-report-map-card figcaption { padding: 8px 12px; font-size: 11.5px; color: var(--ri-txt-2); }
+
+/* Печать/PDF: только содержимое отчёта, без шапки/меню/настроек;
+ * разрыв страницы перед каждым участком (кроме первого). */
+@media print {
+  .ri-header, .ri-tabstrip, .ri-error-banner, .ri-no-print, .ri-panel-toolbar { display: none !important; }
+  /* #ri-app зафиксирован на height:100vh + overflow:hidden ради экранных
+     MDI-вкладок — без сброса этого печать обрезала бы отчёт до одного
+     "экрана" вместо разворачивания на всю длину документа. */
+  html, body, #ri-app { height: auto !important; overflow: visible !important; }
+  #ri-app { display: block !important; background: #fff !important; }
+  .ri-content { position: static !important; overflow: visible !important; }
+  /* .ri-panel по умолчанию display:none, кроме .active — печатаем только
+     активную вкладку, а не все открытые MDI-вкладки разом. */
+  .ri-panel { display: none !important; }
+  .ri-panel.active { position: static !important; display: block !important; overflow: visible !important; padding: 0 !important; }
+  .ri-panel-card, .ri-panel-body { overflow: visible !important; padding: 0 !important; }
+  .ri-report-plot-section { border-top: none; page-break-before: always; }
+  .ri-report-plot-section:first-of-type { page-break-before: auto; }
+  .ri-report-kpi-card, .ri-report-map-card { break-inside: avoid; }
+}
