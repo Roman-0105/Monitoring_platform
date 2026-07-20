@@ -109,5 +109,6 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('ri-logout').addEventListener('click', function() {
     Toast.show('Выход из тестовой модели — авторизация подключается вместе с производственным API', 'info');
   });
+  document.getElementById('ri-diag-btn').addEventListener('click', copyDiagnostics);
   openTab('journal');
 });
