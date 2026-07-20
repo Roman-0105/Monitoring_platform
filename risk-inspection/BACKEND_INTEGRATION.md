@@ -37,7 +37,7 @@
 
 ```sql
 -- GEOLOCATION_CALLLOG — уже существует, ничего не создавать.
--- Приведено для справки психологической модели данных.
+-- Приведено для справки — логическая модель данных.
 -- CREATE TABLE dbo.GEOLOCATION_CALLLOG (
 --   ID              INT IDENTITY PRIMARY KEY,
 --   DELETED         INT NOT NULL DEFAULT 0,
@@ -296,9 +296,30 @@ WHERE PLOT_NAME = :plotId AND WEEK_KEY = :weekKey AND DELETED = 0`. Если
 `config.js` достаточно прописать `API_BASE_URL`, и весь остальной код
 панели трогать не придётся.
 
+> **Пути даны ровно так, как их формирует `data.js`** (camelCase, без
+> дефисов) — например, справочник участков это `/plotNames`, а не
+> `/plot-names`, справочник рисков — `/fixedRisks`, а не `/fixed-risks`.
+> Свериться можно прямо в коде: в `data.js` это вызовы `remoteCall(...)`
+> и `makeRefApi('plotNames', ...)` / `makeRefApi('fixedRisks', ...)`.
+
+> **`photo`/`image` — везде только имя файла, полный URL строит клиент.**
+> Как и для существующей `GEOLOCATION_CALLLOG.PHOTO`, поле `photo` в
+> ответах `/calllog*` и поле `image` в ответах `/schemes/*` должны
+> содержать **только имя файла** (`PHOTO_BASE_URL` в `config.js` — общий
+> префикс). Клиент сам достраивает полный URL (`photoUrl`/`imageUrl` в
+> объекте после `RiskApi.*` — этих полей в ответе API быть не должно,
+> их вычисляет `data.js`). Если файловый сервер (раздача
+> `geoadmin.rggold.kz/static/files/`) окажется на домене, отличном от
+> домена панели, для него нужен ещё и CORS-заголовок
+> `Access-Control-Allow-Origin` — иначе будет работать всё, кроме
+> вкладки «Отчёты» (там схема участка рисуется на canvas и
+> сериализуется в PDF/картинку — `canvas.toDataURL()` бросает
+> `SecurityError` на кросс-доменной картинке без CORS, даже если она
+> нормально показывается как `<img>` в остальных вкладках).
+
 | Метод и путь | Назначение | Тело запроса | Ответ |
 |---|---|---|---|
-| `GET /calllog` | список обращений (с расшифровкой риска/индикатора/уровня/участка) | — | `[{id, fname, phone, comments, photo, ip, closed, xwgs, ywgs, zwgs, ddate, plotNameId, plotName, indicatorId, indicator, fixedRiskId, fixedRisk, levelId, level}, ...]` |
+| `GET /calllog` | список обращений (с расшифровкой риска/индикатора/уровня/участка) | — | `[{id, fname, phone, comments, photo, ip, closed, xwgs, ywgs, zwgs, xLocal, yLocal, ddate, plotNameId, plotName, indicatorId, indicator, fixedRiskId, fixedRisk, levelId, level}, ...]` |
 | `GET /calllog/:id` | одно обращение | — | тот же объект, что в списке |
 | `PUT /calllog/:id` | редактирование полей обращения администратором | `{fname, phone, comments, plotName, indicator, level, ddate, xwgs, ywgs, zwgs, xLocal, yLocal}` | обновлённая запись |
 | `GET /calllog/:id/actions` | история действий по обращению | — | `[{id, todo, date, photo, calllogId}, ...]` |
@@ -306,8 +327,8 @@ WHERE PLOT_NAME = :plotId AND WEEK_KEY = :weekKey AND DELETED = 0`. Если
 | `POST /calllog/:id/reopen` | вернуть в статус «открыто» | — | `204` |
 | `POST /calllog` | ручное добавление обращения администратором (кнопка «＋ Добавить» в журнале — координат/фото/IP у такой записи нет, `IP` можно проставлять как `manual-entry`) | `{fname, phone?, comments?, plotName, indicator, level?}` | созданная запись |
 | `DELETE /calllog/:id` | удалить обращение из журнала (soft-delete, как везде) | — | `204` |
-| `GET /plot-names` `POST /plot-names` `PUT /plot-names/:id` `DELETE /plot-names/:id` | справочник участков | `{plotName}` | запись/список |
-| `GET /fixed-risks` `POST /fixed-risks` `PUT .../:id` `DELETE .../:id` | справочник рисков | `{fixedRisk}` | запись/список |
+| `GET /plotNames` `POST /plotNames` `PUT /plotNames/:id` `DELETE /plotNames/:id` | справочник участков | `{plotName}` | запись/список |
+| `GET /fixedRisks` `POST /fixedRisks` `PUT .../:id` `DELETE .../:id` | справочник рисков | `{fixedRisk}` | запись/список |
 | `GET /levels` `POST /levels` `PUT .../:id` `DELETE .../:id` | справочник уровней | `{level}` | запись/список |
 | `GET /indicators` `POST /indicators` `PUT .../:id` `DELETE .../:id` | справочник индикаторов | `{indicator, fixedRisk}` | запись/список |
 | `GET /notifications` | список настроек уведомлений (с email-получателями) | — | `[{id, fixedRiskId, fixedRisk, levelId, level, recipients:[email,...]}, ...]` |
@@ -370,6 +391,14 @@ Access-Control-Allow-Methods: GET, POST, PUT, DELETE
 Проще всего этого избежать — разместить панель на том же домене
 (`geoadmin.rggold.kz/admin/` или похожем), тогда CORS не понадобится.
 
+> Это касается и REST API, и раздачи файлов (`PHOTO_BASE_URL`) —
+> **отдельно**, это два разных источника с точки зрения браузера. Если
+> файлы (`geoadmin.rggold.kz/static/files/`) окажутся на домене, не
+> совпадающем с доменом панели, `Access-Control-Allow-Origin` нужен и
+> там — иначе снимки карты во вкладке «Отчёты» не соберутся в PDF (см.
+> примечание в разделе 3 про `canvas.toDataURL()`), хотя сами схемы и
+> фото при этом будут нормально показываться на остальных вкладках.
+
 ## 6. Пример реализации одного эндпоинта (для ориентира IT)
 
 Node.js + пакет `mssql` (самый быстрый способ поднять такой API, если
@@ -379,7 +408,7 @@ Node.js + пакет `mssql` (самый быстрый способ подня�
 const sql = require('mssql');
 const config = { server: '...', database: '...', user: '...', password: '...' };
 
-app.get('/api/fixed-risks', async (req, res) => {
+app.get('/api/fixedRisks', async (req, res) => {
   const pool = await sql.connect(config);
   const result = await pool.request()
     .query('SELECT ID as id, FIXED_RISK as fixedRisk FROM dbo.GEOLOCATION_FIXED_RISKS WHERE DELETED = 0');
@@ -427,3 +456,16 @@ window.RISK_CONFIG = {
 8. Прописать их в `config.js`, задеплоить `risk-inspection/` рядом с
    формой на `geoadmin.rggold.kz` (или на любой статический хостинг,
    если CORS настроен).
+9. Убедиться, что файловый сервер (`PHOTO_BASE_URL`) отдаёт
+   `Access-Control-Allow-Origin`, если он на другом домене, чем панель
+   (см. примечание в конце раздела 5) — без этого сломается только
+   вкладка «Отчёты» (снимки карты), остальное будет работать и без
+   этого заголовка, так что легко не заметить при беглой проверке.
+
+> Клиентская часть (`data.js`) уже проверена и на локальных мок-данных,
+> и отдельно — против тестового REST-сервера с ответами ровно в формате
+> раздела 3 (в т.ч. `photo`/`image` как имя файла, без `photoUrl`), так
+> что переключение `config.js` на реальный `API_BASE_URL` само по себе
+> ничего в `ui-*.js` менять не потребует — это относится именно к
+> контракту как описано выше (пути без дефисов, `photo`/`image` только
+> именем файла).

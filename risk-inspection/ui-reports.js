@@ -193,6 +193,13 @@ function overdueCritical(rows, overdueDays) {
 function loadImageAsync(src) {
   return new Promise(function(resolve, reject) {
     var img = new Image();
+    // Нужно ДО src: canvas.toDataURL() ниже (renderWeekSnapshot) иначе
+    // бросит SecurityError на "заражённом" (tainted) канвасе для любой
+    // картинки с чужого домена — даже если файловый сервер шлёт
+    // Access-Control-Allow-Origin (без этого атрибута браузер его не
+    // спросит). Для схем с того же домена, что и панель, атрибут ни на
+    // что не влияет. См. BACKEND_INTEGRATION.md, раздел 5.
+    img.crossOrigin = 'anonymous';
     img.onload = function() { resolve(img); };
     img.onerror = function() { reject(new Error('Не удалось загрузить изображение схемы')); };
     img.src = src;
@@ -203,7 +210,7 @@ function loadImageAsync(src) {
 // статусу" (открыто/закрыто — то, что и так волнует читателя сводки;
 // уровень/риск уже показаны отдельными таблицами разбивки на той же странице).
 async function renderWeekSnapshot(scheme, weekPoints, faults, domains, settings, colorMaps) {
-  var img = await loadImageAsync(scheme.image);
+  var img = await loadImageAsync(scheme.imageUrl);
   var bounds = { xMin: scheme.xMin, xMax: scheme.xMax, yMin: scheme.yMin, yMax: scheme.yMax };
   var TARGET_W = 720;
   var scale = Math.min(TARGET_W / img.width, 1);

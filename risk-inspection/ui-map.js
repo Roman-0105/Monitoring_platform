@@ -224,7 +224,7 @@ async function loadMapForWeek(panelEl, plotId, weekKey, requestToken) {
     sizeMapCanvas(panelEl);
     fitMap(panelEl);
   };
-  img.src = scheme.image;
+  img.src = scheme.imageUrl;
 }
 
 function sizeMapCanvas(panelEl) {
