@@ -45,11 +45,14 @@
     <div class="ri-header-spacer"></div>
 
     <div class="ri-header-right">
+      <button type="button" class="ri-icon-btn" id="ri-diag-btn" title="Скопировать диагностику для отладки">🩺</button>
       <button type="button" class="ri-icon-btn" id="ri-theme-toggle" title="Тема">🌗</button>
       <span class="ri-user">Admin <b>Roman Yukin</b></span>
       <button type="button" class="ri-icon-btn" id="ri-logout" title="Выход">⏻</button>
     </div>
   </header>
+
+  <div class="ri-error-banner" id="ri-error-banner" hidden></div>
 
   <div class="ri-tabstrip" id="ri-tabstrip"></div>
 
@@ -60,6 +63,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if (window.pdfjsLib) { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }</script>
 <script src="config.js"></script>
+<script src="ui-diagnostics.js"></script>
 <script src="ui-utils.js"></script>
 <script src="seed-geology.js"></script>
 <script src="seed.js"></script>

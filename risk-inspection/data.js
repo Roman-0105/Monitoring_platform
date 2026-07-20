@@ -185,6 +185,29 @@ var RiskApi = (function() {
   // для случайного клика).
   function resetToSeed() { db = seedDb(); persist(); }
 
+  // Компактный снимок состояния для кнопки "🩺 Диагностика" (ui-diagnostics.js) —
+  // счётчики и ключевые поля, без огромных base64-полей (фото/схемы), чтобы
+  // итоговый JSON помещался в один comfortable paste.
+  function debugSnapshot() {
+    var counts = {};
+    TABLES.forEach(function(t) {
+      counts[t] = (db[t] || []).filter(function(r) { return !r.deleted; }).length;
+    });
+    return {
+      meta: db.meta,
+      tableCounts: counts,
+      plotNames: db.plotNames.filter(function(p) { return !p.deleted; })
+        .map(function(p) { return { id: p.id, name: p.plotName }; }),
+      schemes: db.schemes.filter(function(s) { return !s.deleted; }).map(function(s) {
+        return {
+          id: s.id, plotName: s.plotName, weekKey: s.weekKey, hasImage: !!s.image,
+          xMin: s.xMin, xMax: s.xMax, yMin: s.yMin, yMax: s.yMax,
+          uploadedAt: s.uploadedAt, uploadedBy: s.uploadedBy,
+        };
+      }),
+    };
+  }
+
   /* ---------------- generic remote helper (для будущего API) ---------------- */
   async function remoteCall(method, path, body) {
     var headers = { 'Content-Type': 'application/json' };
@@ -640,5 +663,6 @@ var RiskApi = (function() {
     colors: colorsApi,
     photoUrl: photoUrl,
     _debugResetSeed: resetToSeed,
+    _debugSnapshot: debugSnapshot,
   };
 })();
