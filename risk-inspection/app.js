@@ -3,6 +3,7 @@
 var TAB_DEFS = {
   journal: { title: 'Журнал Обращений', init: initJournalPanel },
   map: { title: 'Карта', init: initMapPanel },
+  reports: { title: 'Отчёты', init: initReportsPanel },
   plotNames: { title: 'Названия участков', init: initPlotNamesPanel },
   fixedRisks: { title: 'Зафиксированные риски', init: initFixedRisksPanel },
   indicators: { title: 'Индикаторы опасностей', init: initIndicatorsPanel },

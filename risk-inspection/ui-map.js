@@ -250,37 +250,51 @@ function fitMap(panelEl) {
  * закрыто, как раньше), по уровню опасности или по типу зафиксированного
  * риска (оба — через настраиваемые палитры RiskApi.colors, см. вкладку
  * "Настройка цветов"). */
-function mapPointColor(pt) {
-  if (MapState.colorMode === 'level') return MapState.levelColorMap[pt.levelId] || '#9ca3af';
-  if (MapState.colorMode === 'risk') return MapState.riskColorMap[pt.fixedRiskId] || '#9ca3af';
+/* ---------------- Отрисовка сцены схемы (общая для живой карты и снимков
+ * для отчётов, см. ui-reports.js) ----------------
+ * "state" — любой объект формы {img, bounds, scale, points, faults, domains,
+ * showFaults, showDomains, faultColor, colorMode, statusFilter,
+ * levelColorMap, riskColorMap}. MapState сам является таким объектом (плюс
+ * ещё поля zoom/pan, сюда не относящиеся), поэтому вызовы ниже просто
+ * передают его напрямую. Отчёты передают свой отдельный, более лёгкий
+ * объект той же формы — благодаря этому не пришлось заводить вторую копию
+ * логики отрисовки доменов/разломов/точек.
+ */
+
+function pointColorFor(pt, state) {
+  if (state.colorMode === 'level') return state.levelColorMap[pt.levelId] || '#9ca3af';
+  if (state.colorMode === 'risk') return state.riskColorMap[pt.fixedRiskId] || '#9ca3af';
   return pt.closed ? '#34d399' : '#f87171';
 }
 
-/* Точки, которые сейчас положено рисовать и на которые можно кликать/
- * наводиться — фильтр "Показывать" (все/только открытые/только закрытые)
- * независим от режима раскраски (mapPointColor) и применяется здесь один
- * раз, а не в каждом месте, где перебираются точки. */
-function visiblePoints() {
-  if (MapState.statusFilter === 'open') return MapState.points.filter(function(p) { return !p.closed; });
-  if (MapState.statusFilter === 'closed') return MapState.points.filter(function(p) { return p.closed; });
-  return MapState.points;
+function filterByStatus(points, statusFilter) {
+  if (statusFilter === 'open') return points.filter(function(p) { return !p.closed; });
+  if (statusFilter === 'closed') return points.filter(function(p) { return p.closed; });
+  return points;
 }
 
-function drawFaultsLayer(ctx, imgW, imgH) {
-  if (!MapState.showFaults || !MapState.faults.length) return;
+/* Точки, которые сейчас положено рисовать на ЖИВОЙ карте и на которые можно
+ * кликать/наводиться — фильтр "Показывать" применяется здесь один раз, а
+ * не в каждом месте, где перебираются точки (используется в mapPointAt). */
+function visiblePoints() {
+  return filterByStatus(MapState.points, MapState.statusFilter);
+}
+
+function drawFaultsLayer(ctx, state, imgW, imgH) {
+  if (!state.showFaults || !state.faults.length) return;
   ctx.save();
-  ctx.strokeStyle = MapState.faultColor;
-  ctx.lineWidth = 1.5 / MapState.scale;
+  ctx.strokeStyle = state.faultColor;
+  ctx.lineWidth = 1.5 / state.scale;
   ctx.setLineDash([]);
   ctx.globalAlpha = 0.75;
-  MapState.faults.forEach(function(f) {
+  state.faults.forEach(function(f) {
     var pts = f.points;
     if (!pts || pts.length < 2) return;
-    var first = xyToPixel(pts[0][0], pts[0][1], MapState.bounds, imgW, imgH);
+    var first = xyToPixel(pts[0][0], pts[0][1], state.bounds, imgW, imgH);
     ctx.beginPath();
     ctx.moveTo(first.px, first.py);
     for (var i = 1; i < pts.length; i++) {
-      var p = xyToPixel(pts[i][0], pts[i][1], MapState.bounds, imgW, imgH);
+      var p = xyToPixel(pts[i][0], pts[i][1], state.bounds, imgW, imgH);
       ctx.lineTo(p.px, p.py);
     }
     ctx.stroke();
@@ -288,18 +302,18 @@ function drawFaultsLayer(ctx, imgW, imgH) {
   ctx.restore();
 }
 
-function drawDomainsLayer(ctx, imgW, imgH) {
-  if (!MapState.showDomains || !MapState.domains.length) return;
-  var s = MapState.scale;
-  MapState.domains.forEach(function(d) {
+function drawDomainsLayer(ctx, state, imgW, imgH) {
+  if (!state.showDomains || !state.domains.length) return;
+  var s = state.scale;
+  state.domains.forEach(function(d) {
     var pts = d.points;
     if (!pts || pts.length < 3) return;
     ctx.save();
     ctx.beginPath();
-    var first = xyToPixel(pts[0][0], pts[0][1], MapState.bounds, imgW, imgH);
+    var first = xyToPixel(pts[0][0], pts[0][1], state.bounds, imgW, imgH);
     ctx.moveTo(first.px, first.py);
     for (var i = 1; i < pts.length; i++) {
-      var p = xyToPixel(pts[i][0], pts[i][1], MapState.bounds, imgW, imgH);
+      var p = xyToPixel(pts[i][0], pts[i][1], state.bounds, imgW, imgH);
       ctx.lineTo(p.px, p.py);
     }
     ctx.closePath();
@@ -312,7 +326,7 @@ function drawDomainsLayer(ctx, imgW, imgH) {
 
     var cx = 0, cy = 0;
     pts.forEach(function(pt) {
-      var px = xyToPixel(pt[0], pt[1], MapState.bounds, imgW, imgH);
+      var px = xyToPixel(pt[0], pt[1], state.bounds, imgW, imgH);
       cx += px.px; cy += px.py;
     });
     cx /= pts.length; cy /= pts.length;
@@ -329,6 +343,30 @@ function drawDomainsLayer(ctx, imgW, imgH) {
   });
 }
 
+/* Рисует схему + домены + разломы + точки в уже готовый (транслированный/
+ * отмасштабированный вызывающей стороной) ctx. state.scale используется
+ * только для расчёта "экранно-постоянной" толщины линий/размера точек —
+ * сам ctx.scale(...) вызывающая сторона делает самостоятельно ДО этого вызова. */
+function renderMapScene(ctx, state) {
+  var imgW = state.img.width, imgH = state.img.height;
+  ctx.drawImage(state.img, 0, 0);
+
+  drawDomainsLayer(ctx, state, imgW, imgH);
+  drawFaultsLayer(ctx, state, imgW, imgH);
+
+  filterByStatus(state.points, state.statusFilter).forEach(function(pt) {
+    var pos = xyToPixel(pt.xLocal, pt.yLocal, state.bounds, imgW, imgH);
+    var r = 7 / state.scale;
+    ctx.beginPath();
+    ctx.arc(pos.px, pos.py, r, 0, Math.PI * 2);
+    ctx.fillStyle = pointColorFor(pt, state);
+    ctx.fill();
+    ctx.lineWidth = 2 / state.scale;
+    ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.stroke();
+  });
+}
+
 function redrawMap() {
   var canvas = document.getElementById('ri-map-canvas');
   if (!canvas) return;
@@ -339,23 +377,7 @@ function redrawMap() {
   ctx.save();
   ctx.translate(MapState.offX, MapState.offY);
   ctx.scale(MapState.scale, MapState.scale);
-  ctx.drawImage(MapState.img, 0, 0);
-
-  drawDomainsLayer(ctx, MapState.img.width, MapState.img.height);
-  drawFaultsLayer(ctx, MapState.img.width, MapState.img.height);
-
-  visiblePoints().forEach(function(pt) {
-    var pos = xyToPixel(pt.xLocal, pt.yLocal, MapState.bounds, MapState.img.width, MapState.img.height);
-    var r = 7 / MapState.scale;
-    ctx.beginPath();
-    ctx.arc(pos.px, pos.py, r, 0, Math.PI * 2);
-    ctx.fillStyle = mapPointColor(pt);
-    ctx.fill();
-    ctx.lineWidth = 2 / MapState.scale;
-    ctx.strokeStyle = 'rgba(255,255,255,.9)';
-    ctx.stroke();
-  });
-
+  renderMapScene(ctx, MapState);
   ctx.restore();
 }
 
