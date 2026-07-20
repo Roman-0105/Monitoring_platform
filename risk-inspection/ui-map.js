@@ -10,12 +10,19 @@ var MapState = {
   scale: 1, offX: 0, offY: 0, minScale: 0.05, maxScale: 8,
   dragging: false, dragMoved: false, lastX: 0, lastY: 0,
   hoveredPointId: null,
-  colorMode: 'status', levelColorMap: {}, riskColorMap: {},
+  // Растёт на каждый новый вызов loadMapForPlot/loadMapForWeek — если
+  // пользователь быстро переключает участок/неделю, более старый (но всё
+  // ещё выполняющийся) вызов после своих await должен видеть, что он уже
+  // не последний, и не применять устаревший результат поверх более
+  // нового состояния (иначе картинка/точки могут "отстать" от того, что
+  // выбрано в интерфейсе — гонка состояний в модульном синглтоне).
+  requestId: 0,
+  colorMode: 'status', statusFilter: 'all', levelColorMap: {}, riskColorMap: {},
   // Домены видны по умолчанию, разломы — нет: та же асимметрия умолчаний,
   // что в domens.js (_visible=true) и faults.js (_visible=false) проекта
-  // "Гидрогеологический мониторинг".
+  // "Гидрогеологический мониторинг". Разломы/домены — только просмотр
+  // (вкл/выкл слоя целиком), без создания/редактирования в этой панели.
   faults: [], domains: [], showFaults: false, showDomains: true, faultColor: '#e05c5c',
-  drawMode: null, drawPts: [],
 };
 
 async function initMapPanel(panelEl) {
@@ -36,12 +43,13 @@ async function initMapPanel(panelEl) {
               '<option value="risk">По типу риска</option>' +
             '</select>' +
           '</label>' +
-        '</div>' +
-        '<div class="ri-map-draw-bar" id="ri-map-draw-bar" hidden>' +
-          '<span id="ri-map-draw-hint"></span>' +
-          '<span class="ri-map-draw-count" id="ri-map-draw-count"></span>' +
-          '<button type="button" class="ri-btn ri-btn-primary ri-btn-xs" id="ri-map-draw-done">Готово</button>' +
-          '<button type="button" class="ri-btn ri-btn-outline ri-btn-xs" id="ri-map-draw-cancel">Отмена</button>' +
+          '<label class="ri-map-color-mode-label">Показывать:' +
+            '<select class="ri-input" id="ri-map-status-filter" style="max-width:180px;margin-left:6px">' +
+              '<option value="all">Все обращения</option>' +
+              '<option value="open">Только открытые</option>' +
+              '<option value="closed">Только закрытые</option>' +
+            '</select>' +
+          '</label>' +
         '</div>' +
         '<div class="ri-map-wrap" id="ri-map-wrap">' +
           '<canvas id="ri-map-canvas"></canvas>' +
@@ -66,20 +74,8 @@ async function initMapPanel(panelEl) {
           '</div>' +
           '<div class="ri-map-layers-panel" id="ri-map-layers-panel" hidden>' +
             '<div class="ri-map-legend-panel-title">Слои</div>' +
-            '<div class="ri-map-layers-section">' +
-              '<div class="ri-map-layers-head">' +
-                '<label><input type="checkbox" id="ri-layer-faults-toggle"> 🪨 Разломы</label>' +
-                '<button type="button" class="ri-btn ri-btn-outline ri-btn-xs" id="ri-fault-draw-btn">✏️ Добавить</button>' +
-              '</div>' +
-              '<div class="ri-map-layers-list" id="ri-faults-list"></div>' +
-            '</div>' +
-            '<div class="ri-map-layers-section">' +
-              '<div class="ri-map-layers-head">' +
-                '<label><input type="checkbox" id="ri-layer-domains-toggle" checked> 🗺️ Домены</label>' +
-                '<button type="button" class="ri-btn ri-btn-outline ri-btn-xs" id="ri-domain-draw-btn">✏️ Добавить</button>' +
-              '</div>' +
-              '<div class="ri-map-layers-list" id="ri-domains-list"></div>' +
-            '</div>' +
+            '<label class="ri-map-layers-row"><input type="checkbox" id="ri-layer-faults-toggle"> 🪨 Разломы</label>' +
+            '<label class="ri-map-layers-row"><input type="checkbox" id="ri-layer-domains-toggle" checked> 🗺️ Домены</label>' +
           '</div>' +
           '<div id="ri-map-tooltip" class="ri-map-tooltip" hidden></div>' +
         '</div>' +
@@ -145,20 +141,24 @@ function renderMapTabs(panelEl) {
 /* Загружает список недель для участка и открывает самую свежую
  * (или текущую календарную неделю, если для участка ещё нет ни одной схемы). */
 async function loadMapForPlot(panelEl, plotId) {
+  var myRequest = ++MapState.requestId;
   MapState.plotId = plotId;
-  cancelDrawMode(panelEl);
   renderMapTabs(panelEl);
 
-  MapState.weeks = await RiskApi.schemes.listWeeks(plotId);
-  MapState.weekKey = MapState.weeks.length ? MapState.weeks[0].weekKey : currentWeekKey();
+  var weeks = await RiskApi.schemes.listWeeks(plotId);
+  if (myRequest !== MapState.requestId) return; // подоспел более новый вызов — этот результат уже неактуален
+  MapState.weeks = weeks;
+  MapState.weekKey = weeks.length ? weeks[0].weekKey : currentWeekKey();
 
   // Разломы и домены привязаны к участку целиком (не к неделе) — это
   // относительно статичные геологические особенности, а не еженедельные срезы.
-  MapState.faults = await RiskApi.faults.listByPlot(plotId);
-  MapState.domains = await RiskApi.domains.listByPlot(plotId);
-  renderLayersLists(panelEl);
+  var faults = await RiskApi.faults.listByPlot(plotId);
+  var domains = await RiskApi.domains.listByPlot(plotId);
+  if (myRequest !== MapState.requestId) return;
+  MapState.faults = faults;
+  MapState.domains = domains;
 
-  await loadMapForWeek(panelEl, plotId, MapState.weekKey);
+  await loadMapForWeek(panelEl, plotId, MapState.weekKey, myRequest);
 }
 
 function renderMapWeekBar(panelEl) {
@@ -179,13 +179,18 @@ function renderMapWeekBar(panelEl) {
   });
 }
 
-async function loadMapForWeek(panelEl, plotId, weekKey) {
+async function loadMapForWeek(panelEl, plotId, weekKey, requestToken) {
+  // requestToken передаётся, когда вызывающая сторона (loadMapForPlot) уже
+  // застолбила номер запроса — иначе (прямой вызов из недельного чипа/
+  // инпута) считаем это новым запросом и застолбливаем номер сами.
+  var myRequest = requestToken != null ? requestToken : ++MapState.requestId;
   MapState.weekKey = weekKey;
   renderMapWeekBar(panelEl);
 
   MapState.img = null; MapState.bounds = null; MapState.points = [];
   var emptyEl = panelEl.querySelector('#ri-map-empty');
   var scheme = await RiskApi.schemes.getByPlotWeek(plotId, weekKey);
+  if (myRequest !== MapState.requestId) return;
 
   if (!scheme) {
     emptyEl.hidden = false;
@@ -206,6 +211,7 @@ async function loadMapForWeek(panelEl, plotId, weekKey) {
   MapState.bounds = { xMin: scheme.xMin, xMax: scheme.xMax, yMin: scheme.yMin, yMax: scheme.yMax };
 
   var allCallLog = await RiskApi.calllog.list();
+  if (myRequest !== MapState.requestId) return;
   MapState.points = allCallLog.filter(function(r) {
     if (r.plotNameId !== plotId || r.xLocal == null || r.yLocal == null || !r.ddate) return false;
     return weekKeyForDate(new Date(r.ddate)) === weekKey;
@@ -213,6 +219,7 @@ async function loadMapForWeek(panelEl, plotId, weekKey) {
 
   var img = new Image();
   img.onload = function() {
+    if (myRequest !== MapState.requestId) return; // пока грузилась картинка, выбор успел устареть
     MapState.img = img;
     sizeMapCanvas(panelEl);
     fitMap(panelEl);
@@ -247,6 +254,16 @@ function mapPointColor(pt) {
   if (MapState.colorMode === 'level') return MapState.levelColorMap[pt.levelId] || '#9ca3af';
   if (MapState.colorMode === 'risk') return MapState.riskColorMap[pt.fixedRiskId] || '#9ca3af';
   return pt.closed ? '#34d399' : '#f87171';
+}
+
+/* Точки, которые сейчас положено рисовать и на которые можно кликать/
+ * наводиться — фильтр "Показывать" (все/только открытые/только закрытые)
+ * независим от режима раскраски (mapPointColor) и применяется здесь один
+ * раз, а не в каждом месте, где перебираются точки. */
+function visiblePoints() {
+  if (MapState.statusFilter === 'open') return MapState.points.filter(function(p) { return !p.closed; });
+  if (MapState.statusFilter === 'closed') return MapState.points.filter(function(p) { return p.closed; });
+  return MapState.points;
 }
 
 function drawFaultsLayer(ctx, imgW, imgH) {
@@ -312,28 +329,6 @@ function drawDomainsLayer(ctx, imgW, imgH) {
   });
 }
 
-function drawInProgressShape(ctx, imgW, imgH) {
-  if (!MapState.drawMode || !MapState.drawPts.length) return;
-  ctx.save();
-  ctx.strokeStyle = MapState.drawMode === 'domain' ? '#1a73e8' : MapState.faultColor;
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.lineWidth = 2 / MapState.scale;
-  ctx.setLineDash([4 / MapState.scale, 3 / MapState.scale]);
-  ctx.beginPath();
-  MapState.drawPts.forEach(function(xy, i) {
-    var p = xyToPixel(xy[0], xy[1], MapState.bounds, imgW, imgH);
-    if (i === 0) ctx.moveTo(p.px, p.py); else ctx.lineTo(p.px, p.py);
-  });
-  ctx.stroke();
-  MapState.drawPts.forEach(function(xy) {
-    var p = xyToPixel(xy[0], xy[1], MapState.bounds, imgW, imgH);
-    ctx.beginPath();
-    ctx.arc(p.px, p.py, 4 / MapState.scale, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  ctx.restore();
-}
-
 function redrawMap() {
   var canvas = document.getElementById('ri-map-canvas');
   if (!canvas) return;
@@ -349,7 +344,7 @@ function redrawMap() {
   drawDomainsLayer(ctx, MapState.img.width, MapState.img.height);
   drawFaultsLayer(ctx, MapState.img.width, MapState.img.height);
 
-  MapState.points.forEach(function(pt) {
+  visiblePoints().forEach(function(pt) {
     var pos = xyToPixel(pt.xLocal, pt.yLocal, MapState.bounds, MapState.img.width, MapState.img.height);
     var r = 7 / MapState.scale;
     ctx.beginPath();
@@ -361,147 +356,7 @@ function redrawMap() {
     ctx.stroke();
   });
 
-  drawInProgressShape(ctx, MapState.img.width, MapState.img.height);
-
   ctx.restore();
-}
-
-/* ---------------- Слои: разломы / домены (список + удаление) ---------------- */
-
-function renderLayersLists(panelEl) {
-  var fList = panelEl.querySelector('#ri-faults-list');
-  var dList = panelEl.querySelector('#ri-domains-list');
-  if (!fList || !dList) return;
-
-  fList.innerHTML = MapState.faults.length ? MapState.faults.map(function(f) {
-    return '<div class="ri-map-layers-item"><span>' + escHTML(f.name || ('Разлом #' + f.id)) + '</span>' +
-      '<button type="button" class="ri-map-layers-del" data-fault="' + f.id + '" title="Удалить">✕</button></div>';
-  }).join('') : '<div class="ri-form-hint">Разломов для этого участка ещё нет</div>';
-
-  dList.innerHTML = MapState.domains.length ? MapState.domains.map(function(d) {
-    return '<div class="ri-map-layers-item"><i class="ri-map-layers-swatch" style="background:' + escAttr(d.color) + '"></i>' +
-      '<span>' + escHTML(d.name) + '</span>' +
-      '<button type="button" class="ri-map-layers-del" data-domain="' + d.id + '" title="Удалить">✕</button></div>';
-  }).join('') : '<div class="ri-form-hint">Доменов для этого участка ещё нет</div>';
-
-  fList.querySelectorAll('[data-fault]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      confirmDialog('Удалить этот разлом?', async function() {
-        await RiskApi.faults.remove(Number(btn.dataset.fault));
-        MapState.faults = await RiskApi.faults.listByPlot(MapState.plotId);
-        renderLayersLists(panelEl);
-        redrawMap();
-      });
-    });
-  });
-  dList.querySelectorAll('[data-domain]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      confirmDialog('Удалить этот домен?', async function() {
-        await RiskApi.domains.remove(Number(btn.dataset.domain));
-        MapState.domains = await RiskApi.domains.listByPlot(MapState.plotId);
-        renderLayersLists(panelEl);
-        redrawMap();
-      });
-    });
-  });
-}
-
-/* ---------------- Инструмент рисования разломов/доменов ----------------
- * В "Гидрогеологическом мониторинге" разломы/домены — фиксированный,
- * единожды импортированный из DXF набор без какого-либо UI создания.
- * Здесь координаты каждой схемы свои (задаются калибровкой), поэтому
- * вместо копирования того набора координат админ рисует свои фигуры
- * прямо на схеме участка: клики по канве добавляют точки линии/контура. */
-
-function updateDrawCount(panelEl) {
-  var el = panelEl.querySelector('#ri-map-draw-count');
-  if (el) el.textContent = 'Точек: ' + MapState.drawPts.length;
-}
-
-function enterDrawMode(panelEl, type) {
-  if (!MapState.img || !MapState.bounds) { Toast.show('Сначала откройте откалиброванную схему', 'warning'); return; }
-  MapState.drawMode = type;
-  MapState.drawPts = [];
-  panelEl.querySelector('#ri-map-draw-bar').hidden = false;
-  panelEl.querySelector('#ri-map-draw-hint').textContent = type === 'fault'
-    ? 'Кликайте по схеме, чтобы добавить точки линии разлома (минимум 2).'
-    : 'Кликайте по схеме, чтобы добавить точки контура домена (минимум 3).';
-  updateDrawCount(panelEl);
-  panelEl.querySelector('#ri-map-canvas').style.cursor = 'crosshair';
-  redrawMap();
-}
-
-function exitDrawMode(panelEl) {
-  MapState.drawMode = null;
-  MapState.drawPts = [];
-  var bar = panelEl.querySelector('#ri-map-draw-bar');
-  if (bar) bar.hidden = true;
-  var canvas = panelEl.querySelector('#ri-map-canvas');
-  if (canvas) canvas.style.cursor = 'grab';
-  redrawMap();
-}
-
-function cancelDrawMode(panelEl) {
-  if (MapState.drawMode) exitDrawMode(panelEl);
-}
-
-function finishDrawMode(panelEl) {
-  var pts = MapState.drawPts;
-  if (MapState.drawMode === 'fault') {
-    if (pts.length < 2) { Toast.show('Нужно минимум 2 точки для разлома', 'warning'); return; }
-    openFaultSaveModal(panelEl, pts);
-  } else if (MapState.drawMode === 'domain') {
-    if (pts.length < 3) { Toast.show('Нужно минимум 3 точки для домена', 'warning'); return; }
-    openDomainSaveModal(panelEl, pts);
-  }
-}
-
-function openFaultSaveModal(panelEl, pts) {
-  var overlay = buildModal('Новый разлом',
-    '<div class="ri-form-group"><label class="ri-form-label">Название (необязательно)</label>' +
-      '<input type="text" class="ri-input" id="ri-fault-name-input" placeholder="Разлом ' + (MapState.faults.length + 1) + '"></div>' +
-    '<div class="ri-modal-actions">' +
-      '<button type="button" class="ri-btn ri-btn-outline" data-act="cancel">Отмена</button>' +
-      '<button type="button" class="ri-btn ri-btn-primary" data-act="save">Сохранить</button>' +
-    '</div>', { width: '360px' });
-  overlay.querySelector('[data-act="cancel"]').addEventListener('click', function() { closeModal(overlay); });
-  overlay.querySelector('[data-act="save"]').addEventListener('click', async function() {
-    var name = overlay.querySelector('#ri-fault-name-input').value.trim();
-    closeModal(overlay);
-    await RiskApi.faults.add(MapState.plotId, pts, name);
-    Toast.show('Разлом сохранён', 'success');
-    MapState.faults = await RiskApi.faults.listByPlot(MapState.plotId);
-    MapState.showFaults = true;
-    var cb = panelEl.querySelector('#ri-layer-faults-toggle'); if (cb) cb.checked = true;
-    renderLayersLists(panelEl);
-    exitDrawMode(panelEl);
-  });
-}
-
-function openDomainSaveModal(panelEl, pts) {
-  var defaultColor = ['#1a73e8', '#34a853', '#f9ab00', '#ea4335', '#7c3aed'][MapState.domains.length % 5];
-  var overlay = buildModal('Новый домен',
-    '<div class="ri-form-group"><label class="ri-form-label">Название</label>' +
-      '<input type="text" class="ri-input" id="ri-domain-name-input" placeholder="Домен ' + (MapState.domains.length + 1) + '"></div>' +
-    '<div class="ri-form-group"><label class="ri-form-label">Цвет</label>' +
-      '<input type="color" id="ri-domain-color-input" value="' + defaultColor + '"></div>' +
-    '<div class="ri-modal-actions">' +
-      '<button type="button" class="ri-btn ri-btn-outline" data-act="cancel">Отмена</button>' +
-      '<button type="button" class="ri-btn ri-btn-primary" data-act="save">Сохранить</button>' +
-    '</div>', { width: '360px' });
-  overlay.querySelector('[data-act="cancel"]').addEventListener('click', function() { closeModal(overlay); });
-  overlay.querySelector('[data-act="save"]').addEventListener('click', async function() {
-    var name = overlay.querySelector('#ri-domain-name-input').value.trim();
-    var color = overlay.querySelector('#ri-domain-color-input').value;
-    closeModal(overlay);
-    await RiskApi.domains.add(MapState.plotId, pts, name, color);
-    Toast.show('Домен сохранён', 'success');
-    MapState.domains = await RiskApi.domains.listByPlot(MapState.plotId);
-    MapState.showDomains = true;
-    var cb = panelEl.querySelector('#ri-layer-domains-toggle'); if (cb) cb.checked = true;
-    renderLayersLists(panelEl);
-    exitDrawMode(panelEl);
-  });
 }
 
 function mapPointAt(canvasX, canvasY) {
@@ -510,7 +365,7 @@ function mapPointAt(canvasX, canvasY) {
   var wy = (canvasY - MapState.offY) / MapState.scale;
   var thresh = 10 / MapState.scale;
   var found = null, bestDist = Infinity;
-  MapState.points.forEach(function(pt) {
+  visiblePoints().forEach(function(pt) {
     var pos = xyToPixel(pt.xLocal, pt.yLocal, MapState.bounds, MapState.img.width, MapState.img.height);
     var d = Math.hypot(pos.px - wx, pos.py - wy);
     if (d <= thresh && d < bestDist) { bestDist = d; found = pt; }
@@ -521,7 +376,7 @@ function mapPointAt(canvasX, canvasY) {
 /* ---------------- Всплывающая карточка точки при наведении ---------------- */
 
 function mapTooltipHTML(pt) {
-  return (pt.photo ? '<img class="ri-map-tooltip-photo" src="' + pt.photoUrl + '" alt="">' : '') +
+  return (pt.photo ? '<img class="ri-map-tooltip-photo" src="' + escAttr(pt.photoUrl) + '" alt="">' : '') +
     '<div class="ri-map-tooltip-body">' +
       '<div class="ri-map-tooltip-title">' + escHTML(pt.fname) + '</div>' +
       '<div class="ri-map-tooltip-row">' + escHTML(pt.fixedRisk) + '</div>' +
@@ -589,7 +444,7 @@ function setupMapInteraction(panelEl) {
   });
 
   canvas.addEventListener('mousemove', function(e) {
-    if (MapState.dragging || MapState.drawMode) return;
+    if (MapState.dragging) return;
     var rect = canvas.getBoundingClientRect();
     var x = e.clientX - rect.left, y = e.clientY - rect.top;
     var pt = mapPointAt(x, y);
@@ -601,18 +456,7 @@ function setupMapInteraction(panelEl) {
   canvas.addEventListener('click', function(e) {
     if (MapState.dragMoved) return;
     var rect = canvas.getBoundingClientRect();
-    var cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-    if (MapState.drawMode) {
-      if (!MapState.img || !MapState.bounds) return;
-      var wx = (cx - MapState.offX) / MapState.scale;
-      var wy = (cy - MapState.offY) / MapState.scale;
-      var xy = pixelToXY(wx, wy, MapState.bounds, MapState.img.width, MapState.img.height);
-      MapState.drawPts.push([xy.x, xy.y]);
-      updateDrawCount(panelEl);
-      redrawMap();
-      return;
-    }
-    var pt = mapPointAt(cx, cy);
+    var pt = mapPointAt(e.clientX - rect.left, e.clientY - rect.top);
     if (pt) openJournalDetail(pt.id);
   });
   canvas.style.cursor = 'grab';
@@ -652,6 +496,13 @@ function setupMapInteraction(panelEl) {
     MapState.colorMode = e.target.value;
     redrawMap();
   });
+  // "Показывать" — независимый от раскраски фильтр видимости точек по
+  // статусу обращения (см. visiblePoints()).
+  panelEl.querySelector('#ri-map-status-filter').addEventListener('change', function(e) {
+    MapState.statusFilter = e.target.value;
+    hideMapTooltip(panelEl);
+    redrawMap();
+  });
 
   panelEl.querySelector('#ri-layer-faults-toggle').addEventListener('change', function(e) {
     MapState.showFaults = e.target.checked;
@@ -661,8 +512,4 @@ function setupMapInteraction(panelEl) {
     MapState.showDomains = e.target.checked;
     redrawMap();
   });
-  panelEl.querySelector('#ri-fault-draw-btn').addEventListener('click', function() { enterDrawMode(panelEl, 'fault'); });
-  panelEl.querySelector('#ri-domain-draw-btn').addEventListener('click', function() { enterDrawMode(panelEl, 'domain'); });
-  panelEl.querySelector('#ri-map-draw-done').addEventListener('click', function() { finishDrawMode(panelEl); });
-  panelEl.querySelector('#ri-map-draw-cancel').addEventListener('click', function() { exitDrawMode(panelEl); });
 }

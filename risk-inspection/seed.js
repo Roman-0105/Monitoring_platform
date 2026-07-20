@@ -235,14 +235,14 @@ function seedDb() {
     return {
       id: i + 1, deleted: 0, recordVersion: 0, plotName: 1,
       name: '', points: points,
-      createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+      createdAt: '2026-06-01T00:00:00', createdBy: RI_GEOLOGY_IMPORT_LABEL,
     };
   });
   var domains = RI_DOMAINS_SEED.map(function(d, i) {
     return {
       id: i + 1, deleted: 0, recordVersion: 0, plotName: 1,
       name: d.name, points: d.pts, color: d.color,
-      createdAt: '2026-06-01T00:00:00', createdBy: 'Импорт ГИС (DXF, карьер ЮРГ)',
+      createdAt: '2026-06-01T00:00:00', createdBy: RI_GEOLOGY_IMPORT_LABEL,
     };
   });
 

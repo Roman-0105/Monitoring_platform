@@ -96,7 +96,7 @@ async function renderSchemeContent(panelEl) {
       }).join('') + '</div>' : '') +
     '</div>' +
     (scheme
-      ? '<img class="ri-scheme-preview" id="ri-sch-preview-img" src="' + scheme.image + '" alt="Схема участка">' +
+      ? '<img class="ri-scheme-preview" id="ri-sch-preview-img" src="' + escAttr(scheme.image) + '" alt="Схема участка">' +
         '<p class="ri-form-hint" style="margin:8px 0 16px">Загружено: ' + formatDate(scheme.uploadedAt) +
           (scheme.uploadedBy ? ' · ' + escHTML(scheme.uploadedBy) : '') + '</p>'
       : '<p class="ri-form-hint" style="margin:12px 0">Для «' + formatWeekKey(weekKey) + '» ещё не загружена схема.</p>') +
@@ -191,7 +191,7 @@ function openCalibrationModal(plotId, weekKey, scheme, onSaved) {
   var body =
     '<p class="ri-form-hint" style="margin-bottom:10px">Кликните 2 точки на схеме с известными реальными координатами (чем дальше друг от друга — тем точнее), затем укажите их X/Y.</p>' +
     '<div class="ri-cal-wrap" id="ri-cal-wrap">' +
-      '<img id="ri-cal-img" src="' + scheme.image + '" draggable="false">' +
+      '<img id="ri-cal-img" src="' + escAttr(scheme.image) + '" draggable="false">' +
       '<div id="ri-cal-markers"></div>' +
     '</div>' +
     '<div class="ri-form-row" style="margin-top:14px">' +

@@ -59,8 +59,6 @@ var RiskApi = (function() {
   var TABLES = ['calllog', 'actions', 'fixedRisks', 'indicators', 'levels', 'plotNames',
     'notifications', 'notificationRecipients', 'contacts', 'schemes', 'faults', 'domains'];
 
-  var GEOLOGY_IMPORT_LABEL = 'Импорт ГИС (DXF, карьер ЮРГ)';
-
   function ensureTables(d) {
     // Заполняет отсутствующие таблицы пустыми массивами — нужно, если в
     // localStorage лежат данные, сохранённые до появления новой сущности
@@ -86,7 +84,7 @@ var RiskApi = (function() {
   // калибровка администратора (X: 45850-47350, Y: 15800-17350 — точно
   // диапазон из docstring domens.js) показала, что переставлять было не
   // нужно. V2 не просто доливает недостающее, а сначала СНОСИТ все ранее
-  // авто-импортированные записи (по createdBy === GEOLOGY_IMPORT_LABEL —
+  // авто-импортированные записи (по createdBy === RI_GEOLOGY_IMPORT_LABEL —
   // руками нарисованные пользователем фигуры не трогает) и вставляет их
   // заново уже с исправленными (см. RI_FAULTS_SEED/RI_DOMAINS_SEED в
   // seed-geology.js) координатами. Флаг не даёт повторно навязывать
@@ -121,19 +119,19 @@ var RiskApi = (function() {
     // (участок мог появиться позже), а не "успешно смигрировать ничего".
     if (!plot) return;
     d.meta.geologySeededV2 = true;
-    d.faults = d.faults.filter(function(f) { return !(f.plotName === plot.id && f.createdBy === GEOLOGY_IMPORT_LABEL); });
-    d.domains = d.domains.filter(function(x) { return !(x.plotName === plot.id && x.createdBy === GEOLOGY_IMPORT_LABEL); });
+    d.faults = d.faults.filter(function(f) { return !(f.plotName === plot.id && f.createdBy === RI_GEOLOGY_IMPORT_LABEL); });
+    d.domains = d.domains.filter(function(x) { return !(x.plotName === plot.id && x.createdBy === RI_GEOLOGY_IMPORT_LABEL); });
     RI_FAULTS_SEED.forEach(function(points) {
       d.faults.push({
         id: nextLocalId(d.faults), deleted: 0, recordVersion: 0, plotName: plot.id,
-        name: '', points: points, createdAt: '2026-06-01T00:00:00', createdBy: GEOLOGY_IMPORT_LABEL,
+        name: '', points: points, createdAt: '2026-06-01T00:00:00', createdBy: RI_GEOLOGY_IMPORT_LABEL,
       });
     });
     RI_DOMAINS_SEED.forEach(function(dm) {
       d.domains.push({
         id: nextLocalId(d.domains), deleted: 0, recordVersion: 0, plotName: plot.id,
         name: dm.name, points: dm.pts, color: dm.color,
-        createdAt: '2026-06-01T00:00:00', createdBy: GEOLOGY_IMPORT_LABEL,
+        createdAt: '2026-06-01T00:00:00', createdBy: RI_GEOLOGY_IMPORT_LABEL,
       });
     });
   }
@@ -146,21 +144,30 @@ var RiskApi = (function() {
   }
 
   function load() {
-    try {
-      var raw = localStorage.getItem(LS_KEY);
-      if (raw) {
-        var parsed = JSON.parse(raw);
+    var raw = null;
+    try { raw = localStorage.getItem(LS_KEY); } catch (e) { /* недоступен localStorage */ }
+
+    if (raw) {
+      var parsed = null;
+      try { parsed = JSON.parse(raw); } catch (e) { /* повреждённый JSON — пересидим с нуля ниже */ }
+      if (parsed) {
         var before = parsed.meta && parsed.meta.geologySeededV2;
         db = ensureTables(parsed);
         // ensureTables() может дозаполнить недостающие таблицы и разово
         // смигрировать геологию (migrateGeologySeedV2) — сохраняем сразу,
         // а не откладываем до следующего "естественного" persist(),
         // иначе миграция будет молча повторяться в памяти на каждой
-        // перезагрузке страницы, так и не попав в localStorage.
-        if (!before) persist();
+        // перезагрузке страницы, так и не попав в localStorage. Если
+        // именно ЭТОТ persist() провалится (например, забита квота
+        // браузера) — это не повод стирать уже распарсенные РЕАЛЬНЫЕ
+        // данные пользователя реседом ниже: db уже корректно назначен в
+        // памяти на этот сеанс, а сам persist() уже показал тост с
+        // ошибкой — раньше такая ошибка попадала в тот же catch, что и
+        // повреждённый JSON, и приводила именно к такому стиранию.
+        if (!before) { try { persist(); } catch (e) { /* тост уже показан внутри persist() */ } }
         return;
       }
-    } catch (e) { /* ignore corrupt storage */ }
+    }
     db = ensureTables(seedDb());
     persist();
   }
@@ -172,6 +179,10 @@ var RiskApi = (function() {
       throw e;
     }
   }
+  // Только для ручного вызова из консоли браузера (см. README.md) —
+  // стирает все локальные правки и возвращает тестовые данные к исходному
+  // сиду; в самом UI кнопки для этого нет намеренно (слишком разрушительно
+  // для случайного клика).
   function resetToSeed() { db = seedDb(); persist(); }
 
   /* ---------------- generic remote helper (для будущего API) ---------------- */
@@ -222,11 +233,20 @@ var RiskApi = (function() {
     return (cfg().PHOTO_BASE_URL || '') + photo;
   }
 
+  // Невалидная/отсутствующая дата даёт Invalid Date -> NaN при вычитании
+  // (не бросает исключение, но и не даёт осмысленного порядка) — уводим её
+  // в начало эпохи, чтобы такие строки предсказуемо уходили в конец
+  // списка (сортировка "по убыванию даты"), а не путали остальной порядок.
+  function ddateTime(v) {
+    var t = new Date(v).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+
   async function getCallLog() {
     if (isRemote()) return remoteCall('GET', '/calllog');
     return db.calllog.filter(function(r) { return !r.deleted; })
       .map(decorateCallLog)
-      .sort(function(a, b) { return new Date(b.ddate) - new Date(a.ddate); });
+      .sort(function(a, b) { return ddateTime(b.ddate) - ddateTime(a.ddate); });
   }
 
   async function getCallLogById(id) {
@@ -278,6 +298,32 @@ var RiskApi = (function() {
     persist();
   }
 
+  async function addCallLog(data) {
+    // data: { fname, phone, comments, plotName, indicator, level }
+    // (ручной ввод обращения администратором — те же поля, что форма пишет
+    // с телефона, кроме координат/фото/IP, которых у "ручной" записи нет)
+    if (isRemote()) return remoteCall('POST', '/calllog', data);
+    var row = {
+      id: nextId('calllog'), deleted: 0, recordVersion: 0,
+      fname: data.fname, phone: data.phone || '', comments: data.comments || '',
+      photo: '', ip: 'manual-entry', closed: 0,
+      xwgs: null, ywgs: null, zwgs: null, xLocal: null, yLocal: null,
+      ddate: new Date().toISOString(),
+      plotName: data.plotName, indicator: data.indicator, level: data.level != null ? data.level : null,
+    };
+    db.calllog.push(row);
+    persist();
+    return decorateCallLog(row);
+  }
+
+  async function removeCallLog(id) {
+    if (isRemote()) return remoteCall('DELETE', '/calllog/' + id);
+    var row = db.calllog.find(function(r) { return r.id === id; });
+    if (!row) return;
+    row.deleted = 1;
+    persist();
+  }
+
   /* ---------------- Универсальный CRUD для справочников ---------------- */
 
   function makeRefApi(table, fields, decorate) {
@@ -316,14 +362,7 @@ var RiskApi = (function() {
   var levelsApi = makeRefApi('levels', ['level']);
   var plotNamesApi = makeRefApi('plotNames', ['plotName']);
 
-  var indicatorsApi = (function() {
-    var base = makeRefApi('indicators', ['indicator', 'fixedRisk']);
-    base.listByRisk = async function(riskId) {
-      var all = await base.list();
-      return riskId ? all.filter(function(i) { return i.fixedRisk === riskId; }) : all;
-    };
-    return base;
-  })();
+  var indicatorsApi = makeRefApi('indicators', ['indicator', 'fixedRisk']);
 
   /* ---------------- Уведомления ---------------- */
 
@@ -588,7 +627,7 @@ var RiskApi = (function() {
   load();
 
   return {
-    calllog: { list: getCallLog, get: getCallLogById, close: closeCallLog, reopen: reopenCallLog, actions: getActionsByCallLogId, update: updateCallLog },
+    calllog: { list: getCallLog, get: getCallLogById, close: closeCallLog, reopen: reopenCallLog, actions: getActionsByCallLogId, update: updateCallLog, add: addCallLog, remove: removeCallLog },
     fixedRisks: fixedRisksApi,
     indicators: indicatorsApi,
     levels: levelsApi,
