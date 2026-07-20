@@ -265,15 +265,28 @@ var RiskApi = (function() {
     return isNaN(t) ? 0 : t;
   }
 
+  // API отдаёт `photo` только как имя файла (см. BACKEND_INTEGRATION.md,
+  // 2.1/7) — decorateCallLog() строит полный URL для локального режима,
+  // а этот хелпер делает то же самое поверх уже готового JSON от API
+  // (плейсменты labels там уже посчитаны сервером, пересчитывать их
+  // локально нельзя — id-справочники клиента и сервера могут не совпасть).
+  function withPhotoUrl(row) {
+    row.photoUrl = photoUrl(row.photo);
+    return row;
+  }
+
   async function getCallLog() {
-    if (isRemote()) return remoteCall('GET', '/calllog');
+    if (isRemote()) return (await remoteCall('GET', '/calllog')).map(withPhotoUrl);
     return db.calllog.filter(function(r) { return !r.deleted; })
       .map(decorateCallLog)
       .sort(function(a, b) { return ddateTime(b.ddate) - ddateTime(a.ddate); });
   }
 
   async function getCallLogById(id) {
-    if (isRemote()) return remoteCall('GET', '/calllog/' + id);
+    if (isRemote()) {
+      var remoteRow = await remoteCall('GET', '/calllog/' + id);
+      return remoteRow ? withPhotoUrl(remoteRow) : null;
+    }
     var row = db.calllog.find(function(r) { return r.id === id; });
     return row ? decorateCallLog(row) : null;
   }
@@ -451,30 +464,40 @@ var RiskApi = (function() {
       .sort(function(a, b) { return (b.weekKey || '').localeCompare(a.weekKey || ''); }); // новые недели сверху
   }
 
+  // Как и с CALLLOG.PHOTO: сервер должен отдавать `image` именем файла
+  // (полный URL = PHOTO_BASE_URL + IMAGE, см. BACKEND_INTEGRATION.md,
+  // 2.2), поэтому клиент всегда строит отображаемую ссылку сам —
+  // photoUrl() одинаково пропускает data:-URL тестового режима как есть
+  // и достраивает URL из имени файла для боевого API.
+  function withImageUrl(row) {
+    if (row) row.imageUrl = photoUrl(row.image);
+    return row;
+  }
+
   var schemesApi = {
     // Все загруженные недели схем для участка, от новой к старой.
     listWeeks: async function(plotId) {
-      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId + '/weeks');
-      return listSchemeRows(plotId).map(function(s) { return Object.assign({}, s); });
+      if (isRemote()) return (await remoteCall('GET', '/schemes/' + plotId + '/weeks')).map(withImageUrl);
+      return listSchemeRows(plotId).map(function(s) { return withImageUrl(Object.assign({}, s)); });
     },
     // Схема конкретной недели (или null).
     getByPlotWeek: async function(plotId, weekKey) {
-      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId + '/' + weekKey);
+      if (isRemote()) return withImageUrl(await remoteCall('GET', '/schemes/' + plotId + '/' + weekKey));
       var row = findSchemeRow(plotId, weekKey);
-      return row ? Object.assign({}, row) : null;
+      return row ? withImageUrl(Object.assign({}, row)) : null;
     },
     // Самая свежая загруженная неделя для участка (или null) — используется
     // и как "неделя по умолчанию" на карте, и как источник границ при
     // создании схемы для ещё не существовавшей недели (перенос калибровки).
     getLatest: async function(plotId) {
-      if (isRemote()) return remoteCall('GET', '/schemes/' + plotId + '/latest');
+      if (isRemote()) return withImageUrl(await remoteCall('GET', '/schemes/' + plotId + '/latest'));
       var rows = listSchemeRows(plotId);
-      return rows.length ? Object.assign({}, rows[0]) : null;
+      return rows.length ? withImageUrl(Object.assign({}, rows[0])) : null;
     },
     upload: async function(plotId, weekKey, image) {
       // image: сжатая data-URL картинки схемы
       var uploadedBy = (cfg().CURRENT_USER) || '';
-      if (isRemote()) return remoteCall('POST', '/schemes/' + plotId + '/' + weekKey, { image: image, uploadedBy: uploadedBy });
+      if (isRemote()) return withImageUrl(await remoteCall('POST', '/schemes/' + plotId + '/' + weekKey, { image: image, uploadedBy: uploadedBy }));
       var row = findSchemeRow(plotId, weekKey);
       if (row) {
         // Повторная загрузка на ТУ ЖЕ неделю — заменяет картинку, границы не трогаем.
@@ -493,7 +516,7 @@ var RiskApi = (function() {
         db.schemes.push(row);
       }
       persist();
-      return Object.assign({}, row);
+      return withImageUrl(Object.assign({}, row));
     },
     saveBounds: async function(plotId, weekKey, bounds) {
       // bounds: {xMin, xMax, yMin, yMax}
@@ -609,7 +632,12 @@ var RiskApi = (function() {
   var DEFAULT_FAULT_COLOR = '#e05c5c'; // как в faults.js гидро-проекта
 
   var colorsApi = {
+    // В удалённом режиме сервер сам должен домешивать цвета по умолчанию
+    // для ещё не настроенных уровней/рисков (см. BACKEND_INTEGRATION.md,
+    // 2.2) — клиент просто отдаёт ответ API как есть, не считая свою
+    // палитру поверх (той всё равно нет смысла доверять чужие ID).
     getLevelColorMap: async function() {
+      if (isRemote()) return remoteCall('GET', '/colors/levels');
       var levels = await levelsApi.list();
       var map = {};
       levels.forEach(function(l, i) {
@@ -624,6 +652,7 @@ var RiskApi = (function() {
       persist();
     },
     getRiskColorMap: async function() {
+      if (isRemote()) return remoteCall('GET', '/colors/risks');
       var risks = await fixedRisksApi.list();
       var map = {};
       risks.forEach(function(r, i) {
@@ -638,6 +667,7 @@ var RiskApi = (function() {
       persist();
     },
     getFaultColor: async function() {
+      if (isRemote()) return (await remoteCall('GET', '/colors/fault')).color;
       return (db.colors && db.colors.fault) || DEFAULT_FAULT_COLOR;
     },
     setFaultColor: async function(hex) {
