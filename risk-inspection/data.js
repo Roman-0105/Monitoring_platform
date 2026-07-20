@@ -378,8 +378,15 @@ var RiskApi = (function() {
     return db.schemes.find(function(s) { return s.plotName === plotId && s.weekKey === weekKey && !s.deleted; });
   }
   function listSchemeRows(plotId) {
+    // (a.weekKey || '') — на случай, если в localStorage дожила запись схемы
+    // с давних версий модели (до перехода на "участок + неделя", когда
+    // WEEK_KEY ещё не было), либо weekKey иначе не проставился: раньше
+    // .weekKey.localeCompare() на undefined ронял всю карту необработанным
+    // исключением ещё до того, как код успевал дойти до подгрузки
+    // разломов/доменов — снаружи это выглядело так, будто геология
+    // "не подгружается", хотя дело было в этом падении чуть раньше по стеку.
     return db.schemes.filter(function(s) { return s.plotName === plotId && !s.deleted; })
-      .sort(function(a, b) { return b.weekKey.localeCompare(a.weekKey); }); // новые недели сверху
+      .sort(function(a, b) { return (b.weekKey || '').localeCompare(a.weekKey || ''); }); // новые недели сверху
   }
 
   var schemesApi = {
