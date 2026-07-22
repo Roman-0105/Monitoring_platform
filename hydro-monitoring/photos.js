@@ -23,9 +23,10 @@ var Photos = (function() {
       return;
     }
 
-    var currentFacing = 'environment';
     var currentStream = null;
-    var switching = false;
+    var switching     = false;
+    var videoDevices  = [];   // все найденные видеоустройства
+    var deviceIndex   = 0;    // индекс текущей камеры
 
     // Build overlay once
     var overlay = document.createElement('div');
@@ -37,8 +38,11 @@ var Photos = (function() {
     video.muted = true;
     video.style.cssText = 'max-width:100%;max-height:calc(100dvh - 100px);border-radius:8px;object-fit:contain';
 
+    var camLabel = document.createElement('div');
+    camLabel.style.cssText = 'color:rgba(255,255,255,.5);font-size:12px;margin-top:6px;text-align:center;min-height:16px';
+
     var btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:12px;margin-top:16px;align-items:center';
+    btnRow.style.cssText = 'display:flex;gap:12px;margin-top:12px;align-items:center';
 
     var captureBtn = document.createElement('button');
     captureBtn.type = 'button';
@@ -68,21 +72,78 @@ var Photos = (function() {
       overlay.remove();
     }
 
-    function startStream(facing) {
+    function updateCamLabel() {
+      if (!videoDevices.length) { camLabel.textContent = ''; return; }
+      var dev = videoDevices[deviceIndex];
+      var lbl = dev && dev.label ? dev.label : ('Камера ' + (deviceIndex + 1));
+      camLabel.textContent = (deviceIndex + 1) + ' / ' + videoDevices.length + ' — ' + lbl;
+    }
+
+    // Запускает поток по deviceId (надёжнее facingMode на Windows-планшетах).
+    // При первом старте — без deviceId (браузер выбирает сам), после перечисления используем ID.
+    function startStreamByIndex(idx) {
       switching = true;
       flipBtn.disabled = true;
       stopCurrentStream();
-      navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facing }, width: { ideal: 3840 }, height: { ideal: 2160 } },
-        audio: false
-      }).then(function(stream) {
+
+      var constraints;
+      if (videoDevices.length > 0) {
+        var devId = videoDevices[idx].deviceId;
+        constraints = { video: { deviceId: { exact: devId }, width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false };
+      } else {
+        // Первый запуск: предпочитаем заднюю камеру, но не блокируем если не распознана
+        constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false };
+      }
+
+      navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
         currentStream = stream;
         video.srcObject = stream;
         switching = false;
-        flipBtn.disabled = false;
-      }).catch(function() {
+        flipBtn.disabled = videoDevices.length < 2;
+
+        // После получения потока перечисляем устройства — теперь браузер отдаст labels
+        if (!videoDevices.length) {
+          navigator.mediaDevices.enumerateDevices().then(function(devices) {
+            videoDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+
+            // Определяем индекс текущей активной камеры по треку
+            var activeTrack = stream.getVideoTracks()[0];
+            var activeSettings = activeTrack ? activeTrack.getSettings() : {};
+            var foundIdx = 0;
+            for (var i = 0; i < videoDevices.length; i++) {
+              if (videoDevices[i].deviceId === activeSettings.deviceId) { foundIdx = i; break; }
+            }
+
+            // Если нашли заднюю камеру (environment) — переключаемся на неё
+            var envIdx = -1;
+            for (var j = 0; j < videoDevices.length; j++) {
+              var lbl = (videoDevices[j].label || '').toLowerCase();
+              // Windows-планшеты: задняя камера часто содержит "back", "rear", "environment", "ir" (инфракрасная — пропускаем)
+              if ((lbl.indexOf('back') !== -1 || lbl.indexOf('rear') !== -1 || lbl.indexOf('environment') !== -1) && lbl.indexOf('ir') === -1) {
+                envIdx = j; break;
+              }
+            }
+
+            if (envIdx !== -1 && envIdx !== foundIdx) {
+              // Задняя камера найдена — сразу переключаемся
+              deviceIndex = envIdx;
+              startStreamByIndex(deviceIndex);
+            } else {
+              deviceIndex = foundIdx;
+              flipBtn.disabled = videoDevices.length < 2;
+              updateCamLabel();
+            }
+          }).catch(function() {
+            flipBtn.disabled = false;
+            updateCamLabel();
+          });
+        } else {
+          updateCamLabel();
+        }
+      }).catch(function(err) {
         switching = false;
         flipBtn.disabled = false;
+        camLabel.textContent = 'Ошибка камеры: ' + (err.message || err);
       });
     }
 
@@ -114,9 +175,9 @@ var Photos = (function() {
     });
 
     flipBtn.addEventListener('click', function() {
-      if (switching) return;
-      currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
-      startStream(currentFacing);
+      if (switching || videoDevices.length < 2) return;
+      deviceIndex = (deviceIndex + 1) % videoDevices.length;
+      startStreamByIndex(deviceIndex);
     });
 
     cancelBtn.addEventListener('click', closeOverlay);
@@ -125,9 +186,11 @@ var Photos = (function() {
     btnRow.appendChild(flipBtn);
     btnRow.appendChild(cancelBtn);
     overlay.appendChild(video);
+    overlay.appendChild(camLabel);
     overlay.appendChild(btnRow);
     document.body.appendChild(overlay);
-    startStream(currentFacing);
+    flipBtn.disabled = true;  // до перечисления устройств
+    startStreamByIndex(0);
   }
 
   function clearCaptured() { _capturedFile = null; }
