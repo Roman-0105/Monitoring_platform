@@ -62,16 +62,23 @@ function initWellsTab() {
     });
   }
 
-  // Кнопка скрытия условных обозначений
-  var legendToggle  = document.getElementById('btn-wells-legend-toggle');
-  var legendContent = document.getElementById('wells-legend-content');
-  if (legendToggle && legendContent) {
-    legendToggle.addEventListener('click', function() {
-      var hidden = legendContent.style.display === 'none';
-      legendContent.style.display = hidden ? '' : 'none';
-      legendToggle.textContent = hidden ? '−' : '+';
+  // Сворачиваемые блоки левой колонки
+  function _makeCollapsible(btnId, contentId, startCollapsed) {
+    var btn     = document.getElementById(btnId);
+    var content = document.getElementById(contentId);
+    if (!btn || !content) return;
+    if (startCollapsed) content.style.display = 'none';
+    btn.textContent = startCollapsed ? '+' : '−';
+    btn.addEventListener('click', function() {
+      var hidden = content.style.display === 'none';
+      content.style.display = hidden ? '' : 'none';
+      btn.textContent = hidden ? '−' : '+';
     });
   }
+  _makeCollapsible('btn-wells-legend-toggle',   'wells-legend-content',   true);
+  _makeCollapsible('btn-wells-passport-toggle', 'wells-passport-content', false);
+  _makeCollapsible('btn-wells-coords-toggle',   'wells-coords-content',   false);
+  _makeCollapsible('btn-wells-list-toggle',     'wells-list-content',     false);
 
   _switchWellsSubTab('view');
 }
@@ -1493,6 +1500,91 @@ function _setupWellMapZoom(body, svg) {
     z.tvbX = 0; z.tvbY = 0; z.tvbW = z.imgW; z.tvbH = z.imgH;
     startAnim();
   });
+
+  // ── Touch: pinch-to-zoom + single-finger pan ──────────────
+  var _touches = {};
+  var _pinch0  = null;
+
+  function _touchPt(t) { return { cx: t.clientX, cy: t.clientY }; }
+  function _activeTouches() {
+    return Object.keys(_touches).map(function(k) { return _touches[k]; });
+  }
+
+  svg.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      _touches[t.identifier] = _touchPt(t);
+    }
+    var pts = _activeTouches();
+    if (pts.length === 2) {
+      var dx = pts[1].cx - pts[0].cx;
+      var dy = pts[1].cy - pts[0].cy;
+      _pinch0 = {
+        dist:  Math.sqrt(dx * dx + dy * dy) || 1,
+        midCx: (pts[0].cx + pts[1].cx) / 2,
+        midCy: (pts[0].cy + pts[1].cy) / 2,
+        tvbX: z.tvbX, tvbY: z.tvbY, tvbW: z.tvbW, tvbH: z.tvbH
+      };
+    } else if (pts.length === 1) {
+      _pinch0 = null;
+    }
+  }, { passive: false });
+
+  svg.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (_touches[t.identifier]) _touches[t.identifier] = _touchPt(t);
+    }
+    var pts  = _activeTouches();
+    var rect = svg.getBoundingClientRect();
+    var sw   = rect.width  || 1;
+    var sh   = rect.height || 1;
+
+    if (pts.length === 2 && _pinch0) {
+      var dx = pts[1].cx - pts[0].cx;
+      var dy = pts[1].cy - pts[0].cy;
+      var dist  = Math.sqrt(dx * dx + dy * dy) || 1;
+      var scale = _pinch0.dist / dist;
+      var midCx = (pts[0].cx + pts[1].cx) / 2;
+      var midCy = (pts[0].cy + pts[1].cy) / 2;
+      var svgMx = _pinch0.tvbX + (_pinch0.midCx - rect.left) / sw * _pinch0.tvbW;
+      var svgMy = _pinch0.tvbY + (_pinch0.midCy - rect.top)  / sh * _pinch0.tvbH;
+      var newW  = _pinch0.tvbW * scale;
+      var newH  = _pinch0.tvbH * scale;
+      var panDx = (midCx - _pinch0.midCx) / sw * newW;
+      var panDy = (midCy - _pinch0.midCy) / sh * newH;
+      var vb    = clampVB(svgMx - midCx / sw * newW - panDx, svgMy - midCy / sh * newH - panDy, newW, newH);
+      z.tvbX = z.vbX = vb.x; z.tvbY = z.vbY = vb.y; z.tvbW = z.vbW = vb.w; z.tvbH = z.vbH = vb.h;
+      _applyViewBox();
+      _updateMarkerSizes();
+    } else if (pts.length === 1) {
+      if (z.imgW / z.tvbW <= 1.02) return;
+      var pt   = pts[0];
+      var prev = _pinch0 && _pinch0.singlePrev;
+      if (!prev) { _pinch0 = { singlePrev: pt }; return; }
+      var dxSvg = -(pt.cx - prev.cx) / sw * z.vbW;
+      var dySvg = -(pt.cy - prev.cy) / sh * z.vbH;
+      var vb2   = clampVB(z.tvbX + dxSvg, z.tvbY + dySvg, z.tvbW, z.tvbH);
+      z.tvbX = z.vbX = vb2.x; z.tvbY = z.vbY = vb2.y;
+      _applyViewBox();
+      _pinch0 = { singlePrev: pt };
+    }
+  }, { passive: false });
+
+  function _touchEnd(e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      delete _touches[e.changedTouches[i].identifier];
+    }
+    var pts = _activeTouches();
+    if (pts.length < 2) {
+      if (pts.length === 1) _pinch0 = { singlePrev: pts[0] };
+      else { _pinch0 = null; startAnim(); }
+    }
+  }
+  svg.addEventListener('touchend',    _touchEnd, { passive: false });
+  svg.addEventListener('touchcancel', _touchEnd, { passive: false });
 }
 
 // ── Плавающая карточка данных (концепция D) ───────────────

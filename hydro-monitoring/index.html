@@ -278,12 +278,22 @@
         <!-- Левая колонка: паспорт + координаты + легенда -->
         <div style="display:flex;flex-direction:column;gap:12px">
           <div class="card" style="padding:16px">
-            <div class="card-title">Паспорт скважины</div>
-            <div id="wells-info-body"></div>
+            <div class="card-title" style="margin-bottom:0;display:flex;justify-content:space-between;align-items:center">
+              <span>Паспорт скважины</span>
+              <button id="btn-wells-passport-toggle" style="background:none;border:1px solid rgba(255,255,255,.15);color:var(--txt-3);font-size:13px;cursor:pointer;border-radius:4px;padding:0 7px;line-height:1.8;flex-shrink:0" title="Свернуть/развернуть">−</button>
+            </div>
+            <div id="wells-passport-content">
+              <div id="wells-info-body" style="margin-top:10px"></div>
+            </div>
           </div>
           <div class="card" style="padding:16px">
-            <div class="card-title">Координаты</div>
-            <div id="wells-coords-body"></div>
+            <div class="card-title" style="margin-bottom:0;display:flex;justify-content:space-between;align-items:center">
+              <span>Координаты</span>
+              <button id="btn-wells-coords-toggle" style="background:none;border:1px solid rgba(255,255,255,.15);color:var(--txt-3);font-size:13px;cursor:pointer;border-radius:4px;padding:0 7px;line-height:1.8;flex-shrink:0" title="Свернуть/развернуть">−</button>
+            </div>
+            <div id="wells-coords-content">
+              <div id="wells-coords-body" style="margin-top:10px"></div>
+            </div>
           </div>
           <div class="card" style="padding:14px">
             <div class="card-title" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
@@ -350,12 +360,17 @@
 
           <!-- Список скважин — растягивается по высоте карты -->
           <div class="card" style="padding:16px;display:flex;flex-direction:column;overflow:hidden">
-            <div id="wells-list-header" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;flex-shrink:0">
-              <span class="card-title" style="margin:0">Скважины</span>
-              <span id="wells-list-count" style="font-size:11px;color:var(--txt-3)"></span>
+            <div id="wells-list-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0;flex-shrink:0">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span class="card-title" style="margin:0">Скважины</span>
+                <span id="wells-list-count" style="font-size:11px;color:var(--txt-3)"></span>
+              </div>
+              <button id="btn-wells-list-toggle" style="background:none;border:1px solid rgba(255,255,255,.15);color:var(--txt-3);font-size:13px;cursor:pointer;border-radius:4px;padding:0 7px;line-height:1.8;flex-shrink:0" title="Свернуть/развернуть">−</button>
             </div>
-            <div id="wells-filters" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;flex-shrink:0"></div>
-            <div id="wells-registry-list" style="overflow-y:auto;flex:1;min-height:0"></div>
+            <div id="wells-list-content" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;margin-top:10px">
+              <div id="wells-filters" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;flex-shrink:0"></div>
+              <div id="wells-registry-list" style="overflow-y:auto;flex:1;min-height:0"></div>
+            </div>
           </div>
 
         </div>
