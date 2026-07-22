@@ -76,9 +76,9 @@ function initWellsTab() {
     });
   }
   _makeCollapsible('btn-wells-legend-toggle',   'wells-legend-content',   true);
-  _makeCollapsible('btn-wells-passport-toggle', 'wells-passport-content', false);
-  _makeCollapsible('btn-wells-coords-toggle',   'wells-coords-content',   false);
-  _makeCollapsible('btn-wells-list-toggle',     'wells-list-content',     false);
+  _makeCollapsible('btn-wells-passport-toggle', 'wells-passport-content', true);
+  _makeCollapsible('btn-wells-coords-toggle',   'wells-coords-content',   true);
+  _makeCollapsible('btn-wells-list-toggle',     'wells-list-content',     true);
 
   _switchWellsSubTab('view');
 }
@@ -1279,10 +1279,7 @@ function _updateMarkerSizes() {
     var lbl    = g.querySelector('.wm-label');
     var pillBg = g.querySelector('.wm-pill-bg');
     if (lbl) {
-      var rawFS   = (isSel ? 10 : 8.5) * p2s;
-      var minFS   = isSel ? 9 : 7.5;   // minimum px in SVG units when zoomed out
-      var maxFS   = isSel ? 14 : 11;   // cap when zoomed in
-      var nameFS  = Math.max(minFS, Math.min(maxFS, rawFS));
+      var nameFS  = (isSel ? 11 : 9) * p2s;  // fixed screen-pixel size at any zoom
       var nameLen = (lbl.textContent || '').length;
       var pillPad = Math.max(6, 10 * p2s);
       var pillW   = nameLen * nameFS * 0.55 + pillPad;
