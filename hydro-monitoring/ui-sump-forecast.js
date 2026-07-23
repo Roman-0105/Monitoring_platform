@@ -392,9 +392,10 @@ function renderSumpForecastContent(sump) {
   var currVol   = (hasCurve && latestLev !== null) ? _sfVolumeAt(sump.volumeCurve, latestLev) : null;
   var pct       = (hasCurve && currVol !== null) ? (currVol / sump.totalVolume * 100) : null;
 
-  var html = '<div style="display:grid;grid-template-columns:340px 1fr;gap:14px;align-items:start">';
+  // ── Двухколоночный лэйаут: карточки слева, 3D справа ───────────────────────
+  html += '<div style="display:grid;grid-template-columns:360px 1fr;gap:14px;align-items:start">';
 
-  // ── Левая колонка ────────────────────────────────────────────────────────
+  // ── Левая колонка — все карточки ────────────────────────────────────────
   html += '<div style="display:flex;flex-direction:column;gap:14px">';
 
   // Карточка модели
@@ -405,21 +406,23 @@ function renderSumpForecastContent(sump) {
   } else {
     html += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:10px">Файл .tridb не загружен — объём воды и прогноз недоступны</p>';
   }
-  html += '<label class="btn btn-sm btn-outline" style="cursor:pointer;display:inline-block;margin-top:6px">';
+  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">';
+  html += '<label class="btn btn-sm btn-outline" style="cursor:pointer;display:inline-block">';
   html += '<input type="file" accept=".tridb" style="display:none" onchange="_sfOnFileInput(event,\'' + sump.id + '\')">';
   html += hasCurve ? '↺ Обновить .tridb' : '+ Загрузить .tridb';
   html += '</label>';
-  html += '<div id="sf-upload-status" style="font-size:12px;margin-top:6px;color:#60a5fa;min-height:18px"></div>';
   if (hasCurve) {
-    html += '<div style="margin-top:10px"><label style="font-size:12px;display:flex;align-items:center;gap:8px">Критический уровень (м):&nbsp;';
-    html += '<input type="number" step="0.1" value="' + (sump.criticalLevel||'') + '" style="width:80px" ';
-    html += 'onchange="_sfSaveCritical(\'' + sump.id + '\',this.value)"></label></div>';
+    html += '<label style="font-size:12px;display:flex;align-items:center;gap:6px">Крит. уровень (м):';
+    html += '<input type="number" step="0.1" value="' + (sump.criticalLevel||'') + '" style="width:72px" ';
+    html += 'onchange="_sfSaveCritical(\'' + sump.id + '\',this.value)"></label>';
   }
+  html += '</div>';
+  html += '<div id="sf-upload-status" style="font-size:12px;margin-top:6px;color:#60a5fa;min-height:16px"></div>';
   html += '</div>';
 
   // Карточка насосов
   html += '<div class="card" style="padding:14px">';
-  html += '<div class="card-title" style="margin-bottom:10px">Насосы зумпфа <span style="font-size:11px;color:var(--text-muted);font-weight:400">(факт. за 30 дн.)</span></div>';
+  html += '<div class="card-title" style="margin-bottom:10px">Насосы <span style="font-size:11px;color:var(--text-muted);font-weight:400">факт. за 30 дн.</span></div>';
   if (pumps.length === 0) {
     html += '<p style="color:var(--text-muted);font-size:13px">Насосы не привязаны к этому зумпфу</p>';
   } else {
@@ -438,10 +441,6 @@ function renderSumpForecastContent(sump) {
     html += '</table>';
   }
   html += '</div>';
-  html += '</div>'; // конец левой колонки
-
-  // ── Правая колонка ───────────────────────────────────────────────────────
-  html += '<div style="display:flex;flex-direction:column;gap:14px">';
 
   // Карточка притока
   html += '<div class="card" style="padding:14px">';
@@ -453,7 +452,7 @@ function renderSumpForecastContent(sump) {
   } else if (inflow.length === 0) {
     html += '<p style="color:var(--text-muted);font-size:13px">Недостаточно данных по уровням воды</p>';
   } else {
-    html += '<canvas id="sf-inflow-chart" height="90"></canvas>';
+    html += '<canvas id="sf-inflow-chart" height="100"></canvas>';
   }
   html += '</div>';
 
@@ -465,18 +464,6 @@ function renderSumpForecastContent(sump) {
     html += '<p style="color:var(--text-muted);font-size:13px">Прогноз будет доступен после накопления истории уровней воды</p></div>';
   }
 
-  // 3D каркас
-  if (hasCurve) {
-    html += '<div class="card" style="padding:14px">';
-    html += '<div class="card-title" style="margin-bottom:8px">3D-модель зумпфа';
-    if (latestLev !== null) html += ' <span style="font-size:11px;color:#3b82f6;font-weight:400">уровень ' + latestLev.toFixed(2) + ' м</span>';
-    html += '</div>';
-    html += '<div id="sf-3d-container" style="width:100%;border-radius:8px;overflow:hidden;background:#0d1117">';
-    html += '<p style="color:var(--text-muted);font-size:12px;padding:16px;text-align:center">Загрузка Three.js...</p>';
-    html += '</div>';
-    html += '</div>';
-  }
-
   // График V(H)
   if (hasCurve) {
     html += '<div class="card" style="padding:14px">';
@@ -485,7 +472,27 @@ function renderSumpForecastContent(sump) {
     html += '</div>';
   }
 
+  html += '</div>'; // конец левой колонки
+
+  // ── Правая колонка — 3D-модель, прилипает к верху при скролле ───────────
+  html += '<div style="position:sticky;top:14px">';
+  if (hasCurve) {
+    html += '<div class="card" style="padding:0;overflow:hidden">';
+    html += '<div style="padding:12px 14px 8px;display:flex;align-items:baseline;gap:8px">';
+    html += '<span class="card-title">3D-модель зумпфа</span>';
+    if (latestLev !== null) html += '<span style="font-size:11px;color:#3b82f6">уровень ' + latestLev.toFixed(2) + ' м</span>';
+    html += '</div>';
+    html += '<div id="sf-3d-container" style="width:100%;height:520px;background:#0d1117">';
+    html += '<p style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Загрузка Three.js...</p>';
+    html += '</div>';
+    html += '<div style="padding:8px 14px;font-size:11px;color:var(--text-muted)">ЛКМ — вращение · Колёсико — масштаб · ПКМ — панорама</div>';
+    html += '</div>';
+  } else {
+    html += '<div class="card" style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">';
+    html += 'Загрузите файл .tridb для отображения 3D-модели зумпфа</div>';
+  }
   html += '</div>'; // конец правой колонки
+
   html += '</div>'; // конец grid
 
   document.getElementById('sf-content').innerHTML = html;
@@ -696,7 +703,7 @@ function _sfInit3D(geom, currentLevel) {
   var container = document.getElementById('sf-3d-container');
   if (!container || !window.THREE) return;
 
-  var W = container.clientWidth || 480, H3 = 320;
+  var W = container.clientWidth || 480, H3 = container.clientHeight || 500;
 
   var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -721,13 +728,13 @@ function _sfInit3D(geom, currentLevel) {
   var span = Math.max(xMax-xMin, yMax-yMin, geom.zMax-geom.zMin) || 1;
   var scale = 80 / span; // нормируем в куб ~80 ед.
 
-  // Каркас (wireframe) — полупрозрачные грани + рёбра
+  // Каркас — маппинг осей: Mining X→Three X, Mining Y→Three -Z, Mining Z(высота)→Three Y
   var positions = new Float32Array(tris.length * 9);
   for (var j=0;j<tris.length;j++) {
     var t=tris[j];
-    positions[j*9+0]=(xs[t[0]]-cx)*scale; positions[j*9+1]=(ys[t[0]]-cy)*scale; positions[j*9+2]=(zs[t[0]]-cz)*scale;
-    positions[j*9+3]=(xs[t[1]]-cx)*scale; positions[j*9+4]=(ys[t[1]]-cy)*scale; positions[j*9+5]=(zs[t[1]]-cz)*scale;
-    positions[j*9+6]=(xs[t[2]]-cx)*scale; positions[j*9+7]=(ys[t[2]]-cy)*scale; positions[j*9+8]=(zs[t[2]]-cz)*scale;
+    positions[j*9+0]= (xs[t[0]]-cx)*scale; positions[j*9+1]= (zs[t[0]]-cz)*scale; positions[j*9+2]=-(ys[t[0]]-cy)*scale;
+    positions[j*9+3]= (xs[t[1]]-cx)*scale; positions[j*9+4]= (zs[t[1]]-cz)*scale; positions[j*9+5]=-(ys[t[1]]-cy)*scale;
+    positions[j*9+6]= (xs[t[2]]-cx)*scale; positions[j*9+7]= (zs[t[2]]-cz)*scale; positions[j*9+8]=-(ys[t[2]]-cy)*scale;
   }
   var geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -755,9 +762,10 @@ function _sfInit3D(geom, currentLevel) {
   waterMesh.position.y = wz;
   scene.add(waterMesh);
 
-  // Камера
-  var camera = new THREE.PerspectiveCamera(45, W / H3, 0.1, 2000);
-  camera.position.set(span * scale * 0.9, span * scale * 0.6, span * scale * 1.2);
+  // Камера — изометрический вид сверху-спереди, чтобы зумпф выглядел как горизонтальная чаша
+  var camera = new THREE.PerspectiveCamera(40, W / H3, 0.1, 2000);
+  var d = span * scale;
+  camera.position.set(d * 0.8, d * 0.9, d * 1.1);
   camera.lookAt(0, 0, 0);
 
   // Управление
@@ -777,13 +785,13 @@ function _sfInit3D(geom, currentLevel) {
   SumpForecastState._three = { renderer: renderer, scene: scene, camera: camera, controls: controls, waterMesh: waterMesh, cz: cz, scale: scale, animId: null };
   animate();
 
-  // Масштабируем при изменении ширины контейнера
+  // Масштабируем при изменении размеров контейнера
   var ro = new ResizeObserver(function() {
     if (!SumpForecastState._three) return;
-    var nw = container.clientWidth;
-    camera.aspect = nw / H3;
+    var nw = container.clientWidth, nh = container.clientHeight || nw;
+    camera.aspect = nw / nh;
     camera.updateProjectionMatrix();
-    renderer.setSize(nw, H3);
+    renderer.setSize(nw, nh);
   });
   ro.observe(container);
 }
