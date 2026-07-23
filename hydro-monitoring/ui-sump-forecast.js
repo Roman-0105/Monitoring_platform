@@ -393,7 +393,7 @@ function renderSumpForecastContent(sump) {
   var pct       = (hasCurve && currVol !== null) ? (currVol / sump.totalVolume * 100) : null;
 
   // ── Двухколоночный лэйаут: карточки слева, 3D справа ───────────────────────
-  html += '<div style="display:grid;grid-template-columns:360px 1fr;gap:14px;align-items:start">';
+  var html = '<div style="display:grid;grid-template-columns:360px 1fr;gap:14px;align-items:start">';
 
   // ── Левая колонка — все карточки ────────────────────────────────────────
   html += '<div style="display:flex;flex-direction:column;gap:14px">';
