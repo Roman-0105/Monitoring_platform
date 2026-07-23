@@ -100,23 +100,26 @@ function _sfClipTriVol(x0,y0,z0, x1,y1,z1, x2,y2,z2, H) {
 }
 
 function _sfBuildVolumeCurve(xs, ys, zs, tris, zMin, zMax) {
-  // Translate X/Y to local origin for numerical stability (absolute coords ~46000, ~16000
-  // cause catastrophic cancellation in the signed-tetrahedron cross products)
-  var xOff = xs[0], yOff = ys[0];
+  // Переносим X, Y и Z в локальную систему координат для численной стабильности.
+  // Абсолютные координаты X~46000, Y~16000, Z~167 дают огромные тетраэдры от начала
+  // до плоскости обрезки: при неполной сетке (обрезка) они не компенсируются.
+  var xOff = xs[0], yOff = ys[0], zOff = zMin;
   for (var k = 1; k < xs.length; k++) {
     if (xs[k] < xOff) xOff = xs[k];
     if (ys[k] < yOff) yOff = ys[k];
   }
   var lxs = xs.map(function(v){ return v - xOff; });
   var lys = ys.map(function(v){ return v - yOff; });
+  var lzs = zs.map(function(v){ return v - zOff; });
 
   var step = 0.1, curve = [];
   for (var H = zMin; H <= zMax + step*0.01; H += step) {
     H = Math.round(H * 10) / 10;
+    var lH = H - zOff; // уровень обрезки в локальных координатах
     var vol = 0;
     for (var i = 0; i < tris.length; i++) {
       var t = tris[i];
-      vol += _sfClipTriVol(lxs[t[0]],lys[t[0]],zs[t[0]], lxs[t[1]],lys[t[1]],zs[t[1]], lxs[t[2]],lys[t[2]],zs[t[2]], H);
+      vol += _sfClipTriVol(lxs[t[0]],lys[t[0]],lzs[t[0]], lxs[t[1]],lys[t[1]],lzs[t[1]], lxs[t[2]],lys[t[2]],lzs[t[2]], lH);
     }
     curve.push({ h: H, v: Math.abs(vol) });
   }
