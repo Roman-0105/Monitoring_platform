@@ -87,66 +87,50 @@ function _sfParseGeomBlob(blob) {
   return { xs: xs, ys: ys, zs: zs, tris: tris };
 }
 
-// ── V(H) кривая — метод знаковых тетраэдров с обрезкой по горизонту ─────────
-function _sfSignedTet(x0,y0,z0, x1,y1,z1, x2,y2,z2) {
-  return (x0*(y1*z2-y2*z1) - x1*(y0*z2-y2*z0) + x2*(y0*z1-y1*z0)) / 6;
-}
+// ── V(H) кривая — интегрирование площади поперечного сечения ─────────────────
+// Устойчиво к ориентации нормалей, монотонно возрастает.
+// Для каждого шага dH вычисляем площадь сечения на высоте H по теореме Грина:
+// A(H) = |Σ (x₁+x₂)(y₂−y₁)/2| по всем рёбрам-пересечениям треугольников с плоскостью H.
+// V(H) = ∫[zMin→H] A(z) dz  (правило средней точки).
 
-function _sfClipTriVol(x0,y0,z0, x1,y1,z1, x2,y2,z2, H) {
-  var b0=z0<=H, b1=z1<=H, b2=z2<=H;
-  var n = (b0?1:0)+(b1?1:0)+(b2?1:0);
-  if (n===0) return 0;
-  if (n===3) return _sfSignedTet(x0,y0,z0,x1,y1,z1,x2,y2,z2);
-
-  function lerp(xa,ya,za,xb,yb,zb) {
-    var t=(H-za)/(zb-za);
-    return [xa+t*(xb-xa), ya+t*(yb-ya), H];
+function _sfCrossSectionArea(xs, ys, zs, tris, H) {
+  var sum = 0;
+  for (var i = 0; i < tris.length; i++) {
+    var t  = tris[i];
+    var x0=xs[t[0]], y0=ys[t[0]], z0=zs[t[0]];
+    var x1=xs[t[1]], y1=ys[t[1]], z1=zs[t[1]];
+    var x2=xs[t[2]], y2=ys[t[2]], z2=zs[t[2]];
+    // Находим два ребра, пересекающих плоскость H
+    var pts = [];
+    function addEdge(ax,ay,az,bx,by,bz) {
+      if ((az < H) === (bz < H)) return; // оба с одной стороны
+      var tt = (H - az) / (bz - az);
+      pts.push([ax + tt*(bx-ax), ay + tt*(by-ay)]);
+    }
+    addEdge(x0,y0,z0, x1,y1,z1);
+    addEdge(x1,y1,z1, x2,y2,z2);
+    addEdge(x2,y2,z2, x0,y0,z0);
+    if (pts.length === 2) {
+      // Вклад сегмента в знаковую площадь (формула Грина / shoelace)
+      sum += (pts[0][0] + pts[1][0]) * (pts[1][1] - pts[0][1]) * 0.5;
+    }
   }
-
-  if (n===1) {
-    var p,a,b;
-    if(b0){p=[x0,y0,z0];a=[x1,y1,z1];b=[x2,y2,z2];}
-    else if(b1){p=[x1,y1,z1];a=[x0,y0,z0];b=[x2,y2,z2];}
-    else{p=[x2,y2,z2];a=[x0,y0,z0];b=[x1,y1,z1];}
-    var pa=lerp(p[0],p[1],p[2],a[0],a[1],a[2]);
-    var pb=lerp(p[0],p[1],p[2],b[0],b[1],b[2]);
-    return _sfSignedTet(p[0],p[1],p[2],pa[0],pa[1],pa[2],pb[0],pb[1],pb[2]);
-  }
-
-  // n===2: two below, one above
-  var ab,bb,cb;
-  if(!b0){ab=[x0,y0,z0];bb=[x1,y1,z1];cb=[x2,y2,z2];}
-  else if(!b1){ab=[x1,y1,z1];bb=[x0,y0,z0];cb=[x2,y2,z2];}
-  else{ab=[x2,y2,z2];bb=[x0,y0,z0];cb=[x1,y1,z1];}
-  var pab=lerp(bb[0],bb[1],bb[2],ab[0],ab[1],ab[2]);
-  var pac=lerp(cb[0],cb[1],cb[2],ab[0],ab[1],ab[2]);
-  return _sfSignedTet(bb[0],bb[1],bb[2],cb[0],cb[1],cb[2],pac[0],pac[1],pac[2]) +
-         _sfSignedTet(bb[0],bb[1],bb[2],pac[0],pac[1],pac[2],pab[0],pab[1],pab[2]);
+  return Math.abs(sum);
 }
 
 function _sfBuildVolumeCurve(xs, ys, zs, tris, zMin, zMax) {
-  // Переносим X, Y и Z в локальную систему координат для численной стабильности.
-  // Абсолютные координаты X~46000, Y~16000, Z~167 дают огромные тетраэдры от начала
-  // до плоскости обрезки: при неполной сетке (обрезка) они не компенсируются.
-  var xOff = xs[0], yOff = ys[0], zOff = zMin;
-  for (var k = 1; k < xs.length; k++) {
-    if (xs[k] < xOff) xOff = xs[k];
-    if (ys[k] < yOff) yOff = ys[k];
-  }
-  var lxs = xs.map(function(v){ return v - xOff; });
-  var lys = ys.map(function(v){ return v - yOff; });
-  var lzs = zs.map(function(v){ return v - zOff; });
-
-  var step = 0.1, curve = [];
-  for (var H = zMin; H <= zMax + step*0.01; H += step) {
+  var step = 0.1;
+  var curve = [{ h: zMin, v: 0 }];
+  var V = 0;
+  var H = zMin + step;
+  while (H <= zMax + step * 0.01) {
     H = Math.round(H * 10) / 10;
-    var lH = H - zOff; // уровень обрезки в локальных координатах
-    var vol = 0;
-    for (var i = 0; i < tris.length; i++) {
-      var t = tris[i];
-      vol += _sfClipTriVol(lxs[t[0]],lys[t[0]],lzs[t[0]], lxs[t[1]],lys[t[1]],lzs[t[1]], lxs[t[2]],lys[t[2]],lzs[t[2]], lH);
-    }
-    curve.push({ h: H, v: Math.abs(vol) });
+    // Площадь на средней точке слоя — правило средней точки
+    var Hmid = H - step * 0.5;
+    var A = _sfCrossSectionArea(xs, ys, zs, tris, Hmid);
+    V += A * step;
+    curve.push({ h: H, v: V });
+    H += step;
   }
   return curve;
 }
