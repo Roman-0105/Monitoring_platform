@@ -5,6 +5,8 @@ var SumpForecastState = {
   _inflowChartInst: null,
   _vhChartInst:     null,
   _fcastChartInst:  null,
+  _geom:            null,   // геометрия последнего загруженного .tridb {xs,ys,zs,tris,zMin,zMax}
+  _three:           null,   // Three.js-рендерер {renderer,scene,camera,controls,waterMesh,animId}
 };
 
 // ── Утилита: загрузка sql.js (WASM SQLite) ──────────────────────────────────
@@ -20,6 +22,28 @@ function _sfLoadSqlJs() {
     };
     s.onerror = function() { reject(new Error('Не удалось загрузить sql.js')); };
     document.head.appendChild(s);
+  });
+}
+
+// ── Загрузка Three.js и OrbitControls ────────────────────────────────────────
+function _sfLoadThree() {
+  if (window.THREE && window._sfOrbitControls) return Promise.resolve();
+  return new Promise(function(resolve, reject) {
+    function loadScript(src, cb) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = cb;
+      s.onerror = function(){ reject(new Error('Не удалось загрузить ' + src)); };
+      document.head.appendChild(s);
+    }
+    var base = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/';
+    loadScript(base + 'three.min.js', function() {
+      // OrbitControls не входит в основной бандл r128 — берём с unpkg
+      loadScript('https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js', function() {
+        window._sfOrbitControls = THREE.OrbitControls;
+        resolve();
+      });
+    });
   });
 }
 
@@ -252,6 +276,8 @@ async function _sfHandleTridbUpload(file, sump) {
 
     setStatus('Построение кривой V(H)...');
     var curve = _sfBuildVolumeCurve(geom.xs, geom.ys, geom.zs, geom.tris, zMin, zMax);
+    // Сохраняем геометрию для 3D-рендера
+    SumpForecastState._geom = { xs: geom.xs, ys: geom.ys, zs: geom.zs, tris: geom.tris, zMin: zMin, zMax: zMax };
 
     // Верификация: V при zMax должен быть близок к totalVol
     var computedMax = curve[curve.length-1].v;
@@ -343,6 +369,8 @@ function _sfRenderSelector() {
 
 function _sfSelectSump(id) {
   SumpForecastState.selectedSumpId = id;
+  SumpForecastState._geom = null; // сбрасываем геометрию при смене зумпфа
+  _sfDestroy3D();
   _sfRenderSelector();
   var sump = DewateringState.sumps.find(function(s){ return s.id === id; });
   if (sump) renderSumpForecastContent(sump);
@@ -350,10 +378,11 @@ function _sfSelectSump(id) {
 
 // ── Главный рендер страницы зумпфа ───────────────────────────────────────────
 function renderSumpForecastContent(sump) {
-  // Уничтожаем старые графики
+  // Уничтожаем старые графики и 3D-сцену
   ['_inflowChartInst','_vhChartInst','_fcastChartInst'].forEach(function(k){
     if (SumpForecastState[k]) { try{SumpForecastState[k].destroy();}catch(e){} SumpForecastState[k]=null; }
   });
+  _sfDestroy3D();
 
   var hasCurve  = sump.volumeCurve && sump.volumeCurve.length > 0;
   var pumps     = _sfPumpPerformance(sump, 30);
@@ -436,6 +465,18 @@ function renderSumpForecastContent(sump) {
     html += '<p style="color:var(--text-muted);font-size:13px">Прогноз будет доступен после накопления истории уровней воды</p></div>';
   }
 
+  // 3D каркас
+  if (hasCurve) {
+    html += '<div class="card" style="padding:14px">';
+    html += '<div class="card-title" style="margin-bottom:8px">3D-модель зумпфа';
+    if (latestLev !== null) html += ' <span style="font-size:11px;color:#3b82f6;font-weight:400">уровень ' + latestLev.toFixed(2) + ' м</span>';
+    html += '</div>';
+    html += '<div id="sf-3d-container" style="width:100%;border-radius:8px;overflow:hidden;background:#0d1117">';
+    html += '<p style="color:var(--text-muted);font-size:12px;padding:16px;text-align:center">Загрузка Three.js...</p>';
+    html += '</div>';
+    html += '</div>';
+  }
+
   // График V(H)
   if (hasCurve) {
     html += '<div class="card" style="padding:14px">';
@@ -453,6 +494,32 @@ function renderSumpForecastContent(sump) {
   if (inflow.length > 0) setTimeout(function(){ _sfRenderInflowChart(inflow); }, 50);
   if (hasCurve)          setTimeout(function(){ _sfRenderVhChart(sump.volumeCurve, latestLev); }, 50);
   if (hasCurve && avgQ !== null) setTimeout(function(){ _sfUpdateForecastResult(sump, pumps, avgQ, latestLev, currVol); }, 100);
+  // 3D-рендер — геометрия либо уже в памяти, либо попытка скачать из Storage
+  if (hasCurve) {
+    if (SumpForecastState._geom) {
+      setTimeout(function(){ _sfTryRender3D(SumpForecastState._geom, latestLev); }, 80);
+    } else if (sump.tridbPath && window.Api) {
+      // Геометрия не в памяти — скачиваем из Supabase Storage
+      Api.downloadSumpTridb(sump.tridbPath).then(function(res) {
+        if (res.error || !res.data) return;
+        return res.data.arrayBuffer();
+      }).then(function(ab) {
+        if (!ab) return;
+        var SQL = window._sfSqlJs;
+        if (!SQL) return; // sql.js ещё не загружался — 3D без геометрии
+        var db = new SQL.Database(new Uint8Array(ab));
+        try {
+          var row = db.exec('SELECT Geometry FROM Geometry LIMIT 1')[0].values[0][0];
+          var g = _sfParseGeomBlob(row);
+          db.close();
+          if (g.xs && g.tris) {
+            SumpForecastState._geom = { xs:g.xs, ys:g.ys, zs:g.zs, tris:g.tris, zMin:sump.zMin, zMax:sump.zMax };
+            _sfTryRender3D(SumpForecastState._geom, latestLev);
+          }
+        } catch(e) { db.close(); }
+      }).catch(function(){});
+    }
+  }
 }
 
 function _sfModelStats(sump, latestLev, currVol, pct) {
@@ -612,6 +679,129 @@ function _sfUpdateForecastResult(sump, pumps, avgQ, latestLev, currVol) {
     }
     var resEl = document.getElementById('sf-dry-result');
     if (resEl) resEl.innerHTML = html;
+  }
+}
+
+// ── 3D-рендер каркаса зумпфа ─────────────────────────────────────────────────
+function _sfDestroy3D() {
+  var t = SumpForecastState._three;
+  if (!t) return;
+  if (t.animId) cancelAnimationFrame(t.animId);
+  if (t.renderer) { t.renderer.dispose(); t.renderer.domElement.remove(); }
+  SumpForecastState._three = null;
+}
+
+function _sfInit3D(geom, currentLevel) {
+  _sfDestroy3D();
+  var container = document.getElementById('sf-3d-container');
+  if (!container || !window.THREE) return;
+
+  var W = container.clientWidth || 480, H3 = 320;
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(W, H3);
+  renderer.setClearColor(0x0d1117, 1);
+  container.appendChild(renderer.domElement);
+
+  var scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(1, 2, 3);
+  scene.add(dirLight);
+
+  // Вычисляем центр и масштаб модели
+  var xs = geom.xs, ys = geom.ys, zs = geom.zs, tris = geom.tris;
+  var xMin=xs[0],xMax=xs[0],yMin=ys[0],yMax=ys[0];
+  for (var i=1;i<xs.length;i++){
+    if(xs[i]<xMin)xMin=xs[i]; if(xs[i]>xMax)xMax=xs[i];
+    if(ys[i]<yMin)yMin=ys[i]; if(ys[i]>yMax)yMax=ys[i];
+  }
+  var cx=(xMin+xMax)/2, cy=(yMin+yMax)/2, cz=(geom.zMin+geom.zMax)/2;
+  var span = Math.max(xMax-xMin, yMax-yMin, geom.zMax-geom.zMin) || 1;
+  var scale = 80 / span; // нормируем в куб ~80 ед.
+
+  // Каркас (wireframe) — полупрозрачные грани + рёбра
+  var positions = new Float32Array(tris.length * 9);
+  for (var j=0;j<tris.length;j++) {
+    var t=tris[j];
+    positions[j*9+0]=(xs[t[0]]-cx)*scale; positions[j*9+1]=(ys[t[0]]-cy)*scale; positions[j*9+2]=(zs[t[0]]-cz)*scale;
+    positions[j*9+3]=(xs[t[1]]-cx)*scale; positions[j*9+4]=(ys[t[1]]-cy)*scale; positions[j*9+5]=(zs[t[1]]-cz)*scale;
+    positions[j*9+6]=(xs[t[2]]-cx)*scale; positions[j*9+7]=(ys[t[2]]-cy)*scale; positions[j*9+8]=(zs[t[2]]-cz)*scale;
+  }
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+
+  // Сплошная поверхность (полупрозрачная серая)
+  var solidMat = new THREE.MeshPhongMaterial({
+    color: 0x6b7280, side: THREE.DoubleSide, transparent: true, opacity: 0.35, depthWrite: false
+  });
+  scene.add(new THREE.Mesh(geo, solidMat));
+
+  // Рёбра каркаса
+  var edgeMat = new THREE.LineBasicMaterial({ color: 0x9ca3af, transparent: true, opacity: 0.6 });
+  scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(geo), edgeMat));
+
+  // Плоскость воды
+  var waterSize = span * scale * 1.2;
+  var waterGeo = new THREE.PlaneGeometry(waterSize, waterSize);
+  var waterMat = new THREE.MeshPhongMaterial({
+    color: 0x3b82f6, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false
+  });
+  var waterMesh = new THREE.Mesh(waterGeo, waterMat);
+  waterMesh.rotation.x = -Math.PI / 2;
+  var wz = currentLevel !== null ? (currentLevel - cz) * scale : (geom.zMin - cz) * scale;
+  waterMesh.position.y = wz;
+  scene.add(waterMesh);
+
+  // Камера
+  var camera = new THREE.PerspectiveCamera(45, W / H3, 0.1, 2000);
+  camera.position.set(span * scale * 0.9, span * scale * 0.6, span * scale * 1.2);
+  camera.lookAt(0, 0, 0);
+
+  // Управление
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 10;
+  controls.maxDistance = 500;
+
+  function animate() {
+    var id = requestAnimationFrame(animate);
+    SumpForecastState._three.animId = id;
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  SumpForecastState._three = { renderer: renderer, scene: scene, camera: camera, controls: controls, waterMesh: waterMesh, cz: cz, scale: scale, animId: null };
+  animate();
+
+  // Масштабируем при изменении ширины контейнера
+  var ro = new ResizeObserver(function() {
+    if (!SumpForecastState._three) return;
+    var nw = container.clientWidth;
+    camera.aspect = nw / H3;
+    camera.updateProjectionMatrix();
+    renderer.setSize(nw, H3);
+  });
+  ro.observe(container);
+}
+
+function _sfUpdate3DWaterLevel(level) {
+  var t = SumpForecastState._three;
+  if (!t || !t.waterMesh) return;
+  t.waterMesh.position.y = (level - t.cz) * t.scale;
+}
+
+async function _sfTryRender3D(geom, currentLevel) {
+  try {
+    await _sfLoadThree();
+    _sfInit3D(geom, currentLevel);
+  } catch(e) {
+    console.warn('[sf] 3D рендер недоступен:', e.message);
+    var c = document.getElementById('sf-3d-container');
+    if (c) c.innerHTML = '<p style="color:var(--text-muted);font-size:12px;padding:12px">3D-просмотр недоступен</p>';
   }
 }
 
