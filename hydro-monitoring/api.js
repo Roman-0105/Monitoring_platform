@@ -17,7 +17,15 @@ function dewSumpToRow(s) {
   return { id: s.id, name: s.name || '', quarry: s.quarry || '', notes: s.notes || '' };
 }
 function rowToDewSump(r) {
-  return { id: r.id, name: r.name || '', quarry: r.quarry || '', notes: r.notes || '' };
+  return {
+    id: r.id, name: r.name || '', quarry: r.quarry || '', notes: r.notes || '',
+    tridbPath:     r.tridb_path     || null,
+    totalVolume:   r.total_volume   != null ? Number(r.total_volume)   : null,
+    zMin:          r.z_min          != null ? Number(r.z_min)          : null,
+    zMax:          r.z_max          != null ? Number(r.z_max)          : null,
+    criticalLevel: r.critical_level != null ? Number(r.critical_level) : null,
+    volumeCurve:   Array.isArray(r.volume_curve) ? r.volume_curve : null,
+  };
 }
 
 function dewElevToRow(h) {
@@ -908,5 +916,10 @@ var Api = (function() {
     getDustLogs:        async function() { return client().from('dust_logs').select('*').order('date', { ascending: false }); },
     upsertDustLog:      async function(row) { return client().from('dust_logs').upsert(row); },
     deleteDustLog:      async function(id) { return client().from('dust_logs').delete().eq('id', id); },
+
+    // ── Sump Storage (tridb files) ────────────────────────────
+    _getClient: function() { return client(); },
+    uploadSumpTridb:    async function(path, file) { return client().storage.from('sump-models').upload(path, file, { upsert: true }); },
+    downloadSumpTridb:  async function(path) { return client().storage.from('sump-models').download(path); },
   };
 })();

@@ -38,6 +38,7 @@
           <span class="sidebar-section-label">Мониторинг водоотлива</span>
           <button class="tab-btn" data-tab="dewatering"><span class="tab-icon">⛽</span><span class="tab-label"> Журнал Водоотлива</span></button>
           <button class="tab-btn" data-tab="dust"><span class="tab-icon">💦</span><span class="tab-label"> Журнал Пылеподавления</span></button>
+          <button class="tab-btn" data-tab="sump-forecast"><span class="tab-icon">◎</span><span class="tab-label"> Прогноз зумпфов</span></button>
         </div>
         <div class="sidebar-section">
           <span class="sidebar-section-label">Риски</span>
@@ -437,6 +438,12 @@
     <div id="dust-panel-orgs"       class="dew-panel"></div>
     <div id="dust-panel-nozzles"    class="dew-panel"></div>
     <div id="dust-panel-analytics"  class="dew-panel"></div>
+  </div>
+
+  <!-- Прогноз зумпфов -->
+  <div class="page" id="page-sump-forecast">
+    <div id="sf-sump-selector" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border-subtle)"></div>
+    <div id="sf-content"></div>
   </div>
 
   <!-- Диагностика -->
@@ -877,6 +884,7 @@
 <script src="report-wells.js"></script>
 <script src="ui-dewatering.js"></script>
 <script src="ui-dustsuppression.js"></script>
+<script src="ui-sump-forecast.js"></script>
 <script src="app.js"></script>
 
 

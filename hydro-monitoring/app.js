@@ -410,6 +410,9 @@ function switchTab(name) {
   if (name === 'dust' && typeof initDustTab === 'function') {
     initDustTab();
   }
+  if (name === 'sump-forecast' && typeof initSumpForecastTab === 'function') {
+    initSumpForecastTab();
+  }
   var tooltipEl = document.getElementById('map-tooltip');
   if (tooltipEl) tooltipEl.style.display = 'none';
   document.querySelectorAll('.map-point-card').forEach(function(el){ el.remove(); });
