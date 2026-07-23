@@ -306,17 +306,25 @@ function _sfRenderSelector() {
   var el = document.getElementById('sf-sump-selector');
   if (!el) return;
   var quarries = {};
-  DewateringState.sumps.forEach(function(s) { (quarries[s.quarry||'—'] = quarries[s.quarry||'—']||[]).push(s); });
+  var order = [];
+  DewateringState.sumps.forEach(function(s) {
+    var q = s.quarry || '—';
+    if (!quarries[q]) { quarries[q] = []; order.push(q); }
+    quarries[q].push(s);
+  });
 
-  var html = '';
-  Object.keys(quarries).forEach(function(q) {
-    html += '<span style="color:var(--text-muted);font-size:11px;font-weight:600;letter-spacing:.5px;margin-right:6px;padding:0 2px">' + q + '</span>';
+  var html = '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">';
+  order.forEach(function(q) {
+    html += '<div style="display:flex;flex-direction:column;gap:4px">';
+    html += '<span style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);padding-left:2px">' + _sfEsc(q) + '</span>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
     quarries[q].forEach(function(s) {
       var active = s.id === SumpForecastState.selectedSumpId;
-      html += '<button class="btn btn-sm ' + (active?'btn-primary':'btn-outline') + '" onclick="_sfSelectSump(\'' + s.id + '\')" style="margin:0 3px 4px 0">' + _sfEsc(s.name) + '</button>';
+      html += '<button class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-outline') + '" onclick="_sfSelectSump(\'' + s.id + '\')">' + _sfEsc(s.name) + '</button>';
     });
-    html += '<span style="margin-right:12px"></span>';
+    html += '</div></div>';
   });
+  html += '</div>';
   el.innerHTML = html;
 }
 
