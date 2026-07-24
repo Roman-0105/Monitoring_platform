@@ -1,13 +1,18 @@
 // ── Прогноз зумпфов ─────────────────────────────────────────────────────────
 
 var SumpForecastState = {
-  selectedSumpId:   null,
-  analysisDays:     30,
-  _inflowChartInst: null,
-  _vhChartInst:     null,
-  _levelChartInst:  null,
-  _geom:            null,
-  _three:           null,
+  selectedSumpId:      null,
+  analysisDays:        30,
+  _inflowChartInst:    null,
+  _vhChartInst:        null,
+  _levelChartInst:     null,
+  _forecastChartInst:  null,
+  _geom:               null,
+  _three:              null,
+  _forecastParams:     null,  // { startDt, endDt, pumpQ: {id:q}, stops: [{pumpId,startDt,durationH}] }
+  _forecastResult:     null,  // [{t,H,V,Qpump}]
+  _forecastSumpId:     null,
+  _forecastAvgQ:       null,
 };
 
 // ── Утилита: загрузка sql.js (WASM SQLite) ──────────────────────────────────
@@ -511,7 +516,7 @@ function _sfBuildLevelPumpData(sump, days) {
 
 // ── Главный рендер страницы зумпфа ───────────────────────────────────────────
 function renderSumpForecastContent(sump) {
-  ['_inflowChartInst','_vhChartInst','_levelChartInst'].forEach(function(k){
+  ['_inflowChartInst','_vhChartInst','_levelChartInst','_forecastChartInst'].forEach(function(k){
     if (SumpForecastState[k]) { try{SumpForecastState[k].destroy();}catch(e){} SumpForecastState[k]=null; }
   });
   _sfDestroy3D();
@@ -603,15 +608,23 @@ function renderSumpForecastContent(sump) {
 
   // ─ График: уровень воды + объём откачки ─────────────────────────────────
   html += '<div class="card" style="padding:14px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
   html += '<span class="card-title">История уровня и водоотлива</span>';
   html += '<span style="font-size:11px;color:var(--text-muted)">за '+days+' дн.</span>';
+  html += '</div>';
+  // Управление масштабом оси Y (уровень)
+  html += '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
+  html += '<span style="font-size:11px;color:var(--text-muted)">Ось Y (уровень):</span>';
+  html += '<label style="font-size:11px;display:flex;align-items:center;gap:4px;color:var(--text-muted)">Мин';
+  html += '<input type="number" id="sf-level-ymin" step="0.1" placeholder="авто" style="width:72px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary);margin-left:3px" onchange="_sfSetLevelYScale()"></label>';
+  html += '<label style="font-size:11px;display:flex;align-items:center;gap:4px;color:var(--text-muted)">Макс';
+  html += '<input type="number" id="sf-level-ymax" step="0.1" placeholder="авто" style="width:72px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary);margin-left:3px" onchange="_sfSetLevelYScale()"></label>';
+  html += '<button onclick="_sfSetLevelYScaleReset()" style="font-size:10px;padding:2px 8px;border-radius:4px;background:none;border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer">Авто</button>';
   html += '</div>';
   if (lpData.levs.length === 0) {
     html += '<p style="color:var(--text-muted);font-size:13px">Нет данных об уровне за выбранный период</p>';
   } else {
     html += '<canvas id="sf-level-chart" height="120"></canvas>';
-    // Пояснение к графику
     html += '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">';
     html += '<span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;background:#60a5fa"></span>Уровень воды (м)</span>';
     html += '<span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:8px;background:rgba(34,197,94,0.4);border-radius:2px"></span>Объём откачки (м³/сут)</span>';
@@ -643,7 +656,7 @@ function renderSumpForecastContent(sump) {
 
   // ─ Прогноз ───────────────────────────────────────────────────────────────
   if (hasCurve && avgQ !== null) {
-    html += _sfForecastCalc(sump, pumps, avgQ, latestLev, currVol, days);
+    html += _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days);
   } else if (hasCurve) {
     html += '<div class="card" style="padding:14px"><div class="card-title">Прогноз</div>';
     html += '<p style="color:var(--text-muted);font-size:13px;margin-top:8px">Прогноз доступен после накопления данных уровней за выбранный период</p></div>';
@@ -692,7 +705,7 @@ function renderSumpForecastContent(sump) {
   if (lpData.levs.length > 0)   setTimeout(function(){ _sfRenderLevelChart(sump, lpData, days); }, 50);
   if (inflow.length >= 2)        setTimeout(function(){ _sfRenderInflowChart(inflow, days); }, 80);
   if (hasCurve)                  setTimeout(function(){ _sfRenderVhChart(sump.volumeCurve, latestLev); }, 110);
-  if (hasCurve && avgQ !== null) setTimeout(function(){ _sfUpdateForecastResult(sump, pumps, avgQ, latestLev, currVol); }, 140);
+  _sfFcCurrentPumps = pumps;
 
   // 3D — из памяти или из Storage
   if (hasCurve) {
@@ -777,143 +790,409 @@ function _sfStat(label, value) {
 }
 
 // ── Калькулятор прогноза ──────────────────────────────────────────────────────
-function _sfForecastCalc(sump, pumps, avgQ, latestLev, currVol, days) {
-  var activePumps = pumps.filter(function(p){ return p.status === 'on'; });
-  var totalPumpQ  = activePumps.reduce(function(s,p){ return s+p.q; }, 0);
+// ── Утилита: форматирование даты/времени в локальное "YYYY-MM-DDTHH:MM" ────────
+function _sfDtLocal(d) {
+  var pad = function(n){ return n < 10 ? '0'+n : ''+n; };
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+
+// ── Инициализация параметров прогноза ────────────────────────────────────────
+function _sfFcInit(pumps) {
+  var now = new Date();
+  var end = new Date(now.getTime() + 7 * 86400000);
+  var pumpQ = {};
+  pumps.forEach(function(p){ pumpQ[p.id] = p.q; });
+  SumpForecastState._forecastParams = {
+    startDt:   _sfDtLocal(now),
+    endDt:     _sfDtLocal(end),
+    pumpQ:     pumpQ,
+    stops:     []
+  };
+}
+
+function _sfFcSetParam(key, val) {
+  if (!SumpForecastState._forecastParams) return;
+  SumpForecastState._forecastParams[key] = val;
+}
+
+function _sfFcSetPumpQ(pumpId, q) {
+  if (!SumpForecastState._forecastParams) return;
+  SumpForecastState._forecastParams.pumpQ[pumpId] = parseFloat(q) || 0;
+}
+
+function _sfFcAddStop(pumps) {
+  var fp = SumpForecastState._forecastParams;
+  if (!fp) return;
+  var firstPump = pumps && pumps.length ? pumps[0] : null;
+  fp.stops.push({
+    pumpId:    firstPump ? firstPump.id : '',
+    startDt:   fp.startDt || _sfDtLocal(new Date()),
+    durationH: 8
+  });
+  _sfFcRerenderStops(pumps);
+}
+
+function _sfFcRemoveStop(idx, pumps) {
+  var fp = SumpForecastState._forecastParams;
+  if (!fp) return;
+  fp.stops.splice(idx, 1);
+  _sfFcRerenderStops(pumps);
+}
+
+function _sfFcSetStop(idx, key, val) {
+  var fp = SumpForecastState._forecastParams;
+  if (!fp || !fp.stops[idx]) return;
+  fp.stops[idx][key] = key === 'durationH' ? (parseFloat(val)||0) : val;
+}
+
+function _sfFcRerenderStops(pumps) {
+  var el = document.getElementById('sf-fc-stops-body');
+  if (!el) return;
+  el.innerHTML = _sfFcStopsHtml(SumpForecastState._forecastParams, pumps);
+}
+
+function _sfFcStopsHtml(fp, pumps) {
+  if (!fp || !fp.stops.length) return '<p style="color:var(--text-muted);font-size:12px">Нет запланированных остановок</p>';
+  var h = '';
+  fp.stops.forEach(function(s, i) {
+    h += '<div style="display:grid;grid-template-columns:1fr 180px 80px 30px;gap:8px;align-items:center;margin-bottom:6px">';
+    // Насос
+    h += '<select style="font-size:12px;padding:3px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetStop('+i+',\'pumpId\',this.value)">';
+    pumps.forEach(function(p){
+      h += '<option value="'+p.id+'"'+(s.pumpId===p.id?' selected':'')+'>'+_sfEsc(p.name)+'</option>';
+    });
+    h += '</select>';
+    // Дата/время начала
+    h += '<input type="datetime-local" value="'+s.startDt+'" style="font-size:12px;padding:3px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetStop('+i+',\'startDt\',this.value)">';
+    // Длительность
+    h += '<div style="display:flex;align-items:center;gap:4px">';
+    h += '<input type="number" value="'+s.durationH+'" min="0.5" max="720" step="0.5" style="width:55px;font-size:12px;padding:3px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetStop('+i+',\'durationH\',this.value)">';
+    h += '<span style="font-size:11px;color:var(--text-muted)">ч</span></div>';
+    // Удалить
+    h += '<button onclick="_sfFcRemoveStop('+i+',_sfFcCurrentPumps)" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>';
+    h += '</div>';
+  });
+  return h;
+}
+
+// ── Карточка "Прогноз" ────────────────────────────────────────────────────────
+function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days) {
+  // Инициализируем параметры при первом входе или смене зумпфа
+  var fp = SumpForecastState._forecastParams;
+  if (!fp || SumpForecastState._forecastSumpId !== sump.id) {
+    _sfFcInit(pumps);
+    fp = SumpForecastState._forecastParams;
+    SumpForecastState._forecastSumpId = sump.id;
+    SumpForecastState._forecastAvgQ   = avgQ;
+  }
 
   var html = '<div class="card" style="padding:14px" id="sf-forecast-card">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
-  html += '<span class="card-title">Прогноз</span>';
-  html += '<span style="font-size:11px;color:var(--text-muted)">Q<sub>приток</sub> = <strong style="color:#60a5fa">' + avgQ.toFixed(1) + ' м³/ч</strong> · база ' + (days||30) + ' дн.</span>';
-  html += '</div>';
-  // Пояснение к методу
-  html += '<div style="background:var(--bg-sub);border-radius:6px;padding:7px 10px;margin-bottom:12px;font-size:10px;color:var(--text-muted)">';
-  html += '<strong>Отключение:</strong> уровень H(t) = H₀ + Q<sub>пр</sub>·t / A(H₀)  — рост уровня при остановленных насосах.<br>';
-  html += '<strong>Осушение:</strong> t = (V₀ − V<sub>цель</sub>) / (Q<sub>нас</sub> − Q<sub>пр</sub>)  — время при работающих насосах.';
-  html += '</div>';
-  html += '<div class="settings-subtabs" style="margin-bottom:14px">';
-  html += '<button class="btn btn-sm btn-outline active" id="sf-tab-off" onclick="_sfSwitchFcastTab(\'off\')">⛔ Отключение насосов</button>';
-  html += '<button class="btn btn-sm btn-outline" id="sf-tab-dry" onclick="_sfSwitchFcastTab(\'dry\')">💧 Осушение</button>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">';
+  html += '<span class="card-title">Прогноз (почасовое моделирование)</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">Q<sub>пр</sub> = <strong style="color:#60a5fa">'+avgQ.toFixed(1)+' м³/ч</strong> · база '+days+' дн.</span>';
   html += '</div>';
 
-  // Панель "Отключение"
-  html += '<div id="sf-panel-off">';
-  html += '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">';
-  html += '<label style="font-size:13px">Насосы отключены на: ';
-  html += '<input type="number" id="sf-off-hours" value="6" min="0" max="168" step="0.5" style="width:70px;margin-left:6px" oninput="_sfUpdateForecastResult()"> ч</label>';
-  html += '</div>';
-  html += '<div id="sf-off-result" style="margin-top:12px"></div>';
+  // Период прогноза
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">';
+  html += '<label style="font-size:12px;color:var(--text-muted)">Начало прогноза<br>';
+  html += '<input type="datetime-local" id="sf-fc-start" value="'+fp.startDt+'" style="width:100%;margin-top:3px;font-size:12px;padding:4px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetParam(\'startDt\',this.value)"></label>';
+  html += '<label style="font-size:12px;color:var(--text-muted)">Конец прогноза<br>';
+  html += '<input type="datetime-local" id="sf-fc-end" value="'+fp.endDt+'" style="width:100%;margin-top:3px;font-size:12px;padding:4px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetParam(\'endDt\',this.value)"></label>';
   html += '</div>';
 
-  // Панель "Осушение"
-  html += '<div id="sf-panel-dry" style="display:none">';
-  html += '<div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">';
-  html += '<label style="font-size:13px">Целевая отметка: ';
-  html += '<input type="number" id="sf-dry-level" value="' + (sump.criticalLevel || (sump.zMin ? (sump.zMin+1).toFixed(1) : 168)) + '" step="0.1" style="width:80px;margin-left:6px" oninput="_sfUpdateForecastResult()"> м</label>';
-  html += '</div>';
-  html += '<div style="margin-top:10px;font-size:12px;color:var(--text-muted)">Работают насосы:</div>';
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="sf-pump-checks">';
+  // Производительность насосов
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">Производительность насосов (м³/ч):</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:10px">';
   pumps.forEach(function(p) {
-    var chk = p.status === 'on' ? 'checked' : '';
-    html += '<label style="font-size:13px;display:flex;align-items:center;gap:4px;cursor:pointer">';
-    html += '<input type="checkbox" ' + chk + ' data-pump-q="' + p.q + '" onchange="_sfUpdateForecastResult()"> ';
-    html += _sfEsc(p.name) + ' <span style="color:var(--text-muted);font-size:11px">(' + p.q.toFixed(0) + ' м³/ч)</span></label>';
+    var q = fp.pumpQ[p.id] !== undefined ? fp.pumpQ[p.id] : p.q;
+    html += '<label style="font-size:12px;display:flex;flex-direction:column;gap:3px">';
+    html += '<span style="color:var(--text-muted);font-size:11px">'+_sfEsc(p.name)+'</span>';
+    html += '<input type="number" value="'+q.toFixed(0)+'" min="0" step="1" style="width:80px;font-size:12px;padding:4px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetPumpQ(\''+p.id+'\',this.value)">';
+    html += '</label>';
   });
+  html += '</div></div>';
+
+  // Запланированные остановки
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+  html += '<span style="font-size:12px;color:var(--text-muted)">Запланированные остановки:</span>';
+  html += '<button onclick="_sfFcAddStop(_sfFcCurrentPumps)" class="btn btn-sm btn-outline" style="font-size:11px;padding:2px 10px">+ Добавить</button>';
   html += '</div>';
-  html += '<div id="sf-dry-result" style="margin-top:12px"></div>';
+  html += '<div id="sf-fc-stops-header" style="display:grid;grid-template-columns:1fr 180px 80px 30px;gap:8px;margin-bottom:4px">';
+  html += '<span style="font-size:10px;color:var(--text-muted)">Насос</span>';
+  html += '<span style="font-size:10px;color:var(--text-muted)">Начало остановки</span>';
+  html += '<span style="font-size:10px;color:var(--text-muted)">Длит.</span>';
+  html += '<span></span></div>';
+  html += '<div id="sf-fc-stops-body">'+_sfFcStopsHtml(fp, pumps)+'</div>';
   html += '</div>';
+
+  // Кнопка запуска
+  html += '<button onclick="_sfRunForecast()" class="btn btn-primary" style="width:100%;padding:8px;font-size:13px;font-weight:600">Рассчитать прогноз</button>';
+
+  // Результат
+  html += '<div id="sf-fc-result" style="margin-top:14px"></div>';
 
   html += '</div>';
   return html;
 }
 
-function _sfSwitchFcastTab(tab) {
-  document.getElementById('sf-panel-off').style.display = tab==='off' ? '' : 'none';
-  document.getElementById('sf-panel-dry').style.display = tab==='dry' ? '' : 'none';
-  document.getElementById('sf-tab-off').classList.toggle('active', tab==='off');
-  document.getElementById('sf-tab-dry').classList.toggle('active', tab==='dry');
-  _sfUpdateForecastResult();
+// ── Моделирование прогноза (почасовое) ───────────────────────────────────────
+function _sfSimulateForecast(sump, pumps, avgQin, H0) {
+  var fp = SumpForecastState._forecastParams;
+  if (!fp) return [];
+  var startMs = new Date(fp.startDt).getTime();
+  var endMs   = new Date(fp.endDt).getTime();
+  if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) return [];
+
+  var V0 = _sfVolumeAt(sump.volumeCurve, H0 !== null ? H0 : sump.zMin);
+  var totalVol = sump.totalVolume || (sump.volumeCurve[sump.volumeCurve.length-1].v);
+  var V = V0 !== null ? V0 : 0;
+  var H = H0 !== null ? H0 : sump.zMin;
+
+  var result = [];
+  var step = 3600000; // 1 час в мс
+
+  for (var t = startMs; t <= endMs; t += step) {
+    // Суммарная откачка на этот час (с учётом остановок)
+    var Qpump = 0;
+    pumps.forEach(function(p) {
+      var pq = (fp.pumpQ[p.id] !== undefined ? fp.pumpQ[p.id] : p.q);
+      var stopped = fp.stops.some(function(s) {
+        if (s.pumpId !== p.id) return false;
+        var sStart = new Date(s.startDt).getTime();
+        var sEnd   = sStart + s.durationH * 3600000;
+        return t >= sStart && t < sEnd;
+      });
+      if (!stopped) Qpump += pq;
+    });
+
+    result.push({ t: t, H: H, V: V, Qpump: Qpump });
+
+    // Шаг: dV = (Q_приток - Q_насосы) * 1ч
+    var dV = (avgQin - Qpump) * 1;
+    V = Math.min(Math.max(V + dV, 0), totalVol);
+    H = _sfLevelAt(sump.volumeCurve, V) !== null ? _sfLevelAt(sump.volumeCurve, V) : H;
+  }
+  return result;
 }
 
-var _sfFcastParams = {};
+// ── Запуск расчёта прогноза ───────────────────────────────────────────────────
+function _sfRunForecast() {
+  var fp = SumpForecastState._forecastParams;
+  if (!fp) return;
+  // Читаем актуальные значения полей даты
+  var startEl = document.getElementById('sf-fc-start');
+  var endEl   = document.getElementById('sf-fc-end');
+  if (startEl) fp.startDt = startEl.value;
+  if (endEl)   fp.endDt   = endEl.value;
 
-function _sfUpdateForecastResult(sump, pumps, avgQ, latestLev, currVol) {
-  // Может быть вызван как из таймаута с параметрами, так и из oninput без
-  if (sump) { _sfFcastParams = { sump:sump, pumps:pumps, avgQ:avgQ, latestLev:latestLev, currVol:currVol }; }
-  else       { sump=_sfFcastParams.sump; pumps=_sfFcastParams.pumps; avgQ=_sfFcastParams.avgQ; latestLev=_sfFcastParams.latestLev; currVol=_sfFcastParams.currVol; }
+  var sumps = DewateringState.sumps;
+  var sump  = sumps.find(function(s){ return s.id === SumpForecastState._forecastSumpId; });
   if (!sump || !sump.volumeCurve) return;
 
-  var panelOff = document.getElementById('sf-panel-off');
-  var panelDry = document.getElementById('sf-panel-dry');
-  var offActive = panelOff && panelOff.style.display !== 'none';
+  var avgQ   = SumpForecastState._forecastAvgQ;
+  var latLev = _sfLatestLevel(sump);
+  if (avgQ === null || avgQ === undefined) { alert('Нет данных о притоке'); return; }
 
-  if (offActive) {
-    var hoursEl = document.getElementById('sf-off-hours');
-    var hours = hoursEl ? parseFloat(hoursEl.value) : 6;
-    if (isNaN(hours) || hours < 0) return;
+  var days = SumpForecastState.analysisDays || 30;
+  var pumps = _sfPumpPerformance(sump, days);
 
-    var V0      = currVol !== null ? currVol : _sfVolumeAt(sump.volumeCurve, latestLev||sump.zMin);
-    var Vfinal  = V0 + avgQ * hours;
-    var Hfinal  = _sfLevelAt(sump.volumeCurve, Vfinal);
-    var dH      = Hfinal !== null ? (Hfinal - (latestLev||0)) : null;
-    var crit    = sump.criticalLevel;
+  var result = _sfSimulateForecast(sump, pumps, avgQ, latLev);
+  SumpForecastState._forecastResult = result;
 
-    var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
-    html += _sfStat('Подъём уровня', dH !== null ? '+' + dH.toFixed(2) + ' м' : '—');
-    html += _sfStat('Уровень через ' + hours + ' ч', Hfinal !== null ? Hfinal.toFixed(2) + ' м' : '—');
-    html += _sfStat('Объём воды', _sfFmt(Vfinal) + ' м³');
-    html += '</div>';
-
-    if (crit && Hfinal !== null && Hfinal > crit) {
-      var tCrit = ((_sfVolumeAt(sump.volumeCurve, crit) || 0) - V0) / avgQ;
-      html += '<div style="background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;padding:10px;margin-top:10px;font-size:13px">';
-      html += '⚠ Критический уровень ' + crit.toFixed(1) + ' м будет достигнут через <strong>' + tCrit.toFixed(1) + ' ч</strong></div>';
-    } else if (crit && Hfinal !== null) {
-      html += '<div style="background:#14532d;border:1px solid #22c55e;border-radius:8px;padding:10px;margin-top:10px;font-size:13px">✓ Критический уровень (' + crit.toFixed(1) + ' м) не будет достигнут</div>';
-    }
-
-    var resEl = document.getElementById('sf-off-result');
-    if (resEl) resEl.innerHTML = html;
-
-  } else {
-    // Осушение
-    var targetEl = document.getElementById('sf-dry-level');
-    var target = targetEl ? parseFloat(targetEl.value) : null;
-    if (target === null || isNaN(target)) return;
-
-    var checks = document.querySelectorAll('#sf-pump-checks input[type=checkbox]');
-    var totalQ = 0;
-    checks.forEach(function(c){ if(c.checked) totalQ += parseFloat(c.dataset.pumpQ)||0; });
-
-    var V0   = currVol !== null ? currVol : _sfVolumeAt(sump.volumeCurve, latestLev||sump.zMax);
-    var Vt   = _sfVolumeAt(sump.volumeCurve, target);
-    var net  = totalQ - avgQ;
-
-    var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
-    html += _sfStat('Чистая откачка', net > 0 ? net.toFixed(1) + ' м³/ч' : '<span style="color:#ef4444">' + net.toFixed(1) + ' м³/ч</span>');
-
-    if (net <= 0) {
-      html += _sfStat('Время', '∞');
-      html += _sfStat('Готово к', '—');
-      html += '</div>';
-      html += '<div style="background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;padding:10px;margin-top:10px;font-size:13px">Суммарный приток превышает производительность насосов — осушение невозможно</div>';
-    } else if (Vt !== null && V0 !== null && target < (latestLev||0)) {
-      var dV   = V0 - Vt;
-      var tH   = dV / net;
-      var done = new Date(Date.now() + tH * 3600000);
-      var doneStr = done.toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-      html += _sfStat('Время осушения', tH < 1 ? (tH*60).toFixed(0) + ' мин' : tH.toFixed(1) + ' ч');
-      html += _sfStat('Готово к', doneStr);
-      html += '</div>';
-    } else {
-      html += _sfStat('Время', '—');
-      html += _sfStat('Готово к', '—');
-      html += '</div>';
-      html += '<div style="background:#1c1f26;border:1px solid var(--border-subtle);border-radius:8px;padding:10px;margin-top:10px;font-size:13px;color:var(--text-muted)">Укажите целевую отметку ниже текущего уровня</div>';
-    }
-    var resEl = document.getElementById('sf-dry-result');
-    if (resEl) resEl.innerHTML = html;
+  var el = document.getElementById('sf-fc-result');
+  if (!el) return;
+  if (!result.length) {
+    el.innerHTML = '<p style="color:#ef4444;font-size:12px">Проверьте даты прогноза</p>';
+    return;
   }
+  el.innerHTML = '<canvas id="sf-fc-chart" height="140"></canvas><div id="sf-fc-summary" style="margin-top:10px"></div>';
+  setTimeout(function(){
+    _sfRenderForecastChart(result, sump, avgQ, pumps);
+    _sfRenderForecastSummary(result, sump, avgQ, latLev);
+  }, 30);
+}
+
+// ── График прогноза ───────────────────────────────────────────────────────────
+function _sfRenderForecastChart(result, sump, avgQ, pumps) {
+  var el = document.getElementById('sf-fc-chart');
+  if (!el || typeof Chart === 'undefined') return;
+  if (SumpForecastState._forecastChartInst) { SumpForecastState._forecastChartInst.destroy(); }
+
+  var fp = SumpForecastState._forecastParams;
+  var labels    = result.map(function(r){ var d=new Date(r.t); return (d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':00'; });
+  var levelData = result.map(function(r){ return r.H; });
+  var pumpData  = result.map(function(r){ return r.Qpump; });
+  var volData   = result.map(function(r){ return r.V; });
+
+  // Аннотации: остановки насосов + критический уровень
+  var annotations = {};
+  if (sump.criticalLevel) {
+    annotations.crit = {
+      type:'line', yScaleID:'yLevel',
+      yMin:sump.criticalLevel, yMax:sump.criticalLevel,
+      borderColor:'#ef4444', borderWidth:1.5, borderDash:[5,4],
+      label:{ content:'Крит. '+sump.criticalLevel.toFixed(1)+' м', display:true, position:'start', font:{size:9}, color:'#ef4444', backgroundColor:'transparent' }
+    };
+  }
+  if (fp && fp.stops) {
+    fp.stops.forEach(function(s, i) {
+      var sMs = new Date(s.startDt).getTime();
+      var eMs = sMs + s.durationH * 3600000;
+      var sIdx = result.findIndex(function(r){ return r.t >= sMs; });
+      var eIdx = result.findIndex(function(r){ return r.t >= eMs; });
+      if (sIdx < 0) sIdx = 0;
+      if (eIdx < 0) eIdx = result.length - 1;
+      var pumpName = pumps ? (pumps.find(function(p){return p.id===s.pumpId;})||{name:s.pumpId}).name : s.pumpId;
+      annotations['stop_s'+i] = {
+        type:'line', xScaleID:'x',
+        xMin:sIdx, xMax:sIdx,
+        borderColor:'rgba(251,146,60,0.7)', borderWidth:1.5, borderDash:[4,3],
+        label:{ content:'Стоп '+_sfEsc(pumpName), display:true, position:'start', font:{size:9}, color:'#f97316', backgroundColor:'rgba(0,0,0,0.5)' }
+      };
+      annotations['stop_e'+i] = {
+        type:'line', xScaleID:'x',
+        xMin:eIdx, xMax:eIdx,
+        borderColor:'rgba(251,146,60,0.4)', borderWidth:1, borderDash:[2,4]
+      };
+      annotations['stop_box'+i] = {
+        type:'box', xScaleID:'x',
+        xMin:sIdx, xMax:eIdx,
+        backgroundColor:'rgba(251,146,60,0.07)', borderWidth:0
+      };
+    });
+  }
+
+  SumpForecastState._forecastChartInst = new Chart(el, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Уровень, м',
+          data: levelData,
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96,165,250,0.08)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: false,
+          yAxisID: 'yLevel',
+          order: 1
+        },
+        {
+          label: 'Откачка насосов, м³/ч',
+          data: pumpData,
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34,197,94,0.10)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0,
+          fill: true,
+          yAxisID: 'yPump',
+          order: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 10 } } },
+        annotation: annotations,
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              var r = result[ctx.dataIndex];
+              if (ctx.datasetIndex === 0) return 'Уровень: '+ctx.parsed.y.toFixed(2)+' м  |  Объём: '+_sfFmt(r.V)+' м³';
+              return 'Откачка: '+ctx.parsed.y.toFixed(0)+' м³/ч  |  Приток: '+avgQ.toFixed(1)+' м³/ч';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 12, font: { size: 9 }, maxRotation: 0 }
+        },
+        yLevel: {
+          type: 'linear', position: 'left',
+          title: { display: true, text: 'Уровень, м', font: { size: 9 } },
+          ticks: { font: { size: 9 } }
+        },
+        yPump: {
+          type: 'linear', position: 'right', grid: { drawOnChartArea: false },
+          title: { display: true, text: 'Откачка, м³/ч', font: { size: 9 } },
+          ticks: { font: { size: 9 } },
+          min: 0
+        }
+      }
+    }
+  });
+}
+
+// ── Итоговые показатели прогноза ──────────────────────────────────────────────
+function _sfRenderForecastSummary(result, sump, avgQ, H0) {
+  var el = document.getElementById('sf-fc-summary');
+  if (!el || !result.length) return;
+
+  var Hstart = result[0].H;
+  var Hend   = result[result.length-1].H;
+  var Hmin   = result.reduce(function(m,r){ return Math.min(m,r.H); }, Hstart);
+  var Hmax   = result.reduce(function(m,r){ return Math.max(m,r.H); }, Hstart);
+  var totalHours = result.length;
+  var totalPumped = result.reduce(function(s,r){ return s + r.Qpump; }, 0);
+
+  // Момент достижения критического уровня
+  var critHit = null;
+  if (sump.criticalLevel) {
+    var cr = result.find(function(r){ return r.H >= sump.criticalLevel; });
+    if (cr) critHit = new Date(cr.t);
+  }
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">';
+  html += _sfStat('Уровень начало', Hstart.toFixed(2)+' м');
+  html += _sfStat('Уровень конец', Hend.toFixed(2)+' м');
+  html += _sfStat('Изменение уровня', (Hend-Hstart>=0?'+':'')+(Hend-Hstart).toFixed(2)+' м');
+  html += _sfStat('Мин. уровень', Hmin.toFixed(2)+' м');
+  html += _sfStat('Макс. уровень', Hmax.toFixed(2)+' м');
+  html += _sfStat('Откачано всего', _sfFmt(totalPumped)+' м³');
+  html += '</div>';
+
+  if (critHit) {
+    html += '<div style="background:#7f1d1d;border:1px solid #ef4444;border-radius:6px;padding:8px 12px;font-size:12px">';
+    html += '⚠ Критический уровень '+sump.criticalLevel.toFixed(1)+' м будет достигнут: <strong>'+critHit.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</strong>';
+    html += '</div>';
+  } else if (sump.criticalLevel) {
+    html += '<div style="background:#14532d;border:1px solid #22c55e;border-radius:6px;padding:8px 12px;font-size:12px">';
+    html += '✓ Критический уровень ('+sump.criticalLevel.toFixed(1)+' м) не будет достигнут в период прогноза';
+    html += '</div>';
+  }
+}
+
+// Глобальная переменная — список насосов для callback остановок
+var _sfFcCurrentPumps = [];
+
+// ── Управление масштабом оси Y на графике истории уровня ─────────────────────
+function _sfSetLevelYScale() {
+  var inst = SumpForecastState._levelChartInst;
+  if (!inst) return;
+  var minEl = document.getElementById('sf-level-ymin');
+  var maxEl = document.getElementById('sf-level-ymax');
+  var minVal = minEl && minEl.value !== '' ? parseFloat(minEl.value) : undefined;
+  var maxVal = maxEl && maxEl.value !== '' ? parseFloat(maxEl.value) : undefined;
+  inst.options.scales.yLevel.min = isNaN(minVal) ? undefined : minVal;
+  inst.options.scales.yLevel.max = isNaN(maxVal) ? undefined : maxVal;
+  inst.update();
+}
+
+function _sfSetLevelYScaleReset() {
+  var minEl = document.getElementById('sf-level-ymin');
+  var maxEl = document.getElementById('sf-level-ymax');
+  if (minEl) minEl.value = '';
+  if (maxEl) maxEl.value = '';
+  _sfSetLevelYScale();
 }
 
 // ── 3D-рендер каркаса зумпфа ─────────────────────────────────────────────────
