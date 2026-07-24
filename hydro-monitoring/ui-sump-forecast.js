@@ -119,6 +119,16 @@ function _sfCrossSectionArea(xs, ys, zs, tris, H) {
 }
 
 function _sfBuildVolumeCurve(xs, ys, zs, tris, zMin, zMax) {
+  // Переводим XY в локальные координаты: при несогласованных нормалях
+  // плоские контуры сечения не замыкаются, и член xOffset·Σ(dy) не
+  // сокращается в формуле Грина → ошибка масштаба ~x_abs/span.
+  // Вычитание центроида устраняет эту погрешность.
+  var xSum = 0, ySum = 0;
+  for (var k = 0; k < xs.length; k++) { xSum += xs[k]; ySum += ys[k]; }
+  var xOff = xSum / xs.length, yOff = ySum / ys.length;
+  var lxs = new Float64Array(xs.length), lys = new Float64Array(ys.length);
+  for (var k = 0; k < xs.length; k++) { lxs[k] = xs[k] - xOff; lys[k] = ys[k] - yOff; }
+
   var step = 0.1;
   var curve = [{ h: zMin, v: 0 }];
   var V = 0;
@@ -126,8 +136,7 @@ function _sfBuildVolumeCurve(xs, ys, zs, tris, zMin, zMax) {
   while (H <= zMax + step * 0.01) {
     H = Math.round(H * 10) / 10;
     // Площадь на средней точке слоя — правило средней точки
-    var Hmid = H - step * 0.5;
-    var A = _sfCrossSectionArea(xs, ys, zs, tris, Hmid);
+    var A = _sfCrossSectionArea(lxs, lys, zs, tris, H - step * 0.5);
     V += A * step;
     curve.push({ h: H, v: V });
     H += step;
@@ -268,11 +277,14 @@ async function _sfHandleTridbUpload(file, sump) {
     // Сохраняем геометрию для 3D-рендера
     SumpForecastState._geom = { xs: geom.xs, ys: geom.ys, zs: geom.zs, tris: geom.tris, zMin: zMin, zMax: zMax };
 
-    // Верификация: V при zMax должен быть близок к totalVol
+    // Верификация: V при zMax должен быть близок к паспортному totalVol
     var computedMax = curve[curve.length-1].v;
-    var err = Math.abs(computedMax - totalVol) / totalVol;
-    if (err > 0.05) {
-      console.warn('[sf] V(zMax)=', computedMax.toFixed(0), '≠ totalVol=', totalVol.toFixed(0), 'err=', (err*100).toFixed(1)+'%');
+    var errFrac = totalVol > 0 ? Math.abs(computedMax - totalVol) / totalVol : 1;
+    if (errFrac > 0.10) {
+      console.warn('[sf] V(zMax)=', computedMax.toFixed(0), '≠ totalVol=', totalVol.toFixed(0),
+        'погрешность:', (errFrac*100).toFixed(1) + '%', '— возможны дефекты меша');
+      setStatus('⚠ V(zMax)=' + _sfFmt(computedMax) + ' м³, паспорт=' + _sfFmt(totalVol)
+        + ' м³ (расхождение ' + (errFrac*100).toFixed(0) + '%). Проверьте меш в Micromine.', true);
     }
 
     setStatus('Загрузка файла в хранилище...');
@@ -431,7 +443,7 @@ function renderSumpForecastContent(sump) {
   // Ключевые метрики справа
   html += '<div style="margin-left:auto;display:flex;gap:12px;flex-wrap:wrap">';
   if (latestLev !== null) html += '<span style="font-size:12px">Уровень: <strong>' + latestLev.toFixed(2) + ' м</strong></span>';
-  if (pct !== null) {
+  if (pct !== null && pct <= 110) {
     var pc = pct > 80 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e';
     html += '<span style="font-size:12px">Заполнение: <strong style="color:'+pc+'">' + pct.toFixed(1) + '%</strong></span>';
   }
@@ -611,16 +623,43 @@ function renderSumpForecastContent(sump) {
   }
 }
 
+// Форматирование числа с пробелами как разделителями тысяч
+function _sfFmt(n, dec) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  dec = dec === undefined ? 0 : dec;
+  return n.toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
 function _sfModelStats(sump, latestLev, currVol, pct) {
+  // Проверка совпадения вычисленного объёма при zMax с паспортным
+  var curveMax = sump.volumeCurve && sump.volumeCurve.length
+    ? sump.volumeCurve[sump.volumeCurve.length - 1].v : null;
+  var verifyOk  = curveMax !== null && sump.totalVolume
+    ? Math.abs(curveMax - sump.totalVolume) / sump.totalVolume < 0.10 : null;
+
   var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
-  html += _sfStat('Полный объём', sump.totalVolume ? sump.totalVolume.toFixed(0) + ' м³' : '—');
+  html += _sfStat('Полный объём', sump.totalVolume ? _sfFmt(sump.totalVolume) + ' м³' : '—');
   html += _sfStat('Диапазон Z', sump.zMin ? sump.zMin.toFixed(1) + '–' + sump.zMax.toFixed(1) + ' м' : '—');
   if (latestLev !== null) {
     html += _sfStat('Тек. отметка', latestLev.toFixed(2) + ' м');
-    html += _sfStat('Объём воды', currVol !== null ? currVol.toFixed(0) + ' м³' : '—');
+    html += _sfStat('Объём воды', currVol !== null ? _sfFmt(currVol) + ' м³' : '—');
   }
   html += '</div>';
-  if (pct !== null) {
+
+  // Индикатор точности кривой V(H)
+  if (verifyOk !== null) {
+    var errPct = curveMax !== null && sump.totalVolume
+      ? Math.abs(curveMax - sump.totalVolume) / sump.totalVolume * 100 : null;
+    if (!verifyOk) {
+      html += '<div style="background:#7f1d1d33;border:1px solid #ef444466;border-radius:6px;padding:6px 10px;font-size:11px;color:#fca5a5;margin-bottom:10px">';
+      html += '⚠ Расчётный V(zMax) = <strong>' + _sfFmt(curveMax) + ' м³</strong> отличается от паспортного '
+        + _sfFmt(sump.totalVolume) + ' м³ на ' + (errPct ? errPct.toFixed(0) + '%' : '?')
+        + '. Возможно, меш содержит дефекты.';
+      html += '</div>';
+    }
+  }
+
+  if (pct !== null && pct <= 110) {
     var color = pct > 80 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e';
     html += '<div style="margin-bottom:10px">';
     html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px">';
@@ -628,6 +667,9 @@ function _sfModelStats(sump, latestLev, currVol, pct) {
     html += '<div style="background:var(--border-subtle);border-radius:4px;height:10px">';
     html += '<div style="background:' + color + ';border-radius:4px;height:10px;width:' + Math.min(100,pct).toFixed(0) + '%;transition:width 0.4s"></div>';
     html += '</div></div>';
+  } else if (pct !== null) {
+    // Данные кривой V(H) некорректны — скрываем процент
+    html += '<div style="font-size:11px;color:#6b7280;margin-bottom:10px">Заполнение: данные уточняются после пересчёта кривой</div>';
   }
   return html;
 }
@@ -723,7 +765,7 @@ function _sfUpdateForecastResult(sump, pumps, avgQ, latestLev, currVol) {
     var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
     html += _sfStat('Подъём уровня', dH !== null ? '+' + dH.toFixed(2) + ' м' : '—');
     html += _sfStat('Уровень через ' + hours + ' ч', Hfinal !== null ? Hfinal.toFixed(2) + ' м' : '—');
-    html += _sfStat('Объём воды', Vfinal.toFixed(0) + ' м³');
+    html += _sfStat('Объём воды', _sfFmt(Vfinal) + ' м³');
     html += '</div>';
 
     if (crit && Hfinal !== null && Hfinal > crit) {
