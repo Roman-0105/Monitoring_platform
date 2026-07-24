@@ -87,55 +87,151 @@ function _sfParseGeomBlob(blob) {
   return { xs: xs, ys: ys, zs: zs, tris: tris };
 }
 
-// ── V(H) кривая — интегрирование площади поперечного сечения ─────────────────
-// Устойчиво к ориентации нормалей, монотонно возрастает.
-// Для каждого шага dH вычисляем площадь сечения на высоте H по теореме Грина:
-// A(H) = |Σ (x₁+x₂)(y₂−y₁)/2| по всем рёбрам-пересечениям треугольников с плоскостью H.
-// V(H) = ∫[zMin→H] A(z) dz  (правило средней точки).
+// ── Площадь горизонтального сечения на отметке H ─────────────────────────────
+//
+// Алгоритм (не зависит от ориентации нормалей треугольников):
+//  1. Находим все отрезки пересечения треугольников с плоскостью Z = H.
+//  2. Строим граф смежности: конец отрезка → список соседних концов.
+//  3. Обходим граф, собирая замкнутые контуры (каждое ребро — ровно один раз).
+//  4. Площадь каждого контура — формула Шнурка (Gauss); суммируем по модулю.
+//
+// Ключи вершин квантуются с точностью 1 мм для стыковки близких концов.
+// При несогласованных нормалях Green's theorem / shoelace суммируются
+// некорректно (часть отрезков "обратная" → взаимная отмена площадей).
+// Топологический обход контуров решает эту проблему полностью.
 
-function _sfCrossSectionArea(xs, ys, zs, tris, H) {
-  var sum = 0;
-  for (var i = 0; i < tris.length; i++) {
-    var t  = tris[i];
-    var x0=xs[t[0]], y0=ys[t[0]], z0=zs[t[0]];
-    var x1=xs[t[1]], y1=ys[t[1]], z1=zs[t[1]];
-    var x2=xs[t[2]], y2=ys[t[2]], z2=zs[t[2]];
-    // Находим два ребра, пересекающих плоскость H
-    var pts = [];
-    function addEdge(ax,ay,az,bx,by,bz) {
-      if ((az < H) === (bz < H)) return; // оба с одной стороны
-      var tt = (H - az) / (bz - az);
-      pts.push([ax + tt*(bx-ax), ay + tt*(by-ay)]);
-    }
-    addEdge(x0,y0,z0, x1,y1,z1);
-    addEdge(x1,y1,z1, x2,y2,z2);
-    addEdge(x2,y2,z2, x0,y0,z0);
-    if (pts.length === 2) {
-      // Вклад сегмента в знаковую площадь (формула Грина / shoelace)
-      sum += (pts[0][0] + pts[1][0]) * (pts[1][1] - pts[0][1]) * 0.5;
-    }
+function _sfCrossSectionArea(lxs, lys, zs, tris, H) {
+  var Q = 1000; // квантование 1 мм
+
+  function ptKey(x, y) {
+    // Смещение +4e6 чтобы отрицательные локальные координаты давали положительный ключ
+    return (Math.round(x * Q) + 4000000) + '|' + (Math.round(y * Q) + 4000000);
   }
-  return Math.abs(sum);
+
+  // Граф: ключ → { x, y, nb: [ключи соседей] }
+  var graph = {};
+
+  for (var i = 0; i < tris.length; i++) {
+    var t = tris[i];
+    // Находим точки пересечения трёх рёбер треугольника с плоскостью H
+    var vx = [lxs[t[0]], lxs[t[1]], lxs[t[2]]];
+    var vy = [lys[t[0]], lys[t[1]], lys[t[2]]];
+    var vz = [ zs[t[0]],  zs[t[1]],  zs[t[2]]];
+
+    var pts = [];
+    for (var e = 0; e < 3; e++) {
+      var ne = (e + 1) % 3;
+      var az = vz[e], bz = vz[ne];
+      if ((az < H) === (bz < H)) continue; // оба по одну сторону
+      var tt = (H - az) / (bz - az);
+      pts.push([vx[e] + tt * (vx[ne] - vx[e]),
+                vy[e] + tt * (vy[ne] - vy[e])]);
+    }
+    if (pts.length !== 2) continue; // 0 или 3 точки — пропуск
+
+    var k0 = ptKey(pts[0][0], pts[0][1]);
+    var k1 = ptKey(pts[1][0], pts[1][1]);
+    if (k0 === k1) continue; // вырожденный отрезок
+
+    if (!graph[k0]) graph[k0] = { x: pts[0][0], y: pts[0][1], nb: [] };
+    if (!graph[k1]) graph[k1] = { x: pts[1][0], y: pts[1][1], nb: [] };
+    graph[k0].nb.push(k1);
+    graph[k1].nb.push(k0);
+  }
+
+  var keys = Object.keys(graph);
+  if (keys.length < 3) return 0;
+
+  // Обход: каждое ненаправленное ребро посещаем ровно один раз
+  var usedEdge = {}; // 'k0>k1' → true
+  var totalArea = 0;
+
+  for (var si = 0; si < keys.length; si++) {
+    var startKey = keys[si];
+    // Ищем первое неиспользованное ребро из startKey
+    var startNbs = graph[startKey].nb;
+    var firstNb = null;
+    for (var ni = 0; ni < startNbs.length; ni++) {
+      if (!usedEdge[startKey + '>' + startNbs[ni]]) {
+        firstNb = startNbs[ni]; break;
+      }
+    }
+    if (!firstNb) continue;
+
+    // Строим контур, следуя по графу
+    var loop = [graph[startKey]];
+    var prev = startKey;
+    var cur  = firstNb;
+    usedEdge[startKey + '>' + firstNb] = true;
+    usedEdge[firstNb + '>' + startKey] = true;
+
+    var guard = keys.length + 4;
+    while (cur !== startKey && guard-- > 0) {
+      var nd = graph[cur];
+      if (!nd) break;
+      loop.push(nd);
+
+      // Следующий: сосед ≠ prev с неиспользованным ребром
+      var nbs = nd.nb;
+      var nextKey = null;
+      for (var ni = 0; ni < nbs.length; ni++) {
+        if (nbs[ni] !== prev && !usedEdge[cur + '>' + nbs[ni]]) {
+          nextKey = nbs[ni]; break;
+        }
+      }
+      // Если все (кроме prev) использованы — пробуем любое свободное
+      if (!nextKey) {
+        for (var ni = 0; ni < nbs.length; ni++) {
+          if (!usedEdge[cur + '>' + nbs[ni]]) {
+            nextKey = nbs[ni]; break;
+          }
+        }
+      }
+      if (!nextKey) break;
+
+      usedEdge[cur + '>' + nextKey] = true;
+      usedEdge[nextKey + '>' + cur] = true;
+      prev = cur;
+      cur  = nextKey;
+    }
+
+    if (loop.length < 3) continue;
+
+    // Формула Шнурка (площадь полигона, знак = ориентация)
+    var area = 0;
+    for (var j = 0; j < loop.length; j++) {
+      var pa = loop[j];
+      var pb = loop[(j + 1) % loop.length];
+      area += pa.x * pb.y - pb.x * pa.y;
+    }
+    totalArea += Math.abs(area) * 0.5;
+  }
+
+  return totalArea;
 }
 
-function _sfBuildVolumeCurve(xs, ys, zs, tris, zMin, zMax) {
-  // Переводим XY в локальные координаты: при несогласованных нормалях
-  // плоские контуры сечения не замыкаются, и член xOffset·Σ(dy) не
-  // сокращается в формуле Грина → ошибка масштаба ~x_abs/span.
-  // Вычитание центроида устраняет эту погрешность.
-  var xSum = 0, ySum = 0;
-  for (var k = 0; k < xs.length; k++) { xSum += xs[k]; ySum += ys[k]; }
-  var xOff = xSum / xs.length, yOff = ySum / ys.length;
-  var lxs = new Float64Array(xs.length), lys = new Float64Array(ys.length);
-  for (var k = 0; k < xs.length; k++) { lxs[k] = xs[k] - xOff; lys[k] = ys[k] - yOff; }
+// ── Построение кривой V(H) ───────────────────────────────────────────────────
+//
+// Метод: интегрирование площадей горизонтальных сечений (правило средней точки).
+// Координаты XY переводятся в локальную систему (центроид → 0) для
+// численной устойчивости: большие абсолютные значения (x ≈ 46 000 м)
+// при квантовании ключей могут давать коллизии без этого сдвига.
 
-  var step = 0.1;
+function _sfBuildVolumeCurve(xs, ys, zs, tris, zMin, zMax) {
+  // Центрируем XY относительно центроида меша
+  var xSum = 0, ySum = 0, nv = xs.length;
+  for (var k = 0; k < nv; k++) { xSum += xs[k]; ySum += ys[k]; }
+  var xOff = xSum / nv, yOff = ySum / nv;
+  var lxs = new Float64Array(nv), lys = new Float64Array(nv);
+  for (var k = 0; k < nv; k++) { lxs[k] = xs[k] - xOff; lys[k] = ys[k] - yOff; }
+
+  var step = 0.1; // шаг интегрирования — 10 см
   var curve = [{ h: zMin, v: 0 }];
   var V = 0;
   var H = zMin + step;
   while (H <= zMax + step * 0.01) {
     H = Math.round(H * 10) / 10;
-    // Площадь на средней точке слоя — правило средней точки
+    // Площадь на средней точке слоя (правило средней точки)
     var A = _sfCrossSectionArea(lxs, lys, zs, tris, H - step * 0.5);
     V += A * step;
     curve.push({ h: H, v: V });
