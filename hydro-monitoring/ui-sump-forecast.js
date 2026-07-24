@@ -1017,10 +1017,10 @@ function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days) {
   html += '</div>';
 
   // Двухколоночная сетка
-  html += '<div style="display:grid;grid-template-columns:240px 1fr;align-items:stretch">';
+  html += '<div style="display:grid;grid-template-columns:240px 1fr;align-items:stretch;min-height:420px">';
 
   // ═══ ЛЕВАЯ КОЛОНКА — шаговая навигация ════════════════════════════════════
-  html += '<div style="border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;min-height:380px">';
+  html += '<div style="border-right:1px solid var(--border-subtle);display:flex;flex-direction:column">';
 
   // Табы шагов
   html += '<div id="sf-fc-step-tabs">';
@@ -1040,15 +1040,15 @@ function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days) {
   html += '</div>'; // конец левой колонки
 
   // ═══ ПРАВАЯ КОЛОНКА — масштаб + график ════════════════════════════════════
-  html += '<div style="display:flex;flex-direction:column">';
+  html += '<div style="display:flex;flex-direction:column;min-height:0">';
 
   // Строка управления масштабом (всегда видна)
   html += _sfFcScaleRowHtml();
 
-  // Область графика
-  html += '<div id="sf-fc-chart-area" style="flex:1;padding:10px 14px 0">';
+  // Область графика — flex:1 чтобы занять всё свободное пространство
+  html += '<div id="sf-fc-chart-area" style="flex:1;min-height:0;padding:10px 14px 0;display:flex;flex-direction:column">';
   if (hasResult) {
-    html += '<canvas id="sf-fc-chart" style="width:100%" height="160"></canvas>';
+    html += '<div style="position:relative;flex:1;min-height:0"><canvas id="sf-fc-chart" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas></div>';
   } else {
     html += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;color:var(--text-muted);font-size:12px;text-align:center;gap:10px">';
     html += '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
@@ -1147,7 +1147,7 @@ function _sfRunForecast() {
     areaEl.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:20px">Проверьте даты прогноза</p>';
     return;
   }
-  areaEl.innerHTML = '<canvas id="sf-fc-chart" style="width:100%" height="160"></canvas>';
+  areaEl.innerHTML = '<div style="position:relative;flex:1;min-height:200px"><canvas id="sf-fc-chart" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>';
   setTimeout(function(){
     _sfRenderForecastChart(result, sump, avgQ, pumps);
     _sfRenderForecastSummary(result, sump, avgQ, latLev);
@@ -1237,7 +1237,7 @@ function _sfRenderForecastChart(result, sump, avgQ, pumps) {
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       interaction: { mode:'index', intersect:false },
       plugins: {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 10 } } },
