@@ -1241,7 +1241,7 @@ function _sfRenderForecastChart(result, sump, avgQ, pumps) {
       interaction: { mode:'index', intersect:false },
       plugins: {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 10 } } },
-        annotation: annotations,
+        annotation: { annotations: annotations },
         tooltip: {
           callbacks: {
             label: function(ctx) {
