@@ -13,6 +13,7 @@ var SumpForecastState = {
   _forecastResult:     null,  // [{t,H,V,Qpump}]
   _forecastSumpId:     null,
   _forecastAvgQ:       null,
+  _forecastRenderCtx:  null,  // { result, sump, avgQ, pumps, latLev } для перерисовки
 };
 
 // ── Утилита: загрузка sql.js (WASM SQLite) ──────────────────────────────────
@@ -1007,7 +1008,46 @@ function _sfRunForecast() {
     el.innerHTML = '<p style="color:#ef4444;font-size:12px">Проверьте даты прогноза</p>';
     return;
   }
-  el.innerHTML = '<canvas id="sf-fc-chart" height="140"></canvas><div id="sf-fc-summary" style="margin-top:10px"></div>';
+  // Сохраняем контекст для перерисовки при изменении масштаба
+  SumpForecastState._forecastRenderCtx = { result: result, sump: sump, avgQ: avgQ, pumps: pumps, latLev: latLev };
+
+  var chartHtml = '<canvas id="sf-fc-chart" height="140"></canvas>';
+
+  // Панель управления масштабом осей
+  chartHtml += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;padding:10px;background:var(--bg-sub);border-radius:6px">';
+
+  // Ось X
+  chartHtml += '<div>';
+  chartHtml += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em">Ось X (диапазон)</div>';
+  chartHtml += '<div style="display:flex;flex-direction:column;gap:4px">';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">От (ч)<input type="number" id="sf-fc-xmin" min="0" placeholder="0" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">До (ч)<input type="number" id="sf-fc-xmax" min="0" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Меток<input type="number" id="sf-fc-xticks" min="2" max="48" placeholder="12" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '</div></div>';
+
+  // Ось Y — уровень (левая)
+  chartHtml += '<div>';
+  chartHtml += '<div style="font-size:10px;font-weight:600;color:#60a5fa;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em">Ось Y — Уровень (м)</div>';
+  chartHtml += '<div style="display:flex;flex-direction:column;gap:4px">';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Мин<input type="number" id="sf-fc-ylmin" step="0.1" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Макс<input type="number" id="sf-fc-ylmax" step="0.1" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Шаг<input type="number" id="sf-fc-ylstep" step="0.1" min="0.01" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '</div></div>';
+
+  // Ось Y² — откачка (правая)
+  chartHtml += '<div>';
+  chartHtml += '<div style="font-size:10px;font-weight:600;color:#22c55e;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em">Ось Y² — Откачка (м³/ч)</div>';
+  chartHtml += '<div style="display:flex;flex-direction:column;gap:4px">';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Мин<input type="number" id="sf-fc-yrmin" min="0" placeholder="0" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Макс<input type="number" id="sf-fc-yrmax" min="0" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Шаг<input type="number" id="sf-fc-yrstep" min="1" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
+  chartHtml += '</div></div>';
+
+  chartHtml += '</div>'; // конец панели масштаба
+  chartHtml += '<div style="text-align:right;margin-top:4px"><button onclick="_sfResetFcChartScale()" style="font-size:10px;padding:2px 10px;border-radius:4px;background:none;border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer">Сбросить масштаб</button></div>';
+
+  chartHtml += '<div id="sf-fc-summary" style="margin-top:10px"></div>';
+  el.innerHTML = chartHtml;
   setTimeout(function(){
     _sfRenderForecastChart(result, sump, avgQ, pumps);
     _sfRenderForecastSummary(result, sump, avgQ, latLev);
@@ -1169,6 +1209,57 @@ function _sfRenderForecastSummary(result, sump, avgQ, H0) {
     html += '✓ Критический уровень ('+sump.criticalLevel.toFixed(1)+' м) не будет достигнут в период прогноза';
     html += '</div>';
   }
+}
+
+// ── Управление масштабом осей графика прогноза ────────────────────────────────
+function _sfUpdateFcChartScale() {
+  var inst = SumpForecastState._forecastChartInst;
+  if (!inst) return;
+
+  function num(id) {
+    var el = document.getElementById(id);
+    if (!el || el.value === '') return undefined;
+    var v = parseFloat(el.value);
+    return isNaN(v) ? undefined : v;
+  }
+  function posInt(id, def) {
+    var el = document.getElementById(id);
+    if (!el || el.value === '') return def;
+    var v = parseInt(el.value, 10);
+    return isNaN(v) || v < 1 ? def : v;
+  }
+
+  var ctx = SumpForecastState._forecastRenderCtx;
+  var totalPts = ctx ? ctx.result.length : 0;
+
+  // Ось X: min/max задаются как смещение в часах от начала (индекс точки)
+  var xMinH = num('sf-fc-xmin');
+  var xMaxH = num('sf-fc-xmax');
+  inst.options.scales.x.min = xMinH !== undefined ? Math.max(0, Math.round(xMinH)) : undefined;
+  inst.options.scales.x.max = xMaxH !== undefined ? Math.min(totalPts - 1, Math.round(xMaxH)) : undefined;
+  inst.options.scales.x.ticks.maxTicksLimit = posInt('sf-fc-xticks', 12);
+
+  // Ось Y — уровень (левая)
+  inst.options.scales.yLevel.min  = num('sf-fc-ylmin');
+  inst.options.scales.yLevel.max  = num('sf-fc-ylmax');
+  var ylStep = num('sf-fc-ylstep');
+  inst.options.scales.yLevel.ticks.stepSize = ylStep !== undefined ? ylStep : undefined;
+
+  // Ось Y² — откачка (правая)
+  inst.options.scales.yPump.min  = num('sf-fc-yrmin') !== undefined ? num('sf-fc-yrmin') : 0;
+  inst.options.scales.yPump.max  = num('sf-fc-yrmax');
+  var yrStep = num('sf-fc-yrstep');
+  inst.options.scales.yPump.ticks.stepSize = yrStep !== undefined ? yrStep : undefined;
+
+  inst.update();
+}
+
+function _sfResetFcChartScale() {
+  ['sf-fc-xmin','sf-fc-xmax','sf-fc-xticks','sf-fc-ylmin','sf-fc-ylmax','sf-fc-ylstep','sf-fc-yrmin','sf-fc-yrmax','sf-fc-yrstep'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  _sfUpdateFcChartScale();
 }
 
 // Глобальная переменная — список насосов для callback остановок
