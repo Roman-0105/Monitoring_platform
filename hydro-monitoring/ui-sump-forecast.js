@@ -13,6 +13,7 @@ var SumpForecastState = {
   _forecastResult:     null,  // [{t,H,V,Qpump}]
   _forecastSumpId:     null,
   _forecastAvgQ:       null,
+  _forecastStep:       1,     // активный шаг сайдбара (1=Период, 2=Насосы, 3=Остановки)
   _forecastRenderCtx:  null,  // { result, sump, avgQ, pumps, latLev } для перерисовки
 };
 
@@ -825,12 +826,9 @@ function _sfFcAddStop(pumps) {
   var fp = SumpForecastState._forecastParams;
   if (!fp) return;
   var firstPump = pumps && pumps.length ? pumps[0] : null;
-  fp.stops.push({
-    pumpId:    firstPump ? firstPump.id : '',
-    startDt:   fp.startDt || _sfDtLocal(new Date()),
-    durationH: 8
-  });
+  fp.stops.push({ pumpId: firstPump ? firstPump.id : '', startDt: fp.startDt || _sfDtLocal(new Date()), durationH: 8 });
   _sfFcRerenderStops(pumps);
+  _sfFcRerenderStepTabs(pumps);
 }
 
 function _sfFcRemoveStop(idx, pumps) {
@@ -838,6 +836,7 @@ function _sfFcRemoveStop(idx, pumps) {
   if (!fp) return;
   fp.stops.splice(idx, 1);
   _sfFcRerenderStops(pumps);
+  _sfFcRerenderStepTabs(pumps);
 }
 
 function _sfFcSetStop(idx, key, val) {
@@ -849,92 +848,229 @@ function _sfFcSetStop(idx, key, val) {
 function _sfFcRerenderStops(pumps) {
   var el = document.getElementById('sf-fc-stops-body');
   if (!el) return;
-  el.innerHTML = _sfFcStopsHtml(SumpForecastState._forecastParams, pumps);
+  el.innerHTML = _sfFcStopsHtmlCompact(SumpForecastState._forecastParams, pumps);
 }
 
-function _sfFcStopsHtml(fp, pumps) {
-  if (!fp || !fp.stops.length) return '<p style="color:var(--text-muted);font-size:12px">Нет запланированных остановок</p>';
+function _sfFcRerenderStepTabs(pumps) {
+  var el = document.getElementById('sf-fc-step-tabs');
+  if (!el) return;
+  el.innerHTML = _sfFcStepTabsHtml(SumpForecastState._forecastParams, SumpForecastState._forecastStep || 1, pumps);
+}
+
+// Компактный список остановок для сайдбара (каждая остановка — карточка из 2 строк)
+function _sfFcStopsHtmlCompact(fp, pumps) {
+  if (!fp || !fp.stops.length) {
+    return '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;text-align:center;opacity:.6">Нет остановок</div>';
+  }
+  var inpSt = 'border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)';
   var h = '';
   fp.stops.forEach(function(s, i) {
-    h += '<div style="display:grid;grid-template-columns:1fr 180px 80px 30px;gap:8px;align-items:center;margin-bottom:6px">';
-    // Насос
-    h += '<select style="font-size:12px;padding:3px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetStop('+i+',\'pumpId\',this.value)">';
-    pumps.forEach(function(p){
-      h += '<option value="'+p.id+'"'+(s.pumpId===p.id?' selected':'')+'>'+_sfEsc(p.name)+'</option>';
-    });
+    h += '<div style="background:var(--bg-sub);border:1px solid var(--border-subtle);border-radius:5px;padding:7px 8px;margin-bottom:6px">';
+    // Строка 1: насос + кнопка удаления
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:6px">';
+    h += '<select style="font-size:11px;padding:2px 5px;flex:1;min-width:0;'+inpSt+'" onchange="_sfFcSetStop('+i+',\'pumpId\',this.value)">';
+    pumps.forEach(function(p){ h += '<option value="'+p.id+'"'+(s.pumpId===p.id?' selected':'')+'>'+_sfEsc(p.name)+'</option>'; });
     h += '</select>';
-    // Дата/время начала
-    h += '<input type="datetime-local" value="'+s.startDt+'" style="font-size:12px;padding:3px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetStop('+i+',\'startDt\',this.value)">';
-    // Длительность
+    h += '<button onclick="_sfFcRemoveStop('+i+',_sfFcCurrentPumps)" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;line-height:1;padding:0;opacity:.7;flex-shrink:0">×</button>';
+    h += '</div>';
+    // Строка 2: дата/время + длительность
     h += '<div style="display:flex;align-items:center;gap:4px">';
-    h += '<input type="number" value="'+s.durationH+'" min="0.5" max="720" step="0.5" style="width:55px;font-size:12px;padding:3px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetStop('+i+',\'durationH\',this.value)">';
-    h += '<span style="font-size:11px;color:var(--text-muted)">ч</span></div>';
-    // Удалить
-    h += '<button onclick="_sfFcRemoveStop('+i+',_sfFcCurrentPumps)" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>';
+    h += '<input type="datetime-local" value="'+s.startDt+'" style="font-size:10px;padding:2px 4px;flex:1;min-width:0;'+inpSt+'" onchange="_sfFcSetStop('+i+',\'startDt\',this.value)">';
+    h += '<input type="number" value="'+s.durationH+'" min="0.5" max="720" step="0.5" style="width:38px;font-size:11px;padding:2px 4px;text-align:right;'+inpSt+'" onchange="_sfFcSetStop('+i+',\'durationH\',this.value)">';
+    h += '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0">ч</span>';
+    h += '</div>';
     h += '</div>';
   });
   return h;
 }
 
-// ── Карточка "Прогноз" ────────────────────────────────────────────────────────
+// ── Табы шагов для сайдбара ───────────────────────────────────────────────────
+function _sfFcStepTabsHtml(fp, activeStep, pumps) {
+  pumps = pumps || _sfFcCurrentPumps;
+  var totalQ = pumps.reduce(function(s,p){ return s+(fp.pumpQ&&fp.pumpQ[p.id]!==undefined?fp.pumpQ[p.id]:p.q); }, 0);
+  var summaries = [
+    fp.startDt && fp.endDt
+      ? fp.startDt.slice(5,10).replace('-','.')+' – '+fp.endDt.slice(5,10).replace('-','.')
+      : 'Не задан',
+    totalQ.toFixed(0)+' м³/ч суммарно',
+    (fp.stops||[]).length ? ((fp.stops.length)+' запланировано') : 'Нет остановок'
+  ];
+  var titles = ['Период','Насосы','Остановки'];
+  var h = '';
+  titles.forEach(function(title, i) {
+    var n = i + 1;
+    var isActive = n === activeStep;
+    var isDone   = n < activeStep;
+    h += '<div onclick="_sfFcStep('+n+',_sfFcCurrentPumps)" style="display:flex;align-items:center;gap:9px;padding:10px 14px;cursor:pointer;'
+       + 'border-left:2px solid '+(isActive?'#3b82f6':'transparent')+';'
+       + 'background:'+(isActive?'var(--bg-sub)':'transparent')+';'
+       + (i<2?'border-bottom:1px solid var(--border-subtle)':'')+'">';
+    // Бейдж
+    h += '<span style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;'
+       + 'background:'+(isDone?'#166534':isActive?'#1d4ed8':'var(--bg-sub)')+';'
+       + 'border:1px solid '+(isDone?'#22c55e':isActive?'#3b82f6':'var(--border-subtle)')+';'
+       + 'color:'+(isDone||isActive?'#fff':'var(--text-muted)')+';">'
+       + (isDone?'✓':n)+'</span>';
+    h += '<div style="flex:1;min-width:0">';
+    h += '<div style="font-size:12px;font-weight:600;color:'+(isActive?'var(--text-primary)':'var(--text-muted)')+'">'+title+'</div>';
+    h += '<div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+summaries[i]+'</div>';
+    h += '</div>';
+    if (isActive) h += '<span style="color:var(--text-muted);font-size:12px">›</span>';
+    h += '</div>';
+  });
+  return h;
+}
+
+// ── Содержимое активного шага ─────────────────────────────────────────────────
+function _sfFcStepContentHtml(step, fp, pumps) {
+  pumps = pumps || _sfFcCurrentPumps;
+  var nextBtn = function(n, label) {
+    return '<button onclick="_sfFcStep('+n+',_sfFcCurrentPumps)" style="width:100%;padding:6px;border-radius:5px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary);cursor:pointer;font-size:12px;margin-top:12px">'+label+' →</button>';
+  };
+  if (step === 1) {
+    var h = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Период прогноза</div>';
+    h += '<label style="font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px;margin-bottom:8px">Начало<input type="datetime-local" id="sf-fc-start" value="'+fp.startDt+'" style="margin-top:2px;font-size:12px" onchange="_sfFcSetParam(\'startDt\',this.value)"></label>';
+    h += '<label style="font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px">Конец<input type="datetime-local" id="sf-fc-end" value="'+fp.endDt+'" style="margin-top:2px;font-size:12px" onchange="_sfFcSetParam(\'endDt\',this.value)"></label>';
+    h += nextBtn(2, 'Далее: Насосы');
+    return h;
+  } else if (step === 2) {
+    var h = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Производительность, м³/ч</div>';
+    var totalQ = 0;
+    pumps.forEach(function(p) {
+      var q = fp.pumpQ&&fp.pumpQ[p.id]!==undefined?fp.pumpQ[p.id]:p.q;
+      totalQ += q;
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+      h += '<span style="font-size:12px;display:flex;align-items:center;gap:5px"><span style="color:#22c55e;font-size:10px">●</span>'+_sfEsc(p.name)+'</span>';
+      h += '<input type="number" value="'+q.toFixed(0)+'" min="0" step="1" style="width:68px;font-size:12px;padding:3px 6px;text-align:right" onchange="_sfFcSetPumpQ(\''+p.id+'\',this.value)">';
+      h += '</div>';
+    });
+    h += '<div style="font-size:10px;color:var(--text-muted);border-top:1px solid var(--border-subtle);padding:6px 0 0;display:flex;justify-content:space-between">';
+    h += '<span>Суммарно</span><b style="color:var(--text-primary);font-variant-numeric:tabular-nums">'+totalQ.toFixed(0)+' м³/ч</b></div>';
+    h += nextBtn(3, 'Далее: Остановки');
+    return h;
+  } else {
+    var h = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+    h += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Плановые остановки</div>';
+    h += '<button onclick="_sfFcAddStop(_sfFcCurrentPumps)" style="padding:2px 7px;font-size:10px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary);cursor:pointer">+ Добавить</button>';
+    h += '</div>';
+    h += '<div id="sf-fc-stops-body">'+_sfFcStopsHtmlCompact(fp, pumps)+'</div>';
+    return h;
+  }
+}
+
+// Переключение шага
+function _sfFcStep(n, pumps) {
+  SumpForecastState._forecastStep = n;
+  var fp = SumpForecastState._forecastParams;
+  if (!fp) return;
+  pumps = pumps || _sfFcCurrentPumps;
+  var tabsEl    = document.getElementById('sf-fc-step-tabs');
+  var contentEl = document.getElementById('sf-fc-step-content');
+  if (tabsEl)    tabsEl.innerHTML    = _sfFcStepTabsHtml(fp, n, pumps);
+  if (contentEl) contentEl.innerHTML = _sfFcStepContentHtml(n, fp, pumps);
+}
+
+// ── Строка управления масштабом осей ─────────────────────────────────────────
+function _sfFcScaleRowHtml() {
+  var s = 'width:52px;font-size:11px;padding:2px 4px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)';
+  var sep = '<span style="width:1px;height:16px;background:var(--border-subtle);margin:0 2px;flex-shrink:0"></span>';
+  var h = '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px 12px;background:var(--bg-sub);border-bottom:1px solid var(--border-subtle)">';
+  h += '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding-right:5px;border-right:1px solid var(--border-subtle);margin-right:1px">X</span>';
+  h += '<span style="font-size:10px;color:var(--text-muted)">от</span><input type="number" id="sf-fc-xmin" placeholder="0" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += '<span style="font-size:10px;color:var(--text-muted)">до</span><input type="number" id="sf-fc-xmax" placeholder="авто" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += '<span style="font-size:10px;color:var(--text-muted)">меток</span><input type="number" id="sf-fc-xticks" placeholder="8" style="width:38px;font-size:11px;padding:2px 4px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()">';
+  h += sep;
+  h += '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#60a5fa;padding-right:5px;border-right:1px solid var(--border-subtle);margin-right:1px">Y</span>';
+  h += '<span style="font-size:10px;color:var(--text-muted)">мин</span><input type="number" id="sf-fc-ylmin" step="0.1" placeholder="авто" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += '<span style="font-size:10px;color:var(--text-muted)">макс</span><input type="number" id="sf-fc-ylmax" step="0.1" placeholder="авто" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += '<span style="font-size:10px;color:var(--text-muted)">шаг</span><input type="number" id="sf-fc-ylstep" step="0.1" placeholder="авто" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += sep;
+  h += '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#22c55e;padding-right:5px;border-right:1px solid var(--border-subtle);margin-right:1px">Y²</span>';
+  h += '<span style="font-size:10px;color:var(--text-muted)">мин</span><input type="number" id="sf-fc-yrmin" placeholder="0" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += '<span style="font-size:10px;color:var(--text-muted)">макс</span><input type="number" id="sf-fc-yrmax" placeholder="авто" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += '<span style="font-size:10px;color:var(--text-muted)">шаг</span><input type="number" id="sf-fc-yrstep" placeholder="авто" style="'+s+'" onchange="_sfUpdateFcChartScale()">';
+  h += '<button onclick="_sfResetFcChartScale()" style="font-size:10px;padding:2px 8px;border-radius:4px;background:none;border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer;margin-left:auto;white-space:nowrap">Авто</button>';
+  h += '</div>';
+  return h;
+}
+
+// ── Карточка "Прогноз" — боковая панель + шаговый ввод ───────────────────────
 function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days) {
-  // Инициализируем параметры при первом входе или смене зумпфа
   var fp = SumpForecastState._forecastParams;
   if (!fp || SumpForecastState._forecastSumpId !== sump.id) {
     _sfFcInit(pumps);
     fp = SumpForecastState._forecastParams;
     SumpForecastState._forecastSumpId = sump.id;
     SumpForecastState._forecastAvgQ   = avgQ;
+    SumpForecastState._forecastStep   = 1;
+    SumpForecastState._forecastResult = null;
   }
+  var step      = SumpForecastState._forecastStep || 1;
+  var hasResult = !!(SumpForecastState._forecastResult && SumpForecastState._forecastResult.length);
 
-  var html = '<div class="card" style="padding:14px" id="sf-forecast-card">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">';
-  html += '<span class="card-title">Прогноз (почасовое моделирование)</span>';
-  html += '<span style="font-size:11px;color:var(--text-muted)">Q<sub>пр</sub> = <strong style="color:#60a5fa">'+avgQ.toFixed(1)+' м³/ч</strong> · база '+days+' дн.</span>';
+  var html = '<div class="card" style="padding:0;overflow:hidden" id="sf-forecast-card">';
+
+  // Заголовок карточки
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border-subtle)">';
+  html += '<span class="card-title">Прогноз · почасовое моделирование</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">Q<sub>пр</sub> = <b style="color:#60a5fa">'+avgQ.toFixed(1)+'</b> м³/ч · база '+days+' дн.</span>';
   html += '</div>';
 
-  // Период прогноза
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">';
-  html += '<label style="font-size:12px;color:var(--text-muted)">Начало прогноза<br>';
-  html += '<input type="datetime-local" id="sf-fc-start" value="'+fp.startDt+'" style="width:100%;margin-top:3px;font-size:12px;padding:4px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetParam(\'startDt\',this.value)"></label>';
-  html += '<label style="font-size:12px;color:var(--text-muted)">Конец прогноза<br>';
-  html += '<input type="datetime-local" id="sf-fc-end" value="'+fp.endDt+'" style="width:100%;margin-top:3px;font-size:12px;padding:4px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetParam(\'endDt\',this.value)"></label>';
+  // Двухколоночная сетка
+  html += '<div style="display:grid;grid-template-columns:240px 1fr;align-items:stretch">';
+
+  // ═══ ЛЕВАЯ КОЛОНКА — шаговая навигация ════════════════════════════════════
+  html += '<div style="border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;min-height:380px">';
+
+  // Табы шагов
+  html += '<div id="sf-fc-step-tabs">';
+  html += _sfFcStepTabsHtml(fp, step, pumps);
   html += '</div>';
 
-  // Производительность насосов
-  html += '<div style="margin-bottom:14px">';
-  html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">Производительность насосов (м³/ч):</div>';
-  html += '<div style="display:flex;flex-wrap:wrap;gap:10px">';
-  pumps.forEach(function(p) {
-    var q = fp.pumpQ[p.id] !== undefined ? fp.pumpQ[p.id] : p.q;
-    html += '<label style="font-size:12px;display:flex;flex-direction:column;gap:3px">';
-    html += '<span style="color:var(--text-muted);font-size:11px">'+_sfEsc(p.name)+'</span>';
-    html += '<input type="number" value="'+q.toFixed(0)+'" min="0" step="1" style="width:80px;font-size:12px;padding:4px 6px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfFcSetPumpQ(\''+p.id+'\',this.value)">';
-    html += '</label>';
-  });
-  html += '</div></div>';
-
-  // Запланированные остановки
-  html += '<div style="margin-bottom:14px">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
-  html += '<span style="font-size:12px;color:var(--text-muted)">Запланированные остановки:</span>';
-  html += '<button onclick="_sfFcAddStop(_sfFcCurrentPumps)" class="btn btn-sm btn-outline" style="font-size:11px;padding:2px 10px">+ Добавить</button>';
-  html += '</div>';
-  html += '<div id="sf-fc-stops-header" style="display:grid;grid-template-columns:1fr 180px 80px 30px;gap:8px;margin-bottom:4px">';
-  html += '<span style="font-size:10px;color:var(--text-muted)">Насос</span>';
-  html += '<span style="font-size:10px;color:var(--text-muted)">Начало остановки</span>';
-  html += '<span style="font-size:10px;color:var(--text-muted)">Длит.</span>';
-  html += '<span></span></div>';
-  html += '<div id="sf-fc-stops-body">'+_sfFcStopsHtml(fp, pumps)+'</div>';
+  // Содержимое шага
+  html += '<div id="sf-fc-step-content" style="padding:14px;flex:1;overflow-y:auto">';
+  html += _sfFcStepContentHtml(step, fp, pumps);
   html += '</div>';
 
-  // Кнопка запуска
-  html += '<button onclick="_sfRunForecast()" class="btn btn-primary" style="width:100%;padding:8px;font-size:13px;font-weight:600">Рассчитать прогноз</button>';
-
-  // Результат
-  html += '<div id="sf-fc-result" style="margin-top:14px"></div>';
-
+  // Кнопка расчёта
+  html += '<div style="padding:10px 12px;border-top:1px solid var(--border-subtle)">';
+  html += '<button onclick="_sfRunForecast()" class="btn btn-primary" style="width:100%;justify-content:center;padding:8px 12px;font-size:13px;font-weight:600">▶ Рассчитать прогноз</button>';
   html += '</div>';
+
+  html += '</div>'; // конец левой колонки
+
+  // ═══ ПРАВАЯ КОЛОНКА — масштаб + график ════════════════════════════════════
+  html += '<div style="display:flex;flex-direction:column">';
+
+  // Строка управления масштабом (всегда видна)
+  html += _sfFcScaleRowHtml();
+
+  // Область графика
+  html += '<div id="sf-fc-chart-area" style="flex:1;padding:10px 14px 0">';
+  if (hasResult) {
+    html += '<canvas id="sf-fc-chart" style="width:100%" height="160"></canvas>';
+  } else {
+    html += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;color:var(--text-muted);font-size:12px;text-align:center;gap:10px">';
+    html += '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
+    html += '<div>Настройте параметры слева<br>и нажмите <b>▶ Рассчитать прогноз</b></div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Легенда
+  html += '<div style="display:flex;gap:14px;padding:6px 16px 8px;align-items:center;border-top:1px solid var(--border-subtle);flex-wrap:wrap">';
+  html += '<span style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-muted)"><span style="width:20px;height:2px;background:#60a5fa;display:inline-block;border-radius:2px"></span>Уровень, м</span>';
+  html += '<span style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-muted)"><span style="width:20px;height:2px;background:#22c55e;display:inline-block"></span>Откачка, м³/ч</span>';
+  if (sump.criticalLevel) html += '<span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#ef4444"><span style="width:16px;height:0;border-top:1.5px dashed #ef4444;display:inline-block"></span>Крит. '+sump.criticalLevel.toFixed(1)+' м</span>';
+  html += '<span style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-muted)"><span style="width:12px;height:10px;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.5);display:inline-block;border-radius:2px"></span>Остановка</span>';
+  html += '</div>';
+
+  // Итоги прогноза
+  html += '<div id="sf-fc-summary"></div>';
+
+  html += '</div>'; // конец правой колонки
+  html += '</div>'; // конец сетки
+  html += '</div>'; // конец карточки
   return html;
 }
 
@@ -1002,52 +1138,16 @@ function _sfRunForecast() {
   var result = _sfSimulateForecast(sump, pumps, avgQ, latLev);
   SumpForecastState._forecastResult = result;
 
-  var el = document.getElementById('sf-fc-result');
-  if (!el) return;
-  if (!result.length) {
-    el.innerHTML = '<p style="color:#ef4444;font-size:12px">Проверьте даты прогноза</p>';
-    return;
-  }
   // Сохраняем контекст для перерисовки при изменении масштаба
   SumpForecastState._forecastRenderCtx = { result: result, sump: sump, avgQ: avgQ, pumps: pumps, latLev: latLev };
 
-  var chartHtml = '<canvas id="sf-fc-chart" height="140"></canvas>';
-
-  // Панель управления масштабом осей
-  chartHtml += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;padding:10px;background:var(--bg-sub);border-radius:6px">';
-
-  // Ось X
-  chartHtml += '<div>';
-  chartHtml += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em">Ось X (диапазон)</div>';
-  chartHtml += '<div style="display:flex;flex-direction:column;gap:4px">';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">От (ч)<input type="number" id="sf-fc-xmin" min="0" placeholder="0" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">До (ч)<input type="number" id="sf-fc-xmax" min="0" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Меток<input type="number" id="sf-fc-xticks" min="2" max="48" placeholder="12" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '</div></div>';
-
-  // Ось Y — уровень (левая)
-  chartHtml += '<div>';
-  chartHtml += '<div style="font-size:10px;font-weight:600;color:#60a5fa;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em">Ось Y — Уровень (м)</div>';
-  chartHtml += '<div style="display:flex;flex-direction:column;gap:4px">';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Мин<input type="number" id="sf-fc-ylmin" step="0.1" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Макс<input type="number" id="sf-fc-ylmax" step="0.1" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Шаг<input type="number" id="sf-fc-ylstep" step="0.1" min="0.01" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '</div></div>';
-
-  // Ось Y² — откачка (правая)
-  chartHtml += '<div>';
-  chartHtml += '<div style="font-size:10px;font-weight:600;color:#22c55e;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em">Ось Y² — Откачка (м³/ч)</div>';
-  chartHtml += '<div style="display:flex;flex-direction:column;gap:4px">';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Мин<input type="number" id="sf-fc-yrmin" min="0" placeholder="0" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Макс<input type="number" id="sf-fc-yrmax" min="0" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '<label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:4px">Шаг<input type="number" id="sf-fc-yrstep" min="1" placeholder="авто" style="width:60px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--text-primary)" onchange="_sfUpdateFcChartScale()"></label>';
-  chartHtml += '</div></div>';
-
-  chartHtml += '</div>'; // конец панели масштаба
-  chartHtml += '<div style="text-align:right;margin-top:4px"><button onclick="_sfResetFcChartScale()" style="font-size:10px;padding:2px 10px;border-radius:4px;background:none;border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer">Сбросить масштаб</button></div>';
-
-  chartHtml += '<div id="sf-fc-summary" style="margin-top:10px"></div>';
-  el.innerHTML = chartHtml;
+  var areaEl = document.getElementById('sf-fc-chart-area');
+  if (!areaEl) return;
+  if (!result.length) {
+    areaEl.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:20px">Проверьте даты прогноза</p>';
+    return;
+  }
+  areaEl.innerHTML = '<canvas id="sf-fc-chart" style="width:100%" height="160"></canvas>';
   setTimeout(function(){
     _sfRenderForecastChart(result, sump, avgQ, pumps);
     _sfRenderForecastSummary(result, sump, avgQ, latLev);
