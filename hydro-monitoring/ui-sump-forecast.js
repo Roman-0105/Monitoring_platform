@@ -26,25 +26,15 @@ function _sfLoadSqlJs() {
   });
 }
 
-// ── Загрузка Three.js и OrbitControls ────────────────────────────────────────
+// ── Загрузка Three.js ────────────────────────────────────────────────────────
 function _sfLoadThree() {
-  if (window.THREE && window._sfOrbitControls) return Promise.resolve();
+  if (window.THREE) return Promise.resolve();
   return new Promise(function(resolve, reject) {
-    function loadScript(src, cb) {
-      var s = document.createElement('script');
-      s.src = src;
-      s.onload = cb;
-      s.onerror = function(){ reject(new Error('Не удалось загрузить ' + src)); };
-      document.head.appendChild(s);
-    }
-    var base = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/';
-    loadScript(base + 'three.min.js', function() {
-      // OrbitControls не входит в основной бандл r128 — берём с unpkg
-      loadScript('https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js', function() {
-        window._sfOrbitControls = THREE.OrbitControls;
-        resolve();
-      });
-    });
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    s.onload = resolve;
+    s.onerror = function(){ reject(new Error('Не удалось загрузить three.js')); };
+    document.head.appendChild(s);
   });
 }
 
@@ -439,7 +429,7 @@ function renderSumpForecastContent(sump) {
   html += '</div></div>';
 
   // ── ОСНОВНАЯ СЕТКА: левая (инфо) + правая (3D) ────────────────────────────
-  html += '<div style="display:grid;grid-template-columns:1fr 400px;gap:16px;align-items:start">';
+  html += '<div style="display:grid;grid-template-columns:1fr 500px;gap:16px;align-items:start">';
 
   // ═══ ЛЕВАЯ КОЛОНКА ════════════════════════════════════════════════════════
   html += '<div style="display:flex;flex-direction:column;gap:14px;min-width:0">';
@@ -476,8 +466,9 @@ function renderSumpForecastContent(sump) {
     html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
     html += '<tr style="color:var(--text-muted);font-size:10px"><th style="text-align:left;padding:0 4px 5px 0">Насос</th><th style="text-align:right">Q, м³/ч</th><th style="text-align:right">Ч/р</th></tr>';
     pumps.forEach(function(p) {
-      var on = p.status === 'on';
-      var badge = '<span style="background:'+(on?'#16a34a':'#374151')+';color:'+(on?'#fff':'#9ca3af')+';border-radius:3px;padding:1px 4px;font-size:9px">'+(on?'ON':'OFF')+'</span>';
+      // Индикатор активности по реальным данным за период (а не по полю status)
+      var active = p.totalH > 0;
+      var badge = '<span style="color:'+(active?'#22c55e':'#6b7280')+';font-size:13px;line-height:1" title="'+(active?'Работал за период':'Нет данных за период')+'">●</span>';
       html += '<tr style="border-top:1px solid var(--border-subtle)">';
       html += '<td style="padding:4px 4px 4px 0">'+badge+' '+_sfEsc(p.name)+(p.model?'<br><span style="color:var(--text-muted);font-size:10px">'+_sfEsc(p.model)+'</span>':'')+'</td>';
       html += '<td style="text-align:right;font-weight:600">'+(p.q>0?p.q.toFixed(0):'—')+'</td>';
@@ -561,11 +552,11 @@ function renderSumpForecastContent(sump) {
   if (latestLev !== null) html += '<span style="font-size:11px;color:#3b82f6;font-weight:600">▲ '+latestLev.toFixed(2)+' м</span>';
   html += '</div>';
   if (hasCurve) {
-    // Высота = 400px фиксированная, ширина 100% — без растяжения
-    html += '<div id="sf-3d-container" style="width:100%;height:400px;background:#0d1117">';
+    // Высота 800px — статичный вид без управления
+    html += '<div id="sf-3d-container" style="width:100%;height:800px;background:#0d1117">';
     html += '<p style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Загрузка Three.js...</p>';
     html += '</div>';
-    html += '<div style="padding:5px 14px;font-size:10px;color:var(--text-muted);text-align:center">ЛКМ — вращение · Колёсико — масштаб · ПКМ — панорама</div>';
+    html += '<div style="padding:5px 14px;font-size:10px;color:var(--text-muted);text-align:center">Изометрическая проекция · Фиксированная камера</div>';
   } else {
     html += '<div style="height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">';
     html += '<div style="font-size:40px;margin-bottom:12px;opacity:0.4">◎</div>';
@@ -791,12 +782,13 @@ function _sfInit3D(geom, currentLevel) {
   var container = document.getElementById('sf-3d-container');
   if (!container || !window.THREE) return;
 
-  var W = container.clientWidth || 480, H3 = container.clientHeight || 500;
+  var W = container.clientWidth || 480, H3 = container.clientHeight || 800;
 
-  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(W, H3);
   renderer.setClearColor(0x0d1117, 1);
+  container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
   var scene = new THREE.Scene();
@@ -850,36 +842,25 @@ function _sfInit3D(geom, currentLevel) {
   waterMesh.position.y = wz;
   scene.add(waterMesh);
 
-  // Камера — изометрический вид сверху-спереди, чтобы зумпф выглядел как горизонтальная чаша
+  // Фиксированная изометрическая камера — горизонтальный вид сверху-спереди
   var camera = new THREE.PerspectiveCamera(40, W / H3, 0.1, 2000);
   var d = span * scale;
   camera.position.set(d * 0.8, d * 0.9, d * 1.1);
   camera.lookAt(0, 0, 0);
 
-  // Управление
-  var controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.minDistance = 10;
-  controls.maxDistance = 500;
+  // Статичный рендер — один кадр без цикла анимации
+  renderer.render(scene, camera);
 
-  function animate() {
-    var id = requestAnimationFrame(animate);
-    SumpForecastState._three.animId = id;
-    controls.update();
-    renderer.render(scene, camera);
-  }
+  SumpForecastState._three = { renderer: renderer, scene: scene, camera: camera, waterMesh: waterMesh, cz: cz, scale: scale, animId: null };
 
-  SumpForecastState._three = { renderer: renderer, scene: scene, camera: camera, controls: controls, waterMesh: waterMesh, cz: cz, scale: scale, animId: null };
-  animate();
-
-  // Масштабируем при изменении размеров контейнера
+  // При изменении размеров контейнера — перерисовываем единственный кадр
   var ro = new ResizeObserver(function() {
     if (!SumpForecastState._three) return;
     var nw = container.clientWidth, nh = container.clientHeight || nw;
     camera.aspect = nw / nh;
     camera.updateProjectionMatrix();
     renderer.setSize(nw, nh);
+    renderer.render(scene, camera);
   });
   ro.observe(container);
 }
@@ -888,6 +869,8 @@ function _sfUpdate3DWaterLevel(level) {
   var t = SumpForecastState._three;
   if (!t || !t.waterMesh) return;
   t.waterMesh.position.y = (level - t.cz) * t.scale;
+  // Перерисовываем статичный кадр после изменения уровня воды
+  t.renderer.render(t.scene, t.camera);
 }
 
 async function _sfTryRender3D(geom, currentLevel) {
@@ -912,15 +895,23 @@ function _sfRenderLevelChart(sump, lpData, days) {
   var levs = lpData.levs;
   var pumpsByDate = lpData.pumpsByDate;
 
-  // Уровень воды: каждая запись — точка на графике
-  var levelPoints = levs.map(function(l) {
-    return { x: l.date + 'T' + (l.time || '06:00'), y: parseFloat(l.elevation) };
+  // Средний уровень воды по дням — агрегируем к категорийной оси дат
+  var levelByDate = {};
+  levs.forEach(function(l) {
+    if (!levelByDate[l.date]) levelByDate[l.date] = [];
+    levelByDate[l.date].push(parseFloat(l.elevation));
   });
 
   // Объём откачки по датам (столбцы)
   var allDates = lpData.allDates;
   var volLabels = allDates;
   var volData   = allDates.map(function(d){ return (pumpsByDate[d] ? pumpsByDate[d].vol : 0); });
+
+  // Данные уровня совпадают с категорийными метками (date-строки)
+  var levelData = allDates.map(function(d) {
+    if (!levelByDate[d] || !levelByDate[d].length) return null;
+    return levelByDate[d].reduce(function(s,v){ return s+v; },0) / levelByDate[d].length;
+  });
 
   // Даты, когда насосы стояли (нет откачки, но есть данные уровня)
   var stoppedDates = allDates.filter(function(d){
@@ -940,7 +931,7 @@ function _sfRenderLevelChart(sump, lpData, days) {
   stoppedDates.forEach(function(d, i) {
     annotations['stop'+i] = {
       type: 'line', xScaleID: 'x',
-      xMin: d + 'T12:00', xMax: d + 'T12:00',
+      xMin: d, xMax: d,
       borderColor: 'rgba(251,146,60,0.5)', borderWidth: 1, borderDash: [3,3],
       label: { content: 'Стоп', display: stoppedDates.length <= 10, position: 'start', font: { size: 8 }, color: '#f97316', backgroundColor: 'transparent' }
     };
@@ -954,18 +945,18 @@ function _sfRenderLevelChart(sump, lpData, days) {
         {
           type: 'line',
           label: 'Уровень, м',
-          data: levelPoints,
+          data: levelData,
           borderColor: '#60a5fa',
           backgroundColor: 'rgba(96,165,250,0.08)',
           borderWidth: 2,
-          pointRadius: levelPoints.length <= 60 ? 3 : 0,
+          pointRadius: levelData.filter(function(v){return v!==null;}).length <= 60 ? 3 : 0,
           pointBackgroundColor: '#60a5fa',
           tension: 0.3,
           fill: false,
           yAxisID: 'yLevel',
           xAxisID: 'x',
-          parsing: false,
-          order: 1
+          order: 1,
+          spanGaps: true
         },
         {
           type: 'bar',
