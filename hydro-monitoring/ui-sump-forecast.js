@@ -26,15 +26,25 @@ function _sfLoadSqlJs() {
   });
 }
 
-// ── Загрузка Three.js ────────────────────────────────────────────────────────
+// ── Загрузка Three.js и OrbitControls ────────────────────────────────────────
 function _sfLoadThree() {
-  if (window.THREE) return Promise.resolve();
+  if (window.THREE && window._sfOrbitControls) return Promise.resolve();
   return new Promise(function(resolve, reject) {
-    var s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    s.onload = resolve;
-    s.onerror = function(){ reject(new Error('Не удалось загрузить three.js')); };
-    document.head.appendChild(s);
+    function loadScript(src, cb) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = cb;
+      s.onerror = function(){ reject(new Error('Не удалось загрузить ' + src)); };
+      document.head.appendChild(s);
+    }
+    var base = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/';
+    loadScript(base + 'three.min.js', function() {
+      // OrbitControls не входит в основной бандл r128 — берём с unpkg
+      loadScript('https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js', function() {
+        window._sfOrbitControls = THREE.OrbitControls;
+        resolve();
+      });
+    });
   });
 }
 
@@ -556,7 +566,7 @@ function renderSumpForecastContent(sump) {
     html += '<div id="sf-3d-container" style="width:100%;height:800px;background:#0d1117">';
     html += '<p style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Загрузка Three.js...</p>';
     html += '</div>';
-    html += '<div style="padding:5px 14px;font-size:10px;color:var(--text-muted);text-align:center">Изометрическая проекция · Фиксированная камера</div>';
+    html += '<div style="padding:5px 14px;font-size:10px;color:var(--text-muted);text-align:center">ЛКМ — вращение · Колёсико — масштаб · ПКМ — панорама</div>';
   } else {
     html += '<div style="height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">';
     html += '<div style="font-size:40px;margin-bottom:12px;opacity:0.4">◎</div>';
@@ -842,25 +852,36 @@ function _sfInit3D(geom, currentLevel) {
   waterMesh.position.y = wz;
   scene.add(waterMesh);
 
-  // Фиксированная изометрическая камера — горизонтальный вид сверху-спереди
+  // Изометрическая камера — горизонтальный вид сверху-спереди
   var camera = new THREE.PerspectiveCamera(40, W / H3, 0.1, 2000);
   var d = span * scale;
   camera.position.set(d * 0.8, d * 0.9, d * 1.1);
   camera.lookAt(0, 0, 0);
 
-  // Статичный рендер — один кадр без цикла анимации
-  renderer.render(scene, camera);
+  // Управление вращением/масштабом
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 10;
+  controls.maxDistance = 500;
 
-  SumpForecastState._three = { renderer: renderer, scene: scene, camera: camera, waterMesh: waterMesh, cz: cz, scale: scale, animId: null };
+  function animate() {
+    var id = requestAnimationFrame(animate);
+    SumpForecastState._three.animId = id;
+    controls.update();
+    renderer.render(scene, camera);
+  }
 
-  // При изменении размеров контейнера — перерисовываем единственный кадр
+  SumpForecastState._three = { renderer: renderer, scene: scene, camera: camera, controls: controls, waterMesh: waterMesh, cz: cz, scale: scale, animId: null };
+  animate();
+
+  // При изменении размеров контейнера обновляем проекцию
   var ro = new ResizeObserver(function() {
     if (!SumpForecastState._three) return;
     var nw = container.clientWidth, nh = container.clientHeight || nw;
     camera.aspect = nw / nh;
     camera.updateProjectionMatrix();
     renderer.setSize(nw, nh);
-    renderer.render(scene, camera);
   });
   ro.observe(container);
 }
@@ -869,8 +890,6 @@ function _sfUpdate3DWaterLevel(level) {
   var t = SumpForecastState._three;
   if (!t || !t.waterMesh) return;
   t.waterMesh.position.y = (level - t.cz) * t.scale;
-  // Перерисовываем статичный кадр после изменения уровня воды
-  t.renderer.render(t.scene, t.camera);
 }
 
 async function _sfTryRender3D(geom, currentLevel) {
