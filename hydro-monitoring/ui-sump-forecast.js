@@ -3,6 +3,9 @@
 var SumpForecastState = {
   selectedSumpId:      null,
   analysisDays:        30,
+  analysisCustomFrom:  null,  // дата начала произвольного периода (YYYY-MM-DD)
+  analysisCustomTo:    null,  // дата конца произвольного периода
+  _manualQ:            null,  // ручной ввод Q_пр, м³/ч (null = авто)
   _inflowChartInst:    null,
   _vhChartInst:        null,
   _levelChartInst:     null,
@@ -279,13 +282,22 @@ function _sfComputeInflowHistory(sump, days) {
   var result = [];
   if (!sump.volumeCurve || sump.volumeCurve.length === 0) return result;
 
-  var cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - (days || 30));
-  var cutoffStr = cutoff.toISOString().slice(0,10);
+  // days=0 означает произвольный период из analysisCustomFrom/To
+  var cutoffStr, endStr;
+  if (days === 0) {
+    cutoffStr = SumpForecastState.analysisCustomFrom || '';
+    endStr    = SumpForecastState.analysisCustomTo   || new Date().toISOString().slice(0,10);
+  } else {
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (days || 30));
+    cutoffStr = cutoff.toISOString().slice(0,10);
+    endStr    = new Date().toISOString().slice(0,10);
+  }
+  if (!cutoffStr) return result;
 
   // Отметки зумпфа по датам за выбранный период
   var levByDate = {};
-  var levs = DewateringState.waterLevels.filter(function(l){ return l.sumpId === sump.id && l.date >= cutoffStr; });
+  var levs = DewateringState.waterLevels.filter(function(l){ return l.sumpId === sump.id && l.date >= cutoffStr && l.date <= endStr; });
   levs.forEach(function(l) {
     if (!levByDate[l.date] || l.time < levByDate[l.date].time) levByDate[l.date] = l;
   });
@@ -297,7 +309,7 @@ function _sfComputeInflowHistory(sump, days) {
 
   var pumpedByDate = {};
   DewateringState.meterReadings.forEach(function(r) {
-    if (pumpIds.indexOf(r.pumpId) < 0 || r.date < cutoffStr) return;
+    if (pumpIds.indexOf(r.pumpId) < 0 || r.date < cutoffStr || r.date > endStr) return;
     var v = DewateringState.computedVolume(r);
     pumpedByDate[r.date] = (pumpedByDate[r.date] || 0) + v;
   });
@@ -324,16 +336,25 @@ function _sfComputeInflowHistory(sump, days) {
 
 // ── Фактическая производительность насосов зумпфа ────────────────────────────
 function _sfPumpPerformance(sump, days) {
-  days = days || 30;
-  var cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  var cutoffStr = cutoff.toISOString().slice(0,10);
+  var cutoffStr, endStr;
+  if (days === 0) {
+    cutoffStr = SumpForecastState.analysisCustomFrom || '';
+    endStr    = SumpForecastState.analysisCustomTo   || new Date().toISOString().slice(0,10);
+    if (!cutoffStr) { days = 30; } // fallback
+  }
+  if (days !== 0) {
+    days = days || 30;
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    cutoffStr = cutoff.toISOString().slice(0,10);
+    endStr    = new Date().toISOString().slice(0,10);
+  }
 
   return DewateringState.pumps
     .filter(function(p){ return p.sumpId === sump.id; })
     .map(function(p) {
       var recs = DewateringState.meterReadings.filter(function(r){
-        return r.pumpId === p.id && r.date >= cutoffStr && !r.isStopped;
+        return r.pumpId === p.id && r.date >= cutoffStr && r.date <= endStr && !r.isStopped;
       });
       var totalVol = recs.reduce(function(s,r){ return s + (DewateringState.computedVolume(r)||0); }, 0);
       var totalH   = recs.reduce(function(s,r){ return s + (parseFloat(r.hoursWorked)||0); }, 0);
@@ -523,26 +544,43 @@ function renderSumpForecastContent(sump) {
   });
   _sfDestroy3D();
 
-  var days      = SumpForecastState.analysisDays || 30;
+  var days      = SumpForecastState.analysisDays; // может быть 0 = произвольный период
+  if (days === null || days === undefined) days = 30;
   var hasCurve  = sump.volumeCurve && sump.volumeCurve.length > 0;
   var pumps     = _sfPumpPerformance(sump, days);
   var inflow    = hasCurve ? _sfComputeInflowHistory(sump, days) : [];
-  var avgQ      = inflow.length > 0 ? inflow.reduce(function(s,r){return s+r.q;},0)/inflow.length : null;
+  var calcAvgQ  = inflow.length > 0 ? inflow.reduce(function(s,r){return s+r.q;},0)/inflow.length : null;
+  // Если задан ручной Q — используем его для прогноза, расчётный показываем справочно
+  var manualQ   = SumpForecastState._manualQ;
+  var avgQ      = (manualQ !== null && manualQ !== undefined && !isNaN(manualQ)) ? manualQ : calcAvgQ;
   var latestLev = _sfLatestLevel(sump);
   var currVol   = (hasCurve && latestLev !== null) ? _sfVolumeAt(sump.volumeCurve, latestLev) : null;
   var pct       = (hasCurve && currVol !== null && sump.totalVolume) ? (currVol / sump.totalVolume * 100) : null;
   var lpData    = _sfBuildLevelPumpData(sump, days);
 
   // ── Панель выбора периода + ключевые метрики ──────────────────────────────
+  var isCustom = (days === 0); // 0 = произвольный период
   function periodBtn(d, label) {
     var a = d === days;
-    return '<button onclick="SumpForecastState.analysisDays='+d+';renderSumpForecastContent(DewateringState.sumps.find(function(s){return s.id===\''+sump.id+'\'}))" '
+    return '<button onclick="SumpForecastState.analysisDays='+d+';SumpForecastState._manualQ=null;renderSumpForecastContent(DewateringState.sumps.find(function(s){return s.id===\''+sump.id+'\'}))" '
       + 'style="padding:4px 12px;border-radius:20px;border:1px solid '+(a?'#3b82f6':'var(--border-subtle)')+';font-size:12px;cursor:pointer;font-weight:'+(a?'700':'400')+';'
       + 'background:'+(a?'#3b82f6':'var(--bg-sub)')+';color:'+(a?'#fff':'var(--text-muted)')+'">'+label+'</button>';
   }
   var html = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap">';
   html += '<span style="font-size:11px;color:var(--text-muted);margin-right:4px">Период анализа:</span>';
-  html += periodBtn(7,'7 дн') + periodBtn(14,'14 дн') + periodBtn(30,'30 дн') + periodBtn(60,'60 дн') + periodBtn(90,'90 дн');
+  html += periodBtn(1,'1 сут') + periodBtn(7,'7 дн') + periodBtn(14,'14 дн') + periodBtn(30,'30 дн') + periodBtn(60,'60 дн') + periodBtn(90,'90 дн');
+  // Кнопка «Период» — произвольные даты
+  html += '<button onclick="_sfToggleCustomPeriod()" '
+    + 'style="padding:4px 12px;border-radius:20px;border:1px solid '+(isCustom?'#3b82f6':'var(--border-subtle)')+';font-size:12px;cursor:pointer;font-weight:'+(isCustom?'700':'400')+';'
+    + 'background:'+(isCustom?'#3b82f6':'var(--bg-sub)')+';color:'+(isCustom?'#fff':'var(--text-muted)')+'">Период</button>';
+  if (isCustom) {
+    var cfrom = SumpForecastState.analysisCustomFrom || '';
+    var cto   = SumpForecastState.analysisCustomTo   || '';
+    html += '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted)">';
+    html += 'с<input type="date" id="sf-custom-from" value="'+cfrom+'" style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--border-subtle);background:var(--bg-card);color:var(--text-primary)" onchange="_sfApplyCustomPeriod(\''+sump.id+'\')">';
+    html += 'по<input type="date" id="sf-custom-to" value="'+cto+'" style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--border-subtle);background:var(--bg-card);color:var(--text-primary)" onchange="_sfApplyCustomPeriod(\''+sump.id+'\')">';
+    html += '</span>';
+  }
   // Ключевые метрики справа
   html += '<div style="margin-left:auto;display:flex;gap:12px;flex-wrap:wrap">';
   if (latestLev !== null) html += '<span style="font-size:12px">Уровень: <strong>' + latestLev.toFixed(2) + ' м</strong></span>';
@@ -639,13 +677,13 @@ function renderSumpForecastContent(sump) {
   html += '<div class="card" style="padding:14px">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
   html += '<span class="card-title">Водоприток</span>';
-  if (avgQ !== null) html += '<span style="font-size:18px;font-weight:700;color:#60a5fa">'+avgQ.toFixed(1)+' м³/ч</span>';
+  if (calcAvgQ !== null) html += '<span style="font-size:18px;font-weight:700;color:#60a5fa">'+calcAvgQ.toFixed(1)+' м³/ч</span>';
   html += '</div>';
   // Формула и метод
   html += '<div style="background:var(--bg-sub);border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--text-muted)">';
   html += '<div style="font-weight:600;margin-bottom:4px;color:var(--text-primary)">Метод расчёта (водный баланс):</div>';
   html += 'Q<sub>приток</sub> = (V<sub>откачано</sub> + ΔV<sub>зумпф</sub>) / 24<br>';
-  html += '<span style="font-size:10px">ΔV<sub>зумпф</sub> = V(H₂) − V(H₁) по кривой V(H) · Усредняется за '+days+' сут.</span>';
+  html += '<span style="font-size:10px">ΔV<sub>зумпф</sub> = V(H₂) − V(H₁) по кривой V(H) · Усредняется за '+(days===0?(SumpForecastState.analysisCustomFrom+' – '+SumpForecastState.analysisCustomTo):days+' сут.')+'</span>';
   html += '</div>';
   if (!hasCurve) {
     html += '<p style="color:var(--text-muted);font-size:13px">Загрузите .tridb для расчёта</p>';
@@ -657,8 +695,8 @@ function renderSumpForecastContent(sump) {
   html += '</div>';
 
   // ─ Прогноз ───────────────────────────────────────────────────────────────
-  if (hasCurve && avgQ !== null) {
-    html += _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days);
+  if (hasCurve && (avgQ !== null || calcAvgQ !== null)) {
+    html += _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days, calcAvgQ);
   } else if (hasCurve) {
     html += '<div class="card" style="padding:14px"><div class="card-title">Прогноз</div>';
     html += '<p style="color:var(--text-muted);font-size:13px;margin-top:8px">Прогноз доступен после накопления данных уровней за выбранный период</p></div>';
@@ -994,8 +1032,44 @@ function _sfFcScaleRowHtml() {
   return h;
 }
 
+// ── Переключение произвольного периода анализа ────────────────────────────────
+function _sfToggleCustomPeriod() {
+  var s = SumpForecastState;
+  if (s.analysisDays === 0) {
+    s.analysisDays = 30; // возврат к дефолту
+  } else {
+    s.analysisDays = 0;
+    if (!s.analysisCustomFrom) {
+      var to = new Date(); var fr = new Date(); fr.setDate(fr.getDate()-30);
+      s.analysisCustomFrom = fr.toISOString().slice(0,10);
+      s.analysisCustomTo   = to.toISOString().slice(0,10);
+    }
+  }
+  var sump = DewateringState.sumps.find(function(s2){ return s2.id === s.selectedSumpId; });
+  if (sump) renderSumpForecastContent(sump);
+}
+
+function _sfApplyCustomPeriod(sumpId) {
+  var fr = document.getElementById('sf-custom-from');
+  var to = document.getElementById('sf-custom-to');
+  if (fr) SumpForecastState.analysisCustomFrom = fr.value;
+  if (to) SumpForecastState.analysisCustomTo   = to.value;
+  var sump = DewateringState.sumps.find(function(s){ return s.id === sumpId; });
+  if (sump) renderSumpForecastContent(sump);
+}
+
+// ── Ручной ввод Q_пр ─────────────────────────────────────────────────────────
+function _sfApplyManualQ(val) {
+  var v = parseFloat(val);
+  SumpForecastState._manualQ = (!val || isNaN(v) || v < 0) ? null : v;
+  var s = SumpForecastState;
+  var sump = DewateringState.sumps.find(function(s2){ return s2.id === s._forecastSumpId || s2.id === s.selectedSumpId; });
+  if (sump) renderSumpForecastContent(sump);
+}
+
 // ── Карточка "Прогноз" — боковая панель + шаговый ввод ───────────────────────
-function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days) {
+function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days, calcAvgQ) {
+  calcAvgQ = calcAvgQ !== undefined ? calcAvgQ : avgQ;
   var fp = SumpForecastState._forecastParams;
   if (!fp || SumpForecastState._forecastSumpId !== sump.id) {
     _sfFcInit(pumps);
@@ -1010,10 +1084,26 @@ function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days) {
 
   var html = '<div class="card" style="padding:0;overflow:hidden" id="sf-forecast-card">';
 
-  // Заголовок карточки
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border-subtle)">';
+  // Заголовок карточки с ручным вводом Q_пр
+  var manualQ = SumpForecastState._manualQ;
+  var isManual = (manualQ !== null && manualQ !== undefined && !isNaN(manualQ));
+  var placeholderQ = calcAvgQ !== null ? calcAvgQ.toFixed(1) : '—';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">';
   html += '<span class="card-title">Прогноз · почасовое моделирование</span>';
-  html += '<span style="font-size:11px;color:var(--text-muted)">Q<sub>пр</sub> = <b style="color:#60a5fa">'+avgQ.toFixed(1)+'</b> м³/ч · база '+days+' дн.</span>';
+  html += '<span style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted)">';
+  html += 'Q<sub>пр</sub>&nbsp;=&nbsp;';
+  html += '<input type="number" id="sf-manual-q" value="'+(isManual ? manualQ.toFixed(1) : '')+'" placeholder="'+placeholderQ+'" min="0" step="0.1" '
+    + 'title="Ручной ввод притока. Оставьте пустым — будет использован расчётный '+(calcAvgQ!==null?calcAvgQ.toFixed(1)+'':'—')+' м³/ч"'
+    + 'style="width:72px;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px;border:1px solid '+(isManual?'#3b82f6':'var(--border-subtle)')+';background:var(--bg-card);color:'+(isManual?'#60a5fa':'var(--text-primary)')+';text-align:right"'
+    + 'onchange="_sfApplyManualQ(this.value)">'
+    + '&nbsp;м³/ч';
+  if (isManual) {
+    html += '&nbsp;<span style="font-size:10px;color:#f59e0b" title="Используется ручное значение">●&nbsp;ручной</span>';
+    html += '&nbsp;<button onclick="_sfApplyManualQ(\'\')" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--border-subtle);background:none;color:var(--text-muted);cursor:pointer">авто</button>';
+  } else if (calcAvgQ !== null) {
+    html += '&nbsp;<span style="font-size:10px;color:#22c55e" title="Расчётное значение">● авто</span>';
+  }
+  html += '&nbsp;<span style="color:var(--border-subtle)">|</span>&nbsp;база&nbsp;'+(days===0?'выбранный период':days===1?'1 сутки':days+' дн.')+'</span>';
   html += '</div>';
 
   // Двухколоночная сетка
@@ -1128,7 +1218,14 @@ function _sfRunForecast() {
   var sump  = sumps.find(function(s){ return s.id === SumpForecastState._forecastSumpId; });
   if (!sump || !sump.volumeCurve) return;
 
-  var avgQ   = SumpForecastState._forecastAvgQ;
+  // Проверяем ручной Q из поля ввода (приоритет над сохранённым)
+  var manualQEl = document.getElementById('sf-manual-q');
+  if (manualQEl && manualQEl.value !== '') {
+    var mqv = parseFloat(manualQEl.value);
+    if (!isNaN(mqv) && mqv >= 0) SumpForecastState._manualQ = mqv;
+  }
+  var manQ  = SumpForecastState._manualQ;
+  var avgQ  = (manQ !== null && manQ !== undefined && !isNaN(manQ)) ? manQ : SumpForecastState._forecastAvgQ;
   var latLev = _sfLatestLevel(sump);
   if (avgQ === null || avgQ === undefined) { alert('Нет данных о притоке'); return; }
 
