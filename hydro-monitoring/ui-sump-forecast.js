@@ -469,27 +469,80 @@ function initSumpForecastTab() {
 function _sfRenderSelector() {
   var el = document.getElementById('sf-sump-selector');
   if (!el) return;
-  var quarries = {};
-  var order = [];
+
+  // Вычисляем метрики по каждому зумпфу для сайдбара
+  function sumpMeta(s) {
+    var lev = _sfLatestLevel(s);
+    var hasCurve = s.volumeCurve && s.volumeCurve.length > 0;
+    var vol = (hasCurve && lev !== null) ? _sfVolumeAt(s.volumeCurve, lev) : null;
+    var pct = (vol !== null && s.totalVolume) ? (vol / s.totalVolume * 100) : null;
+    var days = SumpForecastState.analysisDays || 30;
+    var inflow = hasCurve ? _sfComputeInflowHistory(s, days) : [];
+    var q = inflow.length > 0 ? inflow.reduce(function(acc,r){return acc+r.q;},0)/inflow.length : null;
+    return { lev: lev, pct: pct, q: q };
+  }
+
+  var manualQ = SumpForecastState._manualQ;
+  var isManual = (manualQ !== null && manualQ !== undefined && !isNaN(manualQ));
+  // Расчётный Q текущего зумпфа для индикатора
+  var selSump = DewateringState.sumps.find(function(s){ return s.id === SumpForecastState.selectedSumpId; });
+  var calcQSel = null;
+  if (selSump) {
+    var days0 = SumpForecastState.analysisDays || 30;
+    var inf0 = (selSump.volumeCurve && selSump.volumeCurve.length) ? _sfComputeInflowHistory(selSump, days0) : [];
+    calcQSel = inf0.length > 0 ? inf0.reduce(function(a,r){return a+r.q;},0)/inf0.length : null;
+  }
+  var placeholderQ = calcQSel !== null ? calcQSel.toFixed(1) : '—';
+
+  var html = '<div style="width:210px;flex-shrink:0;border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;overflow-y:auto;background:var(--bg-card);height:100%">';
+  html += '<div style="padding:10px 14px;border-bottom:1px solid var(--border-subtle);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">Зумпфы</div>';
+
   DewateringState.sumps.forEach(function(s) {
-    var q = s.quarry || '—';
-    if (!quarries[q]) { quarries[q] = []; order.push(q); }
-    quarries[q].push(s);
+    var active = s.id === SumpForecastState.selectedSumpId;
+    var m = sumpMeta(s);
+    var pct = m.pct;
+    var statusColor = pct === null ? '#6b7280' : pct > 80 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e';
+    var levStr = m.lev !== null ? m.lev.toFixed(2) + ' м' : '—';
+    var pctStr = pct !== null ? pct.toFixed(0) + '%' : '—';
+    var qStr   = m.q !== null ? m.q.toFixed(0) + ' м³/ч' : '—';
+    html += '<div onclick="_sfSelectSump(\'' + s.id + '\')" style="padding:10px 14px;border-bottom:1px solid var(--border-subtle);cursor:pointer;'
+      + 'background:' + (active ? 'rgba(59,130,246,0.08)' : 'none') + ';'
+      + (active ? 'border-left:3px solid #3b82f6;padding-left:11px;' : 'border-left:3px solid transparent;') + '">';
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+    html += '<span style="color:' + statusColor + ';font-size:13px;line-height:1">●</span>';
+    html += '<span style="font-size:13px;font-weight:' + (active ? '700' : '600') + ';color:' + (active ? '#60a5fa' : 'var(--text-primary)') + '">' + _sfEsc(s.name) + '</span>';
+    html += '</div>';
+    if (s.quarry) html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">' + _sfEsc(s.quarry) + '</div>';
+    html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">' + levStr + ' · ' + pctStr + ' · Q ' + qStr + '</div>';
+    // Полоса заполнения
+    if (pct !== null) {
+      var barPct = Math.min(100, Math.max(0, pct));
+      html += '<div style="height:3px;background:var(--border-subtle);border-radius:2px;overflow:hidden">';
+      html += '<div style="height:100%;width:' + barPct.toFixed(0) + '%;background:' + statusColor + ';border-radius:2px;transition:width .4s"></div>';
+      html += '</div>';
+    }
+    html += '</div>';
   });
 
-  var html = '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">';
-  order.forEach(function(q) {
-    html += '<div style="display:flex;flex-direction:column;gap:4px">';
-    html += '<span style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);padding-left:2px">' + _sfEsc(q) + '</span>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
-    quarries[q].forEach(function(s) {
-      var active = s.id === SumpForecastState.selectedSumpId;
-      html += '<button class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-outline') + '" onclick="_sfSelectSump(\'' + s.id + '\')">' + _sfEsc(s.name) + '</button>';
-    });
-    html += '</div></div>';
-  });
+  // Ввод Q_пр внизу сайдбара
+  html += '<div style="margin-top:auto;padding:12px 14px;border-top:1px solid var(--border-subtle)">';
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:5px">Q<sub>пр</sub> вручную, м³/ч</div>';
+  html += '<input type="number" id="sf-manual-q-sidebar" value="' + (isManual ? manualQ.toFixed(1) : '') + '" placeholder="' + placeholderQ + '" min="0" step="0.1" '
+    + 'style="width:100%;font-size:12px;font-weight:700;padding:5px 8px;border-radius:6px;border:1px solid '+(isManual?'#3b82f6':'var(--border-subtle)')+';background:var(--bg-sub);color:'+(isManual?'#60a5fa':'var(--text-primary)')+';" '
+    + 'onchange="_sfApplyManualQ(this.value)">';
+  if (isManual) {
+    html += '<div style="margin-top:5px;font-size:10px;color:#f59e0b;display:flex;align-items:center;justify-content:space-between">';
+    html += '<span>● ручной</span>';
+    html += '<button onclick="_sfApplyManualQ(\'\')" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--border-subtle);background:none;color:var(--text-muted);cursor:pointer">авто</button>';
+    html += '</div>';
+  } else if (calcQSel !== null) {
+    html += '<div style="margin-top:5px;font-size:10px;color:#22c55e">● авто: ' + calcQSel.toFixed(1) + ' м³/ч</div>';
+  }
   html += '</div>';
+
+  html += '</div>'; // конец сайдбара
   el.innerHTML = html;
+  el.style.cssText = ''; // сбрасываем возможные inline-стили
 }
 
 function _sfSelectSump(id) {
@@ -537,39 +590,38 @@ function _sfBuildLevelPumpData(sump, days) {
   return { levs: levs, pumpsByDate: pumpsByDate, allDates: allDates, pumpIds: pumpIds };
 }
 
-// ── Главный рендер страницы зумпфа ───────────────────────────────────────────
+// ── Главный рендер страницы зумпфа (макет Variant B) ─────────────────────────
 function renderSumpForecastContent(sump) {
   ['_inflowChartInst','_vhChartInst','_levelChartInst','_forecastChartInst'].forEach(function(k){
     if (SumpForecastState[k]) { try{SumpForecastState[k].destroy();}catch(e){} SumpForecastState[k]=null; }
   });
   _sfDestroy3D();
 
-  var days      = SumpForecastState.analysisDays; // может быть 0 = произвольный период
+  var days     = SumpForecastState.analysisDays;
   if (days === null || days === undefined) days = 30;
-  var hasCurve  = sump.volumeCurve && sump.volumeCurve.length > 0;
-  var pumps     = _sfPumpPerformance(sump, days);
-  var inflow    = hasCurve ? _sfComputeInflowHistory(sump, days) : [];
-  var calcAvgQ  = inflow.length > 0 ? inflow.reduce(function(s,r){return s+r.q;},0)/inflow.length : null;
-  // Если задан ручной Q — используем его для прогноза, расчётный показываем справочно
-  var manualQ   = SumpForecastState._manualQ;
-  var avgQ      = (manualQ !== null && manualQ !== undefined && !isNaN(manualQ)) ? manualQ : calcAvgQ;
+  var hasCurve = sump.volumeCurve && sump.volumeCurve.length > 0;
+  var pumps    = _sfPumpPerformance(sump, days);
+  var inflow   = hasCurve ? _sfComputeInflowHistory(sump, days) : [];
+  var calcAvgQ = inflow.length > 0 ? inflow.reduce(function(s,r){return s+r.q;},0)/inflow.length : null;
+  var manualQ  = SumpForecastState._manualQ;
+  var avgQ     = (manualQ !== null && manualQ !== undefined && !isNaN(manualQ)) ? manualQ : calcAvgQ;
   var latestLev = _sfLatestLevel(sump);
-  var currVol   = (hasCurve && latestLev !== null) ? _sfVolumeAt(sump.volumeCurve, latestLev) : null;
-  var pct       = (hasCurve && currVol !== null && sump.totalVolume) ? (currVol / sump.totalVolume * 100) : null;
-  var lpData    = _sfBuildLevelPumpData(sump, days);
+  var currVol  = (hasCurve && latestLev !== null) ? _sfVolumeAt(sump.volumeCurve, latestLev) : null;
+  var pct      = (hasCurve && currVol !== null && sump.totalVolume) ? (currVol / sump.totalVolume * 100) : null;
+  var lpData   = _sfBuildLevelPumpData(sump, days);
+  var isCustom = (days === 0);
 
-  // ── Панель выбора периода + ключевые метрики ──────────────────────────────
-  var isCustom = (days === 0); // 0 = произвольный период
   function periodBtn(d, label) {
     var a = d === days;
     return '<button onclick="SumpForecastState.analysisDays='+d+';SumpForecastState._manualQ=null;renderSumpForecastContent(DewateringState.sumps.find(function(s){return s.id===\''+sump.id+'\'}))" '
       + 'style="padding:4px 12px;border-radius:20px;border:1px solid '+(a?'#3b82f6':'var(--border-subtle)')+';font-size:12px;cursor:pointer;font-weight:'+(a?'700':'400')+';'
       + 'background:'+(a?'#3b82f6':'var(--bg-sub)')+';color:'+(a?'#fff':'var(--text-muted)')+'">'+label+'</button>';
   }
-  var html = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap">';
-  html += '<span style="font-size:11px;color:var(--text-muted);margin-right:4px">Период анализа:</span>';
+
+  // ── Верхняя строка: период анализа ───────────────────────────────────────
+  var html = '<div style="flex-shrink:0;padding:8px 16px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--bg-card)">';
+  html += '<span style="font-size:11px;color:var(--text-muted);margin-right:2px">Период анализа:</span>';
   html += periodBtn(1,'1 сут') + periodBtn(7,'7 дн') + periodBtn(14,'14 дн') + periodBtn(30,'30 дн') + periodBtn(60,'60 дн') + periodBtn(90,'90 дн');
-  // Кнопка «Период» — произвольные даты
   html += '<button onclick="_sfToggleCustomPeriod()" '
     + 'style="padding:4px 12px;border-radius:20px;border:1px solid '+(isCustom?'#3b82f6':'var(--border-subtle)')+';font-size:12px;cursor:pointer;font-weight:'+(isCustom?'700':'400')+';'
     + 'background:'+(isCustom?'#3b82f6':'var(--bg-sub)')+';color:'+(isCustom?'#fff':'var(--text-muted)')+'">Период</button>';
@@ -581,28 +633,27 @@ function renderSumpForecastContent(sump) {
     html += 'по<input type="date" id="sf-custom-to" value="'+cto+'" style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--border-subtle);background:var(--bg-card);color:var(--text-primary)" onchange="_sfApplyCustomPeriod(\''+sump.id+'\')">';
     html += '</span>';
   }
-  // Ключевые метрики справа
-  html += '<div style="margin-left:auto;display:flex;gap:12px;flex-wrap:wrap">';
-  if (latestLev !== null) html += '<span style="font-size:12px">Уровень: <strong>' + latestLev.toFixed(2) + ' м</strong></span>';
-  if (pct !== null && pct <= 110) {
-    var pc = pct > 80 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e';
-    html += '<span style="font-size:12px">Заполнение: <strong style="color:'+pc+'">' + pct.toFixed(1) + '%</strong></span>';
-  }
-  if (avgQ !== null) html += '<span style="font-size:12px">Приток Q: <strong style="color:#60a5fa">' + avgQ.toFixed(1) + ' м³/ч</strong></span>';
-  html += '</div></div>';
+  html += '</div>';
 
-  // ── ОСНОВНАЯ СЕТКА: левая (инфо) + правая (3D) ────────────────────────────
-  html += '<div style="display:grid;grid-template-columns:1fr 500px;gap:16px;align-items:start">';
+  // ── KPI-строка: 4 карточки ────────────────────────────────────────────────
+  var pctColor = pct === null ? '#6b7280' : pct > 80 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e';
+  var totalPumpQ = pumps.reduce(function(s,p){ return s+p.q; }, 0);
+  html += '<div style="flex-shrink:0;display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border-subtle)">';
+  html += _sfKpiCard('Уровень воды', latestLev !== null ? latestLev.toFixed(2)+' м' : '—', null, '#60a5fa');
+  html += _sfKpiCard('Заполнение', pct !== null && pct <= 110 ? pct.toFixed(1)+'%' : '—', pct !== null && pct <= 110 ? pct : null, pctColor);
+  html += _sfKpiCard('Водоприток Q', calcAvgQ !== null ? calcAvgQ.toFixed(1)+' м³/ч' : '—', null, '#60a5fa');
+  html += _sfKpiCard('Насосы Q', totalPumpQ > 0 ? totalPumpQ.toFixed(0)+' м³/ч' : '—', null, '#22c55e');
+  html += '</div>';
 
-  // ═══ ЛЕВАЯ КОЛОНКА ════════════════════════════════════════════════════════
-  html += '<div style="display:flex;flex-direction:column;gap:14px;min-width:0">';
+  // ── Тело: сетка 380px слева + 1fr справа ─────────────────────────────────
+  html += '<div style="flex:1;overflow:hidden;display:grid;grid-template-columns:380px 1fr;min-height:0">';
 
-  // ─ Модель + насосы (две карточки в ряд) ──────────────────────────────────
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+  // ═══ ЛЕВАЯ КОЛОНКА — модель, насосы, водоприток, V(H) ════════════════════
+  html += '<div style="border-right:1px solid var(--border-subtle);overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">';
 
   // Карточка: модель зумпфа
-  html += '<div class="card" style="padding:14px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  html += '<div class="card" style="padding:12px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
   html += '<span class="card-title">Модель зумпфа</span>';
   html += '<label class="btn btn-sm btn-outline" style="cursor:pointer;font-size:11px;padding:2px 8px">';
   html += '<input type="file" accept=".tridb" style="display:none" onchange="_sfOnFileInput(event,\''+sump.id+'\')">';
@@ -610,18 +661,18 @@ function renderSumpForecastContent(sump) {
   html += '</label></div>';
   if (hasCurve) {
     html += _sfModelStats(sump, latestLev, currVol, pct);
-    html += '<label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-top:6px">';
+    html += '<label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-top:4px">';
     html += 'Крит. уровень (м): <input type="number" step="0.1" value="'+(sump.criticalLevel||'')+'" style="width:68px;font-size:12px" onchange="_sfSaveCritical(\''+sump.id+'\',this.value)">';
     html += '</label>';
   } else {
     html += '<p style="color:var(--text-muted);font-size:13px">Файл .tridb не загружен</p>';
   }
-  html += '<div id="sf-upload-status" style="font-size:11px;margin-top:5px;color:#60a5fa;min-height:14px"></div>';
+  html += '<div id="sf-upload-status" style="font-size:11px;margin-top:4px;color:#60a5fa;min-height:14px"></div>';
   html += '</div>';
 
   // Карточка: насосы
-  html += '<div class="card" style="padding:14px">';
-  html += '<div class="card-title" style="margin-bottom:8px">Насосы <span style="font-size:11px;font-weight:400;color:var(--text-muted)">за '+days+' дн.</span></div>';
+  html += '<div class="card" style="padding:12px">';
+  html += '<div class="card-title" style="margin-bottom:8px">Насосы <span style="font-size:11px;font-weight:400;color:var(--text-muted)">за '+(days===1?'1 сут.':days===0?'выбранный период':days+' дн.')+'</span></div>';
   if (pumps.length === 0) {
     html += '<p style="color:var(--text-muted);font-size:13px">Насосы не привязаны</p>';
   } else {
@@ -629,7 +680,6 @@ function renderSumpForecastContent(sump) {
     html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
     html += '<tr style="color:var(--text-muted);font-size:10px"><th style="text-align:left;padding:0 4px 5px 0">Насос</th><th style="text-align:right">Q, м³/ч</th><th style="text-align:right">Ч/р</th></tr>';
     pumps.forEach(function(p) {
-      // Индикатор активности по реальным данным за период (а не по полю status)
       var active = p.totalH > 0;
       var badge = '<span style="color:'+(active?'#22c55e':'#6b7280')+';font-size:13px;line-height:1" title="'+(active?'Работал за период':'Нет данных за период')+'">●</span>';
       html += '<tr style="border-top:1px solid var(--border-subtle)">';
@@ -644,100 +694,93 @@ function renderSumpForecastContent(sump) {
   }
   html += '</div>';
 
-  html += '</div>'; // конец ряда модель+насосы
-
-  // ─ График: уровень воды + объём откачки ─────────────────────────────────
-  html += '<div class="card" style="padding:14px">';
+  // Карточка: водоприток
+  html += '<div class="card" style="padding:12px">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
-  html += '<span class="card-title">История уровня и водоотлива</span>';
-  html += '<span style="font-size:11px;color:var(--text-muted)">за '+days+' дн.</span>';
+  html += '<span class="card-title">Водоприток</span>';
+  if (calcAvgQ !== null) html += '<span style="font-size:18px;font-weight:700;color:#60a5fa">'+calcAvgQ.toFixed(1)+' м³/ч</span>';
   html += '</div>';
-  // Управление масштабом оси Y (уровень)
-  html += '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
-  html += '<span style="font-size:11px;color:var(--text-muted)">Ось Y (уровень):</span>';
-  html += '<label style="font-size:11px;display:flex;align-items:center;gap:4px;color:var(--text-muted)">Мин';
-  html += '<input type="number" id="sf-level-ymin" step="0.1" placeholder="авто" style="width:72px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary);margin-left:3px" onchange="_sfSetLevelYScale()"></label>';
-  html += '<label style="font-size:11px;display:flex;align-items:center;gap:4px;color:var(--text-muted)">Макс';
-  html += '<input type="number" id="sf-level-ymax" step="0.1" placeholder="авто" style="width:72px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary);margin-left:3px" onchange="_sfSetLevelYScale()"></label>';
-  html += '<button onclick="_sfSetLevelYScaleReset()" style="font-size:10px;padding:2px 8px;border-radius:4px;background:none;border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer">Авто</button>';
+  html += '<div style="background:var(--bg-sub);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-size:11px;color:var(--text-muted)">';
+  html += 'Q<sub>приток</sub> = (V<sub>откачано</sub> + ΔV<sub>зумпф</sub>) / 24<br>';
+  html += '<span style="font-size:10px">Усредняется за '+(days===0?(SumpForecastState.analysisCustomFrom+' – '+SumpForecastState.analysisCustomTo):days===1?'1 сутки':days+' сут.')+'</span>';
+  html += '</div>';
+  if (!hasCurve) {
+    html += '<p style="color:var(--text-muted);font-size:13px">Загрузите .tridb для расчёта</p>';
+  } else if (inflow.length < 2) {
+    html += '<p style="color:var(--text-muted);font-size:13px">Недостаточно пар замеров за период</p>';
+  } else {
+    html += '<canvas id="sf-inflow-chart" height="70"></canvas>';
+  }
+  html += '</div>';
+
+  // Карточка: кривая V(H)
+  if (hasCurve) {
+    html += '<div class="card" style="padding:12px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
+    html += '<span class="card-title">Кривая V(H)</span>';
+    html += '<span style="font-size:10px;color:var(--text-muted)">объём от отметки</span>';
+    html += '</div>';
+    html += '<canvas id="sf-vh-chart" height="80"></canvas>';
+    html += '</div>';
+  }
+
+  html += '</div>'; // конец левой колонки
+
+  // ═══ ПРАВАЯ КОЛОНКА — 3D, история уровня, прогноз ════════════════════════
+  html += '<div style="overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">';
+
+  // Карточка: 3D-модель (компактная)
+  html += '<div class="card" style="padding:0;overflow:hidden">';
+  html += '<div style="padding:8px 12px 6px;display:flex;justify-content:space-between;align-items:baseline">';
+  html += '<span class="card-title">3D-модель зумпфа</span>';
+  if (latestLev !== null) html += '<span style="font-size:11px;color:#3b82f6;font-weight:600">▲ '+latestLev.toFixed(2)+' м</span>';
+  html += '</div>';
+  if (hasCurve) {
+    html += '<div id="sf-3d-container" style="width:100%;height:260px;background:#0d1117">';
+    html += '<p style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Загрузка Three.js...</p>';
+    html += '</div>';
+    html += '<div style="padding:4px 12px;font-size:10px;color:var(--text-muted);text-align:center">ЛКМ — вращение · Колёсико — масштаб · ПКМ — панорама</div>';
+  } else {
+    html += '<div style="height:120px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;flex-direction:column;gap:8px">';
+    html += '<div style="font-size:32px;opacity:0.3">◎</div><div>Загрузите .tridb</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Карточка: история уровня
+  html += '<div class="card" style="padding:12px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  html += '<span class="card-title">История уровня и водоотлива</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">за '+(days===1?'1 сут.':days===0?'выбранный период':days+' дн.')+'</span>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">';
+  html += '<span style="font-size:11px;color:var(--text-muted)">Ось Y:</span>';
+  html += '<label style="font-size:11px;display:flex;align-items:center;gap:3px;color:var(--text-muted)">Мин<input type="number" id="sf-level-ymin" step="0.1" placeholder="авто" style="width:68px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary);margin-left:3px" onchange="_sfSetLevelYScale()"></label>';
+  html += '<label style="font-size:11px;display:flex;align-items:center;gap:3px;color:var(--text-muted)">Макс<input type="number" id="sf-level-ymax" step="0.1" placeholder="авто" style="width:68px;font-size:11px;padding:2px 5px;border-radius:4px;background:var(--bg-sub);border:1px solid var(--border-subtle);color:var(--text-primary);margin-left:3px" onchange="_sfSetLevelYScale()"></label>';
+  html += '<button onclick="_sfSetLevelYScaleReset()" style="font-size:10px;padding:2px 7px;border-radius:4px;background:none;border:1px solid var(--border-subtle);color:var(--text-muted);cursor:pointer">Авто</button>';
   html += '</div>';
   if (lpData.levs.length === 0) {
     html += '<p style="color:var(--text-muted);font-size:13px">Нет данных об уровне за выбранный период</p>';
   } else {
-    html += '<canvas id="sf-level-chart" height="120"></canvas>';
-    html += '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">';
-    html += '<span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;background:#60a5fa"></span>Уровень воды (м)</span>';
+    html += '<canvas id="sf-level-chart" height="130"></canvas>';
+    html += '<div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">';
+    html += '<span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;background:#60a5fa"></span>Уровень (м)</span>';
     html += '<span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:8px;background:rgba(34,197,94,0.4);border-radius:2px"></span>Объём откачки (м³/сут)</span>';
     if (sump.criticalLevel) html += '<span style="font-size:10px;color:#ef4444;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:1px;background:#ef4444;border-top:1px dashed #ef4444"></span>Крит. уровень</span>';
     html += '</div>';
   }
   html += '</div>';
 
-  // ─ Водоприток (метод и значения) ─────────────────────────────────────────
-  html += '<div class="card" style="padding:14px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
-  html += '<span class="card-title">Водоприток</span>';
-  if (calcAvgQ !== null) html += '<span style="font-size:18px;font-weight:700;color:#60a5fa">'+calcAvgQ.toFixed(1)+' м³/ч</span>';
-  html += '</div>';
-  // Формула и метод
-  html += '<div style="background:var(--bg-sub);border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--text-muted)">';
-  html += '<div style="font-weight:600;margin-bottom:4px;color:var(--text-primary)">Метод расчёта (водный баланс):</div>';
-  html += 'Q<sub>приток</sub> = (V<sub>откачано</sub> + ΔV<sub>зумпф</sub>) / 24<br>';
-  html += '<span style="font-size:10px">ΔV<sub>зумпф</sub> = V(H₂) − V(H₁) по кривой V(H) · Усредняется за '+(days===0?(SumpForecastState.analysisCustomFrom+' – '+SumpForecastState.analysisCustomTo):days+' сут.')+'</span>';
-  html += '</div>';
-  if (!hasCurve) {
-    html += '<p style="color:var(--text-muted);font-size:13px">Загрузите .tridb для расчёта</p>';
-  } else if (inflow.length < 2) {
-    html += '<p style="color:var(--text-muted);font-size:13px">Недостаточно пар последовательных замеров уровня за период</p>';
-  } else {
-    html += '<canvas id="sf-inflow-chart" height="70"></canvas>';
-  }
-  html += '</div>';
-
-  // ─ Прогноз ───────────────────────────────────────────────────────────────
+  // Прогноз
   if (hasCurve && (avgQ !== null || calcAvgQ !== null)) {
     html += _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days, calcAvgQ);
   } else if (hasCurve) {
-    html += '<div class="card" style="padding:14px"><div class="card-title">Прогноз</div>';
-    html += '<p style="color:var(--text-muted);font-size:13px;margin-top:8px">Прогноз доступен после накопления данных уровней за выбранный период</p></div>';
+    html += '<div class="card" style="padding:12px"><div class="card-title">Прогноз</div>';
+    html += '<p style="color:var(--text-muted);font-size:13px;margin-top:8px">Прогноз доступен после накопления данных уровней</p></div>';
   }
 
-  // ─ Кривая V(H) ───────────────────────────────────────────────────────────
-  if (hasCurve) {
-    html += '<div class="card" style="padding:14px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
-    html += '<span class="card-title">Кривая V(H)</span>';
-    html += '<span style="font-size:10px;color:var(--text-muted)">Зависимость объёма воды от отметки дна</span>';
-    html += '</div>';
-    html += '<canvas id="sf-vh-chart" height="80"></canvas>';
-    html += '</div>';
-  }
-
-  html += '</div>'; // ═══ конец левой колонки ═══
-
-  // ═══ ПРАВАЯ КОЛОНКА — 3D (sticky, фиксированная высота) ══════════════════
-  html += '<div style="position:sticky;top:0;display:flex;flex-direction:column;gap:14px">';
-  html += '<div class="card" style="padding:0;overflow:hidden">';
-  html += '<div style="padding:10px 14px 6px;display:flex;justify-content:space-between;align-items:baseline">';
-  html += '<span class="card-title">3D-модель зумпфа</span>';
-  if (latestLev !== null) html += '<span style="font-size:11px;color:#3b82f6;font-weight:600">▲ '+latestLev.toFixed(2)+' м</span>';
-  html += '</div>';
-  if (hasCurve) {
-    // Высота 800px — статичный вид без управления
-    html += '<div id="sf-3d-container" style="width:100%;height:800px;background:#0d1117">';
-    html += '<p style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Загрузка Three.js...</p>';
-    html += '</div>';
-    html += '<div style="padding:5px 14px;font-size:10px;color:var(--text-muted);text-align:center">ЛКМ — вращение · Колёсико — масштаб · ПКМ — панорама</div>';
-  } else {
-    html += '<div style="height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">';
-    html += '<div style="font-size:40px;margin-bottom:12px;opacity:0.4">◎</div>';
-    html += '<div>Загрузите .tridb для отображения 3D</div>';
-    html += '</div>';
-  }
-  html += '</div>';
   html += '</div>'; // конец правой колонки
-
-  html += '</div>'; // конец основной сетки
+  html += '</div>'; // конец тела
 
   document.getElementById('sf-content').innerHTML = html;
 
@@ -777,6 +820,19 @@ function _sfFmt(n, dec) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   dec = dec === undefined ? 0 : dec;
   return n.toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+function _sfKpiCard(label, value, fillPct, color) {
+  var html = '<div style="padding:10px 16px;border-right:1px solid var(--border-subtle)">';
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px">' + label + '</div>';
+  html += '<div style="font-size:20px;font-weight:700;color:' + (color||'var(--text-primary)') + ';line-height:1.2">' + value + '</div>';
+  if (fillPct !== null && fillPct !== undefined) {
+    html += '<div style="height:3px;background:var(--border-subtle);border-radius:2px;margin-top:6px;overflow:hidden">';
+    html += '<div style="height:100%;width:' + Math.min(100, Math.max(0, fillPct)).toFixed(0) + '%;background:' + color + ';border-radius:2px;transition:width .4s"></div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
 }
 
 function _sfModelStats(sump, latestLev, currVol, pct) {
@@ -1064,6 +1120,7 @@ function _sfApplyManualQ(val) {
   SumpForecastState._manualQ = (!val || isNaN(v) || v < 0) ? null : v;
   var s = SumpForecastState;
   var sump = DewateringState.sumps.find(function(s2){ return s2.id === s._forecastSumpId || s2.id === s.selectedSumpId; });
+  _sfRenderSelector(); // обновляем индикатор в сайдбаре
   if (sump) renderSumpForecastContent(sump);
 }
 
@@ -1084,26 +1141,17 @@ function _sfForecastPanel(sump, pumps, avgQ, latestLev, currVol, days, calcAvgQ)
 
   var html = '<div class="card" style="padding:0;overflow:hidden" id="sf-forecast-card">';
 
-  // Заголовок карточки с ручным вводом Q_пр
-  var manualQ = SumpForecastState._manualQ;
+  // Заголовок карточки — Q_пр перенесён в сайдбар, здесь только статус
+  var manualQ  = SumpForecastState._manualQ;
   var isManual = (manualQ !== null && manualQ !== undefined && !isNaN(manualQ));
-  var placeholderQ = calcAvgQ !== null ? calcAvgQ.toFixed(1) : '—';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">';
   html += '<span class="card-title">Прогноз · почасовое моделирование</span>';
-  html += '<span style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted)">';
-  html += 'Q<sub>пр</sub>&nbsp;=&nbsp;';
-  html += '<input type="number" id="sf-manual-q" value="'+(isManual ? manualQ.toFixed(1) : '')+'" placeholder="'+placeholderQ+'" min="0" step="0.1" '
-    + 'title="Ручной ввод притока. Оставьте пустым — будет использован расчётный '+(calcAvgQ!==null?calcAvgQ.toFixed(1)+'':'—')+' м³/ч"'
-    + 'style="width:72px;font-size:12px;font-weight:700;padding:2px 6px;border-radius:4px;border:1px solid '+(isManual?'#3b82f6':'var(--border-subtle)')+';background:var(--bg-card);color:'+(isManual?'#60a5fa':'var(--text-primary)')+';text-align:right"'
-    + 'onchange="_sfApplyManualQ(this.value)">'
-    + '&nbsp;м³/ч';
-  if (isManual) {
-    html += '&nbsp;<span style="font-size:10px;color:#f59e0b" title="Используется ручное значение">●&nbsp;ручной</span>';
-    html += '&nbsp;<button onclick="_sfApplyManualQ(\'\')" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--border-subtle);background:none;color:var(--text-muted);cursor:pointer">авто</button>';
-  } else if (calcAvgQ !== null) {
-    html += '&nbsp;<span style="font-size:10px;color:#22c55e" title="Расчётное значение">● авто</span>';
-  }
-  html += '&nbsp;<span style="color:var(--border-subtle)">|</span>&nbsp;база&nbsp;'+(days===0?'выбранный период':days===1?'1 сутки':days+' дн.')+'</span>';
+  html += '<span style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted)">';
+  html += 'Q<sub>пр</sub>: <strong style="color:'+(isManual?'#f59e0b':'#60a5fa')+'">'+((isManual?manualQ:calcAvgQ)!==null?(isManual?manualQ:calcAvgQ).toFixed(1)+' м³/ч':'—')+'</strong>';
+  if (isManual) html += '&nbsp;<span style="color:#f59e0b;font-size:10px">● ручной</span>';
+  else if (calcAvgQ !== null) html += '&nbsp;<span style="color:#22c55e;font-size:10px">● авто</span>';
+  html += '&nbsp;·&nbsp;база '+(days===0?'выбранный период':days===1?'1 сутки':days+' дн.');
+  html += '</span>';
   html += '</div>';
 
   // Двухколоночная сетка
@@ -1219,7 +1267,8 @@ function _sfRunForecast() {
   if (!sump || !sump.volumeCurve) return;
 
   // Проверяем ручной Q из поля ввода (приоритет над сохранённым)
-  var manualQEl = document.getElementById('sf-manual-q');
+  // Q_пр из сайдбара (если поле присутствует)
+  var manualQEl = document.getElementById('sf-manual-q-sidebar');
   if (manualQEl && manualQEl.value !== '') {
     var mqv = parseFloat(manualQEl.value);
     if (!isNaN(mqv) && mqv >= 0) SumpForecastState._manualQ = mqv;

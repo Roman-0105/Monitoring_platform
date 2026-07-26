@@ -809,3 +809,12 @@ html { transition: background-color 350ms ease, color 350ms ease; }
   border-color: rgba(8,145,178,.3) !important;
   box-shadow: 0 4px 20px rgba(15,23,42,.1), 0 0 16px rgba(8,145,178,.08) !important;
 }
+
+/* ── Прогноз зумпфов — макет Variant B ─────────────────────── */
+#page-sump-forecast.active {
+  display: flex;
+  flex-direction: row;
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
