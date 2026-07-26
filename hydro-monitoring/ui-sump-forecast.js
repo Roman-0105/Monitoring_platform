@@ -1697,6 +1697,13 @@ function _sfRenderLevelChart(sump, lpData, days) {
     return levelByDate[d].reduce(function(s,v){ return s+v; },0) / levelByDate[d].length;
   });
 
+  // Объём воды зумпфа по датам через кривую V(H)
+  var hasCurve = sump.volumeCurve && sump.volumeCurve.length > 0;
+  var sumpVolData = allDates.map(function(d) {
+    if (!levelData[allDates.indexOf(d)] || !hasCurve) return null;
+    return _sfVolumeAt(sump.volumeCurve, levelData[allDates.indexOf(d)]);
+  });
+
   // Даты, когда насосы стояли (нет откачки, но есть данные уровня)
   var stoppedDates = allDates.filter(function(d){
     return (!pumpsByDate[d] || pumpsByDate[d].vol === 0) && levs.some(function(l){ return l.date === d; });
@@ -1753,19 +1760,53 @@ function _sfRenderLevelChart(sump, lpData, days) {
           yAxisID: 'yVol',
           xAxisID: 'x',
           order: 2
+        },
+        {
+          type: 'line',
+          label: 'Объём зумпфа, м³',
+          data: sumpVolData,
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167,139,250,0.06)',
+          borderWidth: 1.5,
+          borderDash: [5, 3],
+          pointRadius: 0,
+          tension: 0.3,
+          fill: false,
+          yAxisID: 'yVolSump',
+          xAxisID: 'x',
+          order: 0,
+          spanGaps: true
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: true, interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          position: 'top',
+          labels: { font: { size: 9 }, boxWidth: 12, padding: 6,
+            generateLabels: function(chart) {
+              return [
+                { text: 'Уровень', fillStyle: '#60a5fa', strokeStyle: '#60a5fa', lineWidth: 2, hidden: false, datasetIndex: 0 },
+                { text: 'Откачка', fillStyle: 'rgba(34,197,94,0.5)', strokeStyle: 'rgba(34,197,94,0.6)', lineWidth: 1, hidden: false, datasetIndex: 1 },
+                { text: 'Объём зумпфа', fillStyle: 'rgba(167,139,250,0.06)', strokeStyle: '#a78bfa', lineWidth: 1.5, hidden: !hasCurve, datasetIndex: 2, lineDash: [5,3] }
+              ].filter(function(l){ return !l.hidden; });
+            }
+          }
+        },
         annotation: annotations,
         tooltip: {
           callbacks: {
             label: function(ctx) {
               if (ctx.datasetIndex === 0) return 'Уровень: ' + ctx.parsed.y.toFixed(2) + ' м';
-              return 'Откачка: ' + ctx.parsed.y.toFixed(0) + ' м³';
+              if (ctx.datasetIndex === 1) return 'Откачка: ' + ctx.parsed.y.toFixed(0) + ' м³/сут';
+              if (ctx.datasetIndex === 2) {
+                var v = ctx.parsed.y;
+                var pct = (sump.totalVolume && v !== null) ? ' (' + (v / sump.totalVolume * 100).toFixed(0) + '%)' : '';
+                return 'Объём зумпфа: ' + v.toFixed(0) + ' м³' + pct;
+              }
+              return ctx.parsed.y;
             }
           }
         }
@@ -1782,8 +1823,13 @@ function _sfRenderLevelChart(sump, lpData, days) {
         },
         yVol: {
           type: 'linear', position: 'right', grid: { drawOnChartArea: false },
-          title: { display: true, text: 'Откачка, м³/сут', font: { size: 9 } },
-          ticks: { font: { size: 9 } }
+          title: { display: true, text: 'Откачка, м³/сут', font: { size: 9 }, color: 'rgba(34,197,94,0.8)' },
+          ticks: { font: { size: 9 }, color: 'rgba(34,197,94,0.8)' }
+        },
+        yVolSump: {
+          type: 'linear', position: 'right', grid: { drawOnChartArea: false },
+          title: { display: true, text: 'Объём, м³', font: { size: 9 }, color: '#a78bfa' },
+          ticks: { font: { size: 9 }, color: '#a78bfa', maxTicksLimit: 5 }
         }
       }
     }
