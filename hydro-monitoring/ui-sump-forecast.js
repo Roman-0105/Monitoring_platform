@@ -337,10 +337,10 @@ function _sfComputeInflowHistory(sump, days) {
 
     var deltaV = V2 - V1;
     // Нормализуем на реальное количество суток → Q в м³/ч
-    var Qin = (Vpumped + deltaV) / (nDays * 24);
-    if (Qin < 0) Qin = 0;
+    var QinRaw = (Vpumped + deltaV) / (nDays * 24);
+    var Qin = Math.max(0, QinRaw);
 
-    result.push({ date: d2, q: Math.round(Qin * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100 });
+    result.push({ date: d2, q: Math.round(Qin * 10) / 10, qRaw: Math.round(QinRaw * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100 });
   }
   return result.slice(-60); // последние 60 суток
 }
@@ -1796,17 +1796,28 @@ function _sfRenderInflowChart(inflow, days) {
   if (SumpForecastState._inflowChartInst) { SumpForecastState._inflowChartInst.destroy(); }
   var show = inflow.slice(-(days||30));
   var labels = show.map(function(r){ return r.date.slice(5); });
-  var vals   = show.map(function(r){ return r.q; });
+  // Для дней с qRaw<0 показываем небольшой маркер (высота = 1 ед.) — иначе столбик невидим
+  var vals   = show.map(function(r){ return r.qRaw !== undefined && r.qRaw < 0 ? 1 : r.q; });
+  var bgColors = show.map(function(r){ return (r.qRaw !== undefined && r.qRaw < 0) ? 'rgba(251,146,60,0.6)' : 'rgba(96,165,250,0.5)'; });
+  var bdrColors = show.map(function(r){ return (r.qRaw !== undefined && r.qRaw < 0) ? '#fb923c' : '#60a5fa'; });
   SumpForecastState._inflowChartInst = new Chart(el, {
     type: 'bar',
     data: {
       labels: labels,
       datasets: [{ label: 'Приток м³/ч', data: vals,
-        backgroundColor: 'rgba(96,165,250,0.5)', borderColor: '#60a5fa', borderWidth: 1, borderRadius: 3 }]
+        backgroundColor: bgColors, borderColor: bdrColors, borderWidth: 1, borderRadius: 3 }]
     },
     options: {
       responsive: true, maintainAspectRatio: true,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c){ return c.parsed.y.toFixed(1) + ' м³/ч'; } } } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(c){
+          var r = show[c.dataIndex];
+          if (r && r.qRaw !== undefined && r.qRaw < 0)
+            return 'Аномалия: Q=' + r.qRaw.toFixed(1) + ' м³/ч (откачка ' + r.vpumped + ' м³, ΔH=' + r.dh + ' м)';
+          return r ? r.q.toFixed(1) + ' м³/ч (откачка ' + r.vpumped + ' м³, ΔH=' + r.dh + ' м)' : c.parsed.y.toFixed(1) + ' м³/ч';
+        }}}
+      },
       scales: {
         x: { ticks: { maxTicksLimit: 10, font: { size: 10 } } },
         y: { ticks: { font: { size: 10 } }, title: { display: true, text: 'м³/ч', font: { size: 10 } } }
