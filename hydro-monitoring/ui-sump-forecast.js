@@ -324,13 +324,15 @@ function _sfComputeInflowHistory(sump, days) {
     var V2 = _sfVolumeAt(sump.volumeCurve, H2);
     if (V1 === null || V2 === null || isNaN(H1) || isNaN(H2)) continue;
 
-    // Суммируем откачку за весь промежуток (d1, d2] — не только за d2
+    // Суммируем откачку за промежуток [d1, d2) — запись насосов датируется
+    // началом суток, т.е. volume за 19.07 → date='2026-07-19' соответствует
+    // интервалу уровней 19.07 06:00 → 20.07 06:00
     var d1ms = new Date(d1).getTime();
     var d2ms = new Date(d2).getTime();
     var dayMs = 86400000;
     var nDays = (d2ms - d1ms) / dayMs; // количество суток в интервале
     var Vpumped = 0;
-    for (var t = d1ms + dayMs; t <= d2ms; t += dayMs) {
+    for (var t = d1ms; t < d2ms; t += dayMs) {
       var ds = new Date(t).toISOString().slice(0,10);
       Vpumped += pumpedByDate[ds] || 0;
     }
