@@ -342,7 +342,9 @@ function _sfComputeInflowHistory(sump, days) {
     var QinRaw = (Vpumped + deltaV) / (nDays * 24);
     var Qin = Math.max(0, QinRaw);
 
-    result.push({ date: d2, q: Math.round(Qin * 10) / 10, qRaw: Math.round(QinRaw * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100 });
+    // Маркируем по d1 (дата записи откачки), т.к. пользователь записывает
+    // объём откачки за период [d1, d2) как запись с датой d1
+    result.push({ date: d1, q: Math.round(Qin * 10) / 10, qRaw: Math.round(QinRaw * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100 });
   }
   return result.slice(-60); // последние 60 суток
 }
