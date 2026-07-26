@@ -777,7 +777,7 @@ function renderSumpForecastContent(sump) {
   if (lpData.levs.length === 0) {
     html += '<p style="color:var(--text-muted);font-size:13px">Нет данных об уровне за выбранный период</p>';
   } else {
-    html += '<canvas id="sf-level-chart" height="130"></canvas>';
+    html += '<div style="position:relative;height:180px"><canvas id="sf-level-chart" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>';
     html += '<div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">';
     html += '<span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;background:#60a5fa"></span>Уровень (м)</span>';
     html += '<span style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:8px;background:rgba(34,197,94,0.4);border-radius:2px"></span>Объём откачки (м³/сут)</span>';
@@ -1784,7 +1784,7 @@ function _sfRenderLevelChart(sump, lpData, days) {
       ]
     },
     options: {
-      responsive: true, maintainAspectRatio: true, interaction: { mode: 'index', intersect: false },
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
           display: true,
