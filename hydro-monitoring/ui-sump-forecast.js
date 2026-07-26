@@ -324,9 +324,20 @@ function _sfComputeInflowHistory(sump, days) {
     var V2 = _sfVolumeAt(sump.volumeCurve, H2);
     if (V1 === null || V2 === null || isNaN(H1) || isNaN(H2)) continue;
 
-    var Vpumped = pumpedByDate[d2] || 0;
-    var deltaV  = V2 - V1;
-    var Qin     = (Vpumped + deltaV) / 24;
+    // Суммируем откачку за весь промежуток (d1, d2] — не только за d2
+    var d1ms = new Date(d1).getTime();
+    var d2ms = new Date(d2).getTime();
+    var dayMs = 86400000;
+    var nDays = (d2ms - d1ms) / dayMs; // количество суток в интервале
+    var Vpumped = 0;
+    for (var t = d1ms + dayMs; t <= d2ms; t += dayMs) {
+      var ds = new Date(t).toISOString().slice(0,10);
+      Vpumped += pumpedByDate[ds] || 0;
+    }
+
+    var deltaV = V2 - V1;
+    // Нормализуем на реальное количество суток → Q в м³/ч
+    var Qin = (Vpumped + deltaV) / (nDays * 24);
     if (Qin < 0) Qin = 0;
 
     result.push({ date: d2, q: Math.round(Qin * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100 });
