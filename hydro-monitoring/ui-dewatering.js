@@ -426,6 +426,11 @@ var _dewSubTab          = 'overview';
 var _dewJFilter         = { quarry: '', sumpId: '', date: '' };
 var _dewLFilter         = { quarry: '', sumpId: '' };
 var _dewAFilter         = { quarry: '', sumpId: '', days: 30, dateFrom: '', dateTo: '' };
+// null = all; array of IDs = only these included in analytics
+var _dewAnlSettings     = { includedSumpIds: null, includedPumpIds: null };
+(function() {
+  try { var s = localStorage.getItem('dew_anl_settings'); if (s) _dewAnlSettings = JSON.parse(s); } catch(e) {}
+})();
 var _dewShowPumpRegistry = false;
 var _dewEditReadingId    = null;
 var _dewEditLevelId      = null;
@@ -3830,6 +3835,7 @@ function _dewRenderAnalytics() {
       '<input type="date" id="dew-af-from" class="form-control" style="width:130px;font-size:12px" value="' + (_dewAFilter.dateFrom || '') + '" title="Начало периода">' +
       '<span style="font-size:11px;color:var(--txt-3)">—</span>' +
       '<input type="date" id="dew-af-to" class="form-control" style="width:130px;font-size:12px" value="' + (_dewAFilter.dateTo || '') + '" title="Конец периода">' +
+      '<button id="dew-af-settings" title="Настройка аналитики" style="margin-left:auto;padding:4px 10px;border-radius:5px;border:1px solid var(--line);font-size:12px;cursor:pointer;background:' + (_dewAnlSettings.includedSumpIds || _dewAnlSettings.includedPumpIds ? 'var(--accent,#3b82f6)' : 'var(--bg-3,var(--bg-2))') + ';color:' + (_dewAnlSettings.includedSumpIds || _dewAnlSettings.includedPumpIds ? '#fff' : 'var(--txt-2)') + '">⚙ Настройка</button>' +
     '</div>' +
     '<div id="dew-anl-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px"></div>' +
     '<div class="card" style="padding:14px;margin-bottom:14px">' +
@@ -3899,6 +3905,9 @@ function _dewRenderAnalytics() {
   if (fi) fi.addEventListener('change', onDateChange);
   if (ti) ti.addEventListener('change', onDateChange);
 
+  var settBtn = document.getElementById('dew-af-settings');
+  if (settBtn) settBtn.addEventListener('click', _dewAnlOpenSettings);
+
   _dewAnlRefreshAll();
 }
 
@@ -3945,6 +3954,145 @@ function _dewAnlUpdatePresetBtns() {
     btn.style.cssText = 'padding:4px 10px;border-radius:5px;border:1px solid var(--line);font-size:11px;font-weight:600;cursor:pointer;transition:.15s;' +
       (active ? 'background:var(--accent,#3b82f6);color:#fff;border-color:var(--accent,#3b82f6)' : 'background:var(--bg-3,var(--bg-2));color:var(--txt-2)');
   });
+}
+
+// Открывает модальную панель настройки аналитики (выбор зумпфов и насосов)
+function _dewAnlOpenSettings() {
+  var existing = document.getElementById('dew-anl-settings-modal');
+  if (existing) { existing.remove(); return; }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'dew-anl-settings-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:flex-end;padding:60px 24px 0 0';
+
+  var panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--bg-1,#111827);border:1px solid var(--line);border-radius:10px;width:320px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);display:flex;flex-direction:column';
+
+  var inclSumps = _dewAnlSettings.includedSumpIds ? _dewAnlSettings.includedSumpIds.slice() : null;
+  var inclPumps = _dewAnlSettings.includedPumpIds ? _dewAnlSettings.includedPumpIds.slice() : null;
+
+  function allSumpIds() { return DewateringState.sumps.map(function(s) { return s.id; }); }
+  function allPumpIds() { return DewateringState.pumps.map(function(p) { return p.id; }); }
+  function isSumpOn(id) { return !inclSumps || inclSumps.indexOf(id) >= 0; }
+  function isPumpOn(id) { return !inclPumps || inclPumps.indexOf(id) >= 0; }
+
+  function buildHTML() {
+    var html = '<div style="padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between">' +
+      '<span style="font-size:13px;font-weight:700;color:var(--txt-1)">Настройка аналитики</span>' +
+      '<button id="dew-anl-sett-close" style="background:none;border:none;color:var(--txt-3);font-size:18px;cursor:pointer;line-height:1">✕</button>' +
+    '</div>' +
+    '<div style="padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px">' +
+      '<button id="dew-anl-sett-all" style="flex:1;padding:5px 8px;border-radius:5px;border:1px solid var(--line);font-size:11px;cursor:pointer;background:var(--bg-2);color:var(--txt-2)">Выбрать всё</button>' +
+      '<button id="dew-anl-sett-none" style="flex:1;padding:5px 8px;border-radius:5px;border:1px solid var(--line);font-size:11px;cursor:pointer;background:var(--bg-2);color:var(--txt-2)">Сбросить</button>' +
+    '</div>';
+
+    DewateringState.sumps.forEach(function(sump) {
+      var sOn = isSumpOn(sump.id);
+      var pumps = DewateringState.pumpsOfSump(sump.id);
+      html += '<div style="border-bottom:1px solid var(--line)">' +
+        '<label style="display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;background:var(--bg-2)">' +
+          '<input type="checkbox" data-sump="' + sump.id + '" ' + (sOn ? 'checked' : '') + ' style="accent-color:var(--accent,#3b82f6)">' +
+          '<span style="font-size:12px;font-weight:600;color:var(--txt-1)">' + escHTML(sump.name) + '</span>' +
+          (sump.quarry ? '<span style="font-size:10px;color:var(--txt-3);margin-left:auto">' + escHTML(sump.quarry) + '</span>' : '') +
+        '</label>';
+      pumps.forEach(function(p) {
+        var pOn = isPumpOn(p.id);
+        var sc = { working:'#10b981', standby:'#3b82f6', repair:'#f59e0b', off:'#64748b' }[p.status] || '#64748b';
+        html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 14px 6px 32px;cursor:pointer">' +
+          '<input type="checkbox" data-pump="' + p.id + '" data-sump="' + sump.id + '" ' + (pOn ? 'checked' : '') + ' style="accent-color:var(--accent,#3b82f6)">' +
+          '<span style="width:6px;height:6px;border-radius:50%;background:' + sc + ';flex-shrink:0"></span>' +
+          '<span style="font-size:11px;color:var(--txt-2)">' + escHTML(p.name) + (p.model ? ' <span style="color:var(--txt-3)">· ' + escHTML(p.model) + '</span>' : '') + '</span>' +
+        '</label>';
+      });
+      html += '</div>';
+    });
+
+    html += '<div style="padding:12px 14px;display:flex;gap:8px">' +
+      '<button id="dew-anl-sett-apply" style="flex:1;padding:7px 12px;border-radius:6px;border:none;background:var(--accent,#3b82f6);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Применить</button>' +
+      '<button id="dew-anl-sett-reset" style="padding:7px 12px;border-radius:6px;border:1px solid var(--line);background:var(--bg-2);color:var(--txt-2);font-size:12px;cursor:pointer">Сбросить всё</button>' +
+    '</div>';
+    return html;
+  }
+
+  panel.innerHTML = buildHTML();
+
+  // Events
+  panel.addEventListener('change', function(e) {
+    var t = e.target;
+    if (t.dataset.sump && !t.dataset.pump) {
+      // Sump checkbox → toggle sump + all its pumps
+      var sid = t.dataset.sump;
+      var pumpIds = DewateringState.pumpsOfSump(sid).map(function(p) { return p.id; });
+      if (t.checked) {
+        if (inclSumps) { if (inclSumps.indexOf(sid) < 0) inclSumps.push(sid); }
+        if (inclPumps) pumpIds.forEach(function(pid) { if (inclPumps.indexOf(pid) < 0) inclPumps.push(pid); });
+      } else {
+        if (!inclSumps) inclSumps = allSumpIds().filter(function(id) { return id !== sid; });
+        else inclSumps = inclSumps.filter(function(id) { return id !== sid; });
+        if (!inclPumps) inclPumps = allPumpIds().filter(function(id) { return pumpIds.indexOf(id) < 0; });
+        else inclPumps = inclPumps.filter(function(id) { return pumpIds.indexOf(id) < 0; });
+      }
+      // Sync pump checkboxes
+      pumpIds.forEach(function(pid) {
+        var cb = panel.querySelector('input[data-pump="' + pid + '"]');
+        if (cb) cb.checked = t.checked;
+      });
+    } else if (t.dataset.pump) {
+      var pid = t.dataset.pump;
+      if (t.checked) {
+        if (inclPumps) { if (inclPumps.indexOf(pid) < 0) inclPumps.push(pid); }
+      } else {
+        if (!inclPumps) inclPumps = allPumpIds().filter(function(id) { return id !== pid; });
+        else inclPumps = inclPumps.filter(function(id) { return id !== pid; });
+      }
+    }
+  });
+
+  panel.addEventListener('click', function(e) {
+    var id = e.target.id || (e.target.closest && e.target.closest('button') && e.target.closest('button').id);
+    if (!id && e.target.closest) id = (e.target.closest('button') || {}).id;
+    if (id === 'dew-anl-sett-close') { overlay.remove(); return; }
+    if (id === 'dew-anl-sett-all') {
+      inclSumps = null; inclPumps = null;
+      panel.querySelectorAll('input[type=checkbox]').forEach(function(cb) { cb.checked = true; });
+      return;
+    }
+    if (id === 'dew-anl-sett-none') {
+      inclSumps = []; inclPumps = [];
+      panel.querySelectorAll('input[type=checkbox]').forEach(function(cb) { cb.checked = false; });
+      return;
+    }
+    if (id === 'dew-anl-sett-reset') {
+      _dewAnlSettings.includedSumpIds = null;
+      _dewAnlSettings.includedPumpIds = null;
+      localStorage.setItem('dew_anl_settings', JSON.stringify(_dewAnlSettings));
+      overlay.remove();
+      _dewRenderAnalytics();
+      return;
+    }
+    if (id === 'dew-anl-sett-apply') {
+      _dewAnlSettings.includedSumpIds = inclSumps;
+      _dewAnlSettings.includedPumpIds = inclPumps;
+      localStorage.setItem('dew_anl_settings', JSON.stringify(_dewAnlSettings));
+      overlay.remove();
+      _dewRenderAnalytics();
+      return;
+    }
+  });
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
+// Возвращает pump IDs с учётом фильтра И настроек аналитики
+function _dewAnlEffectivePumpIds() {
+  var fromFilter = _dewAFilteredPumpIds(); // null = all
+  var fromSettings = _dewAnlSettings.includedPumpIds; // null = all
+  if (!fromFilter && !fromSettings) return null;
+  var base = fromFilter || DewateringState.pumps.map(function(p) { return p.id; });
+  if (fromSettings) base = base.filter(function(id) { return fromSettings.indexOf(id) >= 0; });
+  return base;
 }
 
 // Returns sorted array of ISO date strings for the current filter period
@@ -4024,7 +4172,7 @@ function _dewAnlKpis() {
   var titleEl = document.getElementById('dew-anl-trend-title');
   if (titleEl) titleEl.textContent = 'Объём откачки по зумпфам ' + _dewAnlPeriodLabel();
 
-  var pids = _dewAFilteredPumpIds();
+  var pids = _dewAnlEffectivePumpIds();
   var days = _dewAnlDays();
   var N = days.length || 1;
   var daySet = {};
@@ -4127,7 +4275,7 @@ function _dewAnlTrend() {
   var canvas = document.getElementById('dew-canvas-anltrend');
   if (!canvas) return;
 
-  var pids = _dewAFilteredPumpIds();
+  var pids = _dewAnlEffectivePumpIds();
   var days = _dewAnlDays();
   var daySet = {};
   days.forEach(function(d) { daySet[d] = true; });
@@ -4136,6 +4284,7 @@ function _dewAnlTrend() {
   var filteredSumps = DewateringState.sumps.filter(function(s) {
     if (_dewAFilter.sumpId && s.id !== _dewAFilter.sumpId) return false;
     if (_dewAFilter.quarry && (s.quarry || '') !== _dewAFilter.quarry) return false;
+    if (_dewAnlSettings.includedSumpIds && _dewAnlSettings.includedSumpIds.indexOf(s.id) < 0) return false;
     return true;
   });
 
@@ -4220,7 +4369,7 @@ function _dewAnlPumpCards() {
   var wrap = document.getElementById('dew-anl-pumpcards');
   if (!wrap) return;
 
-  var pids = _dewAFilteredPumpIds();
+  var pids = _dewAnlEffectivePumpIds();
   var pumps = (pids
     ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
     : DewateringState.pumps
@@ -4272,7 +4421,7 @@ function _dewAnlDest() {
   var canvas = document.getElementById('dew-canvas-anldest');
   if (!canvas) return;
 
-  var pids = _dewAFilteredPumpIds();
+  var pids = _dewAnlEffectivePumpIds();
   var byDest = {};
   DewateringState.meterReadings.forEach(function(r) {
     if (pids && pids.indexOf(r.pumpId) < 0) return;
@@ -4289,9 +4438,24 @@ function _dewAnlDest() {
   var total = Object.keys(byDest).reduce(function(a, k) { return a + byDest[k]; }, 0);
   if (!total) { canvas.parentElement.innerHTML = '<p class="dew-no-data">Нет данных</p>'; return; }
 
+  // Собираем детализацию: для каждого направления — объём по насосам
+  var byDestPump = {}; // destId → { pumpId → vol }
+  DewateringState.meterReadings.forEach(function(r) {
+    if (pids && pids.indexOf(r.pumpId) < 0) return;
+    var vol = DewateringState.computedVolume(r) || 0;
+    if (!vol) return;
+    DewateringState.getDistributions(r).forEach(function(d) {
+      if (!d.destinationId) return;
+      var dest = DewateringState.destById(d.destinationId);
+      if (dest && dest.type === 'intermediate_sump') return;
+      if (!byDestPump[d.destinationId]) byDestPump[d.destinationId] = {};
+      byDestPump[d.destinationId][r.pumpId] = (byDestPump[d.destinationId][r.pumpId] || 0) + vol * d.pct / 100;
+    });
+  });
+
   var entries = Object.keys(byDest).map(function(k) {
     var d = DewateringState.destById(k);
-    return { name: d ? d.name : 'Не указано', vol: byDest[k] };
+    return { id: k, name: d ? d.name : 'Не указано', vol: byDest[k] };
   }).sort(function(a, b) { return b.vol - a.vol; });
 
   var COLORS = ['rgba(34,211,238,0.85)', 'rgba(52,211,153,0.85)', 'rgba(251,146,60,0.85)',
@@ -4309,6 +4473,13 @@ function _dewAnlDest() {
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '62%',
+      onClick: function(evt, elements) {
+        if (!elements || !elements.length) return;
+        var idx = elements[0].index;
+        var entry = entries[idx];
+        if (!entry) return;
+        _dewAnlDestDrilldown(entry, byDestPump[entry.id] || {}, COLORS[idx % COLORS.length]);
+      },
       plugins: {
         legend: {
           display: true, position: 'bottom',
@@ -4324,10 +4495,71 @@ function _dewAnlDest() {
         },
         tooltip: { callbacks: { label: function(item) {
           var pct = total > 0 ? Math.round(item.raw / total * 100) : 0;
-          return ' ' + item.raw.toLocaleString('ru-RU') + ' м³ (' + pct + '%)';
+          return ' ' + item.raw.toLocaleString('ru-RU') + ' м³ (' + pct + '%) · нажмите для детализации';
         }}}
       }
     }
+  });
+}
+
+// Всплывающая детализация по направлению: список насосов с объёмами
+function _dewAnlDestDrilldown(entry, pumpVolMap, color) {
+  var existing = document.getElementById('dew-anl-dest-drill');
+  if (existing) existing.remove();
+
+  var pumpRows = Object.keys(pumpVolMap).map(function(pid) {
+    var pump = DewateringState.pumps.find(function(p) { return p.id === pid; });
+    var sump = pump ? DewateringState.sumps.find(function(s) { return s.id === pump.sumpId; }) : null;
+    return { name: pump ? pump.name : pid, sumpName: sump ? sump.name : '—', vol: pumpVolMap[pid] };
+  }).sort(function(a, b) { return b.vol - a.vol; });
+
+  var total = pumpRows.reduce(function(acc, r) { return acc + r.vol; }, 0);
+  var maxVol = pumpRows.length ? pumpRows[0].vol : 1;
+
+  var modal = document.createElement('div');
+  modal.id = 'dew-anl-dest-drill';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-1,#111827);border:1px solid var(--line);border-radius:10px;width:460px;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)';
+
+  var rows = pumpRows.map(function(r) {
+    var pct = total > 0 ? Math.round(r.vol / total * 100) : 0;
+    var barW = maxVol > 0 ? Math.round(r.vol / maxVol * 100) : 0;
+    return '<div style="padding:8px 16px;border-bottom:1px solid var(--line)">' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+        '<div>' +
+          '<span style="font-size:12px;font-weight:600;color:var(--txt-1)">' + escHTML(r.name) + '</span>' +
+          '<span style="font-size:10px;color:var(--txt-3);margin-left:8px">' + escHTML(r.sumpName) + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--txt-1)">' +
+          r.vol.toLocaleString('ru-RU') + ' м³ <span style="color:var(--txt-3);font-size:10px">(' + pct + '%)</span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="height:4px;background:rgba(255,255,255,0.07);border-radius:2px">' +
+        '<div style="height:4px;width:' + barW + '%;background:' + color + ';border-radius:2px"></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  box.innerHTML =
+    '<div style="padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">' +
+      '<span style="width:12px;height:12px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
+      '<span style="font-size:13px;font-weight:700;color:var(--txt-1)">' + escHTML(entry.name) + '</span>' +
+      '<span style="font-size:11px;color:var(--txt-3);margin-left:4px">' + entry.vol.toLocaleString('ru-RU') + ' м³ всего</span>' +
+      '<button id="dew-drill-close" style="margin-left:auto;background:none;border:none;color:var(--txt-3);font-size:18px;cursor:pointer">✕</button>' +
+    '</div>' +
+    '<div style="padding:8px 0;border-bottom:1px solid var(--line)">' +
+      '<div style="padding:4px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3)">Насос · Зумпф</div>' +
+    '</div>' +
+    rows +
+    '<div style="padding:10px 16px;font-size:11px;color:var(--txt-3);text-align:center">Показаны все насосы, качавшие в это направление</div>';
+
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal || e.target.id === 'dew-drill-close') modal.remove();
   });
 }
 
@@ -4335,7 +4567,7 @@ function _dewAnlHeatmap() {
   var wrap = document.getElementById('dew-anl-heatmap');
   if (!wrap) return;
 
-  var pids = _dewAFilteredPumpIds();
+  var pids = _dewAnlEffectivePumpIds();
   var pumps = (pids
     ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
     : DewateringState.pumps
