@@ -3815,11 +3815,24 @@ function _dewRenderAnalytics() {
       '<select id="dew-af-quarry" class="form-control" style="width:130px;font-size:12px">' + _dewQuarryOpts(_dewAFilter.quarry) + '</select>' +
       '<select id="dew-af-sump" class="form-control" style="width:160px;font-size:12px">' + anlSumpOpts(_dewAFilter.quarry) + '</select>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
-      '<div class="card" style="padding:14px"><div class="card-title">Объём откачки (м³/сутки) · 30 дней</div><div id="dew-ch-trend"></div></div>' +
-      '<div class="card" style="padding:14px"><div class="card-title">Распределение по направлениям</div><div id="dew-ch-dest"></div></div>' +
-      '<div class="card" style="padding:14px"><div class="card-title">Объём по насосам (всё время)</div><div id="dew-ch-pumps"></div></div>' +
-      '<div class="card" style="padding:14px"><div class="card-title">Сравнение зумпфов (3 месяца)</div><div id="dew-ch-sumps"></div></div>' +
+    '<div id="dew-anl-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px"></div>' +
+    '<div class="card" style="padding:14px;margin-bottom:14px">' +
+      '<div class="card-title">Объём откачки по насосам · 30 дней</div>' +
+      '<div style="position:relative;height:200px"><canvas id="dew-canvas-anltrend" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">' +
+      '<div class="card" style="padding:14px">' +
+        '<div class="card-title">Статус насосов</div>' +
+        '<div id="dew-anl-pumpcards" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto"></div>' +
+      '</div>' +
+      '<div class="card" style="padding:14px">' +
+        '<div class="card-title">Направления откачки</div>' +
+        '<div id="dew-anl-dest-wrap" style="position:relative;height:260px"><canvas id="dew-canvas-anldest" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>' +
+      '</div>' +
+      '<div class="card" style="padding:14px">' +
+        '<div class="card-title">Часы работы · 14 дней</div>' +
+        '<div id="dew-anl-heatmap" style="overflow-x:auto"></div>' +
+      '</div>' +
     '</div>';
 
   document.getElementById('dew-af-quarry').addEventListener('change', function() {
@@ -3827,14 +3840,122 @@ function _dewRenderAnalytics() {
     _dewAFilter.sumpId = '';
     var sf = document.getElementById('dew-af-sump');
     if (sf) sf.innerHTML = anlSumpOpts(this.value);
-    _dewChartTrend(); _dewChartDest(); _dewChartPumps(); _dewChartSumps();
+    _dewAnlRefreshAll();
   });
   document.getElementById('dew-af-sump').addEventListener('change', function() {
     _dewAFilter.sumpId = this.value;
-    _dewChartTrend(); _dewChartDest(); _dewChartPumps(); _dewChartSumps();
+    _dewAnlRefreshAll();
   });
 
-  _dewChartTrend(); _dewChartDest(); _dewChartPumps(); _dewChartSumps();
+  _dewAnlRefreshAll();
+}
+
+function _dewAnlRefreshAll() {
+  _dewAnlKpis();
+  _dewAnlTrend();
+  _dewAnlPumpCards();
+  _dewAnlDest();
+  _dewAnlHeatmap();
+}
+
+function _dewSparkSvg(values, color) {
+  var n = values.length;
+  if (n < 2) return '';
+  var max = 0;
+  for (var i = 0; i < n; i++) if (values[i] > max) max = values[i];
+  if (!max) return '';
+  var W = 80, H = 28, pad = 2;
+  var pts = values.map(function(v, i) {
+    var x = pad + i / (n - 1) * (W - pad * 2);
+    var y = H - pad - (v / max) * (H - pad * 2);
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block">' +
+    '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '</svg>';
+}
+
+function _dewAnlKpis() {
+  var wrap = document.getElementById('dew-anl-kpis');
+  if (!wrap) return;
+
+  var pids = _dewAFilteredPumpIds();
+  var N = 30;
+  var days = [];
+  for (var i = N - 1; i >= 0; i--) {
+    var d = new Date(); d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  var dailyVols = days.map(function(day) {
+    return DewateringState.meterReadings
+      .filter(function(r) { return r.date === day && (!pids || pids.indexOf(r.pumpId) >= 0); })
+      .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+  });
+
+  var vol30 = dailyVols.reduce(function(a, v) { return a + v; }, 0);
+  var daysWithData = dailyVols.filter(function(v) { return v > 0; }).length || 1;
+  var avgDaily = vol30 / daysWithData;
+
+  var allPumps = pids
+    ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
+    : DewateringState.pumps;
+  var activePumps = allPumps.filter(function(p) { return p.status === 'working'; }).length;
+
+  var totalHours = 0;
+  DewateringState.meterReadings.forEach(function(r) {
+    if (days.indexOf(r.date) < 0) return;
+    if (pids && pids.indexOf(r.pumpId) < 0) return;
+    totalHours += (r.hoursWorked || 0);
+  });
+  var maxHours = allPumps.length * N * 24;
+  var kio = maxHours > 0 ? Math.round(totalHours / maxHours * 100) : 0;
+
+  var downtimePumpDays = {};
+  DewateringState.meterReadings.forEach(function(r) {
+    if (days.indexOf(r.date) < 0) return;
+    if (pids && pids.indexOf(r.pumpId) < 0) return;
+    if (r.isStopped) downtimePumpDays[r.date + '_' + r.pumpId] = true;
+  });
+  var downtimeCount = Object.keys(downtimePumpDays).length;
+
+  var prevDays = [];
+  for (var j = N * 2 - 1; j >= N; j--) {
+    var pd = new Date(); pd.setDate(pd.getDate() - j);
+    prevDays.push(pd.toISOString().slice(0, 10));
+  }
+  var prevVol = prevDays.reduce(function(acc, day) {
+    return acc + DewateringState.meterReadings
+      .filter(function(r) { return r.date === day && (!pids || pids.indexOf(r.pumpId) >= 0); })
+      .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+  }, 0);
+  var volDelta = prevVol > 0 ? Math.round((vol30 - prevVol) / prevVol * 100) : null;
+  var spark14 = dailyVols.slice(-14);
+
+  function kpiTile(label, value, sub, color, sparkVals, deltaVal) {
+    var sparkHtml = sparkVals ? _dewSparkSvg(sparkVals, color) : '';
+    var deltaHtml = '';
+    if (deltaVal !== null && deltaVal !== undefined) {
+      var sign = deltaVal >= 0 ? '+' : '';
+      var bg = deltaVal >= 0 ? 'rgba(16,185,129,.15)' : 'rgba(239,68,68,.13)';
+      var fg = deltaVal >= 0 ? '#34d399' : '#f87171';
+      deltaHtml = '<div style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:12px;margin-top:5px;background:' + bg + ';color:' + fg + '">' + sign + deltaVal + '% пред. 30д</div>';
+    }
+    return '<div style="background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;border-top:3px solid ' + color + '">' +
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3);margin-bottom:6px">' + label + '</div>' +
+      '<div style="font-size:22px;font-weight:800;color:var(--txt-1);font-variant-numeric:tabular-nums;line-height:1.15">' + value + '</div>' +
+      (sub ? '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">' + sub + '</div>' : '') +
+      (sparkHtml ? '<div style="margin-top:8px">' + sparkHtml + '</div>' : '') +
+      deltaHtml +
+    '</div>';
+  }
+
+  wrap.innerHTML =
+    kpiTile('Объём за 30 дней', (vol30 >= 1000 ? (vol30/1000).toFixed(1)+' тыс.' : vol30.toFixed(0)) + ' м³', 'суммарно', '#3b82f6', spark14, volDelta) +
+    kpiTile('Среднесуточно', avgDaily.toFixed(0) + ' м³/сут', 'дни с данными: ' + daysWithData, '#06b6d4', null, null) +
+    kpiTile('Активных насосов', activePumps + ' / ' + allPumps.length, 'статус «работает»', '#10b981', null, null) +
+    kpiTile('КИО', kio + '%', 'коэф. использования', kio >= 70 ? '#10b981' : kio >= 40 ? '#f59e0b' : '#ef4444', null, null) +
+    kpiTile('Простоев', downtimeCount + '', 'насос-дней за 30 дней', downtimeCount === 0 ? '#10b981' : downtimeCount <= 5 ? '#f59e0b' : '#ef4444', null, null);
 }
 
 function _dewAFilteredPumpIds() {
@@ -3850,95 +3971,169 @@ function _dewAFilteredPumpIds() {
   return null; // null = all pumps
 }
 
-function _dewChartTrend() {
-  var wrap = document.getElementById('dew-ch-trend');
-  if (!wrap) return;
-  _dewDestroyChart('trend');
-
-  var days = [];
-  for (var i = 29; i >= 0; i--) { var d = new Date(); d.setDate(d.getDate()-i); days.push(d.toISOString().slice(0,10)); }
+function _dewAnlTrend() {
+  _dewDestroyChart('anltrend');
+  var canvas = document.getElementById('dew-canvas-anltrend');
+  if (!canvas) return;
 
   var pids = _dewAFilteredPumpIds();
-  var data = days.map(function(day) {
-    var vol = DewateringState.meterReadings
-      .filter(function(r){ return r.date===day && (!pids || pids.indexOf(r.pumpId) >= 0); })
-      .reduce(function(a,r){return a+(DewateringState.computedVolume(r)||0);},0);
-    return { date: day, vol: vol };
+  var N = 30;
+  var days = [];
+  for (var i = N - 1; i >= 0; i--) {
+    var d = new Date(); d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  var allPumps = pids
+    ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
+    : DewateringState.pumps;
+
+  var pumpVols = allPumps.map(function(p) {
+    var vol = days.reduce(function(acc, day) {
+      return acc + DewateringState.meterReadings
+        .filter(function(r) { return r.date === day && r.pumpId === p.id; })
+        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+    }, 0);
+    return { pump: p, vol: vol };
+  }).sort(function(a, b) { return b.vol - a.vol; });
+
+  var top5 = pumpVols.slice(0, 5).map(function(x) { return x.pump; });
+  var restPumps = pumpVols.slice(5);
+
+  var PUMP_COLORS = [
+    'rgba(59,130,246,0.75)', 'rgba(16,185,129,0.75)', 'rgba(245,158,11,0.75)',
+    'rgba(239,68,68,0.75)', 'rgba(139,92,246,0.75)'
+  ];
+
+  var datasets = top5.map(function(p, pi) {
+    var data = days.map(function(day) {
+      return DewateringState.meterReadings
+        .filter(function(r) { return r.date === day && r.pumpId === p.id; })
+        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+    });
+    return {
+      type: 'bar', label: p.name, data: data,
+      backgroundColor: PUMP_COLORS[pi],
+      borderColor: PUMP_COLORS[pi].replace('0.75', '1'),
+      borderWidth: 1, borderRadius: 2, stack: 'vol'
+    };
   });
 
-  var today = new Date().toISOString().slice(0,10);
+  if (restPumps.length) {
+    var otherIds = restPumps.map(function(x) { return x.pump.id; });
+    var otherData = days.map(function(day) {
+      return DewateringState.meterReadings
+        .filter(function(r) { return r.date === day && otherIds.indexOf(r.pumpId) >= 0; })
+        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+    });
+    datasets.push({
+      type: 'bar', label: 'Прочие', data: otherData,
+      backgroundColor: 'rgba(100,116,139,0.55)', borderColor: 'rgba(100,116,139,0.9)',
+      borderWidth: 1, borderRadius: 2, stack: 'vol'
+    });
+  }
 
-  wrap.innerHTML = '<canvas id="dew-canvas-trend"></canvas>';
-  var canvas = wrap.querySelector('canvas');
-  canvas.style.width = '100%';
-  canvas.style.height = '200px';
-
-  var labels = data.map(function(d) {
-    var dt = new Date(d.date + 'T00:00:00');
-    return dt.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
+  // MA7 overlay
+  var totalPerDay = days.map(function(_, di) {
+    return datasets.reduce(function(acc, ds) { return acc + (ds.data ? ds.data[di] : 0); }, 0);
   });
-  var values = data.map(function(d) { return d.vol || 0; });
-
-  var barColors = data.map(function(d) {
-    return d.date === today ? 'rgba(34,211,238,0.9)' : 'rgba(88,166,255,0.75)';
+  var ma7 = totalPerDay.map(function(_, i) {
+    var start = Math.max(0, i - 6);
+    var slice = totalPerDay.slice(start, i + 1);
+    return slice.reduce(function(a, v) { return a + v; }, 0) / slice.length;
   });
-  var barBorders = data.map(function(d) {
-    return d.date === today ? 'rgba(34,211,238,1)' : 'rgba(88,166,255,1)';
+  datasets.push({
+    type: 'line', label: 'MA7', data: ma7,
+    borderColor: 'rgba(251,191,36,0.9)', backgroundColor: 'transparent',
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
+    tension: 0.35, order: -1
   });
 
-  var ctx = canvas.getContext('2d');
-  _dewCharts['trend'] = new Chart(ctx, {
+  var labels = days.map(function(d) {
+    var dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  });
+
+  _dewCharts['anltrend'] = new Chart(canvas.getContext('2d'), {
     type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'м³/сутки',
-        data: values,
-        backgroundColor: barColors,
-        borderColor: barBorders,
-        borderWidth: 1,
-        borderRadius: 3,
-        borderSkipped: false
-      }]
-    },
+    data: { labels: labels, datasets: datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { display: true, position: 'top', labels: { font: { size: 11 }, boxWidth: 12, color: '#b0b8c8', padding: 8 } },
         tooltip: {
+          mode: 'index', intersect: false,
           callbacks: {
-            title: function(items) { return data[items[0].dataIndex].date; },
-            label: function(item) { return ' ' + item.raw.toLocaleString('ru-RU') + ' м³'; }
+            title: function(items) { return days[items[0].dataIndex]; },
+            label: function(item) {
+              if (!item.raw) return null;
+              var v = item.dataset.label === 'MA7' ? item.raw.toFixed(0) : item.raw.toLocaleString('ru-RU');
+              return ' ' + item.dataset.label + ': ' + v + ' м³';
+            }
           }
-        },
-        zoom: {
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
-          pan:  { enabled: true, mode: 'x' }
         }
       },
       scales: {
-        x: {
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { maxRotation: 45, font: { size: 11 }, maxTicksLimit: 10 }
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: {
-            font: { size: 11 },
-            callback: function(v) { return v >= 1000 ? (v/1000).toFixed(1)+'k' : v; }
-          }
-        }
+        x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { font: { size: 11 }, maxTicksLimit: 10, maxRotation: 45 } },
+        y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { font: { size: 11 }, callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } } }
       }
     }
   });
 }
 
-function _dewChartDest() {
-  var wrap = document.getElementById('dew-ch-dest');
+function _dewAnlPumpCards() {
+  var wrap = document.getElementById('dew-anl-pumpcards');
   if (!wrap) return;
-  _dewDestroyChart('dest');
+
+  var pids = _dewAFilteredPumpIds();
+  var pumps = (pids
+    ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
+    : DewateringState.pumps
+  ).slice().sort(function(a, b) {
+    var o = { working: 0, standby: 1, repair: 2, off: 3 };
+    return (o[a.status] || 3) - (o[b.status] || 3);
+  });
+
+  if (!pumps.length) { wrap.innerHTML = '<p class="dew-no-data">Нет насосов</p>'; return; }
+
+  var last7 = [];
+  for (var i = 6; i >= 0; i--) {
+    var d = new Date(); d.setDate(d.getDate() - i);
+    last7.push(d.toISOString().slice(0, 10));
+  }
+
+  var SC = { working: '#10b981', standby: '#3b82f6', repair: '#f59e0b', off: '#64748b' };
+  var SL = { working: 'Работает', standby: 'Резерв', repair: 'Ремонт', off: 'Выкл' };
+
+  wrap.innerHTML = pumps.map(function(p) {
+    var sc = SC[p.status] || '#64748b';
+    var sl = SL[p.status] || p.status || '—';
+    var volTotal = DewateringState.totalVolumePump(p.id) || 0;
+    var sump = DewateringState.sumps.find(function(s) { return s.id === p.sumpId; });
+    var sumpName = sump ? sump.name : '—';
+    var spark7 = last7.map(function(day) {
+      return DewateringState.meterReadings
+        .filter(function(r) { return r.date === day && r.pumpId === p.id; })
+        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+    });
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-3,var(--bg-2));border-radius:6px;border-left:3px solid ' + sc + '">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHTML(p.name) + '</div>' +
+        '<div style="font-size:10px;color:var(--txt-3);margin-top:1px">' + escHTML(sumpName) + (p.model ? ' · ' + escHTML(p.model) : '') + '</div>' +
+        '<div style="font-size:10px;color:var(--txt-2);margin-top:2px;font-variant-numeric:tabular-nums">' + volTotal.toLocaleString('ru-RU') + ' м³ всего</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+        '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:' + sc + '22;color:' + sc + '">' + sl + '</span>' +
+        _dewSparkSvg(spark7, sc) +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _dewAnlDest() {
+  _dewDestroyChart('anldest');
+  var canvas = document.getElementById('dew-canvas-anldest');
+  if (!canvas) return;
 
   var pids = _dewAFilteredPumpIds();
   var byDest = {};
@@ -3951,235 +4146,115 @@ function _dewChartDest() {
       byDest[d.destinationId] = (byDest[d.destinationId] || 0) + vol * d.pct / 100;
     });
   });
-  var total = Object.keys(byDest).reduce(function(a,k){return a+byDest[k];},0);
-  if (!total) { wrap.innerHTML='<p class="dew-no-data">Нет данных</p>'; return; }
 
-  var entries = Object.keys(byDest).map(function(k){
+  var total = Object.keys(byDest).reduce(function(a, k) { return a + byDest[k]; }, 0);
+  if (!total) { canvas.parentElement.innerHTML = '<p class="dew-no-data">Нет данных</p>'; return; }
+
+  var entries = Object.keys(byDest).map(function(k) {
     var d = DewateringState.destById(k);
-    return {name: d ? d.name : 'Не указано', vol: byDest[k]};
-  }).sort(function(a,b){return b.vol-a.vol;});
+    return { name: d ? d.name : 'Не указано', vol: byDest[k] };
+  }).sort(function(a, b) { return b.vol - a.vol; });
 
-  var COLORS = ['rgba(34,211,238,0.85)','rgba(52,211,153,0.85)','rgba(251,146,60,0.85)',
-                'rgba(248,113,113,0.85)','rgba(188,140,255,0.85)','rgba(88,166,255,0.85)'];
+  var COLORS = ['rgba(34,211,238,0.85)', 'rgba(52,211,153,0.85)', 'rgba(251,146,60,0.85)',
+                'rgba(248,113,113,0.85)', 'rgba(188,140,255,0.85)', 'rgba(88,166,255,0.85)'];
 
-  wrap.innerHTML = '<canvas id="dew-canvas-dest"></canvas>';
-  var canvas = wrap.querySelector('canvas');
-  canvas.style.width = '100%';
-  canvas.style.height = '200px';
-
-  var ctx = canvas.getContext('2d');
-  _dewCharts['dest'] = new Chart(ctx, {
+  _dewCharts['anldest'] = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
     data: {
-      labels: entries.map(function(e){return e.name;}),
+      labels: entries.map(function(e) { return e.name; }),
       datasets: [{
-        data: entries.map(function(e){return e.vol;}),
-        backgroundColor: entries.map(function(_,i){return COLORS[i%COLORS.length];}),
-        borderColor: 'rgba(18,24,38,0.8)',
-        borderWidth: 2,
-        hoverOffset: 8
+        data: entries.map(function(e) { return e.vol; }),
+        backgroundColor: entries.map(function(_, i) { return COLORS[i % COLORS.length]; }),
+        borderColor: 'rgba(18,24,38,0.8)', borderWidth: 2, hoverOffset: 8
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '62%',
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
       plugins: {
         legend: {
-          display: true,
-          position: 'right',
-          labels: {
-            font: { size: 11 },
-            padding: 10,
-            boxWidth: 12,
-            color: '#b0b8c8',
+          display: true, position: 'bottom',
+          labels: { font: { size: 11 }, padding: 8, boxWidth: 10, color: '#b0b8c8',
             generateLabels: function(chart) {
               return chart.data.labels.map(function(lbl, i) {
                 var v = chart.data.datasets[0].data[i];
-                var pct = total > 0 ? Math.round(v/total*100) : 0;
-                return {
-                  text: lbl + ' (' + pct + '%)',
-                  fillStyle: COLORS[i%COLORS.length],
-                  strokeStyle: 'transparent',
-                  index: i
-                };
+                var pct = total > 0 ? Math.round(v / total * 100) : 0;
+                return { text: lbl + ' (' + pct + '%)', fillStyle: COLORS[i % COLORS.length], strokeStyle: 'transparent', index: i };
               });
             }
           }
         },
-        tooltip: {
-          callbacks: {
-            label: function(item) {
-              var v = item.raw;
-              var pct = total > 0 ? Math.round(v/total*100) : 0;
-              return ' ' + v.toLocaleString('ru-RU') + ' м³ (' + pct + '%)';
-            }
-          }
-        }
+        tooltip: { callbacks: { label: function(item) {
+          var pct = total > 0 ? Math.round(item.raw / total * 100) : 0;
+          return ' ' + item.raw.toLocaleString('ru-RU') + ' м³ (' + pct + '%)';
+        }}}
       }
     }
   });
 }
 
-function _dewChartPumps() {
-  var wrap = document.getElementById('dew-ch-pumps');
+function _dewAnlHeatmap() {
+  var wrap = document.getElementById('dew-anl-heatmap');
   if (!wrap) return;
-  _dewDestroyChart('pumps');
 
-  if (!DewateringState.pumps.length) { wrap.innerHTML='<p class="dew-no-data">Нет насосов</p>'; return; }
   var pids = _dewAFilteredPumpIds();
-  var pumps = DewateringState.pumps.filter(function(p) { return !pids || pids.indexOf(p.id) >= 0; })
-    .slice().sort(function(a,b){return DewateringState.totalVolumePump(b.id)-DewateringState.totalVolumePump(a.id);});
-  if (!pumps.length) { wrap.innerHTML='<p class="dew-no-data">Нет данных</p>'; return; }
+  var pumps = (pids
+    ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
+    : DewateringState.pumps
+  ).filter(function(p) { return p.status !== 'off'; });
 
-  var STATUS_COLORS = {
-    'working': 'rgba(52,211,153,0.80)',
-    'standby': 'rgba(88,166,255,0.80)',
-    'repair':  'rgba(251,146,60,0.80)',
-    'off':     'rgba(110,118,129,0.60)'
-  };
-  function statusColor(s) {
-    var k = (s||'').toLowerCase();
-    return STATUS_COLORS[k] || 'rgba(88,166,255,0.75)';
+  if (!pumps.length) { wrap.innerHTML = '<p class="dew-no-data">Нет активных насосов</p>'; return; }
+
+  var N = 14;
+  var days = [];
+  for (var i = N - 1; i >= 0; i--) {
+    var d = new Date(); d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
   }
 
-  var canvasH = Math.max(120, pumps.length * 32);
-  wrap.innerHTML = '<canvas id="dew-canvas-pumps"></canvas>';
-  var canvas = wrap.querySelector('canvas');
-  canvas.style.width = '100%';
-  canvas.style.height = canvasH + 'px';
-
-  var ctx = canvas.getContext('2d');
-  var vols = pumps.map(function(p){return DewateringState.totalVolumePump(p.id)||0;});
-  _dewCharts['pumps'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: pumps.map(function(p){return p.name;}),
-      datasets: [{
-        label: 'м³',
-        data: vols,
-        backgroundColor: pumps.map(function(p){return statusColor(p.status);}),
-        borderColor: pumps.map(function(p){return statusColor(p.status).replace('0.80','1').replace('0.60','0.8');}),
-        borderWidth: 1,
-        borderRadius: 4,
-        borderSkipped: false
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function(item) { return ' ' + item.raw.toLocaleString('ru-RU') + ' м³'; }
-          }
-        }
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: {
-            font: { size: 11 },
-            callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; }
-          }
-        },
-        y: {
-          grid: { display: false },
-          ticks: { font: { size: 11 } }
-        }
-      }
-    }
-  });
-}
-
-function _dewChartSumps() {
-  var wrap = document.getElementById('dew-ch-sumps');
-  if (!wrap) return;
-  _dewDestroyChart('sumps');
-
-  if (!DewateringState.sumps.length) { wrap.innerHTML='<p class="dew-no-data">Нет зумпфов</p>'; return; }
-
-  var filteredSumps = DewateringState.sumps.filter(function(s) {
-    if (_dewAFilter.sumpId && s.id !== _dewAFilter.sumpId) return false;
-    if (_dewAFilter.quarry && (s.quarry || '') !== _dewAFilter.quarry) return false;
-    return true;
-  });
-  if (!filteredSumps.length) { wrap.innerHTML='<p class="dew-no-data">Нет данных по фильтру</p>'; return; }
-
-  var now = new Date();
-  var ruM = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
-  var months = [];
-  for (var i = 2; i >= 0; i--) {
-    var md = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    months.push({key: md.toISOString().slice(0,7), label: ruM[md.getMonth()] + ' \'' + String(md.getFullYear()).slice(2)});
+  function heatColor(h) {
+    if (h === null || h === undefined) return 'rgba(255,255,255,0.04)';
+    if (h === 0)  return 'rgba(239,68,68,0.30)';
+    if (h < 8)   return 'rgba(245,158,11,0.40)';
+    if (h < 16)  return 'rgba(251,191,36,0.50)';
+    if (h < 22)  return 'rgba(16,185,129,0.55)';
+    return 'rgba(52,211,153,0.75)';
   }
 
-  var COLORS = ['rgba(34,211,238,0.80)','rgba(52,211,153,0.80)','rgba(251,146,60,0.80)',
-                'rgba(248,113,113,0.80)','rgba(188,140,255,0.80)','rgba(88,166,255,0.80)'];
+  var dayLabels = days.map(function(d) {
+    var dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  });
 
-  var datasets = filteredSumps.map(function(sump, si) {
-    var pIds = DewateringState.pumpsOfSump(sump.id).map(function(p){return p.id;});
-    var vols = months.map(function(m) {
-      return DewateringState.meterReadings
-        .filter(function(r){return r.date.slice(0,7)===m.key && pIds.indexOf(r.pumpId)>=0;})
-        .reduce(function(a,r){return a+(DewateringState.computedVolume(r)||0);},0);
+  var html = '<table style="border-collapse:separate;border-spacing:2px;width:100%;font-size:10px">' +
+    '<tr><th style="text-align:left;padding:2px 4px;color:var(--txt-3);font-weight:400"></th>' +
+    dayLabels.map(function(l) {
+      return '<th style="padding:0 2px;color:var(--txt-3);font-weight:400;text-align:center;font-size:9px;white-space:nowrap">' + l + '</th>';
+    }).join('') + '</tr>';
+
+  pumps.forEach(function(p) {
+    html += '<tr><td style="padding:2px 4px;color:var(--txt-2);white-space:nowrap;font-weight:500;font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis" title="' + escHTML(p.name) + '">' + escHTML(p.name) + '</td>';
+    days.forEach(function(day) {
+      var rec = DewateringState.meterReadings.find(function(r) { return r.pumpId === p.id && r.date === day; });
+      var h = rec ? (rec.hoursWorked !== undefined && rec.hoursWorked !== null ? rec.hoursWorked : null) : null;
+      var bg = heatColor(h);
+      var title = h !== null ? h + ' ч' : 'нет данных';
+      html += '<td style="width:20px;height:20px;background:' + bg + ';border-radius:3px;text-align:center;cursor:default" title="' + escHTML(p.name) + ' · ' + day + ' · ' + title + '"></td>';
     });
-    return {
-      label: sump.name,
-      data: vols,
-      backgroundColor: COLORS[si % COLORS.length],
-      borderColor: COLORS[si % COLORS.length].replace('0.80','1'),
-      borderWidth: 1,
-      borderRadius: 4
-    };
+    html += '</tr>';
   });
 
-  wrap.innerHTML = '<canvas id="dew-canvas-sumps"></canvas>';
-  var canvas = wrap.querySelector('canvas');
-  canvas.style.width = '100%';
-  canvas.style.height = '200px';
+  html += '</table><div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">' +
+    [['rgba(255,255,255,0.04)','нет данных'],['rgba(239,68,68,0.30)','0 ч'],
+     ['rgba(245,158,11,0.40)','< 8 ч'],['rgba(251,191,36,0.50)','8–16 ч'],
+     ['rgba(16,185,129,0.55)','16–22 ч'],['rgba(52,211,153,0.75)','22–24 ч']].map(function(pair) {
+      return '<span style="display:flex;align-items:center;gap:4px">' +
+        '<span style="display:inline-block;width:10px;height:10px;background:' + pair[0] + ';border-radius:2px"></span>' +
+        '<span style="color:var(--txt-3);font-size:10px">' + pair[1] + '</span></span>';
+    }).join('') + '</div>';
 
-  var ctx = canvas.getContext('2d');
-  _dewCharts['sumps'] = new Chart(ctx, {
-    type: 'bar',
-    data: { labels: months.map(function(m){return m.label;}), datasets: datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: filteredSumps.length > 1,
-          position: 'top',
-          labels: { font: { size: 11 }, boxWidth: 12, color: '#b0b8c8', padding: 8 }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(item) {
-              return ' ' + item.dataset.label + ': ' + item.raw.toLocaleString('ru-RU') + ' м³';
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { font: { size: 11 } }
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: {
-            font: { size: 11 },
-            callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; }
-          }
-        }
-      }
-    }
-  });
+  wrap.innerHTML = html;
 }
+
 
 // ── Excel Export ─────────────────────────────────────────────
 
