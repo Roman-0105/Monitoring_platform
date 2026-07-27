@@ -4617,7 +4617,9 @@ function _dewAnlHeatmap() {
     html += '<tr><td style="padding:2px 4px;color:var(--txt-2);white-space:nowrap;font-weight:500;font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis" title="' + escHTML(p.name) + '">' + escHTML(p.name) + '</td>';
     days.forEach(function(day) {
       var rec = DewateringState.meterReadings.find(function(r) { return r.pumpId === p.id && r.date === day; });
-      var h = rec ? (rec.hoursWorked !== undefined && rec.hoursWorked !== null ? rec.hoursWorked : null) : null;
+      var h = rec
+        ? (rec.isStopped ? 0 : (rec.hoursWorked !== undefined && rec.hoursWorked !== null ? rec.hoursWorked : null))
+        : null;
       var bg = heatColor(h);
       var title = h !== null ? h + ' ч' : 'нет данных';
       html += '<td style="width:20px;height:20px;background:' + bg + ';border-radius:3px;text-align:center;cursor:default" title="' + escHTML(p.name) + ' · ' + day + ' · ' + title + '"></td>';
