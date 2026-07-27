@@ -3910,6 +3910,31 @@ function _dewAnlRefreshAll() {
   _dewAnlHeatmap();
 }
 
+// Возвращает объём записи, идущий ТОЛЬКО в финальные направления (не intermediate_sump).
+// Это исключает двойной счёт у насосов-перекаччиков.
+function _dewAnlFinalVolume(rec) {
+  var total = DewateringState.computedVolume(rec);
+  if (!total) return 0;
+  var dists = DewateringState.getDistributions(rec);
+  if (!dists || !dists.length) return total;
+  var finalPct = 0;
+  dists.forEach(function(d) {
+    var dest = d.destinationId ? DewateringState.destById(d.destinationId) : null;
+    if (!dest || dest.type !== 'intermediate_sump') finalPct += (d.pct || 0);
+  });
+  return finalPct >= 100 ? total : total * finalPct / 100;
+}
+
+// Суммарный финальный объём зумпфа за период (массив дат)
+function _dewAnlSumpVol(sumpId, days) {
+  var pIds = DewateringState.pumpsOfSump(sumpId).map(function(p) { return p.id; });
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
+  return DewateringState.meterReadings
+    .filter(function(r) { return pIds.indexOf(r.pumpId) >= 0 && daySet[r.date]; })
+    .reduce(function(acc, r) { return acc + _dewAnlFinalVolume(r); }, 0);
+}
+
 function _dewAnlUpdatePresetBtns() {
   var presets = [['7','7д'],['30','30д'],['90','90д'],['0','Всё']];
   var hasCustom = !!(_dewAFilter.dateFrom || _dewAFilter.dateTo);
@@ -3997,16 +4022,19 @@ function _dewAnlKpis() {
 
   // Update trend chart title
   var titleEl = document.getElementById('dew-anl-trend-title');
-  if (titleEl) titleEl.textContent = 'Объём откачки по насосам ' + _dewAnlPeriodLabel();
+  if (titleEl) titleEl.textContent = 'Объём откачки по зумпфам ' + _dewAnlPeriodLabel();
 
   var pids = _dewAFilteredPumpIds();
   var days = _dewAnlDays();
   var N = days.length || 1;
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
 
+  // Фильтруем только финальный объём (исключаем перекачку между зумпфами)
   var dailyVols = days.map(function(day) {
     return DewateringState.meterReadings
       .filter(function(r) { return r.date === day && (!pids || pids.indexOf(r.pumpId) >= 0); })
-      .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+      .reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
   });
 
   var vol30 = dailyVols.reduce(function(a, v) { return a + v; }, 0);
@@ -4046,7 +4074,7 @@ function _dewAnlKpis() {
     prevVol = prevDays.reduce(function(acc, day) {
       return acc + DewateringState.meterReadings
         .filter(function(r) { return r.date === day && (!pids || pids.indexOf(r.pumpId) >= 0); })
-        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+        .reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
     }, 0);
   }
   var volDelta = prevVol > 0 ? Math.round((vol30 - prevVol) / prevVol * 100) : null;
@@ -4101,55 +4129,44 @@ function _dewAnlTrend() {
 
   var pids = _dewAFilteredPumpIds();
   var days = _dewAnlDays();
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
 
-  var allPumps = pids
-    ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
-    : DewateringState.pumps;
+  // Группируем по зумпфам (финальный объём — без перекачки между зумпфами)
+  var filteredSumps = DewateringState.sumps.filter(function(s) {
+    if (_dewAFilter.sumpId && s.id !== _dewAFilter.sumpId) return false;
+    if (_dewAFilter.quarry && (s.quarry || '') !== _dewAFilter.quarry) return false;
+    return true;
+  });
 
-  var pumpVols = allPumps.map(function(p) {
-    var vol = days.reduce(function(acc, day) {
-      return acc + DewateringState.meterReadings
-        .filter(function(r) { return r.date === day && r.pumpId === p.id; })
-        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
-    }, 0);
-    return { pump: p, vol: vol };
+  var sumpVols = filteredSumps.map(function(s) {
+    var pumpIds = DewateringState.pumpsOfSump(s.id).map(function(p) { return p.id; });
+    if (pids) pumpIds = pumpIds.filter(function(id) { return pids.indexOf(id) >= 0; });
+    var vol = DewateringState.meterReadings
+      .filter(function(r) { return pumpIds.indexOf(r.pumpId) >= 0 && daySet[r.date]; })
+      .reduce(function(acc, r) { return acc + _dewAnlFinalVolume(r); }, 0);
+    return { sump: s, pumpIds: pumpIds, vol: vol };
   }).sort(function(a, b) { return b.vol - a.vol; });
 
-  var top5 = pumpVols.slice(0, 5).map(function(x) { return x.pump; });
-  var restPumps = pumpVols.slice(5);
-
-  var PUMP_COLORS = [
+  var SUMP_COLORS = [
     'rgba(59,130,246,0.75)', 'rgba(16,185,129,0.75)', 'rgba(245,158,11,0.75)',
-    'rgba(239,68,68,0.75)', 'rgba(139,92,246,0.75)'
+    'rgba(239,68,68,0.75)', 'rgba(139,92,246,0.75)', 'rgba(6,182,212,0.75)'
   ];
 
-  var datasets = top5.map(function(p, pi) {
+  var datasets = sumpVols.map(function(sv, si) {
+    var pumpIds = sv.pumpIds;
     var data = days.map(function(day) {
       return DewateringState.meterReadings
-        .filter(function(r) { return r.date === day && r.pumpId === p.id; })
-        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+        .filter(function(r) { return pumpIds.indexOf(r.pumpId) >= 0 && r.date === day; })
+        .reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
     });
+    var col = SUMP_COLORS[si % SUMP_COLORS.length];
     return {
-      type: 'bar', label: p.name, data: data,
-      backgroundColor: PUMP_COLORS[pi],
-      borderColor: PUMP_COLORS[pi].replace('0.75', '1'),
+      type: 'bar', label: sv.sump.name, data: data,
+      backgroundColor: col, borderColor: col.replace('0.75', '1'),
       borderWidth: 1, borderRadius: 2, stack: 'vol'
     };
   });
-
-  if (restPumps.length) {
-    var otherIds = restPumps.map(function(x) { return x.pump.id; });
-    var otherData = days.map(function(day) {
-      return DewateringState.meterReadings
-        .filter(function(r) { return r.date === day && otherIds.indexOf(r.pumpId) >= 0; })
-        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
-    });
-    datasets.push({
-      type: 'bar', label: 'Прочие', data: otherData,
-      backgroundColor: 'rgba(100,116,139,0.55)', borderColor: 'rgba(100,116,139,0.9)',
-      borderWidth: 1, borderRadius: 2, stack: 'vol'
-    });
-  }
 
   // MA7 overlay
   var totalPerDay = days.map(function(_, di) {
@@ -4226,7 +4243,9 @@ function _dewAnlPumpCards() {
   wrap.innerHTML = pumps.map(function(p) {
     var sc = SC[p.status] || '#64748b';
     var sl = SL[p.status] || p.status || '—';
-    var volTotal = DewateringState.totalVolumePump(p.id) || 0;
+    var volTotal = DewateringState.meterReadings
+      .filter(function(r) { return r.pumpId === p.id; })
+      .reduce(function(acc, r) { return acc + _dewAnlFinalVolume(r); }, 0);
     var sump = DewateringState.sumps.find(function(s) { return s.id === p.sumpId; });
     var sumpName = sump ? sump.name : '—';
     var spark7 = last7.map(function(day) {
@@ -4261,6 +4280,8 @@ function _dewAnlDest() {
     if (!vol) return;
     DewateringState.getDistributions(r).forEach(function(d) {
       if (!d.destinationId) return;
+      var dest = DewateringState.destById(d.destinationId);
+      if (dest && dest.type === 'intermediate_sump') return; // не показываем перекачку
       byDest[d.destinationId] = (byDest[d.destinationId] || 0) + vol * d.pct / 100;
     });
   });
