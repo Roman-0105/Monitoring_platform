@@ -21,7 +21,8 @@ var SumpForecastState = {
 };
 
 /// ── Полноэкранный просмотр графика ───────────────────────────────────────────
-function _sfOpenChartFullscreen(chartStateKey, title) {
+// compact=true → компактный оверлей (треть экрана), compact=false → весь экран
+function _sfOpenChartFullscreen(chartStateKey, title, compact) {
   var inst = SumpForecastState[chartStateKey];
   if (!inst || !inst.data) return;
   var existing = document.getElementById('sf-chart-fs');
@@ -29,47 +30,52 @@ function _sfOpenChartFullscreen(chartStateKey, title) {
 
   var overlay = document.createElement('div');
   overlay.id = 'sf-chart-fs';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;flex-direction:column;padding:20px;box-sizing:border-box';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
   overlay.tabIndex = -1;
 
+  var modal = document.createElement('div');
+  if (compact) {
+    modal.style.cssText = 'width:60%;height:34%;min-width:480px;min-height:240px;display:flex;flex-direction:column;background:#1a2233;border-radius:10px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.6)';
+  } else {
+    modal.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;background:#1a2233;border-radius:10px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.6)';
+  }
+
   var hdr = document.createElement('div');
-  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-shrink:0';
+  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px 16px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.1)';
   var ttl = document.createElement('span');
   ttl.textContent = title;
-  ttl.style.cssText = 'color:#fff;font-size:15px;font-weight:600;letter-spacing:.03em';
+  ttl.style.cssText = 'color:#fff;font-size:14px;font-weight:600;letter-spacing:.03em';
   var cls = document.createElement('button');
-  cls.textContent = '✕ Закрыть';
-  cls.style.cssText = 'background:none;border:1px solid rgba(255,255,255,0.3);color:#fff;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:13px';
-  cls.onclick = function(){ overlay.remove(); };
+  cls.textContent = '✕';
+  cls.style.cssText = 'background:none;border:none;color:rgba(255,255,255,0.6);padding:2px 6px;border-radius:4px;cursor:pointer;font-size:16px';
   hdr.appendChild(ttl); hdr.appendChild(cls);
-  overlay.appendChild(hdr);
+  modal.appendChild(hdr);
 
   var wrap = document.createElement('div');
-  wrap.style.cssText = 'flex:1;position:relative;background:#1a2233;border-radius:10px;overflow:hidden;min-height:0';
+  wrap.style.cssText = 'flex:1;position:relative;overflow:hidden;min-height:0';
   var cv = document.createElement('canvas');
   cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
   wrap.appendChild(cv);
-  overlay.appendChild(wrap);
+  modal.appendChild(wrap);
+  overlay.appendChild(modal);
   document.body.appendChild(overlay);
   overlay.focus();
 
-  overlay.addEventListener('keydown', function(e){ if (e.key === 'Escape') overlay.remove(); });
-
-  // Воспроизводим конфиг оригинального графика
   var cfg = inst.config;
   var newChart = new Chart(cv, {
     type: cfg.type,
     data: cfg.data,
-    options: Object.assign({}, cfg.options, { responsive: true, maintainAspectRatio: false,
-      animation: false,
+    options: Object.assign({}, cfg.options, { responsive: true, maintainAspectRatio: false, animation: false,
       plugins: Object.assign({}, cfg.options && cfg.options.plugins, {
         legend: Object.assign({}, cfg.options && cfg.options.plugins && cfg.options.plugins.legend, { display: true })
       })
     })
   });
-  overlay.addEventListener('remove', function(){ newChart.destroy(); });
-  // Destroy при закрытии
-  cls.onclick = function(){ newChart.destroy(); overlay.remove(); };
+
+  function close() { newChart.destroy(); overlay.remove(); }
+  cls.onclick = close;
+  overlay.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) close(); });
 }
 
 // ── Утилита: загрузка sql.js (WASM SQLite) ──────────────────────────────────
@@ -767,7 +773,7 @@ function renderSumpForecastContent(sump) {
   html += '<span class="card-title">Водоприток</span>';
   html += '<div style="display:flex;align-items:center;gap:8px">';
   if (calcAvgQ !== null) html += '<span style="font-size:18px;font-weight:700;color:#60a5fa">'+calcAvgQ.toFixed(1)+' м³/ч</span>';
-  html += '<button onclick="_sfOpenChartFullscreen(\'_inflowChartInst\',\'Водоприток\')" title="Развернуть" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1">⛶</button>';
+  html += '<button onclick="_sfOpenChartFullscreen(\'_inflowChartInst\',\'Водоприток\',true)" title="Развернуть" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1">⛶</button>';
   html += '</div>';
   html += '</div>';
   html += '<div style="background:var(--bg-sub);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-size:11px;color:var(--text-muted)">';
@@ -786,9 +792,12 @@ function renderSumpForecastContent(sump) {
   // Карточка: кривая V(H)
   if (hasCurve) {
     html += '<div class="card" style="padding:12px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
     html += '<span class="card-title">Кривая V(H)</span>';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
     html += '<span style="font-size:10px;color:var(--text-muted)">объём от отметки</span>';
+    html += '<button onclick="_sfOpenChartFullscreen(\'_vhChartInst\',\'Кривая V(H)\',true)" title="Развернуть" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1">⛶</button>';
+    html += '</div>';
     html += '</div>';
     html += '<canvas id="sf-vh-chart" height="80"></canvas>';
     html += '</div>';
@@ -806,7 +815,7 @@ function renderSumpForecastContent(sump) {
   if (latestLev !== null) html += '<span style="font-size:11px;color:#3b82f6;font-weight:600">▲ '+latestLev.toFixed(2)+' м</span>';
   html += '</div>';
   if (hasCurve) {
-    html += '<div id="sf-3d-container" style="width:100%;height:260px;background:#0d1117">';
+    html += '<div id="sf-3d-container" style="width:100%;height:390px;background:#0d1117">';
     html += '<p style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Загрузка Three.js...</p>';
     html += '</div>';
     html += '<div style="padding:4px 12px;font-size:10px;color:var(--text-muted);text-align:center">ЛКМ — вращение · Колёсико — масштаб · ПКМ — панорама</div>';
@@ -823,7 +832,7 @@ function renderSumpForecastContent(sump) {
   html += '<span class="card-title">История уровня и водоотлива</span>';
   html += '<div style="display:flex;align-items:center;gap:8px">';
   html += '<span style="font-size:11px;color:var(--text-muted)">за '+(days===1?'1 сут.':days===0?'выбранный период':days+' дн.')+'</span>';
-  html += '<button onclick="_sfOpenChartFullscreen(\'_levelChartInst\',\'История уровня и водоотлива\')" title="Развернуть" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1">⛶</button>';
+  html += '<button onclick="_sfOpenChartFullscreen(\'_levelChartInst\',\'История уровня и водоотлива\',false)" title="Развернуть" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1">⛶</button>';
   html += '</div>';
   html += '</div>';
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">';
@@ -1774,6 +1783,12 @@ function _sfRenderLevelChart(sump, lpData, days) {
   var stoppedDates = allDates.filter(function(d){
     return (!pumpsByDate[d] || pumpsByDate[d].vol === 0) && levs.some(function(l){ return l.date === d; });
   });
+  // Имена насосов зумпфа для тултипа остановок
+  var sumpPumpNames = DewateringState.pumps
+    .filter(function(p){ return p.sumpId === sump.id; })
+    .map(function(p){ return p.name || p.id; });
+  var stoppedDateSet = {};
+  stoppedDates.forEach(function(d){ stoppedDateSet[d] = true; });
 
   // Аннотации
   var annotations = {};
@@ -1873,6 +1888,14 @@ function _sfRenderLevelChart(sump, lpData, days) {
                 return 'Объём зумпфа: ' + v.toFixed(0) + ' м³' + pct;
               }
               return ctx.parsed.y;
+            },
+            afterBody: function(items) {
+              if (!items.length) return [];
+              var date = allDates[items[0].dataIndex];
+              if (date && stoppedDateSet[date] && sumpPumpNames.length > 0) {
+                return ['Остановка: ' + sumpPumpNames.join(', ')];
+              }
+              return [];
             }
           }
         }
