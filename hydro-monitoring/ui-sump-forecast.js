@@ -20,6 +20,58 @@ var SumpForecastState = {
   _forecastRenderCtx:  null,  // { result, sump, avgQ, pumps, latLev } для перерисовки
 };
 
+/// ── Полноэкранный просмотр графика ───────────────────────────────────────────
+function _sfOpenChartFullscreen(chartStateKey, title) {
+  var inst = SumpForecastState[chartStateKey];
+  if (!inst || !inst.data) return;
+  var existing = document.getElementById('sf-chart-fs');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'sf-chart-fs';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;flex-direction:column;padding:20px;box-sizing:border-box';
+  overlay.tabIndex = -1;
+
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-shrink:0';
+  var ttl = document.createElement('span');
+  ttl.textContent = title;
+  ttl.style.cssText = 'color:#fff;font-size:15px;font-weight:600;letter-spacing:.03em';
+  var cls = document.createElement('button');
+  cls.textContent = '✕ Закрыть';
+  cls.style.cssText = 'background:none;border:1px solid rgba(255,255,255,0.3);color:#fff;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:13px';
+  cls.onclick = function(){ overlay.remove(); };
+  hdr.appendChild(ttl); hdr.appendChild(cls);
+  overlay.appendChild(hdr);
+
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'flex:1;position:relative;background:#1a2233;border-radius:10px;overflow:hidden;min-height:0';
+  var cv = document.createElement('canvas');
+  cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+  wrap.appendChild(cv);
+  overlay.appendChild(wrap);
+  document.body.appendChild(overlay);
+  overlay.focus();
+
+  overlay.addEventListener('keydown', function(e){ if (e.key === 'Escape') overlay.remove(); });
+
+  // Воспроизводим конфиг оригинального графика
+  var cfg = inst.config;
+  var newChart = new Chart(cv, {
+    type: cfg.type,
+    data: cfg.data,
+    options: Object.assign({}, cfg.options, { responsive: true, maintainAspectRatio: false,
+      animation: false,
+      plugins: Object.assign({}, cfg.options && cfg.options.plugins, {
+        legend: Object.assign({}, cfg.options && cfg.options.plugins && cfg.options.plugins.legend, { display: true })
+      })
+    })
+  });
+  overlay.addEventListener('remove', function(){ newChart.destroy(); });
+  // Destroy при закрытии
+  cls.onclick = function(){ newChart.destroy(); overlay.remove(); };
+}
+
 // ── Утилита: загрузка sql.js (WASM SQLite) ──────────────────────────────────
 function _sfLoadSqlJs() {
   if (window._sfSqlJs) return Promise.resolve(window._sfSqlJs);
@@ -711,9 +763,12 @@ function renderSumpForecastContent(sump) {
 
   // Карточка: водоприток
   html += '<div class="card" style="padding:12px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
   html += '<span class="card-title">Водоприток</span>';
+  html += '<div style="display:flex;align-items:center;gap:8px">';
   if (calcAvgQ !== null) html += '<span style="font-size:18px;font-weight:700;color:#60a5fa">'+calcAvgQ.toFixed(1)+' м³/ч</span>';
+  html += '<button onclick="_sfOpenChartFullscreen(\'_inflowChartInst\',\'Водоприток\')" title="Развернуть" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1">⛶</button>';
+  html += '</div>';
   html += '</div>';
   html += '<div style="background:var(--bg-sub);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-size:11px;color:var(--text-muted)">';
   html += 'Q<sub>приток</sub> = (V<sub>откачано</sub> + ΔV<sub>зумпф</sub>) / 24<br>';
@@ -766,7 +821,10 @@ function renderSumpForecastContent(sump) {
   html += '<div class="card" style="padding:12px">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
   html += '<span class="card-title">История уровня и водоотлива</span>';
+  html += '<div style="display:flex;align-items:center;gap:8px">';
   html += '<span style="font-size:11px;color:var(--text-muted)">за '+(days===1?'1 сут.':days===0?'выбранный период':days+' дн.')+'</span>';
+  html += '<button onclick="_sfOpenChartFullscreen(\'_levelChartInst\',\'История уровня и водоотлива\')" title="Развернуть" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1">⛶</button>';
+  html += '</div>';
   html += '</div>';
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">';
   html += '<span style="font-size:11px;color:var(--text-muted)">Ось Y:</span>';
@@ -811,11 +869,15 @@ function renderSumpForecastContent(sump) {
     if (SumpForecastState._geom) {
       doRender(SumpForecastState._geom);
     } else if (sump.tridbPath && window.Api) {
-      Api.downloadSumpTridb(sump.tridbPath).then(function(res){
-        if (res.error || !res.data) return; return res.data.arrayBuffer();
-      }).then(function(ab){
-        if (!ab) return;
-        var SQL = window._sfSqlJs; if (!SQL) return;
+      // Загружаем sql.js параллельно с файлом, затем парсим геометрию
+      Promise.all([
+        _sfLoadSqlJs(),
+        Api.downloadSumpTridb(sump.tridbPath).then(function(res){
+          if (res.error || !res.data) throw new Error('download failed');
+          return res.data.arrayBuffer();
+        })
+      ]).then(function(results){
+        var SQL = results[0], ab = results[1];
         var db = new SQL.Database(new Uint8Array(ab));
         try {
           var row = db.exec('SELECT Geometry FROM Geometry LIMIT 1')[0].values[0][0];
@@ -824,8 +886,8 @@ function renderSumpForecastContent(sump) {
             SumpForecastState._geom = { xs:g.xs, ys:g.ys, zs:g.zs, tris:g.tris, zMin:sump.zMin, zMax:sump.zMax };
             doRender(SumpForecastState._geom);
           }
-        } catch(e){ db.close(); }
-      }).catch(function(){});
+        } catch(e){ db.close(); console.warn('[sf] geom parse:', e); }
+      }).catch(function(e){ console.warn('[sf] 3D load from storage:', e); });
     }
   }
 }
@@ -1799,7 +1861,7 @@ function _sfRenderLevelChart(sump, lpData, days) {
             }
           }
         },
-        annotation: annotations,
+        annotation: { annotations: annotations },
         tooltip: {
           callbacks: {
             label: function(ctx) {
