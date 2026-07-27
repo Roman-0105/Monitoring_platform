@@ -4510,8 +4510,14 @@ function _dewAnlDestDrilldown(entry, pumpVolMap, color) {
   var pumpRows = Object.keys(pumpVolMap).map(function(pid) {
     var pump = DewateringState.pumps.find(function(p) { return p.id === pid; });
     var sump = pump ? DewateringState.sumps.find(function(s) { return s.id === pump.sumpId; }) : null;
-    return { name: pump ? pump.name : pid, sumpName: sump ? sump.name : '—', vol: pumpVolMap[pid] };
-  }).sort(function(a, b) { return b.vol - a.vol; });
+    return {
+      name: pump ? (pump.name || '(без имени)') : '(насос удалён)',
+      sumpName: sump ? sump.name : '—',
+      vol: pumpVolMap[pid],
+      deleted: !pump
+    };
+  }).filter(function(r) { return !r.deleted; }) // скрываем удалённые насосы
+    .sort(function(a, b) { return b.vol - a.vol; });
 
   var total = pumpRows.reduce(function(acc, r) { return acc + r.vol; }, 0);
   var maxVol = pumpRows.length ? pumpRows[0].vol : 1;
