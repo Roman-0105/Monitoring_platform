@@ -4380,11 +4380,11 @@ function _dewAnlPumpCards() {
 
   if (!pumps.length) { wrap.innerHTML = '<p class="dew-no-data">Нет насосов</p>'; return; }
 
-  var last7 = [];
-  for (var i = 6; i >= 0; i--) {
-    var d = new Date(); d.setDate(d.getDate() - i);
-    last7.push(d.toISOString().slice(0, 10));
-  }
+  var days = _dewAnlDays();
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
+  // Спарклайн: последние 14 дней периода (или меньше)
+  var sparkDays = days.slice(-14);
 
   var SC = { working: '#10b981', standby: '#3b82f6', repair: '#f59e0b', off: '#64748b' };
   var SL = { working: 'Работает', standby: 'Резерв', repair: 'Ремонт', off: 'Выкл' };
@@ -4392,25 +4392,26 @@ function _dewAnlPumpCards() {
   wrap.innerHTML = pumps.map(function(p) {
     var sc = SC[p.status] || '#64748b';
     var sl = SL[p.status] || p.status || '—';
+    // Объём за выбранный период
     var volTotal = DewateringState.meterReadings
-      .filter(function(r) { return r.pumpId === p.id; })
+      .filter(function(r) { return r.pumpId === p.id && daySet[r.date]; })
       .reduce(function(acc, r) { return acc + _dewAnlFinalVolume(r); }, 0);
     var sump = DewateringState.sumps.find(function(s) { return s.id === p.sumpId; });
     var sumpName = sump ? sump.name : '—';
-    var spark7 = last7.map(function(day) {
+    var sparkVals = sparkDays.map(function(day) {
       return DewateringState.meterReadings
         .filter(function(r) { return r.date === day && r.pumpId === p.id; })
-        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
+        .reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
     });
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-3,var(--bg-2));border-radius:6px;border-left:3px solid ' + sc + '">' +
       '<div style="flex:1;min-width:0">' +
         '<div style="font-size:12px;font-weight:600;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHTML(p.name) + '</div>' +
         '<div style="font-size:10px;color:var(--txt-3);margin-top:1px">' + escHTML(sumpName) + (p.model ? ' · ' + escHTML(p.model) : '') + '</div>' +
-        '<div style="font-size:10px;color:var(--txt-2);margin-top:2px;font-variant-numeric:tabular-nums">' + volTotal.toLocaleString('ru-RU') + ' м³ всего</div>' +
+        '<div style="font-size:10px;color:var(--txt-2);margin-top:2px;font-variant-numeric:tabular-nums">' + volTotal.toLocaleString('ru-RU') + ' м³ за период</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
         '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:' + sc + '22;color:' + sc + '">' + sl + '</span>' +
-        _dewSparkSvg(spark7, sc) +
+        _dewSparkSvg(sparkVals, sc) +
       '</div>' +
     '</div>';
   }).join('');
@@ -4422,9 +4423,13 @@ function _dewAnlDest() {
   if (!canvas) return;
 
   var pids = _dewAnlEffectivePumpIds();
+  var days = _dewAnlDays();
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
   var byDest = {};
   DewateringState.meterReadings.forEach(function(r) {
     if (pids && pids.indexOf(r.pumpId) < 0) return;
+    if (!daySet[r.date]) return;
     var vol = DewateringState.computedVolume(r) || 0;
     if (!vol) return;
     DewateringState.getDistributions(r).forEach(function(d) {
@@ -4442,6 +4447,7 @@ function _dewAnlDest() {
   var byDestPump = {}; // destId → { pumpId → vol }
   DewateringState.meterReadings.forEach(function(r) {
     if (pids && pids.indexOf(r.pumpId) < 0) return;
+    if (!daySet[r.date]) return;
     var vol = DewateringState.computedVolume(r) || 0;
     if (!vol) return;
     DewateringState.getDistributions(r).forEach(function(d) {
