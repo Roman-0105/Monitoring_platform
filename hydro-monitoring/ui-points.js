@@ -994,8 +994,8 @@ function renderWorkers() {
     for (var i = 0; i < workers.length; i++) {
       var w = workers[i];
       html += '<div class="worker-btn" data-wname="' + escAttr(w.name) + '">';
-      html += '<span class="worker-btn__avatar">' + initials(w.name) + '</span>';
-      html += '<span>' + w.name + '</span></div>';
+      html += '<span class="worker-btn__avatar">' + escHTML(initials(w.name)) + '</span>';
+      html += '<span>' + escHTML(w.name) + '</span></div>';
     }
     grid.innerHTML = html || '<p class="empty-msg" style="padding:8px 0">Нет сотрудников</p>';
   }
