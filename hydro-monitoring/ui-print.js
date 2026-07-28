@@ -86,12 +86,12 @@ function _openPrintWindow(p, history) {
       var rSc  = STATUS_COLORS[r.status] || '#888';
       return '<tr>' +
         '<td>' + _printFmtDate(r.monitoringDate) + '</td>' +
-        '<td><span class="dot" style="background:' + rSc + '"></span>' + (r.status||'—') + '</td>' +
+        '<td><span class="dot" style="background:' + rSc + '"></span>' + escHTML(r.status||'—') + '</td>' +
         '<td style="text-align:right"><b>' + lps + '</b></td>' +
         '<td style="text-align:right">' + m3h + '</td>' +
-        '<td>' + (r.intensity||'—') + '</td>' +
-        '<td>' + (r.measureMethod||'—') + '</td>' +
-        '<td>' + (r.worker||'—') + '</td>' +
+        '<td>' + escHTML(r.intensity||'—') + '</td>' +
+        '<td>' + escHTML(r.measureMethod||'—') + '</td>' +
+        '<td>' + escHTML(r.worker||'—') + '</td>' +
       '</tr>';
     }).join('');
 
@@ -122,7 +122,7 @@ function _openPrintWindow(p, history) {
   // ── Строка данных ────────────────────────────────────────
   function row(label, value) {
     if (!value) return '';
-    return '<tr><td class="lbl">' + label + '</td><td>' + value + '</td></tr>';
+    return '<tr><td class="lbl">' + escHTML(label) + '</td><td>' + escHTML(String(value)) + '</td></tr>';
   }
 
   // ── HTML страницы ────────────────────────────────────────
@@ -240,7 +240,7 @@ function _openPrintWindow(p, history) {
 
   // Подвал
   '<div class="footer">' +
-    '<span>Точка №' + (p.pointNumber||'') + ' · Создана: ' + _printFmtDateTime(p.createdAt) + ' · Обновлена: ' + _printFmtDateTime(p.updatedAt) + '</span>' +
+    '<span>Точка №' + escHTML(p.pointNumber||'') + ' · Создана: ' + _printFmtDateTime(p.createdAt) + ' · Обновлена: ' + _printFmtDateTime(p.updatedAt) + '</span>' +
     '<span>Карьер ЮРГ · Мониторинг подземных вод</span>' +
   '</div>' +
 
