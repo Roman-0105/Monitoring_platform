@@ -129,7 +129,7 @@ function _openPrintWindow(p, history) {
   var html = '<!DOCTYPE html><html lang="ru"><head>' +
     '<meta charset="UTF-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>Точка №' + (p.pointNumber||'') + ' — Карьер ЮРГ</title>' +
+    '<title>Точка №' + escHTML(p.pointNumber||'') + ' — Карьер ЮРГ</title>' +
     '<style>' +
       '*{box-sizing:border-box;margin:0;padding:0}' +
       'body{font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:20px 28px}' +
@@ -186,14 +186,14 @@ function _openPrintWindow(p, history) {
 
   // Заголовок точки
   '<div style="margin-bottom:16px">' +
-    '<span class="point-num">Точка №' + (p.pointNumber||'—') + '</span>' +
-    '<span class="status-badge">' + (p.status||'Новая') + '</span>' +
+    '<span class="point-num">Точка №' + escHTML(p.pointNumber||'—') + '</span>' +
+    '<span class="status-badge">' + escHTML(p.status||'Новая') + '</span>' +
   '</div>' +
 
   // Фото
   '<div class="photo-wrap" style="margin-bottom:16px">' +
     (photoUrl
-      ? '<img src="' + photoUrl + '" alt="Фото точки" onerror="this.style.display=\'none\'">'
+      ? '<img src="' + escAttr(photoUrl) + '" alt="Фото точки" onerror="this.style.display=\'none\'">'
       : '<div class="no-photo">Фото не загружено</div>') +
   '</div>' +
 
