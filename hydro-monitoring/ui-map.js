@@ -1016,12 +1016,12 @@ function showMapTooltip(p, clientX, clientY) {
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
     '<span style="width:10px;height:10px;border-radius:50%;background:' + color +
     ';border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.3);flex-shrink:0"></span>' +
-    '<strong>#' + (p.pointNumber || '?') + '</strong>' +
-    '<span style="color:' + color + ';font-size:11px">' + (p.status || '') + '</span>' +
+    '<strong>#' + escHTML(p.pointNumber || '?') + '</strong>' +
+    '<span style="color:' + color + ';font-size:11px">' + escHTML(p.status || '') + '</span>' +
     '</div>' +
-    (p.worker    ? '<div>👤 ' + p.worker + '</div>' : '') +
+    (p.worker    ? '<div>👤 ' + escHTML(p.worker) + '</div>' : '') +
     (p.flowRate != null ? '<div>💧 ' + formatFlowBothUnits(p.flowRate) + '</div>' : '') +
-    (p.intensity ? '<div>' + p.intensity + '</div>' : '') +
+    (p.intensity ? '<div>' + escHTML(p.intensity) + '</div>' : '') +
     '<div style="color:var(--gray-600);font-size:11px">' + formatDate(p.createdAt) + '</div>';
 
   var tw = 180, th = 90;
@@ -1051,8 +1051,8 @@ function showMapPointCard(p) {
   var html =
     '<div class="mpc-header">' +
       '<div class="mpc-title">' +
-        '<span class="mpc-num">#' + (p.pointNumber || '—') + '</span>' +
-        '<span class="mpc-status" style="background:' + statusColor + '">' + (p.status || '') + '</span>' +
+        '<span class="mpc-num">#' + escHTML(p.pointNumber || '—') + '</span>' +
+        '<span class="mpc-status" style="background:' + statusColor + '">' + escHTML(p.status || '') + '</span>' +
       '</div>' +
       '<button class="mpc-close" id="map-card-close">✕</button>' +
     '</div>';
@@ -1062,14 +1062,14 @@ function showMapPointCard(p) {
   }
 
   html += '<div class="mpc-body">';
-  html += '<div class="mpc-row"><span class="mpc-label">Сотрудник</span><span>' + (p.worker || '—') + '</span></div>';
+  html += '<div class="mpc-row"><span class="mpc-label">Сотрудник</span><span>' + escHTML(p.worker || '—') + '</span></div>';
   html += '<div class="mpc-row"><span class="mpc-label">Дата мониторинга</span><span>' + formatMonitoringDate(p.monitoringDate) + '</span></div>';
   html += '<div class="mpc-row"><span class="mpc-label">Зафиксирована</span><span>' + formatDate(p.createdAt) + '</span></div>';
-  if (p.domain)     html += '<div class="mpc-row"><span class="mpc-label">Домен</span><span>' + p.domain + '</span></div>';
-  if (p.wall)       html += '<div class="mpc-row"><span class="mpc-label">Борт</span><span>' + p.wall + '</span></div>';
-  if (p.intensity)  html += '<div class="mpc-row"><span class="mpc-label">Интенсивность</span><span>' + p.intensity + '</span></div>';
+  if (p.domain)     html += '<div class="mpc-row"><span class="mpc-label">Домен</span><span>' + escHTML(p.domain) + '</span></div>';
+  if (p.wall)       html += '<div class="mpc-row"><span class="mpc-label">Борт</span><span>' + escHTML(p.wall) + '</span></div>';
+  if (p.intensity)  html += '<div class="mpc-row"><span class="mpc-label">Интенсивность</span><span>' + escHTML(p.intensity) + '</span></div>';
   if (p.flowRate != null) html += '<div class="mpc-row"><span class="mpc-label">Дебит</span><span>' + formatFlowBothUnits(p.flowRate) + '</span></div>';
-  if (p.waterColor) html += '<div class="mpc-row"><span class="mpc-label">Цвет воды</span><span>' + p.waterColor + '</span></div>';
+  if (p.waterColor) html += '<div class="mpc-row"><span class="mpc-label">Цвет воды</span><span>' + escHTML(p.waterColor) + '</span></div>';
   if (p.xLocal != null) {
     html += '<div class="mpc-row"><span class="mpc-label">X / Y</span><span>' +
       Number(p.xLocal).toFixed(2) + ' / ' + Number(p.yLocal).toFixed(2) + '</span></div>';

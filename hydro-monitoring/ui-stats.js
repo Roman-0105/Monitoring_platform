@@ -1861,8 +1861,8 @@ function showDitchDetail(ditch, autoHistory) {
   var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px">';
 
   function row(label, val) {
-    return '<div style="color:var(--txt-3)">' + label + '</div>' +
-           '<div style="color:var(--txt-1);font-weight:500">' + val + '</div>';
+    return '<div style="color:var(--txt-3)">' + escHTML(label) + '</div>' +
+           '<div style="color:var(--txt-1);font-weight:500">' + escHTML(String(val)) + '</div>';
   }
 
   html += row('Дата мониторинга', formatDitchDate(ditch.monitoringDate));

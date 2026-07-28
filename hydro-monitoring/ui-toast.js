@@ -14,6 +14,11 @@ var Toast = (function() {
   var _toasts    = {};   // id → { el, timer }
   var _seq       = 0;
 
+  // ── Экранирование (без зависимости от ui-utils.js — грузится раньше) ──
+  function _esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   // ── Контейнер ─────────────────────────────────────────────
   function getContainer() {
     if (_container && document.body.contains(_container)) return _container;
@@ -84,7 +89,7 @@ var Toast = (function() {
 
     el.innerHTML =
       '<span class="toast-icon">' + (icons[t] || icons.info) + '</span>' +
-      '<span class="toast-body"><div class="toast-msg">' + (message || '') + '</div></span>';
+      '<span class="toast-body"><div class="toast-msg">' + _esc(message) + '</div></span>';
     el.style.borderColor = (colors[t] || colors.info) + '55';
 
     getContainer().appendChild(el);
@@ -122,7 +127,7 @@ var Toast = (function() {
     el.innerHTML =
       spinnerHTML +
       '<span class="toast-body">' +
-        '<div class="toast-msg">' + (message || '') + '</div>' +
+        '<div class="toast-msg">' + _esc(message) + '</div>' +
         barHTML +
       '</span>';
 
@@ -136,7 +141,7 @@ var Toast = (function() {
     clearTimeout(t.timer);
     t.el.innerHTML =
       '<span class="toast-icon">✅</span>' +
-      '<span class="toast-body"><div class="toast-msg">' + (message || 'Готово') + '</div></span>';
+      '<span class="toast-body"><div class="toast-msg">' + _esc(message || 'Готово') + '</div></span>';
     t.el.style.borderColor = '#34a85355';
     var ms = duration != null ? duration : 2500;
     t.timer = setTimeout(function() { hide(id); }, ms);
@@ -149,7 +154,7 @@ var Toast = (function() {
     clearTimeout(t.timer);
     t.el.innerHTML =
       '<span class="toast-icon">❌</span>' +
-      '<span class="toast-body"><div class="toast-msg">' + (message || 'Ошибка') + '</div></span>';
+      '<span class="toast-body"><div class="toast-msg">' + _esc(message || 'Ошибка') + '</div></span>';
     t.el.style.borderColor = '#ea433555';
     var ms = duration != null ? duration : 4000;
     t.timer = setTimeout(function() { hide(id); }, ms);

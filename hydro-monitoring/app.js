@@ -63,14 +63,14 @@ function _renderQuarrySwitcher(quarries, suppressReload) {
       'color:var(--txt-3,#9aa0b4);text-transform:uppercase">Карьер</div>' +
     list.map(function(q) {
       var isActive = q.name === AppState.activeQuarry;
-      return '<button onclick="setActiveQuarry(\'' + q.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" ' +
+      return '<button onclick="setActiveQuarry(\'' + escAttr(q.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")) + '\')" ' +
         'style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;' +
         'font-size:13px;font-weight:' + (isActive ? '600' : '400') + ';cursor:pointer;' +
         'border:none;border-radius:8px;text-align:left;transition:background .15s;' +
         'background:' + (isActive ? 'var(--accent)' : 'transparent') + ';' +
         'color:' + (isActive ? '#fff' : 'var(--txt-1)') + '">' +
         '<span style="font-size:10px;line-height:1">' + (isActive ? '◉' : '◎') + '</span>' +
-        (q.name + '').replace(/&/g,'&amp;').replace(/</g,'&lt;') +
+        escHTML(q.name) +
         '</button>';
     }).join('');
 
