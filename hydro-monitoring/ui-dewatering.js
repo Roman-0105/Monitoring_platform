@@ -490,7 +490,8 @@ var _dewDiagramTheme = 'dark';
   style.id = 'dew-rail-css';
   style.textContent = [
     /* Shell layout */
-    '#page-dewatering{padding:0!important;overflow:hidden!important;display:flex!important;flex-direction:column}',
+    '#page-dewatering{padding:0!important;overflow:hidden!important}',
+    '#page-dewatering.active{display:flex!important;flex-direction:column}',
     '.dew-shell{display:flex;flex:1;overflow:hidden;height:100%}',
 
     /* Nav rail */
@@ -2628,6 +2629,11 @@ function _dewRenderPumpRegistry() {
   });
 }
 
+function _dewGoToLevels(sumpId) {
+  _dewLFilter.sumpId = sumpId || '';
+  _dewSwitch('levels');
+}
+
 function _dewSectionHeader(title, btnId, btnLabel, gold) {
   return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
     '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)">' + title + '</div>' +
@@ -2654,9 +2660,14 @@ function _dewRenderSumpsList() {
         (elev != null ? '<span>Отм. дна: <b style="color:var(--txt-2)">' + elev.toFixed(1) + ' м абс.</b></span>' : '<span style="color:var(--warn)">Отметка не задана</span>') +
         '<span>Насосов: <b style="color:var(--txt-2)">' + pumps.length + '</b></span>' +
       '</div>' +
-      '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:2px 8px" onclick="_dewOpenElevationHistory(\'' + s.id + '\')">' +
-        '📜 История отметок (' + hist.length + ')' +
-      '</button>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:2px 8px" onclick="_dewOpenElevationHistory(\'' + s.id + '\')">' +
+          '📜 История отметок (' + hist.length + ')' +
+        '</button>' +
+        '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:2px 8px;color:var(--blue);border-color:var(--blue)" onclick="_dewGoToLevels(\'' + s.id + '\')">' +
+          '≈ Уровни воды' +
+        '</button>' +
+      '</div>' +
       (s.notes ? '<div style="font-size:10px;color:var(--txt-3);margin-top:4px">' + escHTML(s.notes) + '</div>' : '') +
     '</div>';
   }).join('');
@@ -4043,56 +4054,75 @@ function _dewRenderLevelsChart(records, sumpId) {
   if (!wrap) return;
   _dewDestroyChart('levels');
 
-  if (!records || !records.length || !sumpId) { wrap.innerHTML = ''; return; }
+  if (!records || !records.length) { wrap.innerHTML = ''; return; }
 
-  var pts = records.slice().reverse().slice(-60); // last 60 readings
+  var LEVEL_COLORS = ['rgba(34,211,238,1)','rgba(99,179,237,1)','rgba(154,117,232,1)','rgba(251,191,36,1)','rgba(74,222,128,1)','rgba(248,113,113,1)'];
 
-  var labels = pts.map(function(r) {
-    var dt = new Date((r.date || '') + 'T00:00:00');
+  // Group by sump for multi-sump view
+  var grouped = {};
+  var sumpOrder = [];
+  records.slice().reverse().forEach(function(r) {
+    if (!grouped[r.sumpId]) { grouped[r.sumpId] = []; sumpOrder.push(r.sumpId); }
+    grouped[r.sumpId].push(r);
+  });
+
+  // Collect all unique dates for labels
+  var allDates = [];
+  var dateSet = {};
+  records.forEach(function(r) {
+    if (!dateSet[r.date]) { dateSet[r.date] = true; allDates.push(r.date); }
+  });
+  allDates.sort();
+  var labels = allDates.slice(-60).map(function(d) {
+    var dt = new Date(d + 'T00:00:00');
     return dt.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
   });
-  var values = pts.map(function(r) { return parseFloat(r.elevation || 0); });
+  var labelDates = allDates.slice(-60);
+
+  var datasets = sumpOrder.map(function(sid, idx) {
+    var sump = DewateringState.sumpById(sid);
+    var readings = grouped[sid];
+    // Map each label date to a value
+    var byDate = {};
+    readings.forEach(function(r) { byDate[r.date] = parseFloat(r.elevation || 0); });
+    var data = labelDates.map(function(d) { return byDate[d] != null ? byDate[d] : null; });
+    var color = LEVEL_COLORS[idx % LEVEL_COLORS.length];
+    var isSingle = sumpOrder.length === 1;
+    return {
+      label: sump ? sump.name : sid,
+      data: data,
+      fill: isSingle,
+      backgroundColor: isSingle ? color.replace('1)', '0.2)') : 'transparent',
+      borderColor: color,
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      pointBackgroundColor: color,
+      pointBorderColor: 'rgba(18,24,38,0.9)',
+      pointBorderWidth: 1.5,
+      tension: 0.35,
+      spanGaps: true,
+    };
+  });
 
   wrap.innerHTML = '<canvas id="dew-canvas-levels"></canvas>';
   var canvas = wrap.querySelector('canvas');
   canvas.style.width = '100%';
   canvas.style.height = '220px';
-
   var ctx = canvas.getContext('2d');
-
-  // Gradient fill
-  var gradient = ctx.createLinearGradient(0, 0, 0, 220);
-  gradient.addColorStop(0, 'rgba(34,211,238,0.35)');
-  gradient.addColorStop(1, 'rgba(34,211,238,0.02)');
 
   _dewCharts['levels'] = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Отметка (м абс.)',
-        data: values,
-        fill: true,
-        backgroundColor: gradient,
-        borderColor: 'rgba(34,211,238,1)',
-        borderWidth: 2,
-        pointRadius: 3,
-        pointHoverRadius: 6,
-        pointBackgroundColor: 'rgba(34,211,238,1)',
-        pointBorderColor: 'rgba(18,24,38,0.9)',
-        pointBorderWidth: 1.5,
-        tension: 0.35
-      }]
-    },
+    data: { labels: labels, datasets: datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { display: sumpOrder.length > 1, position: 'top', labels: { font: {size:11}, boxWidth: 12, padding: 12 } },
         tooltip: {
           callbacks: {
-            title: function(items) { return pts[items[0].dataIndex].date || ''; },
-            label: function(item) { return ' ' + item.raw.toFixed(2) + ' м абс.'; }
+            title: function(items) { return labelDates[items[0].dataIndex] || ''; },
+            label: function(item) { return ' ' + item.dataset.label + ': ' + (item.raw != null ? item.raw.toFixed(2) + ' м абс.' : '—'); }
           }
         },
         zoom: {
@@ -4103,7 +4133,7 @@ function _dewRenderLevelsChart(records, sumpId) {
       scales: {
         x: {
           grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { font: { size: 11 }, maxTicksLimit: 8, maxRotation: 30 }
+          ticks: { font: { size: 11 }, maxTicksLimit: 10, maxRotation: 30 }
         },
         y: {
           grid: { color: 'rgba(255,255,255,0.06)' },
