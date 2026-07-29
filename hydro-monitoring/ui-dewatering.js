@@ -423,7 +423,7 @@ var DEW_EVENT_TYPE = {
 
 var _dewInited          = false;
 var _dewSubTab          = 'overview';
-var _dewJFilter         = { quarry: '', sumpId: '', date: '' };
+var _dewJFilter         = { quarry: '', sumpId: '', date: '', histDateFrom: '', histDateTo: '' };
 var _dewLFilter         = { quarry: '', sumpId: '' };
 var _dewAFilter         = { quarry: '', sumpId: '', days: 30, dateFrom: '', dateTo: '' };
 // null = all; array of IDs = only these included in analytics
@@ -2970,75 +2970,208 @@ function _dewRenderJournal() {
   var today = new Date().toISOString().slice(0, 10);
   if (!_dewJFilter.date) _dewJFilter.date = today;
 
-  function jSumpOpts(quarry) {
+  function jSumpOpts(quarry, forEntry) {
     var filtered = quarry
       ? DewateringState.sumps.filter(function(s) { return (s.quarry || '') === quarry; })
       : DewateringState.sumps;
-    return '<option value="">Все зумпфы</option>' + filtered.map(function(s) {
+    var label = forEntry ? 'Все зумпфы' : 'Все зумпфы';
+    return '<option value="">' + label + '</option>' + filtered.map(function(s) {
       return '<option value="' + s.id + '"' + (_dewJFilter.sumpId === s.id ? ' selected' : '') + '>' + escHTML(s.name) + '</option>';
     }).join('');
   }
 
   el.innerHTML =
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">' +
+    // ── Day summary strip ──────────────────────────────────────
+    '<div id="dew-jr-day-summary" style="margin-bottom:14px"></div>' +
+
+    // ── Two-column layout ──────────────────────────────────────
+    '<div style="display:grid;grid-template-columns:minmax(340px,46%) 1fr;gap:16px;align-items:start">' +
+
       // LEFT: quick daily entry
       '<div>' +
-        '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);margin-bottom:8px">Ввод показаний (6:00)</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
-          '<select id="dew-jf-l-quarry" class="form-control" style="width:130px;font-size:12px">' + _dewQuarryOpts(_dewJFilter.quarry) + '</select>' +
-          '<select id="dew-jf-l-sump" class="form-control" style="width:150px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry) + '</select>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
-          '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(-1)" style="font-size:14px;padding:1px 8px" title="Предыдущий день">←</button>' +
-          '<input type="date" id="dew-jr-date" class="form-control" value="' + _dewJFilter.date + '" style="width:150px;font-size:12px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
+          '<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)">Ввод показаний</span>' +
+          '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(-1)" style="font-size:14px;padding:1px 8px;margin-left:auto" title="Предыдущий день">←</button>' +
+          '<input type="date" id="dew-jr-date" class="form-control" value="' + _dewJFilter.date + '" style="width:145px;font-size:12px">' +
           '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(1)" style="font-size:14px;padding:1px 8px" title="Следующий день">→</button>' +
-          '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px" id="dew-jr-save-all">💾 Сохранить всё</button>' +
-          '<button class="btn btn-sm btn-outline" style="font-size:11px;color:#217346;border-color:#217346;margin-left:auto" onclick="exportDewXLSX()">⬇ Excel</button>' +
         '</div>' +
+        '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
+          '<select id="dew-jf-l-quarry" class="form-control" style="width:130px;font-size:12px">' + _dewQuarryOpts(_dewJFilter.quarry) + '</select>' +
+          '<select id="dew-jf-l-sump" class="form-control" style="width:150px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry, true) + '</select>' +
+          '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px;margin-left:auto" id="dew-jr-save-all">💾 Сохранить</button>' +
+          '<button class="btn btn-sm btn-outline" style="font-size:11px;color:#217346;border-color:#217346" onclick="exportDewXLSX()">⬇ Excel</button>' +
+        '</div>' +
+        // Completeness indicator bar
+        '<div id="dew-jr-progress" style="margin-bottom:10px"></div>' +
         '<div id="dew-jr-quick"></div>' +
       '</div>' +
+
       // RIGHT: history table
       '<div>' +
-        '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);margin-bottom:8px">История показаний</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
+          '<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)">История показаний</span>' +
+          '<div style="font-size:11px;color:var(--txt-3);margin-left:auto" id="dew-jr-summary"></div>' +
+        '</div>' +
         '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
           '<select id="dew-jf-quarry" class="form-control" style="width:130px;font-size:12px">' + _dewQuarryOpts(_dewJFilter.quarry) + '</select>' +
-          '<select id="dew-jf-sump" class="form-control" style="width:150px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry) + '</select>' +
-          '<div style="font-size:11px;color:var(--txt-3);align-self:center" id="dew-jr-summary"></div>' +
+          '<select id="dew-jf-sump" class="form-control" style="width:150px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry, false) + '</select>' +
+          '<input type="date" id="dew-jr-hist-from" class="form-control" value="' + escAttr(_dewJFilter.histDateFrom || '') + '" style="width:140px;font-size:12px" placeholder="С даты" title="С даты">' +
+          '<input type="date" id="dew-jr-hist-to" class="form-control" value="' + escAttr(_dewJFilter.histDateTo || '') + '" style="width:140px;font-size:12px" placeholder="По дату" title="По дату">' +
+          '<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="_dewJHistClearDates()">✕</button>' +
         '</div>' +
         '<div id="dew-jr-table"></div>' +
       '</div>' +
     '</div>';
 
+  _dewRenderDaySummary(_dewJFilter.date);
+  _dewRenderJournalProgress(_dewJFilter.date);
   _dewRenderQuickEntry(_dewJFilter.date);
   _dewRenderReadingsTable();
 
   document.getElementById('dew-jr-date').addEventListener('change', function() {
     _dewJFilter.date = this.value;
+    _dewRenderDaySummary(this.value);
+    _dewRenderJournalProgress(this.value);
     _dewRenderQuickEntry(this.value);
+    _dewRenderReadingsTable();
   });
   document.getElementById('dew-jf-l-quarry').addEventListener('change', function() {
     _dewJFilter.quarry = this.value;
     _dewJFilter.sumpId = '';
     var lSump = document.getElementById('dew-jf-l-sump');
-    if (lSump) lSump.innerHTML = jSumpOpts(this.value);
+    if (lSump) lSump.innerHTML = jSumpOpts(this.value, true);
+    _dewRenderJournalProgress(_dewJFilter.date);
     _dewRenderQuickEntry(_dewJFilter.date);
   });
   document.getElementById('dew-jf-l-sump').addEventListener('change', function() {
     _dewJFilter.sumpId = this.value;
+    _dewRenderJournalProgress(_dewJFilter.date);
     _dewRenderQuickEntry(_dewJFilter.date);
   });
   document.getElementById('dew-jf-quarry').addEventListener('change', function() {
     _dewJFilter.quarry = this.value;
     _dewJFilter.sumpId = '';
     var rSump = document.getElementById('dew-jf-sump');
-    if (rSump) rSump.innerHTML = jSumpOpts(this.value);
+    if (rSump) rSump.innerHTML = jSumpOpts(this.value, false);
     _dewRenderReadingsTable();
   });
   document.getElementById('dew-jf-sump').addEventListener('change', function() {
     _dewJFilter.sumpId = this.value;
     _dewRenderReadingsTable();
   });
+  document.getElementById('dew-jr-hist-from').addEventListener('change', function() {
+    _dewJFilter.histDateFrom = this.value;
+    _dewRenderReadingsTable();
+  });
+  document.getElementById('dew-jr-hist-to').addEventListener('change', function() {
+    _dewJFilter.histDateTo = this.value;
+    _dewRenderReadingsTable();
+  });
   document.getElementById('dew-jr-save-all').addEventListener('click', _dewSaveQuickEntry);
+}
+
+// ── Day summary strip ─────────────────────────────────────────
+function _dewRenderDaySummary(date) {
+  var el = document.getElementById('dew-jr-day-summary');
+  if (!el) return;
+
+  var allPumps = DewateringState.pumps.filter(function(p) { return p.status === 'working' || p.status === 'standby'; });
+  if (!allPumps.length) { el.innerHTML = ''; return; }
+
+  var totalVol = 0, totalHrs = 0, working = 0, stopped = 0, missing = 0;
+  allPumps.forEach(function(p) {
+    var r = DewateringState.readingForDate(p.id, date);
+    if (!r) { missing++; return; }
+    if (r.isStopped) { stopped++; return; }
+    working++;
+    totalVol += DewateringState.computedVolume(r) || 0;
+    totalHrs += parseFloat(r.hoursWorked) || 0;
+  });
+  var total = allPumps.length;
+  var filled = working + stopped;
+  var pct = total ? Math.round(filled / total * 100) : 0;
+  var avgHrs = working > 0 ? (totalHrs / working).toFixed(1) : '—';
+
+  var statusColor = pct === 100 ? 'var(--ok)' : pct >= 50 ? 'var(--warn)' : 'var(--bad)';
+
+  el.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:10px;background:var(--bg-2);border:1px solid var(--line-2);border-radius:10px;padding:12px 16px;align-items:center">' +
+      _dewJKpi('Дата', _dewJFmtDate(date), '') +
+      _dewJKpi('Объём за день', totalVol > 0 ? totalVol.toFixed(0) + ' м³' : '—', 'var(--ok)') +
+      _dewJKpi('В работе', working + ' нас.', working > 0 ? 'var(--ok)' : 'var(--txt-3)') +
+      _dewJKpi('Простой', stopped + ' нас.', stopped > 0 ? 'var(--warn)' : 'var(--txt-3)') +
+      _dewJKpi('Ср. часов/нас.', avgHrs + ' ч', 'var(--txt-2)') +
+      // Completeness pill
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:4px">' +
+        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3)">Заполнено</div>' +
+        '<div style="font-size:20px;font-weight:700;color:' + statusColor + ';line-height:1">' + pct + '%</div>' +
+        '<div style="font-size:9px;color:var(--txt-3)">' + filled + ' / ' + total + '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+function _dewJKpi(label, val, color) {
+  return '<div style="display:flex;flex-direction:column;gap:2px">' +
+    '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3)">' + escHTML(label) + '</div>' +
+    '<div style="font-size:16px;font-weight:700;color:' + (color || 'var(--txt-1)') + ';line-height:1.2">' + val + '</div>' +
+  '</div>';
+}
+
+function _dewJFmtDate(iso) {
+  if (!iso) return '—';
+  var p = iso.split('-');
+  return p[2] + '.' + p[1] + '.' + p[0];
+}
+
+// ── Completeness progress bar ─────────────────────────────────
+function _dewRenderJournalProgress(date) {
+  var el = document.getElementById('dew-jr-progress');
+  if (!el) return;
+
+  var qFilter = _dewJFilter.quarry, sFilter = _dewJFilter.sumpId;
+  var pumps = DewateringState.pumps.filter(function(p) {
+    if (p.status !== 'working' && p.status !== 'standby') return false;
+    if (sFilter && p.sumpId !== sFilter) return false;
+    if (qFilter) {
+      var sump = DewateringState.sumpById(p.sumpId);
+      if (!sump || (sump.quarry || '') !== qFilter) return false;
+    }
+    return true;
+  });
+
+  if (!pumps.length) { el.innerHTML = ''; return; }
+
+  var indicators = pumps.map(function(p) {
+    var r = DewateringState.readingForDate(p.id, date);
+    var state = !r ? 'missing' : r.isStopped ? 'stopped' : 'done';
+    var sump = DewateringState.sumpById(p.sumpId);
+    var tip = escAttr((sump ? sump.name + ' · ' : '') + p.name + ': ' + (state === 'done' ? 'заполнено' : state === 'stopped' ? 'простой' : 'не заполнено'));
+    var bg = state === 'done' ? 'var(--ok)' : state === 'stopped' ? 'var(--warn)' : 'var(--line)';
+    return '<div title="' + tip + '" style="flex:1;height:6px;border-radius:3px;background:' + bg + ';min-width:6px;max-width:24px;cursor:default"></div>';
+  });
+
+  var done = pumps.filter(function(p) { var r = DewateringState.readingForDate(p.id, date); return r && !r.isStopped; }).length;
+  var stp  = pumps.filter(function(p) { var r = DewateringState.readingForDate(p.id, date); return r && r.isStopped; }).length;
+  var miss = pumps.length - done - stp;
+
+  el.innerHTML =
+    '<div style="margin-bottom:4px;display:flex;gap:4px;align-items:center">' +
+      '<span style="font-size:10px;color:var(--txt-3)">Готовность насосов:</span>' +
+      '<span style="font-size:10px;color:var(--ok)">' + done + ' введено</span>' +
+      (stp  ? '<span style="font-size:10px;color:var(--warn)">· ' + stp  + ' простой</span>' : '') +
+      (miss ? '<span style="font-size:10px;color:var(--bad)">· ' + miss + ' не заполнено</span>' : '') +
+    '</div>' +
+    '<div style="display:flex;gap:2px;flex-wrap:wrap">' + indicators.join('') + '</div>';
+}
+
+function _dewJHistClearDates() {
+  _dewJFilter.histDateFrom = '';
+  _dewJFilter.histDateTo   = '';
+  var f = document.getElementById('dew-jr-hist-from');
+  var t = document.getElementById('dew-jr-hist-to');
+  if (f) f.value = '';
+  if (t) t.value = '';
+  _dewRenderReadingsTable();
 }
 
 function _dewRenderQuickEntry(date) {
@@ -3071,12 +3204,17 @@ function _dewRenderQuickEntry(date) {
       var initRate = (existingVol != null && existingVol > 0 && existing && parseFloat(existing.hoursWorked) > 0)
         ? (existingVol / parseFloat(existing.hoursWorked)).toFixed(1) : null;
 
+      var cardBorder = existing
+        ? (existing.isStopped ? '3px solid var(--warn)' : '3px solid var(--ok)')
+        : '3px solid var(--line)';
+
       html +=
-        '<div style="padding:8px 0;border-top:1px solid var(--line-2)" data-pump-id="' + p.id + '">' +
+        '<div style="padding:8px 0 8px 10px;border-top:1px solid var(--line-2);border-left:' + cardBorder + ';margin-left:-10px;padding-left:10px;transition:border-color .2s" data-pump-id="' + p.id + '">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
           '<span style="font-size:12px;color:var(--txt-1);font-weight:500">' + escHTML(p.name) + '</span>' +
           '<span class="anl-pill anl-pill-' + (DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off).cls + '" style="font-size:9px">' + (DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off).label + '</span>' +
-          (existing ? '<span style="font-size:10px;color:var(--ok)">✓ введено</span>' : '') +
+          (existing && !existing.isStopped ? '<span style="font-size:10px;color:var(--ok)">✓ введено</span>' : '') +
+          (existing && existing.isStopped  ? '<span style="font-size:10px;color:var(--warn)">◑ простой</span>' : '') +
         '</div>' +
         '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-3);margin-bottom:6px;cursor:pointer">' +
           '<input type="checkbox" id="dew-qe-stopped-' + p.id + '"' + (isStopped ? ' checked' : '') + ' onchange="_dewQeToggleStopped(\'' + p.id + '\')">' +
@@ -3226,6 +3364,8 @@ function _dewJrChangeDay(delta) {
     String(d.getDate()).padStart(2, '0');
   _dewJFilter.date = newDate;
   dateEl.value = newDate;
+  _dewRenderDaySummary(newDate);
+  _dewRenderJournalProgress(newDate);
   _dewRenderQuickEntry(newDate);
   _dewRenderReadingsTable();
 }
@@ -3287,10 +3427,19 @@ function _dewSaveQuickEntry() {
     _dewJFilter.date = nextDate;
     var dateInp = document.getElementById('dew-jr-date');
     if (dateInp) dateInp.value = nextDate;
+    _dewRenderDaySummary(nextDate);
+    _dewRenderJournalProgress(nextDate);
     _dewRenderQuickEntry(nextDate);
   } else {
     Toast.show('Нечего сохранять — введите показания', 'warning');
   }
+}
+
+function _dewJStatusBadge(r) {
+  if (r.isStopped) return '<div style="font-size:9px;color:var(--warn);margin-top:1px">простой</div>';
+  if (r.isReset)   return '<div style="font-size:9px;color:var(--gold);margin-top:1px">замена счётчика</div>';
+  if (r.notes)     return '<div style="font-size:9px;color:var(--txt-3);margin-top:1px">' + escHTML(r.notes.slice(0, 40)) + '</div>';
+  return '';
 }
 
 function _dewReadingDestOpts(selectedId) {
@@ -3319,8 +3468,16 @@ function _dewRenderReadingsTable() {
     pumpsFilter = DewateringState.pumps.map(function(p) { return p.id; });
   }
 
+  var dateFrom = _dewJFilter.histDateFrom || '';
+  var dateTo   = _dewJFilter.histDateTo   || '';
+
   var records = DewateringState.meterReadings
-    .filter(function(r) { return pumpsFilter.indexOf(r.pumpId) >= 0; })
+    .filter(function(r) {
+      if (pumpsFilter.indexOf(r.pumpId) < 0) return false;
+      if (dateFrom && r.date < dateFrom) return false;
+      if (dateTo   && r.date > dateTo)   return false;
+      return true;
+    })
     .sort(function(a, b) { return b.date.localeCompare(a.date) || (b.pumpId || '').localeCompare(a.pumpId || ''); });
 
   var totalVol = records.reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
@@ -3328,11 +3485,18 @@ function _dewRenderReadingsTable() {
 
   if (!records.length) {
     el.innerHTML = '<div class="card" style="padding:20px;text-align:center;color:var(--txt-3);font-size:12px">' +
-      (DewateringState.meterReadings.length ? 'Нет данных по выбранному зумпфу' : 'Журнал пуст — введите первые показания слева') + '</div>';
+      (DewateringState.meterReadings.length ? 'Нет данных по выбранным фильтрам' : 'Журнал пуст — введите первые показания слева') + '</div>';
     return;
   }
 
-  el.innerHTML = '<div style="overflow-x:auto;max-height:420px;overflow-y:auto">' +
+  // Group records by date for summary rows
+  var dateGroups = {};
+  records.forEach(function(r) {
+    if (!dateGroups[r.date]) dateGroups[r.date] = [];
+    dateGroups[r.date].push(r);
+  });
+
+  el.innerHTML = '<div style="overflow-x:auto;max-height:520px;overflow-y:auto">' +
     '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:480px">' +
     '<thead style="position:sticky;top:0;background:var(--bg-2);z-index:1"><tr style="color:var(--txt-3);border-bottom:1px solid var(--line);font-size:10px;text-transform:uppercase">' +
       '<th style="padding:6px 8px;text-align:left;font-weight:500">Дата</th>' +
@@ -3343,7 +3507,7 @@ function _dewRenderReadingsTable() {
       '<th style="padding:6px 8px;font-weight:500">Направление</th>' +
       '<th style="padding:6px 8px"></th>' +
     '</tr></thead><tbody>' +
-    records.map(function(r) {
+    records.map(function(r, idx) {
       var pump      = DewateringState.pumpById(r.pumpId);
       var sump      = pump ? DewateringState.sumpById(pump.sumpId) : null;
       var vol       = DewateringState.computedVolume(r);
@@ -3363,12 +3527,34 @@ function _dewRenderReadingsTable() {
                       : r.isReset   ? '<span style="color:var(--gold)">→ ' + (r.resetStartValue != null ? parseFloat(r.resetStartValue).toFixed(0) : '0') + '</span>'
                       : (r.reading != null ? parseFloat(r.reading).toFixed(0) : '—');
 
+      // Insert date group header when date changes
+      var isFirstOfDate = idx === 0 || records[idx - 1].date !== r.date;
+      var groupHeader = '';
+      if (isFirstOfDate) {
+        var grp = dateGroups[r.date] || [];
+        var dayVol = grp.reduce(function(a, x) { return a + (DewateringState.computedVolume(x) || 0); }, 0);
+        var dayWorking = grp.filter(function(x) { return !x.isStopped; }).length;
+        var dayStopped = grp.filter(function(x) { return x.isStopped; }).length;
+        groupHeader = '<tr style="background:var(--bg-3);border-top:2px solid var(--line)">' +
+          '<td colspan="7" style="padding:5px 8px">' +
+            '<div style="display:flex;align-items:center;gap:12px">' +
+              '<span style="font-size:11px;font-weight:600;color:var(--txt-1)">' + _dewJFmtDate(r.date) + '</span>' +
+              '<span style="font-size:10px;color:var(--ok)">' + dayVol.toFixed(0) + ' м³</span>' +
+              '<span style="font-size:10px;color:var(--txt-3)">' + dayWorking + ' в работе' + (dayStopped ? ' · ' + dayStopped + ' простой' : '') + '</span>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+      }
+
       var dataRow =
+        groupHeader +
         '<tr style="border-bottom:' + (isEditing ? 'none' : '1px solid var(--line-2)') + (isEditing ? ';background:rgba(255,255,255,.03)' : r.isReset ? ';background:rgba(251,191,36,.04)' : '') + '">' +
-        '<td style="padding:5px 8px;color:var(--txt-1);white-space:nowrap">' + r.date + '</td>' +
+        '<td style="padding:5px 8px;color:var(--txt-3);white-space:nowrap;font-size:10px">' +
+          (sump ? '<span style="font-size:9px;color:var(--txt-3)">' + escHTML(sump.name) + '</span>' : '—') +
+        '</td>' +
         '<td style="padding:5px 8px">' +
           '<div style="color:var(--txt-1)">' + (pump ? escHTML(pump.name) : '—') + '</div>' +
-          (sump ? '<div style="color:var(--txt-3);font-size:9px">' + escHTML(sump.name) + '</div>' : '') +
+          _dewJStatusBadge(r) +
         '</td>' +
         '<td style="padding:5px 8px;text-align:right;color:var(--txt-2)">' + readingDisp + '</td>' +
         '<td style="padding:5px 8px;text-align:right">' + volStr + '</td>' +
@@ -3479,6 +3665,8 @@ function _dewSaveEditReading(id) {
   }
   DewateringState.updateReading(id, data);
   _dewEditReadingId = null;
+  _dewRenderDaySummary(_dewJFilter.date);
+  _dewRenderJournalProgress(_dewJFilter.date);
   _dewRenderReadingsTable();
   _dewRenderQuickEntry(_dewJFilter.date);
   Toast.show('Запись обновлена', 'success');
@@ -3488,6 +3676,8 @@ function _dewDeleteReading(id) {
   if (!confirm('Удалить запись показания?')) return;
   DewateringState.deleteReading(id);
   _dewEditReadingId = null;
+  _dewRenderDaySummary(_dewJFilter.date);
+  _dewRenderJournalProgress(_dewJFilter.date);
   _dewRenderReadingsTable();
   _dewRenderQuickEntry(_dewJFilter.date);
 }
