@@ -484,6 +484,71 @@ var _dewConnUpHandler      = null;
 // Single fixed theme (dark)
 var _dewDiagramTheme = 'dark';
 
+// ── CSS injection for nav-rail redesign ──────────────────────
+(function() {
+  var style = document.createElement('style');
+  style.id = 'dew-rail-css';
+  style.textContent = [
+    /* Shell layout */
+    '#page-dewatering{padding:0!important;overflow:hidden!important;display:flex!important;flex-direction:column}',
+    '.dew-shell{display:flex;flex:1;overflow:hidden;height:100%}',
+
+    /* Nav rail */
+    '.dew-rail{display:flex;flex-direction:column;width:52px;min-width:52px;background:var(--bg-2);border-right:1px solid var(--line);transition:width .22s cubic-bezier(.4,0,.2,1);overflow:hidden;gap:2px;padding:6px 4px;z-index:10;flex-shrink:0}',
+    '.dew-rail:hover{width:196px}',
+
+    /* Rail items */
+    '.dew-rail-item{display:flex;align-items:center;gap:10px;padding:8px 8px;border:none;background:none;color:var(--txt-3);border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s;text-align:left;min-height:40px;position:relative}',
+    '.dew-rail-item:hover{background:var(--bg-3);color:var(--txt-1)}',
+    '.dew-rail-item.active{background:rgba(59,130,246,.15);color:var(--blue)}',
+    '.dew-rail-item.dew-rail-action{color:var(--txt-3)}',
+    '.dew-rail-item.dew-rail-action:hover{color:var(--ok)}',
+
+    /* Rail icon */
+    '.dew-rail-icon{width:20px;height:20px;flex-shrink:0;stroke:currentColor}',
+
+    /* Rail label — hidden until rail expands */
+    '.dew-rail-label{font-size:12px;font-weight:500;opacity:0;transition:opacity .15s .05s;pointer-events:none;overflow:hidden;text-overflow:ellipsis}',
+    '.dew-rail:hover .dew-rail-label{opacity:1}',
+
+    /* Badge */
+    '.dew-rail-badge{position:absolute;top:6px;left:24px;min-width:14px;height:14px;border-radius:7px;background:var(--bad);color:#fff;font-size:9px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1}',
+    '.dew-rail-badge:not(:empty){display:flex}',
+
+    /* Separator */
+    '.dew-rail-sep{height:1px;background:var(--line);margin:4px 4px;flex-shrink:0}',
+
+    /* Content area */
+    '.dew-content{flex:1;overflow-y:auto;padding:16px 20px;min-width:0}',
+
+    /* Panel visibility */
+    '.dew-panel{display:none}',
+    '.dew-panel.active{display:block}',
+
+    /* Journal spreadsheet table (Variant B) */
+    '.dew-ss-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--line)}',
+    '.dew-ss{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}',
+    '.dew-ss thead tr{background:var(--bg-2);border-bottom:2px solid var(--line)}',
+    '.dew-ss thead th{padding:8px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);white-space:nowrap;text-align:left}',
+    '.dew-ss thead th:not(:first-child){border-left:1px solid var(--line-2)}',
+    '.dew-ss tbody tr{border-bottom:1px solid var(--line-2);transition:background .12s}',
+    '.dew-ss tbody tr:hover{background:var(--bg-2)}',
+    '.dew-ss tbody tr.dew-ss-sump-hdr{background:var(--bg-3);border-top:2px solid var(--line)}',
+    '.dew-ss tbody tr.dew-ss-stopped{opacity:.65}',
+    '.dew-ss td{padding:7px 10px;vertical-align:middle}',
+    '.dew-ss td:not(:first-child){border-left:1px solid var(--line-2)}',
+    '.dew-ss td input[type=number],.dew-ss td input[type=text]{background:transparent;border:none;outline:none;width:100%;font-size:12px;color:var(--txt-1);font-family:inherit;font-variant-numeric:tabular-nums}',
+    '.dew-ss td input[type=number]:focus,.dew-ss td input[type=text]:focus{background:var(--bg-3);border-radius:4px;padding:2px 4px;margin:-2px -4px}',
+    '.dew-ss-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}',
+
+    /* Day summary strip */
+    '.dew-day-kpi{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;background:var(--bg-2);border:1px solid var(--line-2);border-radius:10px;padding:12px 16px;margin-bottom:14px;align-items:center}',
+    '@media(max-width:900px){.dew-day-kpi{grid-template-columns:repeat(3,1fr)}}',
+    '@media(max-width:600px){.dew-day-kpi{grid-template-columns:repeat(2,1fr)}}',
+  ].join('\n');
+  if (!document.getElementById('dew-rail-css')) document.head.appendChild(style);
+})();
+
 // ── Init ─────────────────────────────────────────────────────
 
 function initDewateringTab() {
@@ -495,30 +560,45 @@ function initDewateringTab() {
   }
   if (!_dewInited) {
     _dewInited = true;
-    document.querySelectorAll('[data-dew-tab]').forEach(function(btn) {
+    document.querySelectorAll('.dew-rail-item[data-dew-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() { _dewSwitch(this.dataset.dewTab); });
     });
     // Async Supabase load — re-render when done
     DewateringState.loadFromSupabase().then(function(ok) {
-      if (ok) _dewSwitch(_dewSubTab);
+      if (ok) { _dewSwitch(_dewSubTab); _dewUpdateJournalBadge(); }
     });
   }
   _dewSwitch(_dewSubTab);
+  _dewUpdateJournalBadge();
 }
 
 function _dewSwitch(tab) {
   _dewSubTab = tab;
-  document.querySelectorAll('[data-dew-tab]').forEach(function(b) {
+  // Rail items
+  document.querySelectorAll('.dew-rail-item[data-dew-tab]').forEach(function(b) {
     b.classList.toggle('active', b.dataset.dewTab === tab);
   });
+  // Panels
   document.querySelectorAll('.dew-panel').forEach(function(p) {
     p.classList.toggle('active', p.id === 'dew-panel-' + tab);
   });
+  // Scroll content to top on tab change
+  var content = document.querySelector('.dew-content');
+  if (content) content.scrollTop = 0;
   if (tab === 'overview')  _dewRenderOverview();
   if (tab === 'sumps')     _dewRenderSumps();
   if (tab === 'journal')   _dewRenderJournal();
   if (tab === 'levels')    _dewRenderLevels();
   if (tab === 'analytics') _dewRenderAnalytics();
+}
+
+function _dewUpdateJournalBadge() {
+  var badge = document.getElementById('dew-rail-badge-journal');
+  if (!badge) return;
+  var today = new Date().toISOString().slice(0, 10);
+  var pumps = DewateringState.pumps.filter(function(p) { return p.status === 'working' || p.status === 'standby'; });
+  var missing = pumps.filter(function(p) { return !DewateringState.readingForDate(p.id, today); }).length;
+  badge.textContent = missing > 0 ? String(missing) : '';
 }
 
 // ── Обзор ────────────────────────────────────────────────────
@@ -2970,57 +3050,49 @@ function _dewRenderJournal() {
   var today = new Date().toISOString().slice(0, 10);
   if (!_dewJFilter.date) _dewJFilter.date = today;
 
-  function jSumpOpts(quarry, forEntry) {
+  function jSumpOpts(quarry) {
     var filtered = quarry
       ? DewateringState.sumps.filter(function(s) { return (s.quarry || '') === quarry; })
       : DewateringState.sumps;
-    var label = forEntry ? 'Все зумпфы' : 'Все зумпфы';
-    return '<option value="">' + label + '</option>' + filtered.map(function(s) {
+    return '<option value="">Все зумпфы</option>' + filtered.map(function(s) {
       return '<option value="' + s.id + '"' + (_dewJFilter.sumpId === s.id ? ' selected' : '') + '>' + escHTML(s.name) + '</option>';
     }).join('');
   }
 
   el.innerHTML =
-    // ── Day summary strip ──────────────────────────────────────
+    // Day KPI strip
     '<div id="dew-jr-day-summary" style="margin-bottom:14px"></div>' +
 
-    // ── Two-column layout ──────────────────────────────────────
-    '<div style="display:grid;grid-template-columns:minmax(340px,46%) 1fr;gap:16px;align-items:start">' +
+    // Toolbar
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+      '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(-1)" style="padding:4px 10px;font-size:16px" title="Предыдущий день">‹</button>' +
+      '<input type="date" id="dew-jr-date" class="form-control" value="' + escAttr(_dewJFilter.date) + '" style="width:145px;font-size:12px">' +
+      '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(1)" style="padding:4px 10px;font-size:16px" title="Следующий день">›</button>' +
+      '<div style="width:1px;height:24px;background:var(--line);margin:0 4px"></div>' +
+      '<select id="dew-jf-l-quarry" class="form-control" style="width:120px;font-size:12px">' + _dewQuarryOpts(_dewJFilter.quarry) + '</select>' +
+      '<select id="dew-jf-l-sump" class="form-control" style="width:140px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry) + '</select>' +
+      '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px;margin-left:auto" id="dew-jr-save-all">Сохранить</button>' +
+    '</div>' +
 
-      // LEFT: quick daily entry
-      '<div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
-          '<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)">Ввод показаний</span>' +
-          '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(-1)" style="font-size:14px;padding:1px 8px;margin-left:auto" title="Предыдущий день">←</button>' +
-          '<input type="date" id="dew-jr-date" class="form-control" value="' + _dewJFilter.date + '" style="width:145px;font-size:12px">' +
-          '<button class="btn btn-sm btn-outline" onclick="_dewJrChangeDay(1)" style="font-size:14px;padding:1px 8px" title="Следующий день">→</button>' +
-        '</div>' +
-        '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
-          '<select id="dew-jf-l-quarry" class="form-control" style="width:130px;font-size:12px">' + _dewQuarryOpts(_dewJFilter.quarry) + '</select>' +
-          '<select id="dew-jf-l-sump" class="form-control" style="width:150px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry, true) + '</select>' +
-          '<button class="btn btn-sm" style="background:var(--gold);color:#000;font-size:11px;margin-left:auto" id="dew-jr-save-all">💾 Сохранить</button>' +
-          '<button class="btn btn-sm btn-outline" style="font-size:11px;color:#217346;border-color:#217346" onclick="exportDewXLSX()">⬇ Excel</button>' +
-        '</div>' +
-        // Completeness indicator bar
-        '<div id="dew-jr-progress" style="margin-bottom:10px"></div>' +
-        '<div id="dew-jr-quick"></div>' +
-      '</div>' +
+    // Progress bar
+    '<div id="dew-jr-progress" style="margin-bottom:12px"></div>' +
 
-      // RIGHT: history table
-      '<div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
-          '<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)">История показаний</span>' +
-          '<div style="font-size:11px;color:var(--txt-3);margin-left:auto" id="dew-jr-summary"></div>' +
-        '</div>' +
-        '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">' +
-          '<select id="dew-jf-quarry" class="form-control" style="width:130px;font-size:12px">' + _dewQuarryOpts(_dewJFilter.quarry) + '</select>' +
-          '<select id="dew-jf-sump" class="form-control" style="width:150px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry, false) + '</select>' +
-          '<input type="date" id="dew-jr-hist-from" class="form-control" value="' + escAttr(_dewJFilter.histDateFrom || '') + '" style="width:140px;font-size:12px" placeholder="С даты" title="С даты">' +
-          '<input type="date" id="dew-jr-hist-to" class="form-control" value="' + escAttr(_dewJFilter.histDateTo || '') + '" style="width:140px;font-size:12px" placeholder="По дату" title="По дату">' +
-          '<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="_dewJHistClearDates()">✕</button>' +
-        '</div>' +
-        '<div id="dew-jr-table"></div>' +
+    // Spreadsheet entry table
+    '<div id="dew-jr-quick"></div>' +
+
+    // History section
+    '<div style="margin-top:24px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
+        '<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)">История</span>' +
+        '<div style="flex:1"></div>' +
+        '<select id="dew-jf-quarry" class="form-control" style="width:120px;font-size:12px">' + _dewQuarryOpts(_dewJFilter.quarry) + '</select>' +
+        '<select id="dew-jf-sump" class="form-control" style="width:140px;font-size:12px">' + jSumpOpts(_dewJFilter.quarry) + '</select>' +
+        '<input type="date" id="dew-jr-hist-from" class="form-control" value="' + escAttr(_dewJFilter.histDateFrom || '') + '" style="width:130px;font-size:12px" title="С даты">' +
+        '<input type="date" id="dew-jr-hist-to" class="form-control" value="' + escAttr(_dewJFilter.histDateTo || '') + '" style="width:130px;font-size:12px" title="По дату">' +
+        '<button class="btn btn-sm btn-outline" style="font-size:11px" onclick="_dewJHistClearDates()" title="Сбросить даты">✕</button>' +
+        '<div style="font-size:11px;color:var(--txt-3)" id="dew-jr-summary"></div>' +
       '</div>' +
+      '<div id="dew-jr-table"></div>' +
     '</div>';
 
   _dewRenderDaySummary(_dewJFilter.date);
@@ -3039,7 +3111,7 @@ function _dewRenderJournal() {
     _dewJFilter.quarry = this.value;
     _dewJFilter.sumpId = '';
     var lSump = document.getElementById('dew-jf-l-sump');
-    if (lSump) lSump.innerHTML = jSumpOpts(this.value, true);
+    if (lSump) lSump.innerHTML = jSumpOpts(this.value);
     _dewRenderJournalProgress(_dewJFilter.date);
     _dewRenderQuickEntry(_dewJFilter.date);
   });
@@ -3052,7 +3124,7 @@ function _dewRenderJournal() {
     _dewJFilter.quarry = this.value;
     _dewJFilter.sumpId = '';
     var rSump = document.getElementById('dew-jf-sump');
-    if (rSump) rSump.innerHTML = jSumpOpts(this.value, false);
+    if (rSump) rSump.innerHTML = jSumpOpts(this.value);
     _dewRenderReadingsTable();
   });
   document.getElementById('dew-jf-sump').addEventListener('change', function() {
@@ -3095,16 +3167,15 @@ function _dewRenderDaySummary(date) {
   var statusColor = pct === 100 ? 'var(--ok)' : pct >= 50 ? 'var(--warn)' : 'var(--bad)';
 
   el.innerHTML =
-    '<div style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:10px;background:var(--bg-2);border:1px solid var(--line-2);border-radius:10px;padding:12px 16px;align-items:center">' +
+    '<div class="dew-day-kpi">' +
       _dewJKpi('Дата', _dewJFmtDate(date), '') +
       _dewJKpi('Объём за день', totalVol > 0 ? totalVol.toFixed(0) + ' м³' : '—', 'var(--ok)') +
       _dewJKpi('В работе', working + ' нас.', working > 0 ? 'var(--ok)' : 'var(--txt-3)') +
       _dewJKpi('Простой', stopped + ' нас.', stopped > 0 ? 'var(--warn)' : 'var(--txt-3)') +
       _dewJKpi('Ср. часов/нас.', avgHrs + ' ч', 'var(--txt-2)') +
-      // Completeness pill
       '<div style="display:flex;flex-direction:column;align-items:center;gap:4px">' +
         '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3)">Заполнено</div>' +
-        '<div style="font-size:20px;font-weight:700;color:' + statusColor + ';line-height:1">' + pct + '%</div>' +
+        '<div style="font-size:22px;font-weight:700;color:' + statusColor + ';line-height:1;font-variant-numeric:tabular-nums">' + pct + '%</div>' +
         '<div style="font-size:9px;color:var(--txt-3)">' + filled + ' / ' + total + '</div>' +
       '</div>' +
     '</div>';
@@ -3179,109 +3250,142 @@ function _dewRenderQuickEntry(date) {
   if (!el) return;
 
   if (!DewateringState.pumps.length) {
-    el.innerHTML = '<div class="card" style="padding:16px;text-align:center;color:var(--txt-3);font-size:12px">Насосы не добавлены</div>';
+    el.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--txt-3);font-size:12px">Насосы не добавлены — перейдите на вкладку Зумпфы</div>';
     return;
   }
 
-  var html = '';
   var qFilter = _dewJFilter.quarry, sFilter = _dewJFilter.sumpId;
+  var rows = [];
   DewateringState.sumps.forEach(function(sump) {
     if (qFilter && (sump.quarry || '') !== qFilter) return;
     if (sFilter && sump.id !== sFilter) return;
     var pumps = DewateringState.pumpsOfSump(sump.id).filter(function(p) { return p.status === 'working' || p.status === 'standby'; });
     if (!pumps.length) return;
-    html += '<div class="card" style="padding:12px 14px;margin-bottom:8px">' +
-      '<div style="font-size:11px;font-weight:600;color:var(--txt-1);margin-bottom:10px">' + escHTML(sump.name) + '</div>';
-
-    pumps.forEach(function(p) {
-      var existing = DewateringState.readingForDate(p.id, date);
-      var prevRec  = DewateringState.lastActualReading(p.id, date);
-      var prevVal  = prevRec ? (prevRec.isReset ? (prevRec.manualVolume != null ? parseFloat(prevRec.manualVolume) : (parseFloat(prevRec.resetStartValue) || 0)) : parseFloat(prevRec.reading)) : null;
-      var prevDate = prevRec ? prevRec.date : null;
-      var isStopped = existing ? !!existing.isStopped : false;
-      var isReset   = existing ? !!existing.isReset   : false;
-      var existingVol = (existing && !isStopped && !isReset) ? DewateringState.computedVolume(existing) : null;
-      var initRate = (existingVol != null && existingVol > 0 && existing && parseFloat(existing.hoursWorked) > 0)
-        ? (existingVol / parseFloat(existing.hoursWorked)).toFixed(1) : null;
-
-      var cardBorder = existing
-        ? (existing.isStopped ? '3px solid var(--warn)' : '3px solid var(--ok)')
-        : '3px solid var(--line)';
-
-      html +=
-        '<div style="padding:8px 0 8px 10px;border-top:1px solid var(--line-2);border-left:' + cardBorder + ';margin-left:-10px;padding-left:10px;transition:border-color .2s" data-pump-id="' + p.id + '">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-          '<span style="font-size:12px;color:var(--txt-1);font-weight:500">' + escHTML(p.name) + '</span>' +
-          '<span class="anl-pill anl-pill-' + (DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off).cls + '" style="font-size:9px">' + (DEW_PUMP_STATUS[p.status] || DEW_PUMP_STATUS.off).label + '</span>' +
-          (existing && !existing.isStopped ? '<span style="font-size:10px;color:var(--ok)">✓ введено</span>' : '') +
-          (existing && existing.isStopped  ? '<span style="font-size:10px;color:var(--warn)">◑ простой</span>' : '') +
-        '</div>' +
-        '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-3);margin-bottom:6px;cursor:pointer">' +
-          '<input type="checkbox" id="dew-qe-stopped-' + p.id + '"' + (isStopped ? ' checked' : '') + ' onchange="_dewQeToggleStopped(\'' + p.id + '\')">' +
-          ' Насос не работал (простой)' +
-        '</label>' +
-        '<div id="dew-qe-fields-' + p.id + '" style="' + (isStopped ? 'display:none' : '') + '">' +
-          '<label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;margin-bottom:6px;color:' + (isReset ? 'var(--gold)' : 'var(--txt-3)') + '">' +
-            '<input type="checkbox" id="dew-qe-reset-chk-' + p.id + '"' + (isReset ? ' checked' : '') + ' onchange="_dewQeToggleReset(\'' + p.id + '\')">' +
-            ' 🔄 Замена расходомера / сброс показаний' +
-          '</label>' +
-          '<div id="dew-qe-normal-fields-' + p.id + '"' + (isReset ? ' style="display:none"' : '') + '>' +
-            '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px">' +
-              '<div>' +
-                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">' + (prevRec && prevRec.isReset ? '🔄 Нов. счётчик, нач.' : 'Пред. показание') + ' ' + (prevDate ? '(' + prevDate + ')' : '(нет данных)') + '</div>' +
-                '<div style="font-size:13px;font-weight:600;color:' + (prevRec && prevRec.isReset ? 'var(--gold)' : 'var(--txt-2)') + ';min-width:80px">' + (prevVal != null ? parseFloat(prevVal).toFixed(0) + ' м³' : '—') + '</div>' +
-              '</div>' +
-              '<div>' +
-                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Показание на 6:00 ' + (date || '') + '</div>' +
-                '<input type="number" id="dew-qe-val-' + p.id + '" class="form-control" value="' + (existing && !existing.isStopped && !existing.isReset ? existing.reading || '' : '') + '" placeholder="м³ накоп." style="width:110px;font-size:13px" oninput="_dewQeCalcVol(\'' + p.id + '\',' + (prevVal != null ? prevVal : 'null') + ')">' +
-              '</div>' +
-              '<div>' +
-                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">м³/ч</div>' +
-                '<div id="dew-qe-rate-' + p.id + '" style="font-size:13px;font-weight:600;min-width:55px;color:var(--txt-2)">' + (initRate != null ? '<span style="color:var(--txt-2)">' + initRate + ' м³/ч</span>' : '<span style="color:var(--txt-3)">—</span>') + '</div>' +
-              '</div>' +
-              '<div>' +
-                '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Объём за сутки</div>' +
-                '<div id="dew-qe-vol-' + p.id + '" data-vol="' + (existingVol != null ? existingVol : '') + '" style="font-size:13px;font-weight:600;min-width:70px;color:var(--ok)">' +
-                  _dewCalcVolDisplay(existing, prevVal) +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div id="dew-qe-reset-fields-' + p.id + '"' + (!isReset ? ' style="display:none"' : '') + '>' +
-            '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">' +
-              '<div class="form-group" style="margin:0">' +
-                '<label class="form-label" style="font-size:9px">Нач. показание нового счётчика, м³</label>' +
-                '<input type="number" id="dew-qe-reset-start-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.resetStartValue != null ? existing.resetStartValue : '')) + '" placeholder="0" style="width:150px;font-size:13px;font-weight:600">' +
-              '</div>' +
-              '<div class="form-group" style="margin:0">' +
-                '<label class="form-label" style="font-size:9px">Показание нового счётчика на 06:00 (необяз.)</label>' +
-                '<input type="number" id="dew-qe-reset-vol-' + p.id + '" class="form-control" value="' + escAttr(String(existing && existing.manualVolume != null ? existing.manualVolume : '')) + '" placeholder="м³" style="width:110px;font-size:12px">' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">' +
-            _dewDistBlock(p.id) +
-            '<div>' +
-              '<div style="font-size:9px;color:var(--txt-3);margin-bottom:2px">Часов работы</div>' +
-              '<input type="number" id="dew-qe-hrs-' + p.id + '" class="form-control" value="' + (existing ? existing.hoursWorked || '' : '') + '" placeholder="ч" style="width:60px;font-size:12px" min="0" max="24" oninput="_dewQeUpdateRate(\'' + p.id + '\')">' +
-            '</div>' +
-          '</div>' +
-          '<div style="margin-top:6px">' +
-            '<label style="font-size:9px;color:var(--txt-3)">Примечание</label>' +
-            '<input type="text" id="dew-qe-notes-' + p.id + '" class="form-control" value="' + escAttr(existing ? existing.notes || '' : '') + '" placeholder="необязательно" style="font-size:11px">' +
-          '</div>' +
-        '</div>' +
-        '<div id="dew-qe-stopped-reason-' + p.id + '" style="' + (!isStopped ? 'display:none' : '') + ';margin-top:4px">' +
-          _dewFld('Причина простоя', 'text', 'dew-qe-dreason-' + p.id, existing ? existing.downtimeReason || '' : '', 'нет воды, авария, ремонт...') +
-        '</div>' +
-        '</div>';
-    });
-    html += '</div>';
+    rows.push({ type: 'sump', sump: sump });
+    pumps.forEach(function(p) { rows.push({ type: 'pump', pump: p, sump: sump }); });
   });
 
-  el.innerHTML = html || '<div class="card" style="padding:16px;text-align:center;color:var(--txt-3);font-size:12px">Нет активных насосов</div>';
+  if (!rows.length) {
+    el.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--txt-3);font-size:12px">Нет активных насосов по выбранному фильтру</div>';
+    return;
+  }
 
-  // Init distribution rows for each pump after DOM is ready
+  var thead =
+    '<thead><tr>' +
+      '<th style="width:180px">Насос</th>' +
+      '<th style="width:120px;color:var(--txt-3)">Пред. показание</th>' +
+      '<th style="width:130px">Показание, м³</th>' +
+      '<th style="width:90px">Объём, м³</th>' +
+      '<th style="width:70px">Часов</th>' +
+      '<th style="width:60px">м³/ч</th>' +
+      '<th>Направление</th>' +
+      '<th style="width:120px">Примечание</th>' +
+      '<th style="width:72px;text-align:center">Простой</th>' +
+    '</tr></thead>';
+
+  var tbody = '<tbody>';
+  rows.forEach(function(row) {
+    if (row.type === 'sump') {
+      tbody += '<tr class="dew-ss-sump-hdr">' +
+        '<td colspan="9" style="padding:6px 10px;font-size:11px;font-weight:600;color:var(--txt-2)">' +
+          escHTML(row.sump.name) + (row.sump.quarry ? ' <span style="font-weight:400;color:var(--txt-3);font-size:10px">· ' + escHTML(row.sump.quarry) + '</span>' : '') +
+        '</td></tr>';
+      return;
+    }
+
+    var p = row.pump;
+    var existing = DewateringState.readingForDate(p.id, date);
+    var prevRec  = DewateringState.lastActualReading(p.id, date);
+    var prevVal  = prevRec
+      ? (prevRec.isReset
+          ? (prevRec.manualVolume != null ? parseFloat(prevRec.manualVolume) : (parseFloat(prevRec.resetStartValue) || 0))
+          : parseFloat(prevRec.reading))
+      : null;
+    var prevDate   = prevRec ? prevRec.date : null;
+    var isStopped  = existing ? !!existing.isStopped : false;
+    var isReset    = existing ? !!existing.isReset   : false;
+    var existingVol = (existing && !isStopped && !isReset) ? DewateringState.computedVolume(existing) : null;
+    var initRate   = (existingVol != null && existingVol > 0 && existing && parseFloat(existing.hoursWorked) > 0)
+      ? (existingVol / parseFloat(existing.hoursWorked)).toFixed(1) : null;
+    var rDists = existing ? DewateringState.getDistributions(existing) : (p.defaultDistributions || []);
+
+    // Status dot
+    var dotColor = !existing ? 'var(--line)' : (isStopped ? 'var(--warn)' : 'var(--ok)');
+    var statusLabel = !existing ? '' : (isStopped ? ' <span style="font-size:9px;color:var(--warn)">простой</span>' : ' <span style="font-size:9px;color:var(--ok)">✓</span>');
+
+    // Prev reading cell
+    var prevCell = prevVal != null
+      ? '<span style="font-variant-numeric:tabular-nums;color:' + (prevRec && prevRec.isReset ? 'var(--gold)' : 'var(--txt-3)') + '">' +
+          parseFloat(prevVal).toFixed(0) +
+          (prevDate ? ' <span style="font-size:9px;color:var(--txt-3)">(' + prevDate.slice(5).replace('-','.') + ')</span>' : '') +
+        '</span>'
+      : '<span style="color:var(--txt-3)">—</span>';
+
+    // Current reading input (hidden when stopped or reset)
+    var valInput = isReset
+      ? '<span style="font-size:10px;color:var(--gold)">замена счётчика</span>'
+      : '<input type="number" id="dew-qe-val-' + p.id + '" value="' + escAttr(existing && !isStopped && !isReset ? String(existing.reading || '') : '') + '" placeholder="накоп. м³" style="width:100%" oninput="_dewQeCalcVol(\'' + p.id + '\',' + (prevVal != null ? prevVal : 'null') + ')"' + (isStopped ? ' disabled' : '') + '>';
+
+    // Volume display
+    var volDisp = isStopped
+      ? '<span style="color:var(--txt-3)">—</span>'
+      : '<span id="dew-qe-vol-' + p.id + '" data-vol="' + escAttr(existingVol != null ? String(existingVol) : '') + '" style="font-variant-numeric:tabular-nums;color:var(--ok)">' +
+          (existingVol != null ? existingVol.toFixed(0) : '<span style="color:var(--txt-3)">—</span>') +
+        '</span>';
+
+    // Rate display
+    var rateDisp = isStopped
+      ? '<span style="color:var(--txt-3)">—</span>'
+      : '<span id="dew-qe-rate-' + p.id + '" style="color:var(--txt-3)">' + (initRate != null ? initRate : '—') + '</span>';
+
+    // Hours input
+    var hrsInput = '<input type="number" id="dew-qe-hrs-' + p.id + '" value="' + escAttr(existing ? String(existing.hoursWorked || '') : '') + '" placeholder="ч" min="0" max="24" style="width:52px" oninput="_dewQeUpdateRate(\'' + p.id + '\')"' + (isStopped ? ' disabled' : '') + '>';
+
+    // Notes input
+    var notesInput = '<input type="text" id="dew-qe-notes-' + p.id + '" value="' + escAttr(existing ? existing.notes || '' : '') + '" placeholder="—" style="width:100%"' + (isStopped ? ' disabled' : '') + '>';
+
+    // Distribution — short display + hidden actual rows
+    var distNames = rDists.length
+      ? rDists.map(function(d) { var dst = DewateringState.destById(d.destinationId); return dst ? escHTML(dst.name) : '?'; }).join(', ')
+      : '—';
+    var distCell = '<div style="font-size:11px;color:var(--txt-3)">' + distNames + '</div>' +
+      '<div id="dew-dist-toggle-' + p.id + '" style="display:none">' + _dewDistBlock(p.id) + '</div>';
+
+    tbody += '<tr class="' + (isStopped ? 'dew-ss-stopped' : '') + '" id="dew-ss-row-' + p.id + '">' +
+      '<td>' +
+        '<div style="display:flex;align-items:center;gap:7px">' +
+          '<span class="dew-ss-dot" style="background:' + dotColor + '"></span>' +
+          '<span style="font-size:12px;color:var(--txt-1)">' + escHTML(p.name) + '</span>' +
+          statusLabel +
+        '</div>' +
+      '</td>' +
+      '<td style="font-size:11px">' + prevCell + '</td>' +
+      '<td>' + valInput + '</td>' +
+      '<td style="text-align:right">' + volDisp + '</td>' +
+      '<td>' + hrsInput + '</td>' +
+      '<td style="text-align:right;font-size:11px">' + rateDisp + '</td>' +
+      '<td style="font-size:11px" onclick="_dewQeToggleDistPanel(\'' + p.id + '\')" style="cursor:pointer">' + distCell + '</td>' +
+      '<td>' + notesInput + '</td>' +
+      '<td style="text-align:center">' +
+        '<input type="checkbox" id="dew-qe-stopped-' + p.id + '"' + (isStopped ? ' checked' : '') + ' onchange="_dewQeToggleStopped(\'' + p.id + '\')" title="Насос не работал">' +
+      '</td>' +
+    '</tr>';
+
+    // Stopped reason row
+    if (isStopped) {
+      tbody += '<tr id="dew-ss-reason-' + p.id + '">' +
+        '<td colspan="9" style="padding:4px 10px 8px 24px">' +
+          '<span style="font-size:10px;color:var(--txt-3)">Причина простоя:&nbsp;</span>' +
+          '<input type="text" id="dew-qe-dreason-' + p.id + '" value="' + escAttr(existing ? existing.downtimeReason || '' : '') + '" placeholder="нет воды, авария, ремонт..." style="font-size:11px;width:300px;border:none;background:transparent;outline:none;color:var(--txt-2)">' +
+        '</td>' +
+      '</tr>';
+    }
+  });
+  tbody += '</tbody>';
+
+  el.innerHTML = '<div class="dew-ss-wrap"><table class="dew-ss">' + thead + tbody + '</table></div>';
+
+  // Init distribution rows
   DewateringState.sumps.forEach(function(sump) {
     DewateringState.pumpsOfSump(sump.id)
       .filter(function(p) { return p.status === 'working' || p.status === 'standby'; })
@@ -3290,6 +3394,11 @@ function _dewRenderQuickEntry(date) {
         _dewInitDistRows(p.id, ex ? DewateringState.getDistributions(ex) : (p.defaultDistributions || []));
       });
   });
+}
+
+function _dewQeToggleDistPanel(pumpId) {
+  var panel = document.getElementById('dew-dist-toggle-' + pumpId);
+  if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
 }
 
 function _dewCalcVolDisplay(existing, prevVal) {
@@ -3325,11 +3434,31 @@ function _dewQeCalcVol(pumpId, prevVal) {
 }
 
 function _dewQeToggleStopped(pumpId) {
-  var chk     = document.getElementById('dew-qe-stopped-' + pumpId);
-  var fields  = document.getElementById('dew-qe-fields-' + pumpId);
-  var reason  = document.getElementById('dew-qe-stopped-reason-' + pumpId);
-  if (fields)  fields.style.display  = chk.checked ? 'none' : '';
-  if (reason)  reason.style.display  = chk.checked ? '' : 'none';
+  var chk  = document.getElementById('dew-qe-stopped-' + pumpId);
+  if (!chk) return;
+  var isStopped = chk.checked;
+  // Disable all inputs in this row
+  ['dew-qe-val-', 'dew-qe-hrs-', 'dew-qe-notes-'].forEach(function(prefix) {
+    var inp = document.getElementById(prefix + pumpId);
+    if (inp) inp.disabled = isStopped;
+  });
+  // Show/hide stopped reason row
+  var row = document.getElementById('dew-ss-row-' + pumpId);
+  if (row) row.classList.toggle('dew-ss-stopped', isStopped);
+  // Toggle reason row — insert after pump row if not present
+  var reasonRow = document.getElementById('dew-ss-reason-' + pumpId);
+  if (isStopped && !reasonRow && row) {
+    var tr = document.createElement('tr');
+    tr.id = 'dew-ss-reason-' + pumpId;
+    tr.innerHTML = '<td colspan="9" style="padding:4px 10px 8px 24px"><span style="font-size:10px;color:var(--txt-3)">Причина простоя:&nbsp;</span>' +
+      '<input type="text" id="dew-qe-dreason-' + pumpId + '" placeholder="нет воды, авария, ремонт..." style="font-size:11px;width:300px;border:none;background:transparent;outline:none;color:var(--txt-2)"></td>';
+    row.parentNode.insertBefore(tr, row.nextSibling);
+  } else if (!isStopped && reasonRow) {
+    reasonRow.remove();
+  }
+  // Update dot color
+  var dot = row ? row.querySelector('.dew-ss-dot') : null;
+  if (dot) dot.style.background = isStopped ? 'var(--warn)' : 'var(--line)';
 }
 
 function _dewQeToggleReset(pumpId) {
@@ -3430,6 +3559,7 @@ function _dewSaveQuickEntry() {
     _dewRenderDaySummary(nextDate);
     _dewRenderJournalProgress(nextDate);
     _dewRenderQuickEntry(nextDate);
+    _dewUpdateJournalBadge();
   } else {
     Toast.show('Нечего сохранять — введите показания', 'warning');
   }
@@ -3485,7 +3615,7 @@ function _dewRenderReadingsTable() {
 
   if (!records.length) {
     el.innerHTML = '<div class="card" style="padding:20px;text-align:center;color:var(--txt-3);font-size:12px">' +
-      (DewateringState.meterReadings.length ? 'Нет данных по выбранным фильтрам' : 'Журнал пуст — введите первые показания слева') + '</div>';
+      (DewateringState.meterReadings.length ? 'Нет данных по выбранным фильтрам' : 'Журнал пуст — введите первые показания выше') + '</div>';
     return;
   }
 
@@ -3669,6 +3799,7 @@ function _dewSaveEditReading(id) {
   _dewRenderJournalProgress(_dewJFilter.date);
   _dewRenderReadingsTable();
   _dewRenderQuickEntry(_dewJFilter.date);
+  _dewUpdateJournalBadge();
   Toast.show('Запись обновлена', 'success');
 }
 
@@ -3680,6 +3811,7 @@ function _dewDeleteReading(id) {
   _dewRenderJournalProgress(_dewJFilter.date);
   _dewRenderReadingsTable();
   _dewRenderQuickEntry(_dewJFilter.date);
+  _dewUpdateJournalBadge();
 }
 
 // ── Уровни воды ──────────────────────────────────────────────

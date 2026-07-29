@@ -411,19 +411,46 @@
   </div>
 
   <!-- Водоотлив -->
-  <div class="page" id="page-dewatering">
-    <div class="settings-subtabs" style="margin-bottom:12px">
-      <button class="btn btn-sm btn-outline active" data-dew-tab="overview">📊 Обзор</button>
-      <button class="btn btn-sm btn-outline" data-dew-tab="sumps">⛽ Зумпфы</button>
-      <button class="btn btn-sm btn-outline" data-dew-tab="journal">📟 Расходомеры</button>
-      <button class="btn btn-sm btn-outline" data-dew-tab="levels">💧 Уровни воды</button>
-      <button class="btn btn-sm btn-outline" data-dew-tab="analytics">📈 Аналитика</button>
+  <div class="page" id="page-dewatering" style="padding:0;overflow:hidden">
+    <div class="dew-shell">
+      <!-- Nav Rail (Variant A) -->
+      <nav class="dew-rail" id="dew-rail">
+        <button class="dew-rail-item active" data-dew-tab="overview">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
+          <span class="dew-rail-label">Обзор</span>
+        </button>
+        <button class="dew-rail-item" data-dew-tab="sumps">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/><path d="M5 10h2M13 10h2"/></svg>
+          <span class="dew-rail-label">Зумпфы</span>
+        </button>
+        <button class="dew-rail-item" data-dew-tab="journal">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 7h6M7 10h6M7 13h4"/></svg>
+          <span class="dew-rail-label">Журнал</span>
+          <span class="dew-rail-badge" id="dew-rail-badge-journal"></span>
+        </button>
+        <button class="dew-rail-item" data-dew-tab="levels">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14c1.5-2 3-3 4-3s2.5 3 4 3 3-2 4-3"/><path d="M3 10c1.5-2 3-3 4-3s2.5 3 4 3 3-2 4-3"/></svg>
+          <span class="dew-rail-label">Уровни воды</span>
+        </button>
+        <button class="dew-rail-item" data-dew-tab="analytics">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,15 7,9 11,12 17,5"/><path d="M14 5h3v3"/></svg>
+          <span class="dew-rail-label">Аналитика</span>
+        </button>
+        <div class="dew-rail-sep"></div>
+        <button class="dew-rail-item dew-rail-action" onclick="exportDewXLSX()" title="Экспорт Excel">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 15h12"/></svg>
+          <span class="dew-rail-label">Excel</span>
+        </button>
+      </nav>
+      <!-- Content area -->
+      <div class="dew-content">
+        <div id="dew-panel-overview"  class="dew-panel active"></div>
+        <div id="dew-panel-sumps"     class="dew-panel"></div>
+        <div id="dew-panel-journal"   class="dew-panel"></div>
+        <div id="dew-panel-levels"    class="dew-panel"></div>
+        <div id="dew-panel-analytics" class="dew-panel"></div>
+      </div>
     </div>
-    <div id="dew-panel-overview"  class="dew-panel active"></div>
-    <div id="dew-panel-sumps"     class="dew-panel"></div>
-    <div id="dew-panel-journal"   class="dew-panel"></div>
-    <div id="dew-panel-levels"    class="dew-panel"></div>
-    <div id="dew-panel-analytics" class="dew-panel"></div>
   </div>
 
   <!-- Пылеподавление -->
