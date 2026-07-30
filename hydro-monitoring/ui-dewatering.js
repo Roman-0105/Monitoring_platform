@@ -539,7 +539,9 @@ var _dewDiagramTheme = 'dark';
     '.dew-ss td{padding:7px 10px;vertical-align:middle}',
     '.dew-ss td:not(:first-child){border-left:1px solid var(--line-2)}',
     '.dew-ss td input[type=number],.dew-ss td input[type=text]{background:transparent;border:none;outline:none;width:100%;font-size:12px;color:var(--txt-1);font-family:inherit;font-variant-numeric:tabular-nums}',
-    '.dew-ss td input[type=number]:focus,.dew-ss td input[type=text]:focus{background:var(--bg-3);border-radius:4px;padding:2px 4px;margin:-2px -4px}',
+    '.dew-ss td input[type=number]:focus,.dew-ss td input[type=text]:focus{background:rgba(59,130,246,.15);border-radius:4px;padding:2px 4px;margin:-2px -4px}',
+    '.dew-ss td.dew-ss-input{background:rgba(59,130,246,.05)}',
+    '.dew-ss tbody tr:hover td.dew-ss-input{background:rgba(59,130,246,.09)}',
     '.dew-ss-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}',
 
     /* Day summary strip */
@@ -3388,12 +3390,12 @@ function _dewRenderQuickEntry(date) {
         '</div>' +
       '</td>' +
       '<td style="font-size:11px">' + prevCell + '</td>' +
-      '<td>' + valInput + '</td>' +
+      '<td class="dew-ss-input">' + valInput + '</td>' +
       '<td style="text-align:right">' + volDisp + '</td>' +
-      '<td>' + hrsInput + '</td>' +
+      '<td class="dew-ss-input">' + hrsInput + '</td>' +
       '<td style="text-align:right;font-size:11px">' + rateDisp + '</td>' +
       '<td style="font-size:11px">' + distCell + '</td>' +
-      '<td>' + notesInput + '</td>' +
+      '<td class="dew-ss-input">' + notesInput + '</td>' +
       '<td style="text-align:center">' +
         '<input type="checkbox" id="dew-qe-stopped-' + p.id + '"' + (isStopped ? ' checked' : '') + ' onchange="_dewQeToggleStopped(\'' + p.id + '\')" title="Насос не работал">' +
       '</td>' +
