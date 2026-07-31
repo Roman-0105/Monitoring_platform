@@ -362,7 +362,7 @@ function _sfComputeInflowHistory(sump, days) {
 
   // Суммарный объём откаченной воды по датам со всех насосов зумпфа
   var pumpIds = DewateringState.pumps
-    .filter(function(p){ return p.sumpId === sump.id && p.countInVolume !== false; })
+    .filter(function(p){ return p.sumpId === sump.id; })
     .map(function(p){ return p.id; });
 
   var pumpedByDate = {};
