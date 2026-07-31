@@ -402,7 +402,7 @@ function _sfComputeInflowHistory(sump, days) {
 
     // Маркируем по d1 (дата записи откачки), т.к. пользователь записывает
     // объём откачки за период [d1, d2) как запись с датой d1
-    result.push({ date: d1, q: Math.round(Qin * 10) / 10, qRaw: Math.round(QinRaw * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100 });
+    result.push({ date: d1, q: Math.round(Qin * 10) / 10, qRaw: Math.round(QinRaw * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100, h1: H1, h2: H2, v1: V1, v2: V2, dv: Math.round(deltaV) });
   }
   return result.slice(-60); // последние 60 суток
 }
@@ -786,6 +786,35 @@ function renderSumpForecastContent(sump) {
     html += '<p style="color:var(--text-muted);font-size:13px">Недостаточно пар замеров за период</p>';
   } else {
     html += '<canvas id="sf-inflow-chart" height="70"></canvas>';
+    // Debug table
+    html += '<details style="margin-top:8px"><summary style="font-size:10px;color:var(--text-muted);cursor:pointer;user-select:none">🔍 Сырые данные расчёта</summary>';
+    html += '<div style="overflow-x:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:10px;font-variant-numeric:tabular-nums">';
+    html += '<thead><tr style="background:var(--bg-sub)">' +
+      '<th style="padding:4px 6px;text-align:left;color:var(--text-muted);white-space:nowrap">Дата</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">H1, м</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">H2, м</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">V1, м³</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">V2, м³</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">ΔV, м³</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">Откачано, м³</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">Q сырой</th>' +
+      '<th style="padding:4px 6px;text-align:right;color:var(--text-muted)">Q итог</th>' +
+    '</tr></thead><tbody>';
+    inflow.slice().reverse().forEach(function(row) {
+      var warn = row.qRaw < 0 ? ';color:#f87171' : (row.q === 0 && row.qRaw < 0 ? ';color:#f87171' : '');
+      html += '<tr style="border-top:1px solid var(--border-subtle)' + warn + '">' +
+        '<td style="padding:3px 6px">' + row.date + '</td>' +
+        '<td style="padding:3px 6px;text-align:right">' + (row.h1 != null ? row.h1.toFixed(2) : '—') + '</td>' +
+        '<td style="padding:3px 6px;text-align:right">' + (row.h2 != null ? row.h2.toFixed(2) : '—') + '</td>' +
+        '<td style="padding:3px 6px;text-align:right">' + (row.v1 != null ? Math.round(row.v1) : '—') + '</td>' +
+        '<td style="padding:3px 6px;text-align:right">' + (row.v2 != null ? Math.round(row.v2) : '—') + '</td>' +
+        '<td style="padding:3px 6px;text-align:right;color:' + (row.dv < 0 ? '#60a5fa' : '#f59e0b') + '">' + (row.dv != null ? Math.round(row.dv) : '—') + '</td>' +
+        '<td style="padding:3px 6px;text-align:right;color:var(--text-primary)">' + row.vpumped + '</td>' +
+        '<td style="padding:3px 6px;text-align:right;color:' + (row.qRaw < 0 ? '#f87171' : 'var(--text-muted)') + '">' + row.qRaw.toFixed(1) + '</td>' +
+        '<td style="padding:3px 6px;text-align:right;font-weight:600;color:#60a5fa">' + row.q.toFixed(1) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div></details>';
   }
   html += '</div>';
 
