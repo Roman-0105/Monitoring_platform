@@ -33,6 +33,7 @@ var DewateringState = {
   destinations:         [],  // {id, name, type, targetSumpId}
   meterReadings:        [],  // {id, pumpId, date, reading, isReset, isStopped, downtimeReason, hoursWorked, distributions:[{destinationId,pct}], isManualVolume, manualVolume, notes}
   waterLevels:          [],  // {id, sumpId, date, time, elevation, measuredBy, notes}
+  sumpCurveVersions:    [],  // {id, sumpId, validFrom, totalVolume, zMin, zMax, tridbPath, volumeCurve, notes}
 
   _id: function(p) { return p + Date.now() + '_' + Math.random().toString(36).slice(2, 6); },
 
@@ -47,6 +48,7 @@ var DewateringState = {
       this.destinations         = Array.isArray(d.destinations)         ? d.destinations         : _dewDefaultDest();
       this.meterReadings        = Array.isArray(d.meterReadings)        ? d.meterReadings        : [];
       this.waterLevels          = Array.isArray(d.waterLevels)          ? d.waterLevels          : [];
+      this.sumpCurveVersions    = Array.isArray(d.sumpCurveVersions)    ? d.sumpCurveVersions    : [];
       // Migrate old destinationId → distributions:[{destinationId, pct:100}]
       var needSave = false;
       this.meterReadings = this.meterReadings.map(function(r) {
@@ -62,7 +64,7 @@ var DewateringState = {
     } catch(e) {
       this.sumps = []; this.sumpElevationHistory = []; this.pumps = [];
       this.pumpEvents = []; this.destinations = _dewDefaultDest();
-      this.meterReadings = []; this.waterLevels = [];
+      this.meterReadings = []; this.waterLevels = []; this.sumpCurveVersions = [];
     }
   },
 
@@ -71,7 +73,7 @@ var DewateringState = {
       sumps: this.sumps, sumpElevationHistory: this.sumpElevationHistory,
       pumps: this.pumps, pumpEvents: this.pumpEvents,
       destinations: this.destinations, meterReadings: this.meterReadings,
-      waterLevels: this.waterLevels,
+      waterLevels: this.waterLevels, sumpCurveVersions: this.sumpCurveVersions,
     }));
   },
 
@@ -81,7 +83,8 @@ var DewateringState = {
       var results = await Promise.all([
         Api.getDewSumps(), Api.getDewElevations(), Api.getDewPumps(),
         Api.getDewPumpEvents(), Api.getDewDestinations(),
-        Api.getDewReadings(), Api.getDewWaterLevels()
+        Api.getDewReadings(), Api.getDewWaterLevels(),
+        Api.getDewSumpCurveVersions(),
       ]);
       if (results.some(function(r) { return r.error; })) return false;
       this.sumps                = results[0].data.map(rowToDewSump);
@@ -182,6 +185,9 @@ var DewateringState = {
         // keep this.waterLevels as-is (do NOT overwrite with empty)
       }
       // else: both empty – nothing to do
+
+      // ── Curve versions: remote is source of truth ────────────────────────────
+      this.sumpCurveVersions = results[7].data.map(rowToDewSumpCurveVer);
 
       this.save();
       return true;

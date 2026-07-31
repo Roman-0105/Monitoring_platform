@@ -336,9 +336,28 @@ function _sfLevelAt(curve, targetV) {
 }
 
 // ── Расчёт среднего суточного притока по истории ─────────────────────────────
+// ── Возвращает кривую V(H) для зумпфа на заданную дату ─────────────────────
+// Ищет в sumpCurveVersions версию с наибольшей valid_from <= date.
+// Если версий нет — возвращает sump.volumeCurve (обратная совместимость).
+function _sfGetCurveForDate(sump, date) {
+  var versions = (DewateringState.sumpCurveVersions || [])
+    .filter(function(v) { return v.sumpId === sump.id && v.validFrom <= date && v.volumeCurve && v.volumeCurve.length > 0; })
+    .sort(function(a, b) { return a.validFrom < b.validFrom ? -1 : a.validFrom > b.validFrom ? 1 : 0; });
+  if (versions.length > 0) return versions[versions.length - 1].volumeCurve;
+  return sump.volumeCurve || null;
+}
+
+// ── Возвращает true если для зумпфа есть хоть одна кривая V(H) ─────────────
+function _sfSumpHasCurve(sump) {
+  if (sump.volumeCurve && sump.volumeCurve.length > 0) return true;
+  return (DewateringState.sumpCurveVersions || []).some(function(v) {
+    return v.sumpId === sump.id && v.volumeCurve && v.volumeCurve.length > 0;
+  });
+}
+
 function _sfComputeInflowHistory(sump, days) {
   var result = [];
-  if (!sump.volumeCurve || sump.volumeCurve.length === 0) return result;
+  if (!_sfSumpHasCurve(sump)) return result;
 
   // days=0 означает произвольный период из analysisCustomFrom/To
   var cutoffStr, endStr;
@@ -372,37 +391,86 @@ function _sfComputeInflowHistory(sump, days) {
     pumpedByDate[r.date] = (pumpedByDate[r.date] || 0) + v;
   });
 
+  // Собираем даты смены кривой V(H) для этого зумпфа
+  var curveChangeDates = (DewateringState.sumpCurveVersions || [])
+    .filter(function(v) { return v.sumpId === sump.id && v.volumeCurve && v.volumeCurve.length > 0; })
+    .map(function(v) { return v.validFrom; })
+    .sort();
+
   // Перебираем пары дней (D-1 → D)
   var dates = Object.keys(levByDate).sort();
   for (var i = 1; i < dates.length; i++) {
     var d1 = dates[i-1], d2 = dates[i];
     var H1 = parseFloat(levByDate[d1].elevation);
     var H2 = parseFloat(levByDate[d2].elevation);
-    var V1 = _sfVolumeAt(sump.volumeCurve, H1);
-    var V2 = _sfVolumeAt(sump.volumeCurve, H2);
-    if (V1 === null || V2 === null || isNaN(H1) || isNaN(H2)) continue;
+    if (isNaN(H1) || isNaN(H2)) continue;
 
-    // Суммируем откачку за промежуток [d1, d2) — запись насосов датируется
-    // началом суток, т.е. volume за 19.07 → date='2026-07-19' соответствует
-    // интервалу уровней 19.07 06:00 → 20.07 06:00
     var d1ms = new Date(d1).getTime();
     var d2ms = new Date(d2).getTime();
     var dayMs = 86400000;
-    var nDays = (d2ms - d1ms) / dayMs; // количество суток в интервале
+    var nDays = (d2ms - d1ms) / dayMs;
+
+    // Суммируем откачку за промежуток [d1, d2)
     var Vpumped = 0;
     for (var t = d1ms; t < d2ms; t += dayMs) {
       var ds = new Date(t).toISOString().slice(0,10);
       Vpumped += pumpedByDate[ds] || 0;
     }
 
-    var deltaV = V2 - V1;
-    // Нормализуем на реальное количество суток → Q в м³/ч
-    var QinRaw = (Vpumped + deltaV) / (nDays * 24);
-    var Qin = Math.max(0, QinRaw);
+    // Проверяем — есть ли смена кривой внутри интервала (d1, d2]
+    var splitDate = null;
+    for (var k = 0; k < curveChangeDates.length; k++) {
+      var cd = curveChangeDates[k];
+      if (cd > d1 && cd <= d2) { splitDate = cd; break; }
+    }
 
-    // Маркируем по d1 (дата записи откачки), т.к. пользователь записывает
-    // объём откачки за период [d1, d2) как запись с датой d1
-    result.push({ date: d1, q: Math.round(Qin * 10) / 10, qRaw: Math.round(QinRaw * 10) / 10, vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100, h1: H1, h2: H2, v1: V1, v2: V2, dv: Math.round(deltaV) });
+    if (splitDate) {
+      // Разбиваем пару пополам: интерполируем уровень в точке смены кривой
+      // fraction — доля временного интервала до смены кривой
+      var splitMs  = new Date(splitDate).getTime();
+      var frac     = (splitMs - d1ms) / (d2ms - d1ms);
+      var Hmid     = H1 + frac * (H2 - H1);
+
+      var curve1 = _sfGetCurveForDate(sump, d1);
+      var curve2 = _sfGetCurveForDate(sump, splitDate);
+      var Va = _sfVolumeAt(curve1, H1);
+      var Vb = _sfVolumeAt(curve1, Hmid); // объём по старой кривой в точке перехода
+      var Vc = _sfVolumeAt(curve2, Hmid); // объём по новой кривой в той же точке
+      var Vd = _sfVolumeAt(curve2, H2);
+      if (Va === null || Vb === null || Vc === null || Vd === null) continue;
+
+      // Пропорционально делим откачку по временным долям
+      var Vp1 = Vpumped * frac;
+      var Vp2 = Vpumped * (1 - frac);
+      var nDays1 = nDays * frac;
+      var nDays2 = nDays * (1 - frac);
+
+      var dV1 = Vb - Va, dV2 = Vd - Vc;
+      var Qraw1 = nDays1 > 0 ? (Vp1 + dV1) / (nDays1 * 24) : 0;
+      var Qraw2 = nDays2 > 0 ? (Vp2 + dV2) / (nDays2 * 24) : 0;
+
+      result.push({ date: d1, q: Math.round(Math.max(0,Qraw1)*10)/10, qRaw: Math.round(Qraw1*10)/10,
+        vpumped: Math.round(Vp1), dh: Math.round((Hmid-H1)*100)/100,
+        h1: H1, h2: Hmid, v1: Math.round(Va), v2: Math.round(Vb), dv: Math.round(dV1),
+        splitNote: '→' + splitDate });
+      result.push({ date: splitDate, q: Math.round(Math.max(0,Qraw2)*10)/10, qRaw: Math.round(Qraw2*10)/10,
+        vpumped: Math.round(Vp2), dh: Math.round((H2-Hmid)*100)/100,
+        h1: Hmid, h2: H2, v1: Math.round(Vc), v2: Math.round(Vd), dv: Math.round(dV2),
+        splitNote: splitDate + '→' });
+    } else {
+      var curve = _sfGetCurveForDate(sump, d1);
+      var V1 = _sfVolumeAt(curve, H1);
+      var V2 = _sfVolumeAt(curve, H2);
+      if (V1 === null || V2 === null) continue;
+
+      var deltaV = V2 - V1;
+      var QinRaw = (Vpumped + deltaV) / (nDays * 24);
+      var Qin = Math.max(0, QinRaw);
+
+      result.push({ date: d1, q: Math.round(Qin * 10) / 10, qRaw: Math.round(QinRaw * 10) / 10,
+        vpumped: Math.round(Vpumped), dh: Math.round((H2-H1)*100)/100,
+        h1: H1, h2: H2, v1: Math.round(V1), v2: Math.round(V2), dv: Math.round(deltaV) });
+    }
   }
   return result.slice(-60); // последние 60 суток
 }
@@ -438,7 +506,8 @@ function _sfPumpPerformance(sump, days) {
 }
 
 // ── Обработка загрузки файла .tridb пользователем ───────────────────────────
-async function _sfHandleTridbUpload(file, sump) {
+async function _sfHandleTridbUpload(file, sump, validFrom) {
+  if (!validFrom) validFrom = new Date().toISOString().slice(0,10);
   var statusEl = document.getElementById('sf-upload-status');
   function setStatus(msg, err) {
     if (!statusEl) return;
@@ -500,6 +569,23 @@ async function _sfHandleTridbUpload(file, sump) {
     sump.zMin          = zMin;
     sump.zMax          = zMax;
     sump.volumeCurve   = curve;
+
+    // Создаём версию кривой V(H)
+    var newVersion = {
+      id:          DewateringState._id('scv_'),
+      sumpId:      sump.id,
+      validFrom:   validFrom,
+      totalVolume: sump.totalVolume,
+      zMin:        sump.zMin,
+      zMax:        sump.zMax,
+      tridbPath:   uploaded ? sump.tridbPath : null,
+      volumeCurve: curve,
+      notes:       '',
+    };
+    // Заменяем версию с той же датой, если уже есть
+    var existing = DewateringState.sumpCurveVersions.findIndex(function(v){ return v.sumpId === sump.id && v.validFrom === validFrom; });
+    if (existing >= 0) { DewateringState.sumpCurveVersions[existing] = newVersion; }
+    else { DewateringState.sumpCurveVersions.push(newVersion); }
     DewateringState.save();
 
     await Api.upsertDewSump({
@@ -511,6 +597,11 @@ async function _sfHandleTridbUpload(file, sump) {
       critical_level: sump.criticalLevel || null,
       volume_curve: sump.volumeCurve,
     });
+    if (window.Api && Api.upsertDewSumpCurveVer) {
+      await Api.upsertDewSumpCurveVer(dewSumpCurveVerToRow(newVersion)).catch(function(e){
+        console.warn('[sf] failed to save curve version to Supabase', e);
+      });
+    }
 
     setStatus('✓ Готово! Объём: ' + sump.totalVolume.toFixed(0) + ' м³  ·  Z: ' + zMin.toFixed(1) + '–' + zMax.toFixed(1) + ' м');
     renderSumpForecastContent(sump);
@@ -546,8 +637,9 @@ function _sfRenderSelector() {
   // Вычисляем метрики по каждому зумпфу для сайдбара
   function sumpMeta(s) {
     var lev = _sfLatestLevel(s);
-    var hasCurve = s.volumeCurve && s.volumeCurve.length > 0;
-    var vol = (hasCurve && lev !== null) ? _sfVolumeAt(s.volumeCurve, lev) : null;
+    var hasCurve = _sfSumpHasCurve(s);
+    var todayStr = new Date().toISOString().slice(0,10);
+    var vol = (hasCurve && lev !== null) ? _sfVolumeAt(_sfGetCurveForDate(s, todayStr), lev) : null;
     var pct = (vol !== null && s.totalVolume) ? (vol / s.totalVolume * 100) : null;
     var days = SumpForecastState.analysisDays || 30;
     var inflow = hasCurve ? _sfComputeInflowHistory(s, days) : [];
@@ -562,7 +654,7 @@ function _sfRenderSelector() {
   var calcQSel = null;
   if (selSump) {
     var days0 = SumpForecastState.analysisDays || 30;
-    var inf0 = (selSump.volumeCurve && selSump.volumeCurve.length) ? _sfComputeInflowHistory(selSump, days0) : [];
+    var inf0 = _sfSumpHasCurve(selSump) ? _sfComputeInflowHistory(selSump, days0) : [];
     calcQSel = inf0.length > 0 ? inf0.reduce(function(a,r){return a+r.q;},0)/inf0.length : null;
   }
   var placeholderQ = calcQSel !== null ? calcQSel.toFixed(1) : '—';
@@ -672,14 +764,15 @@ function renderSumpForecastContent(sump) {
 
   var days     = SumpForecastState.analysisDays;
   if (days === null || days === undefined) days = 30;
-  var hasCurve = sump.volumeCurve && sump.volumeCurve.length > 0;
+  var hasCurve = _sfSumpHasCurve(sump);
   var pumps    = _sfPumpPerformance(sump, days);
   var inflow   = hasCurve ? _sfComputeInflowHistory(sump, days) : [];
   var calcAvgQ = inflow.length > 0 ? inflow.reduce(function(s,r){return s+r.q;},0)/inflow.length : null;
   var manualQ  = SumpForecastState._manualQ;
   var avgQ     = (manualQ !== null && manualQ !== undefined && !isNaN(manualQ)) ? manualQ : calcAvgQ;
   var latestLev = _sfLatestLevel(sump);
-  var currVol  = (hasCurve && latestLev !== null) ? _sfVolumeAt(sump.volumeCurve, latestLev) : null;
+  var todayCurve = hasCurve ? _sfGetCurveForDate(sump, new Date().toISOString().slice(0,10)) : null;
+  var currVol  = (todayCurve && latestLev !== null) ? _sfVolumeAt(todayCurve, latestLev) : null;
   var pct      = (hasCurve && currVol !== null && sump.totalVolume) ? (currVol / sump.totalVolume * 100) : null;
   var lpData   = _sfBuildLevelPumpData(sump, days);
   var isCustom = (days === 0);
@@ -728,10 +821,12 @@ function renderSumpForecastContent(sump) {
   html += '<div class="card" style="padding:12px">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
   html += '<span class="card-title">Модель зумпфа</span>';
+  html += '<div style="display:flex;align-items:center;gap:6px">';
+  html += '<label style="font-size:10px;color:var(--text-muted)">С: <input type="date" id="sf-curve-valid-from" value="'+(new Date().toISOString().slice(0,10))+'" style="font-size:11px;width:115px;padding:1px 4px;border:1px solid var(--border-subtle);border-radius:4px;background:var(--bg-sub);color:var(--text-main)" title="Дата начала действия кривой V(H)"></label>';
   html += '<label class="btn btn-sm btn-outline" style="cursor:pointer;font-size:11px;padding:2px 8px">';
   html += '<input type="file" accept=".tridb" style="display:none" onchange="_sfOnFileInput(event,\''+sump.id+'\')">';
   html += hasCurve ? '↺ .tridb' : '+ .tridb';
-  html += '</label></div>';
+  html += '</label></div></div>';
   if (hasCurve) {
     html += _sfModelStats(sump, latestLev, currVol, pct);
     html += '<label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-top:4px">';
@@ -741,6 +836,25 @@ function renderSumpForecastContent(sump) {
     html += '<p style="color:var(--text-muted);font-size:13px">Файл .tridb не загружен</p>';
   }
   html += '<div id="sf-upload-status" style="font-size:11px;margin-top:4px;color:#60a5fa;min-height:14px"></div>';
+
+  // История кривых V(H)
+  var curveVers = (DewateringState.sumpCurveVersions || [])
+    .filter(function(v){ return v.sumpId === sump.id; })
+    .sort(function(a,b){ return a.validFrom > b.validFrom ? -1 : a.validFrom < b.validFrom ? 1 : 0; });
+  if (curveVers.length > 0) {
+    html += '<div style="margin-top:8px;border-top:1px solid var(--border-subtle);padding-top:8px">';
+    html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">История кривых V(H)</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:3px">';
+    curveVers.forEach(function(v) {
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;gap:4px">';
+      html += '<span style="color:var(--text-muted)">с ' + v.validFrom + '</span>';
+      html += '<span style="color:var(--text-main)">' + (v.totalVolume ? Math.round(v.totalVolume).toLocaleString('ru') + ' м³' : '—') + '</span>';
+      html += (v.notes ? '<span style="color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px" title="'+_sfEsc(v.notes)+'">'+_sfEsc(v.notes)+'</span>' : '<span style="flex:1"></span>');
+      html += '<button onclick="_sfDeleteCurveVersion(\''+v.id+'\',\''+sump.id+'\')" title="Удалить" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:12px;padding:0 2px;line-height:1">×</button>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  }
   html += '</div>';
 
   // Карточка: насосы
@@ -898,7 +1012,7 @@ function renderSumpForecastContent(sump) {
   // Рендеринг графиков
   if (lpData.levs.length > 0)   setTimeout(function(){ _sfRenderLevelChart(sump, lpData, days); }, 50);
   if (inflow.length >= 2)        setTimeout(function(){ _sfRenderInflowChart(inflow, days); }, 80);
-  if (hasCurve)                  setTimeout(function(){ _sfRenderVhChart(sump.volumeCurve, latestLev); }, 110);
+  if (hasCurve)                  setTimeout(function(){ _sfRenderVhChart(todayCurve, latestLev); }, 110);
   _sfFcCurrentPumps = pumps;
 
   // 3D — из памяти или из Storage
@@ -1802,10 +1916,11 @@ function _sfRenderLevelChart(sump, lpData, days) {
   });
 
   // Объём воды зумпфа по датам через кривую V(H)
-  var hasCurve = sump.volumeCurve && sump.volumeCurve.length > 0;
+  var hasCurve = _sfSumpHasCurve(sump);
   var sumpVolData = allDates.map(function(d) {
-    if (!levelData[allDates.indexOf(d)] || !hasCurve) return null;
-    return _sfVolumeAt(sump.volumeCurve, levelData[allDates.indexOf(d)]);
+    var lv = levelData[allDates.indexOf(d)];
+    if (lv === null || lv === undefined || !hasCurve) return null;
+    return _sfVolumeAt(_sfGetCurveForDate(sump, d), lv);
   });
 
   // Даты, когда насосы стояли (нет откачки, но есть данные уровня)
@@ -2038,7 +2153,10 @@ function _sfOnFileInput(event, sumpId) {
   var file = event.target.files[0];
   if (!file) return;
   var sump = DewateringState.sumps.find(function(s){ return s.id === sumpId; });
-  if (sump) _sfHandleTridbUpload(file, sump);
+  if (!sump) return;
+  var dateEl = document.getElementById('sf-curve-valid-from');
+  var validFrom = dateEl ? dateEl.value : new Date().toISOString().slice(0,10);
+  _sfHandleTridbUpload(file, sump, validFrom);
 }
 
 function _sfSaveCritical(sumpId, val) {
@@ -2051,6 +2169,17 @@ function _sfSaveCritical(sumpId, val) {
     critical_level: sump.criticalLevel, volume_curve: sump.volumeCurve,
     total_volume: sump.totalVolume, z_min: sump.zMin, z_max: sump.zMax, tridb_path: sump.tridbPath||null
   }).catch(function(){});
+}
+
+function _sfDeleteCurveVersion(verId, sumpId) {
+  if (!confirm('Удалить эту версию кривой V(H)?')) return;
+  DewateringState.sumpCurveVersions = DewateringState.sumpCurveVersions.filter(function(v){ return v.id !== verId; });
+  DewateringState.save();
+  if (window.Api && Api.deleteDewSumpCurveVer) {
+    Api.deleteDewSumpCurveVer(verId).catch(function(e){ console.warn('[sf] failed to delete curve version', e); });
+  }
+  var sump = DewateringState.sumps.find(function(s){ return s.id === sumpId; });
+  if (sump) renderSumpForecastContent(sump);
 }
 
 function _sfEsc(s) {

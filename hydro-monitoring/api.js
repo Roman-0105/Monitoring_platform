@@ -13,6 +13,33 @@
 
 // ── Маппинг dewatering (sumps, elevations, pumps, events, destinations, readings, water levels) ──
 
+function dewSumpCurveVerToRow(v) {
+  return {
+    id:           v.id,
+    sump_id:      v.sumpId,
+    valid_from:   v.validFrom,
+    total_volume: v.totalVolume != null ? Number(v.totalVolume) : null,
+    z_min:        v.zMin != null ? Number(v.zMin) : null,
+    z_max:        v.zMax != null ? Number(v.zMax) : null,
+    tridb_path:   v.tridbPath || null,
+    volume_curve: v.volumeCurve || null,
+    notes:        v.notes || '',
+  };
+}
+function rowToDewSumpCurveVer(r) {
+  return {
+    id:          r.id,
+    sumpId:      r.sump_id,
+    validFrom:   r.valid_from,
+    totalVolume: r.total_volume != null ? Number(r.total_volume) : null,
+    zMin:        r.z_min != null ? Number(r.z_min) : null,
+    zMax:        r.z_max != null ? Number(r.z_max) : null,
+    tridbPath:   r.tridb_path || null,
+    volumeCurve: Array.isArray(r.volume_curve) ? r.volume_curve : null,
+    notes:       r.notes || '',
+  };
+}
+
 function dewSumpToRow(s) {
   return { id: s.id, name: s.name || '', quarry: s.quarry || '', notes: s.notes || '' };
 }
@@ -899,6 +926,10 @@ var Api = (function() {
     getDewWaterLevels:  async function() { return client().from('dew_water_levels').select('*').order('date', { ascending: false }); },
     upsertDewLevel:     async function(row) { return client().from('dew_water_levels').upsert(row); },
     deleteDewLevel:     async function(id) { return client().from('dew_water_levels').delete().eq('id', id); },
+
+    getDewSumpCurveVersions: async function() { return client().from('dew_sump_curve_versions').select('*').order('valid_from', { ascending: true }); },
+    upsertDewSumpCurveVer:   async function(row) { return client().from('dew_sump_curve_versions').upsert(row); },
+    deleteDewSumpCurveVer:   async function(id) { return client().from('dew_sump_curve_versions').delete().eq('id', id); },
 
     // ── Dust suppression ──────────────────────────────────────
     getDustOrgs:        async function() { return client().from('dust_orgs').select('*').order('name'); },
