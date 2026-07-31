@@ -874,13 +874,13 @@ body {
   align-items: center;
   height: 36px;
   flex-shrink: 0;
-  max-width: 48px;
+  max-width: 160px;
   overflow: hidden;
 }
 .brand-logo img {
-  height: 36px !important;
+  height: 32px !important;
   width: auto !important;
-  max-width: 48px;
+  max-width: 160px;
   display: block;
   object-fit: contain;
 }
