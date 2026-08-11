@@ -1026,7 +1026,8 @@ body {
 .anl-tb-btn { background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--txt-2);font-size:11px;padding:3px 9px;border-radius:5px;cursor:pointer;transition:background var(--tr),color var(--tr);white-space:nowrap }
 .anl-tb-btn:hover { background:rgba(255,255,255,.1);color:var(--txt-1) }
 .anl-tb-btn-on { background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:#58a6ff }
-.anl-leg-item:hover { opacity:.8 !important }
+.anl-leg-item { transition:opacity var(--tr),background var(--tr) }
+.anl-leg-item:hover { opacity:.75 !important }
 
 /* Адаптив */
 @media(max-width:1100px) {
