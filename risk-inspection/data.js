@@ -292,9 +292,13 @@ var RiskApi = (function() {
   }
 
   async function getActionsByCallLogId(calllogId) {
-    if (isRemote()) return remoteCall('GET', '/calllog/' + calllogId + '/actions');
+    // photoUrl — фото, приложенное при закрытии обращения (см. ui-journal.js,
+    // вкладка "Статус обращения"); та же логика имя-файла-vs-полный-URL,
+    // что и у CALLLOG.PHOTO выше.
+    if (isRemote()) return (await remoteCall('GET', '/calllog/' + calllogId + '/actions')).map(withPhotoUrl);
     return db.actions.filter(function(a) { return a.calllogId === calllogId && !a.deleted; })
-      .sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+      .sort(function(a, b) { return new Date(b.date) - new Date(a.date); })
+      .map(function(a) { return withPhotoUrl(Object.assign({}, a)); });
   }
 
   async function closeCallLog(calllogId, data) {
