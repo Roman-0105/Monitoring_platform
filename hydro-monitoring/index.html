@@ -498,142 +498,164 @@
 
   <!-- Аналитика -->
   <div class="page" id="page-stats">
-    <!-- Подвкладки аналитики -->
-    <div class="settings-subtabs" style="margin-bottom:12px">
-      <button class="btn btn-sm btn-outline active" data-stats-tab="summary">📊 Сводка</button>
-      <button class="btn btn-sm btn-outline" data-stats-tab="history">📈 История</button>
-      <button class="btn btn-sm btn-outline" data-stats-tab="ditches">🌊 Канавы</button>
+
+    <!-- Фильтр-бар — виден только на вкладках Сводка / Домены / Скважины -->
+    <div class="anl-bar" id="anl-filter-bar">
+      <div class="anl-bar-group">
+        <span class="anl-bar-lbl">Обход</span>
+        <select id="anl-period" class="anl-sel"></select>
+      </div>
+      <div class="anl-bar-group">
+        <span class="anl-bar-lbl">Сравнить с</span>
+        <select id="anl-compare" class="anl-sel"></select>
+      </div>
+      <div class="anl-bar-sep"></div>
+      <div class="anl-bar-group">
+        <span class="anl-bar-lbl">Домен</span>
+        <select id="anl-domain" class="anl-sel"></select>
+      </div>
+      <div class="anl-bar-group">
+        <span class="anl-bar-lbl">Сотрудник</span>
+        <select id="anl-worker" class="anl-sel"></select>
+      </div>
+      <div class="anl-bar-sep"></div>
+      <span id="anl-chip" class="anl-chip"></span>
+      <button id="anl-reset" class="anl-reset-btn" title="Сбросить фильтры">↺</button>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button id="btn-export-csv"  class="btn btn-sm btn-outline" style="white-space:nowrap">⬇ CSV</button>
+        <button id="btn-export-xlsx" class="btn btn-sm btn-outline" style="white-space:nowrap;color:#217346;border-color:#217346">⬇ Excel</button>
+      </div>
     </div>
 
-    <!-- Подвкладка: Сводка — новая аналитическая панель -->
-    <div id="stats-panel-summary" class="stats-subpanel active">
+    <!-- Рейл + панели -->
+    <div style="display:flex;flex:1;overflow:hidden;min-height:0">
 
-      <!-- Фильтр-бар -->
-      <div class="anl-bar">
-        <div class="anl-bar-group">
-          <span class="anl-bar-lbl">Обход</span>
-          <select id="anl-period" class="anl-sel"></select>
-        </div>
-        <div class="anl-bar-group">
-          <span class="anl-bar-lbl">Сравнить с</span>
-          <select id="anl-compare" class="anl-sel"></select>
-        </div>
-        <div class="anl-bar-sep"></div>
-        <div class="anl-bar-group">
-          <span class="anl-bar-lbl">Домен</span>
-          <select id="anl-domain" class="anl-sel"></select>
-        </div>
-        <div class="anl-bar-group">
-          <span class="anl-bar-lbl">Сотрудник</span>
-          <select id="anl-worker" class="anl-sel"></select>
-        </div>
-        <div class="anl-bar-sep"></div>
-        <span id="anl-chip" class="anl-chip"></span>
-        <button id="anl-reset" class="anl-reset-btn" title="Сбросить фильтры">↺</button>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button id="btn-export-csv"  class="btn btn-sm btn-outline" style="white-space:nowrap">⬇ CSV</button>
-          <button id="btn-export-xlsx" class="btn btn-sm btn-outline" style="white-space:nowrap;color:#217346;border-color:#217346">⬇ Excel</button>
-        </div>
-      </div>
+      <!-- Вертикальный рейл навигации -->
+      <nav class="dew-rail" id="stats-rail">
+        <button class="dew-rail-item active" data-stats-tab="summary">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
+          <span class="dew-rail-label">Сводка</span>
+        </button>
+        <button class="dew-rail-item" data-stats-tab="domains">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="10" r="2.5"/><circle cx="15" cy="5" r="2.5"/><circle cx="15" cy="15" r="2.5"/><path d="M7.5 10h5M7.2 8.6l4.8-2.6M7.2 11.4l4.8 2.6"/></svg>
+          <span class="dew-rail-label">Домены</span>
+        </button>
+        <button class="dew-rail-item" data-stats-tab="wells">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="3"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2"/><circle cx="10" cy="10" r="7" stroke-dasharray="3 2"/></svg>
+          <span class="dew-rail-label">Скважины</span>
+        </button>
+        <div class="dew-rail-sep"></div>
+        <button class="dew-rail-item" data-stats-tab="history">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,15 7,9 11,12 17,5"/><path d="M14 5h3v3"/></svg>
+          <span class="dew-rail-label">История</span>
+        </button>
+        <button class="dew-rail-item" data-stats-tab="ditches">
+          <svg class="dew-rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14c1.5-2 3-3 4-3s2.5 3 4 3 3-2 4-3"/><path d="M3 10c1.5-2 3-3 4-3s2.5 3 4 3 3-2 4-3"/></svg>
+          <span class="dew-rail-label">Канавы</span>
+        </button>
+      </nav>
 
-      <!-- KPI-строка -->
-      <div class="anl-kpi-grid" id="anl-kpi-grid"></div>
+      <!-- Область контента -->
+      <div id="stats-content-area" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:0;min-width:0">
 
-      <!-- Тренд дебита + Алерты -->
-      <div class="anl-row-21">
-        <div class="card">
-          <div class="card-title">📈 Суммарный дебит по обходам</div>
-          <div id="anl-trend"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">⚠ Требует внимания</div>
-          <div id="anl-alerts"></div>
-        </div>
-      </div>
-
-      <!-- Статусы по обходам + Покрытие -->
-      <div class="anl-row-2">
-        <div class="card">
-          <div class="card-title">📊 Изменение статусов по обходам</div>
-          <div id="anl-status-bars"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">📅 Покрытие мониторинга — последние 13 обходов</div>
-          <div id="anl-coverage"></div>
-        </div>
-      </div>
-
-      <!-- Домены -->
-      <div class="anl-sec-div"><div class="anl-sec-line"></div><span class="anl-sec-lbl">Анализ доменов</span><div class="anl-sec-line"></div></div>
-      <div class="anl-domain-cards" id="anl-domain-cards"></div>
-      <div class="anl-row-3">
-        <div class="card">
-          <div class="card-title">🔢 Матрица: Домен × Статус</div>
-          <div id="anl-matrix"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">🧭 Распределение по бортам</div>
-          <div id="anl-walls"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">⛰ Дебит по горизонтам</div>
-          <div id="anl-horizons"></div>
-        </div>
-      </div>
-
-      <!-- Скважины -->
-      <div class="anl-sec-div"><div class="anl-sec-line"></div><span class="anl-sec-lbl">Скважины</span><div class="anl-sec-line"></div></div>
-      <div class="anl-kpi-grid" id="anl-well-kpi-grid"></div>
-      <div class="anl-row-2" style="margin-bottom:0">
-        <div class="card">
-          <div class="card-title">🕳 Рейтинг скважин по дебиту</div>
-          <div id="anl-well-list"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">📈 Динамика дебита по скважинам</div>
-          <div id="anl-well-trend"></div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Подвкладка: История -->
-    <div id="stats-panel-history" class="stats-subpanel">
-      <div class="card">
-        <div class="card-title">Выбор точек</div>
-        <div class="form-row" style="align-items:flex-end;flex-wrap:wrap">
-          <div class="form-group" style="flex:1;min-width:200px">
-            <label class="form-label" for="history-point-select">
-              <span style="display:inline-block;width:20px;height:3px;background:#1a73e8;border-radius:2px;vertical-align:middle;margin-right:6px"></span>
-              Точка 1
-            </label>
-            <select id="history-point-select" class="form-select"></select>
+        <!-- Панель: Сводка -->
+        <div id="stats-panel-summary" class="stats-rail-panel active">
+          <!-- KPI-строка -->
+          <div class="anl-kpi-grid" id="anl-kpi-grid"></div>
+          <!-- Тренд дебита + Алерты -->
+          <div class="anl-row-21">
+            <div class="card">
+              <div class="card-title">📈 Суммарный дебит по обходам</div>
+              <div id="anl-trend"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">⚠ Требует внимания</div>
+              <div id="anl-alerts"></div>
+            </div>
           </div>
-          <div class="form-group" style="flex:1;min-width:200px">
-            <label class="form-label" for="history-point-select2">
-              <span style="display:inline-block;width:20px;height:3px;background:#e8340a;border-radius:2px;vertical-align:middle;margin-right:6px;border-bottom:2px dashed #e8340a;height:0"></span>
-              Точка 2 <span style="font-size:11px;color:var(--txt-3);font-weight:400">— для сравнения</span>
-            </label>
-            <select id="history-point-select2" class="form-select"></select>
-          </div>
-          <div class="form-group" style="flex:0">
-            <label class="form-label" style="visibility:hidden">.</label>
-            <button id="history-compare-clear" class="btn btn-sm btn-outline" title="Сбросить сравнение" style="white-space:nowrap">✕ Сброс</button>
+          <!-- Статусы по обходам + Покрытие -->
+          <div class="anl-row-2">
+            <div class="card">
+              <div class="card-title">📊 Изменение статусов по обходам</div>
+              <div id="anl-status-bars"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">📅 Покрытие мониторинга — последние 13 обходов</div>
+              <div id="anl-coverage"></div>
+            </div>
           </div>
         </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">
-        <div class="card" style="overflow:hidden">
-          <div class="card-title">График водопритока</div>
-          <div id="history-chart-area" style="overflow-x:auto"></div>
+
+        <!-- Панель: Домены -->
+        <div id="stats-panel-domains" class="stats-rail-panel">
+          <div class="anl-domain-cards" id="anl-domain-cards"></div>
+          <div class="anl-row-3">
+            <div class="card">
+              <div class="card-title">🔢 Матрица: Домен × Статус</div>
+              <div id="anl-matrix"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">🧭 Распределение по бортам</div>
+              <div id="anl-walls"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">⛰ Дебит по горизонтам</div>
+              <div id="anl-horizons"></div>
+            </div>
+          </div>
         </div>
-        <div id="history-info-panel"></div>
-      </div>
 
-    </div>
+        <!-- Панель: Скважины -->
+        <div id="stats-panel-wells" class="stats-rail-panel">
+          <div class="anl-kpi-grid" id="anl-well-kpi-grid"></div>
+          <div class="anl-row-2" style="margin-bottom:0">
+            <div class="card">
+              <div class="card-title">🕳 Рейтинг скважин по дебиту</div>
+              <div id="anl-well-list"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">📈 Динамика дебита по скважинам</div>
+              <div id="anl-well-trend"></div>
+            </div>
+          </div>
+        </div>
 
-    <!-- Подвкладка: Канавы -->
-    <div id="stats-panel-ditches" class="stats-subpanel">
+        <!-- Панель: История -->
+        <div id="stats-panel-history" class="stats-rail-panel">
+          <div class="card">
+            <div class="card-title">Выбор точек</div>
+            <div class="form-row" style="align-items:flex-end;flex-wrap:wrap">
+              <div class="form-group" style="flex:1;min-width:200px">
+                <label class="form-label" for="history-point-select">
+                  <span style="display:inline-block;width:20px;height:3px;background:#1a73e8;border-radius:2px;vertical-align:middle;margin-right:6px"></span>
+                  Точка 1
+                </label>
+                <select id="history-point-select" class="form-select"></select>
+              </div>
+              <div class="form-group" style="flex:1;min-width:200px">
+                <label class="form-label" for="history-point-select2">
+                  <span style="display:inline-block;width:20px;height:3px;background:#e8340a;border-radius:2px;vertical-align:middle;margin-right:6px;border-bottom:2px dashed #e8340a;height:0"></span>
+                  Точка 2 <span style="font-size:11px;color:var(--txt-3);font-weight:400">— для сравнения</span>
+                </label>
+                <select id="history-point-select2" class="form-select"></select>
+              </div>
+              <div class="form-group" style="flex:0">
+                <label class="form-label" style="visibility:hidden">.</label>
+                <button id="history-compare-clear" class="btn btn-sm btn-outline" title="Сбросить сравнение" style="white-space:nowrap">✕ Сброс</button>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">
+            <div class="card" style="overflow:hidden">
+              <div class="card-title">График водопритока</div>
+              <div id="history-chart-area" style="overflow-x:auto"></div>
+            </div>
+            <div id="history-info-panel"></div>
+          </div>
+        </div>
+
+        <!-- Панель: Канавы -->
+        <div id="stats-panel-ditches" class="stats-rail-panel">
 
       <!-- Фильтры -->
       <div class="card" style="margin-bottom:12px">
@@ -715,8 +737,10 @@
         </div>
       </div>
 
-    </div>
-  </div>
+        </div><!-- /stats-panel-ditches -->
+      </div><!-- /stats-content-area -->
+    </div><!-- /stats flex wrapper -->
+  </div><!-- /page-stats -->
 
   <!-- Tooltip для карты -->
   <div id="map-tooltip" class="map-tooltip" style="display:none"></div>

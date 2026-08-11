@@ -424,7 +424,7 @@ function switchTab(name) {
   if (name === 'map')      { _mapSchemeImg = null; initMapFilters(); renderMap(); initMapLegend(); updateMapLegendPoints(); }
   if (name === 'settings') { refreshSchemesData(); renderSettingsColors(); switchSettingsTab('main'); if (typeof renderUsersPanel === 'function' && AppState.currentUser && AppState.currentUser.role === 'admin') renderUsersPanel(); }
   if (name === 'workers')  renderWorkerManageList();
-  if (name === 'stats')    { renderStatsPage(); initStatsSubTabs(); }
+  if (name === 'stats')    { initStatsSubTabs(); renderStatsPage(); }
 }
 
 // ── Диагностика ───────────────────────────────────────────
@@ -443,10 +443,27 @@ function initDiagButtons() {
   });
 }
 
-// ── Подвкладки аналитики ──────────────────────────────────
+// ── Рейл аналитики ──────────────────────────────────────────
+
+// Вкладки с фильтр-баром (Сводка, Домены, Скважины)
+var _STATS_FILTER_TABS = { summary: true, domains: true, wells: true };
 
 function initStatsSubTabs() {
-  var tabs = document.querySelectorAll('[data-stats-tab]');
+  // Инжектируем CSS для страницы аналитики (один раз)
+  if (!document.getElementById('stats-rail-css')) {
+    var style = document.createElement('style');
+    style.id = 'stats-rail-css';
+    style.textContent = [
+      '#page-stats{padding:0!important;overflow:hidden!important;display:flex;flex-direction:column}',
+      '#page-stats #anl-filter-bar{flex-shrink:0;border-radius:0;border-left:none;border-right:none;border-top:none;margin-bottom:0}',
+      '.stats-rail-panel{display:none}',
+      '.stats-rail-panel.active{display:block}',
+    ].join('');
+    document.head.appendChild(style);
+  }
+
+  // Привязываем клики по рейлу
+  var tabs = document.querySelectorAll('#stats-rail [data-stats-tab]');
   if (!tabs.length) return;
   tabs.forEach(function(btn) {
     if (btn._statsBound) return;
@@ -458,21 +475,35 @@ function initStatsSubTabs() {
 }
 
 function switchStatsTab(name) {
-  document.querySelectorAll('[data-stats-tab]').forEach(function(btn) {
+  // Обновляем активный элемент рейла
+  document.querySelectorAll('#stats-rail [data-stats-tab]').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.statsTab === name);
   });
-  // Управляем видимостью через CSS-класс active (не style.display)
-  document.querySelectorAll('.stats-subpanel').forEach(function(panel) {
+
+  // Переключаем панели
+  document.querySelectorAll('.stats-rail-panel').forEach(function(panel) {
     panel.classList.remove('active');
   });
   var activePanel = document.getElementById('stats-panel-' + name);
   if (activePanel) activePanel.classList.add('active');
 
+  // Показываем/скрываем фильтр-бар
+  var filterBar = document.getElementById('anl-filter-bar');
+  if (filterBar) filterBar.style.display = _STATS_FILTER_TABS[name] ? '' : 'none';
+
+  // Ленивая инициализация вкладок
   if (name === 'history' && typeof initHistoryTab === 'function') {
     initHistoryTab();
   }
   if (name === 'ditches' && typeof initDitchStatsTab === 'function') {
     initDitchStatsTab();
+  }
+  // При переходе на Домены или Скважины — перерисовываем их содержимое
+  if (name === 'domains' && typeof _anlRenderDomains === 'function') {
+    _anlRenderDomains(); _anlRenderMatrix(); _anlRenderWalls(); _anlRenderHorizons();
+  }
+  if (name === 'wells' && typeof _anlRenderWells === 'function') {
+    _anlRenderWells();
   }
 }
 
