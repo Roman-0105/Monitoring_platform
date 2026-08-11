@@ -152,7 +152,10 @@ async function openJournalDetail(id) {
   var fixedRisks = await RiskApi.fixedRisks.list();
 
   var infoPanel =
-    (row.photo ? '<div class="ri-detail-photo-wrap"><img class="ri-detail-photo" src="' + escAttr(row.photoUrl) + '" alt="Фото"></div>' : '') +
+    '<div class="ri-detail-photo-wrap" id="ri-e-photo-wrap">' +
+      (row.photo ? '<img class="ri-detail-photo" src="' + escAttr(row.photoUrl) + '" alt="Фото">' : '') +
+    '</div>' +
+    '<div class="ri-form-group"><label class="ri-form-label">Фото обращения</label><div id="ri-e-photo-dropzone"></div></div>' +
     '<div class="ri-form-row">' +
       '<div class="ri-form-group"><label class="ri-form-label">Фамилия, Имя</label><input class="ri-input" id="ri-e-fname" value="' + escAttr(row.fname) + '"></div>' +
       '<div class="ri-form-group"><label class="ri-form-label">Телефон</label><input class="ri-input" id="ri-e-phone" value="' + escAttr(row.phone) + '"></div>' +
@@ -257,6 +260,18 @@ function wireInfoForm(overlay, row, plots, allIndicators, levels, fixedRisks) {
     saveBtn.disabled = false;
     saveBtn.classList.add('ri-btn-primary');
   }
+
+  // Загрузка/замена фото прямо в карточке обращения — на реальном
+  // объекте фото приходит с мобильной формы, но для тестовых данных
+  // (сид без реальных снимков) админ может подставить своё, не закрывая
+  // обращение (то фото — отдельное, "результат закрытия").
+  var photoDataUrl = row.photo || '';
+  initPhotoDropzone(overlay.querySelector('#ri-e-photo-dropzone'), async function(file) {
+    photoDataUrl = await compressImage(file);
+    overlay.querySelector('#ri-e-photo-wrap').innerHTML =
+      '<img class="ri-detail-photo" src="' + photoDataUrl + '" alt="Фото">';
+    markDirty();
+  }, { hint: row.photo ? 'Перетащите фото сюда или нажмите, чтобы заменить' : 'Перетащите фото сюда или нажмите, чтобы загрузить (для теста)' });
   overlay.querySelectorAll('#ri-e-fname, #ri-e-phone, #ri-e-ddate, #ri-e-xlocal, #ri-e-ylocal, #ri-e-xwgs, #ri-e-ywgs, #ri-e-z, #ri-e-comments')
     .forEach(function(el) { el.addEventListener('input', markDirty); });
   overlay.querySelector('#ri-e-plot').addEventListener('mousedown', function() { setTimeout(markDirty, 0); });
@@ -276,6 +291,7 @@ function wireInfoForm(overlay, row, plots, allIndicators, levels, fixedRisks) {
       ddate: fromDatetimeLocalValue(overlay.querySelector('#ri-e-ddate').value),
       xLocal: num('#ri-e-xlocal'), yLocal: num('#ri-e-ylocal'),
       xwgs: num('#ri-e-xwgs'), ywgs: num('#ri-e-ywgs'), zwgs: num('#ri-e-z'),
+      photo: photoDataUrl,
     });
     Toast.show('Изменения сохранены', 'success');
     saveBtn.classList.remove('ri-btn-primary');
