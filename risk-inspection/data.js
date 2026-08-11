@@ -314,11 +314,14 @@ var RiskApi = (function() {
   }
 
   async function updateCallLog(id, data) {
-    // data: { fname, phone, comments, plotName, indicator, level, ddate, xwgs, ywgs, zwgs, xLocal, yLocal }
+    // data: { fname, phone, comments, plotName, indicator, level, ddate, xwgs, ywgs, zwgs, xLocal, yLocal, photo }
+    // photo — админ может загрузить/заменить фото прямо в карточке
+    // обращения (см. ui-journal.js, вкладка "Информация по обращению") —
+    // полезно для тестовых данных без реальных снимков с мобильной формы.
     if (isRemote()) return remoteCall('PUT', '/calllog/' + id, data);
     var row = db.calllog.find(function(r) { return r.id === id; });
     if (!row) throw new Error('Обращение не найдено');
-    ['fname', 'phone', 'comments', 'plotName', 'indicator', 'level', 'ddate', 'xwgs', 'ywgs', 'zwgs', 'xLocal', 'yLocal'].forEach(function(f) {
+    ['fname', 'phone', 'comments', 'plotName', 'indicator', 'level', 'ddate', 'xwgs', 'ywgs', 'zwgs', 'xLocal', 'yLocal', 'photo'].forEach(function(f) {
       if (data[f] !== undefined) row[f] = data[f];
     });
     row.recordVersion = (row.recordVersion || 0) + 1;
