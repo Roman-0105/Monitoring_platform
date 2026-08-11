@@ -188,20 +188,30 @@ function initStatsFilters() {
 
 function renderStatsPage() {
   initStatsFilters();
+
+  // Всегда рендерим Сводку (она может быть активной)
   _anlRenderKpis();
   _anlRenderTrend();
   _anlRenderAlerts();
   _anlRenderStatusBars();
   _anlRenderCoverage();
-  _anlRenderDomains();
-  _anlRenderMatrix();
-  _anlRenderWalls();
-  _anlRenderHorizons();
-  _anlRenderWells();
-  _anlEnsureWellMeasurements().then(function() {
-    _anlRenderWells();
-    _anlRenderKpis();
-  });
+
+  // Домены и скважины — только если их панель активна
+  var activePanel = document.querySelector('.stats-rail-panel.active');
+  var activeName  = activePanel ? activePanel.id.replace('stats-panel-', '') : 'summary';
+
+  if (activeName === 'domains') {
+    _anlRenderDomains();
+    _anlRenderMatrix();
+    _anlRenderWalls();
+    _anlRenderHorizons();
+  }
+  if (activeName === 'wells' || activeName === 'summary') {
+    _anlEnsureWellMeasurements().then(function() {
+      _anlRenderWells();
+      _anlRenderKpis();
+    });
+  }
 }
 
 // ── KPI-строка ───────────────────────────────────────────────
