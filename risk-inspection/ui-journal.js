@@ -150,6 +150,11 @@ async function openJournalDetail(id) {
   var allIndicators = await RiskApi.indicators.list();
   var levels = await RiskApi.levels.list();
   var fixedRisks = await RiskApi.fixedRisks.list();
+  // actions отсортированы по убыванию даты (см. data.js) — [0] это
+  // самое недавнее действие, т.е. то, которым обращение было закрыто
+  // (если после закрытия обращение возобновляли и закрывали повторно —
+  // всё равно самое последнее закрытие, что и нужно показать здесь).
+  var closeAction = row.closed ? (await RiskApi.calllog.actions(id))[0] || null : null;
 
   var infoPanel =
     '<div class="ri-detail-photo-wrap" id="ri-e-photo-wrap">' +
@@ -193,7 +198,11 @@ async function openJournalDetail(id) {
       (row.closed ? '<span class="ri-badge ri-badge-ok">✓ Закрыто</span>' : '<span class="ri-badge ri-badge-bad">● Открыто</span>') +
     '</div>' +
     (row.closed
-      ? '<div class="ri-modal-actions"><button type="button" class="ri-btn ri-btn-outline" id="ri-j-reopen">↺ Возобновить</button></div>'
+      ? (closeAction
+          ? ((closeAction.photo ? '<div class="ri-detail-photo-wrap"><img class="ri-detail-photo" src="' + escAttr(closeAction.photoUrl) + '" alt="Фото на момент закрытия"></div>' : '') +
+             '<p class="ri-form-hint">Закрыто ' + formatDate(closeAction.date) + (closeAction.todo ? ': ' + escHTML(closeAction.todo) : '') + '</p>')
+          : '') +
+        '<div class="ri-modal-actions"><button type="button" class="ri-btn ri-btn-outline" id="ri-j-reopen">↺ Возобновить</button></div>'
       : closeFormHTML());
 
   var body =
