@@ -84,7 +84,6 @@ var DewateringState = {
         Api.getDewSumps(), Api.getDewElevations(), Api.getDewPumps(),
         Api.getDewPumpEvents(), Api.getDewDestinations(),
         Api.getDewReadings(), Api.getDewWaterLevels(),
-        Api.getDewSumpCurveVersions(),
       ]);
       if (results.some(function(r) { return r.error; })) return false;
       this.sumps                = results[0].data.map(rowToDewSump);
@@ -186,8 +185,15 @@ var DewateringState = {
       }
       // else: both empty – nothing to do
 
-      // ── Curve versions: remote is source of truth ────────────────────────────
-      this.sumpCurveVersions = results[7].data.map(rowToDewSumpCurveVer);
+      // ── Curve versions: загружаем отдельно — таблица может ещё не существовать ──
+      try {
+        var cvRes = await Api.getDewSumpCurveVersions();
+        if (!cvRes.error && Array.isArray(cvRes.data)) {
+          this.sumpCurveVersions = cvRes.data.map(rowToDewSumpCurveVer);
+        }
+      } catch(cvErr) {
+        console.warn('[dewatering] dew_sump_curve_versions not available yet:', cvErr);
+      }
 
       this.save();
       return true;
