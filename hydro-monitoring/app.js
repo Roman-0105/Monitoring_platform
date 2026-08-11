@@ -454,7 +454,8 @@ function initStatsSubTabs() {
     var style = document.createElement('style');
     style.id = 'stats-rail-css';
     style.textContent = [
-      '#page-stats{padding:0!important;overflow:hidden!important;display:flex;flex-direction:column}',
+      '#page-stats{padding:0!important;overflow:hidden!important}',
+      '#page-stats.active{display:flex!important;flex-direction:column!important}',
       '#page-stats #anl-filter-bar{flex-shrink:0;border-radius:0;border-left:none;border-right:none;border-top:none;margin-bottom:0}',
       '.stats-rail-panel{display:none}',
       '.stats-rail-panel.active{display:block}',

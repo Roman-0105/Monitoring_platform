@@ -85,105 +85,113 @@ var DewateringState = {
         Api.getDewPumpEvents(), Api.getDewDestinations(),
         Api.getDewReadings(), Api.getDewWaterLevels(),
       ]);
-      if (results.some(function(r) { return r.error; })) return false;
+
+      // Логируем каждый сбой, но не прерываем загрузку при частичных ошибках
+      var labels = ['dew_sumps','dew_elevation_history','dew_pumps','dew_pump_events','dew_destinations','dew_meter_readings','dew_water_levels'];
+      var anyError = false;
+      results.forEach(function(r, i) {
+        if (r.error) {
+          console.error('[dewatering] ошибка загрузки таблицы ' + labels[i] + ':', r.error.message || r.error);
+          anyError = true;
+        }
+      });
+      // Если критические таблицы (зумпфы + насосы) недоступны — выходим
+      if (results[0].error || results[2].error) {
+        console.error('[dewatering] критические таблицы недоступны, отмена загрузки');
+        return false;
+      }
+
       this.sumps                = results[0].data.map(rowToDewSump);
-      this.sumpElevationHistory = results[1].data.map(rowToDewElev);
+      this.sumpElevationHistory = results[1].error ? this.sumpElevationHistory : results[1].data.map(rowToDewElev);
 
       // ── Bidirectional sync for pumps ─────────────────────────────────────
-      // Push ALL local pumps to Supabase on every load so that local edits
-      // (e.g. defaultDistributions) that failed to save silently are re-synced.
-      // New remote-only pumps are merged into local.  Local wins for same-ID.
-      var remotePumps   = results[2].data.map(rowToDewPump);
-      var remotePumpIds = remotePumps.map(function(p) { return p.id; });
-      var localPumpIds  = this.pumps.map(function(p) { return p.id; });
-      this.pumps.forEach(function(p) {
-        Api.upsertDewPump(dewPumpToRow(p)).catch(function(e) {
-          console.warn('[dewatering] failed to sync pump to Supabase', p.id, e);
+      var remotePumps  = results[2].error ? [] : results[2].data.map(rowToDewPump);
+      var localPumpIds = this.pumps.map(function(p) { return p.id; });
+      if (!results[2].error) {
+        this.pumps.forEach(function(p) {
+          Api.upsertDewPump(dewPumpToRow(p)).catch(function(e) {
+            console.warn('[dewatering] failed to sync pump to Supabase', p.id, e);
+          });
         });
-      });
-      var newRemotePumps = remotePumps.filter(function(p) { return localPumpIds.indexOf(p.id) === -1; });
-      this.pumps = this.pumps.concat(newRemotePumps);
+        var newRemotePumps = remotePumps.filter(function(p) { return localPumpIds.indexOf(p.id) === -1; });
+        this.pumps = this.pumps.concat(newRemotePumps);
+      }
 
       // ── Bidirectional sync for pump events ───────────────────────────────
-      var remoteEvts   = results[3].data.map(rowToDewEvt);
-      var remoteEvtIds = remoteEvts.map(function(e) { return e.id; });
-      var orphanEvts   = this.pumpEvents.filter(function(e) { return remoteEvtIds.indexOf(e.id) === -1; });
-      orphanEvts.forEach(function(e) {
-        Api.upsertDewPumpEvent(dewEvtToRow(e)).catch(function(err) {
-          console.warn('[dewatering] failed to push orphan pump event to Supabase', e.id, err);
+      if (!results[3].error) {
+        var remoteEvts   = results[3].data.map(rowToDewEvt);
+        var remoteEvtIds = remoteEvts.map(function(e) { return e.id; });
+        var orphanEvts   = this.pumpEvents.filter(function(e) { return remoteEvtIds.indexOf(e.id) === -1; });
+        orphanEvts.forEach(function(e) {
+          Api.upsertDewPumpEvent(dewEvtToRow(e)).catch(function(err) {
+            console.warn('[dewatering] failed to push orphan pump event to Supabase', e.id, err);
+          });
         });
-      });
-      this.pumpEvents = remoteEvts.concat(orphanEvts);
+        this.pumpEvents = remoteEvts.concat(orphanEvts);
+      }
 
       // ── Bidirectional sync for destinations ──────────────────────────────
-      // Local changes (new items or color/name edits whose Supabase write
-      // failed silently) must survive a reload.  Strategy:
-      //   • push ALL local items to Supabase (covers orphans + unsaved edits)
-      //   • merge remote-only items into local  (items created elsewhere)
-      //   • local wins for same-ID items        (local is always more recent)
-      var remoteDests   = results[4].data.map(rowToDewDest);
-      var remoteDestIds = remoteDests.map(function(d) { return d.id; });
-      var localDestIds  = this.destinations.map(function(d) { return d.id; });
-      this.destinations.forEach(function(d) {
-        Api.upsertDewDest(dewDestToRow(d)).catch(function(e) {
-          console.warn('[dewatering] failed to sync dest to Supabase', d.id, e);
+      if (!results[4].error) {
+        var remoteDests   = results[4].data.map(rowToDewDest);
+        var remoteDestIds = remoteDests.map(function(d) { return d.id; });
+        var localDestIds  = this.destinations.map(function(d) { return d.id; });
+        this.destinations.forEach(function(d) {
+          Api.upsertDewDest(dewDestToRow(d)).catch(function(e) {
+            console.warn('[dewatering] failed to sync dest to Supabase', d.id, e);
+          });
         });
-      });
-      var newFromRemote = remoteDests.filter(function(d) {
-        return localDestIds.indexOf(d.id) === -1;
-      });
-      this.destinations = this.destinations.concat(newFromRemote);
+        var newFromRemote = remoteDests.filter(function(d) {
+          return localDestIds.indexOf(d.id) === -1;
+        });
+        this.destinations = this.destinations.concat(newFromRemote);
+      }
       if (this.destinations.length === 0) this.destinations = _dewDefaultDest();
 
       // ── Bidirectional sync for meter readings ────────────────────────────
-      var finalPumpIds     = this.pumps.map(function(p) { return p.id; });
-      var remoteReadings   = results[5].data.map(rowToDewReading);
-      // Drop remote readings for pumps that no longer exist; also delete them from Supabase
-      var validRemote = [], orphanedInRemote = [];
-      remoteReadings.forEach(function(r) {
-        if (finalPumpIds.indexOf(r.pumpId) !== -1) { validRemote.push(r); }
-        else { orphanedInRemote.push(r); }
-      });
-      orphanedInRemote.forEach(function(r) {
-        Api.deleteDewReading(r.id).catch(function() {});
-      });
-      var remoteReadingIds = validRemote.map(function(r) { return r.id; });
-      var orphanReadings   = this.meterReadings.filter(function(r) { return remoteReadingIds.indexOf(r.id) === -1; });
-      orphanReadings.forEach(function(r) {
-        Api.upsertDewReading(dewReadingToRow(r)).catch(function(e) {
-          console.warn('[dewatering] failed to push orphan reading to Supabase', r.id, e);
+      if (!results[5].error) {
+        var finalPumpIds     = this.pumps.map(function(p) { return p.id; });
+        var remoteReadings   = results[5].data.map(rowToDewReading);
+        var validRemote = [], orphanedInRemote = [];
+        remoteReadings.forEach(function(r) {
+          if (finalPumpIds.indexOf(r.pumpId) !== -1) { validRemote.push(r); }
+          else { orphanedInRemote.push(r); }
         });
-      });
-      this.meterReadings = validRemote.concat(orphanReadings);
+        orphanedInRemote.forEach(function(r) {
+          Api.deleteDewReading(r.id).catch(function() {});
+        });
+        var remoteReadingIds = validRemote.map(function(r) { return r.id; });
+        var orphanReadings   = this.meterReadings.filter(function(r) { return remoteReadingIds.indexOf(r.id) === -1; });
+        orphanReadings.forEach(function(r) {
+          Api.upsertDewReading(dewReadingToRow(r)).catch(function(e) {
+            console.warn('[dewatering] failed to push orphan reading to Supabase', r.id, e);
+          });
+        });
+        this.meterReadings = validRemote.concat(orphanReadings);
+      }
 
       // ── Bidirectional sync for water levels ──────────────────────────────
-      // If Supabase returned records – use them as source of truth.
-      // If Supabase returned empty but we have local records – push locals to
-      // Supabase so they are not silently discarded on the next load.
-      var remoteWL = results[6].data.map(rowToDewLevel);
-      if (remoteWL.length > 0) {
-        // Supabase has data: merge (local-only items are orphans – push them up)
-        var remoteIds = remoteWL.map(function(w) { return w.id; });
-        var orphans   = this.waterLevels.filter(function(w) { return remoteIds.indexOf(w.id) === -1; });
-        if (orphans.length) {
-          orphans.forEach(function(w) {
+      if (!results[6].error) {
+        var remoteWL = results[6].data.map(rowToDewLevel);
+        if (remoteWL.length > 0) {
+          var remoteIds = remoteWL.map(function(w) { return w.id; });
+          var orphans   = this.waterLevels.filter(function(w) { return remoteIds.indexOf(w.id) === -1; });
+          if (orphans.length) {
+            orphans.forEach(function(w) {
+              Api.upsertDewLevel(dewLevelToRow(w)).catch(function(e) {
+                console.warn('[dewatering] failed to sync orphan water level', w.id, e);
+              });
+            });
+          }
+          this.waterLevels = remoteWL;
+        } else if (this.waterLevels.length > 0) {
+          var self = this;
+          this.waterLevels.forEach(function(w) {
             Api.upsertDewLevel(dewLevelToRow(w)).catch(function(e) {
-              console.warn('[dewatering] failed to sync orphan water level', w.id, e);
+              console.warn('[dewatering] failed to push local water level to Supabase', w.id, e);
             });
           });
         }
-        this.waterLevels = remoteWL;
-      } else if (this.waterLevels.length > 0) {
-        // Supabase is empty but we have local data – push all locals up
-        var self = this;
-        this.waterLevels.forEach(function(w) {
-          Api.upsertDewLevel(dewLevelToRow(w)).catch(function(e) {
-            console.warn('[dewatering] failed to push local water level to Supabase', w.id, e);
-          });
-        });
-        // keep this.waterLevels as-is (do NOT overwrite with empty)
       }
-      // else: both empty – nothing to do
 
       // ── Curve versions: загружаем отдельно — таблица может ещё не существовать ──
       try {
