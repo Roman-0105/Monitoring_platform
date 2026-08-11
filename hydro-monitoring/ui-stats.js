@@ -913,7 +913,14 @@ function _anlTrendBrushDates(allD) {
   return allD.slice(st, en + 1);
 }
 
-var _ANL_CLRS = ['#58a6ff', '#3fb950', '#f9ab00', '#d2a8ff', '#ff7b72'];
+// Palette: variant 1 — warm teal-to-amber spectrum, avoids generic GitHub blue
+var _ANL_CLRS       = ['#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#f87171'];
+// Per-series alpha for fill (only index 0 = leader gets a real fill)
+var _ANL_FILL_OPS   = [0.22, 0, 0, 0, 0];
+// Per-series stroke width — leader thicker
+var _ANL_SW         = [2.2, 1.6, 1.4, 1.2, 1.1];
+// Per-series dash — last two get dashes to de-emphasise
+var _ANL_DASH       = ['', '', '', '5,2', '4,3'];
 
 function _anlDrawTrendTable(wells, allD, trendEl) {
   var visWells = wells.filter(function(w) { return !_anlTrend.hidden[w.id]; });
@@ -952,7 +959,8 @@ function _anlDrawTrendTable(wells, allD, trendEl) {
 }
 
 function _anlDrawTrendChart(wells, allD, trendEl) {
-  var W = 440, H = 185, PL = 42, PR = 12, PT = 12, PB = 32;
+  // Extra right margin to accommodate value labels at endpoint
+  var W = 440, H = 185, PL = 42, PR = 52, PT = 12, PB = 32;
   var cW = W - PL - PR, cH = H - PT - PB;
   var n = allD.length;
   if (!n) return;
@@ -970,74 +978,114 @@ function _anlDrawTrendChart(wells, allD, trendEl) {
   function px(i) { return PL + (n > 1 ? (i / (n - 1)) * cW : cW / 2); }
   function py(q)  { return PT + (1 - q / maxQ) * cH; }
 
-  // Status zones
-  var zones =
-    '<rect x="' + PL + '" y="' + py(maxQ / 1.15).toFixed(1) + '" width="' + cW + '" height="' + (py(maxQ * 0.5 / 1.15) - py(maxQ / 1.15)).toFixed(1) + '" fill="rgba(63,185,80,.07)"/>' +
-    '<rect x="' + PL + '" y="' + py(maxQ * 0.5 / 1.15).toFixed(1) + '" width="' + cW + '" height="' + (py(maxQ * 0.2 / 1.15) - py(maxQ * 0.5 / 1.15)).toFixed(1) + '" fill="rgba(249,171,0,.07)"/>' +
-    '<rect x="' + PL + '" y="' + py(maxQ * 0.2 / 1.15).toFixed(1) + '" width="' + cW + '" height="' + (py(0) - py(maxQ * 0.2 / 1.15)).toFixed(1) + '" fill="rgba(234,67,53,.07)"/>';
+  // Dot-grid pattern for chart background
+  var dotGrid = '<pattern id="anlDots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">' +
+    '<circle cx="0" cy="0" r="0.8" fill="var(--txt-3)" opacity=".25"/></pattern>' +
+    '<rect x="' + PL + '" y="' + PT + '" width="' + cW + '" height="' + cH + '" fill="url(#anlDots)"/>';
 
-  // Grid lines + Y labels
+  // Subtle dashed horizontal guides (no green/amber/red zones)
   var yTicks = [0, 0.25, 0.5, 0.75, 1].map(function(f) { return maxQ * f; });
-  var grid = yTicks.map(function(q) {
-    return '<line x1="' + PL + '" y1="' + py(q).toFixed(1) + '" x2="' + (W - PR) + '" y2="' + py(q).toFixed(1) + '" stroke="rgba(255,255,255,.06)" stroke-width="1"/>' +
-           '<text x="' + (PL - 4) + '" y="' + (py(q) + 3.5).toFixed(1) + '" fill="var(--txt-3)" font-size="9" text-anchor="end">' + q.toFixed(1) + '</text>';
-  }).join('') + '<text x="12" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="9" text-anchor="middle" transform="rotate(-90 12 ' + (PT + cH / 2) + ')">м³/ч</text>';
+  var grid = yTicks.map(function(q, ti) {
+    var isBase = ti === 0;
+    return '<line x1="' + PL + '" y1="' + py(q).toFixed(1) + '" x2="' + (PL + cW) + '" y2="' + py(q).toFixed(1) + '"' +
+           ' stroke="var(--line)" stroke-width="' + (isBase ? '1' : '0.5') + '"' +
+           (isBase ? '' : ' stroke-dasharray="4,4"') + '/>' +
+           '<text x="' + (PL - 4) + '" y="' + (py(q) + 3.5).toFixed(1) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="end" font-variant-numeric="tabular-nums">' +
+           q.toFixed(1) + '</text>';
+  }).join('') +
+  '<text x="12" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="middle" transform="rotate(-90 12 ' + (PT + cH / 2) + ')">м³/ч</text>';
 
-  // Gradient defs
-  var gradDefs = wells.map(function(w, si) {
-    var clr = _ANL_CLRS[si % _ANL_CLRS.length];
-    return '<linearGradient id="aTG' + si + '" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0%" stop-color="' + clr + '" stop-opacity=".22"/>' +
-      '<stop offset="100%" stop-color="' + clr + '" stop-opacity="0"/></linearGradient>';
+  // X axis tick marks
+  var step = Math.max(1, Math.ceil(n / 6));
+  var xTicks = allD.map(function(d, i) {
+    if (i % step !== 0 && i !== n - 1) return '';
+    return '<line x1="' + px(i).toFixed(1) + '" y1="' + (PT + cH) + '" x2="' + px(i).toFixed(1) + '" y2="' + (PT + cH + 3) + '" stroke="var(--txt-3)" stroke-width="1"/>';
   }).join('');
+
+  // Gradient defs — only the leader (index 0) gets a real fill
+  var gradDefs = '<pattern id="anlDots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">' +
+    '<circle cx="0" cy="0" r="0.8" fill="var(--txt-3)" opacity=".25"/></pattern>' +
+    wells.map(function(w, si) {
+      var clr = _ANL_CLRS[si % _ANL_CLRS.length];
+      var op0 = _ANL_FILL_OPS[Math.min(si, _ANL_FILL_OPS.length - 1)];
+      return '<linearGradient id="aTG' + si + '" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="' + clr + '" stop-opacity="' + op0 + '"/>' +
+        '<stop offset="70%" stop-color="' + clr + '" stop-opacity="' + (op0 * 0.25).toFixed(3) + '"/>' +
+        '<stop offset="100%" stop-color="' + clr + '" stop-opacity="0"/></linearGradient>';
+    }).join('');
 
   // Series paths
   var series = wells.map(function(w, si) {
     if (_anlTrend.hidden[w.id]) return '';
-    var clr = _ANL_CLRS[si % _ANL_CLRS.length];
+    var clr  = _ANL_CLRS[si % _ANL_CLRS.length];
+    var sw   = _ANL_SW[Math.min(si, _ANL_SW.length - 1)];
+    var dash = _ANL_DASH[Math.min(si, _ANL_DASH.length - 1)];
     var mMap = {};
-    (WellsState.measurements[w.id] || []).forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
-    var pts = allD.map(function(d, i) { return mMap[d] != null ? { x: px(i), y: py(mMap[d]), q: mMap[d] } : null; }).filter(Boolean);
+    (WellsState.measurements[w.id] || []).forEach(function(m) {
+      mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0;
+    });
+    var pts = allD.map(function(d, i) {
+      return mMap[d] != null ? { x: px(i), y: py(mMap[d]), q: mMap[d] } : null;
+    }).filter(Boolean);
     if (!pts.length) return '';
     var spts = pts.map(function(p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
     var smooth = _anlTrend.chartType === 'step'
       ? 'M' + pts.map(function(p, j) { return (j ? 'H' + p.x.toFixed(1) + 'V' : '') + p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ')
       : _anlPtsToSmooth(spts);
-    var areaPath = smooth + ' L' + pts[pts.length - 1].x.toFixed(1) + ',' + (PT + cH) + ' L' + pts[0].x.toFixed(1) + ',' + (PT + cH) + ' Z';
-    var lp = pts[pts.length - 1];
-    var dot = '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="3.5" fill="' + clr + '"/>' +
-              '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="7" fill="none" stroke="' + clr + '" stroke-width="1.2" opacity=".4"/>';
+    var areaPath = smooth + ' L' + pts[pts.length - 1].x.toFixed(1) + ',' + (PT + cH) +
+                  ' L' + pts[0].x.toFixed(1) + ',' + (PT + cH) + ' Z';
+    var lp  = pts[pts.length - 1];
+    var lpQ = lp.q;
+
+    // Endpoint: diamond marker + value label box
+    var dx = lp.x, dy = lp.y, r = 4;
+    var diamond = '<polygon points="' + dx + ',' + (dy - r) + ' ' + (dx + r) + ',' + dy + ' ' +
+                  dx + ',' + (dy + r) + ' ' + (dx - r) + ',' + dy + '" fill="' + clr + '"/>';
+    var lblX = dx + r + 2, lblY = dy - 7, lblW = 36, lblH = 14;
+    var valueLabel = '<rect x="' + lblX + '" y="' + lblY + '" width="' + lblW + '" height="' + lblH + '"' +
+                     ' fill="' + clr + '" fill-opacity=".15" rx="3"/>' +
+                     '<text x="' + (lblX + lblW / 2) + '" y="' + (lblY + 9.5) + '"' +
+                     ' fill="' + clr + '" font-size="8.5" font-weight="700" text-anchor="middle"' +
+                     ' font-variant-numeric="tabular-nums">' + lpQ.toFixed(2) + '</text>';
+
     var showArea = _anlTrend.chartType === 'area';
+    var dashAttr = dash ? ' stroke-dasharray="' + dash + '"' : '';
+    var opacityAttr = si > 0 ? ' opacity="' + (1 - si * 0.08).toFixed(2) + '"' : '';
     return (showArea ? '<path d="' + areaPath + '" fill="url(#aTG' + si + ')"/>' : '') +
-           '<path class="anl-trend-line" data-wi="' + w.id + '" d="' + smooth + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
-           dot;
+           '<path class="anl-trend-line" data-wi="' + w.id + '" d="' + smooth + '" fill="none"' +
+           ' stroke="' + clr + '" stroke-width="' + sw + '" stroke-linejoin="round" stroke-linecap="round"' +
+           dashAttr + opacityAttr + '/>' +
+           diamond + valueLabel;
   }).join('');
 
   // X axis labels
-  var step = Math.max(1, Math.ceil(n / 6));
   var xL = allD.map(function(d, i) {
     if (i % step !== 0 && i !== n - 1) return '';
-    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - PB + 14) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="middle">' +
+    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - PB + 15) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="middle">' +
       formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
   }).join('');
 
-  // Crosshair overlay (invisible rect to capture mouse)
+  // Crosshair overlay
   var overlay = '<rect class="anl-trend-overlay" x="' + PL + '" y="' + PT + '" width="' + cW + '" height="' + cH + '" fill="transparent"/>' +
-    '<line class="anl-trend-xhair" x1="-9999" y1="' + PT + '" x2="-9999" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="4,3" pointer-events="none"/>';
+    '<line class="anl-trend-xhair" x1="-9999" y1="' + PT + '" x2="-9999" y2="' + (PT + cH) + '"' +
+    ' stroke="rgba(255,255,255,.3)" stroke-width="1" stroke-dasharray="4,3" pointer-events="none"/>';
 
   var body = trendEl.querySelector('.anl-trend-body');
   body.innerHTML = '<div style="position:relative">' +
-    '<svg id="anl-trend-svg" viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block">' +
+    '<svg id="anl-trend-svg" viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block;overflow:visible">' +
     '<defs>' + gradDefs + '</defs>' +
-    '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.08)" stroke-width="1"/>' +
-    '<line x1="' + PL + '" y1="' + (PT + cH) + '" x2="' + (W - PR) + '" y2="' + (PT + cH) + '" stroke="rgba(255,255,255,.08)" stroke-width="1"/>' +
-    zones + grid + series + xL + overlay + '</svg>' +
+    // Chart background with dot grid
+    '<rect x="' + PL + '" y="' + PT + '" width="' + cW + '" height="' + cH + '" fill="url(#anlDots)"/>' +
+    // Axes
+    '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + cH) + '" stroke="var(--line)" stroke-width="1"/>' +
+    '<line x1="' + PL + '" y1="' + (PT + cH) + '" x2="' + (PL + cW) + '" y2="' + (PT + cH) + '" stroke="var(--line)" stroke-width="1"/>' +
+    grid + xTicks + series + xL + overlay + '</svg>' +
     '<div id="anl-trend-tip" style="position:absolute;display:none;pointer-events:none;background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:11px;min-width:120px;box-shadow:0 4px 16px rgba(0,0,0,.35);z-index:20"></div>' +
     '</div>';
 }
 
 function _anlDrawTrendBrush(wells, allD, trendEl) {
-  var BW = 440, BH = 44, BPL = 42, BPR = 12, BPT = 4, BPB = 4;
+  var BW = 440, BH = 40, BPL = 42, BPR = 52, BPT = 4, BPB = 4;
   var bcW = BW - BPL - BPR, bcH = BH - BPT - BPB;
   var n = allD.length;
   if (n < 2) return;
@@ -1056,22 +1104,36 @@ function _anlDrawTrendBrush(wells, allD, trendEl) {
   var miniSeries = wells.map(function(w, si) {
     if (_anlTrend.hidden[w.id]) return '';
     var clr = _ANL_CLRS[si % _ANL_CLRS.length];
+    var sw  = si === 0 ? '1.4' : '0.9';
     var mMap = {};
-    (WellsState.measurements[w.id] || []).forEach(function(m) { mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0; });
-    var pts = allD.map(function(d, i) { return mMap[d] != null ? bpx(i).toFixed(1) + ',' + bpy(mMap[d]).toFixed(1) : null; }).filter(Boolean);
-    return pts.length >= 2 ? '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + clr + '" stroke-width="1.2" opacity=".6"/>' : '';
+    (WellsState.measurements[w.id] || []).forEach(function(m) {
+      mMap[(m.measurementDate || '').slice(0, 10)] = parseFloat(m.flowRate) || 0;
+    });
+    var pts = allD.map(function(d, i) {
+      return mMap[d] != null ? bpx(i).toFixed(1) + ',' + bpy(mMap[d]).toFixed(1) : null;
+    }).filter(Boolean);
+    return pts.length >= 2
+      ? '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + clr + '" stroke-width="' + sw + '" opacity="' + (si === 0 ? '.6' : '.35') + '"/>'
+      : '';
   }).join('');
 
   var bx1 = bpx(_anlTrend.brushSt * (n - 1)), bx2 = bpx(_anlTrend.brushEn * (n - 1));
   var selW = Math.max(4, bx2 - bx1);
+  // Pill-shaped handle bars
+  var handleH = Math.round(bcH * 0.55), handleY = BPT + Math.round((bcH - handleH) / 2);
 
   var brushSvg =
     '<svg id="anl-brush-svg" viewBox="0 0 ' + BW + ' ' + BH + '" style="width:100%;display:block;cursor:crosshair">' +
-    '<rect x="' + BPL + '" y="' + BPT + '" width="' + bcW + '" height="' + bcH + '" fill="rgba(255,255,255,.03)" rx="2"/>' +
+    '<rect x="' + BPL + '" y="' + BPT + '" width="' + bcW + '" height="' + bcH + '" fill="rgba(255,255,255,.025)" rx="3"/>' +
     miniSeries +
-    '<rect id="anl-brush-sel" x="' + bx1.toFixed(1) + '" y="' + BPT + '" width="' + selW.toFixed(1) + '" height="' + bcH + '" fill="rgba(88,166,255,.15)" stroke="rgba(88,166,255,.5)" stroke-width="1" rx="2" style="cursor:ew-resize"/>' +
-    '<line id="anl-brush-lh" x1="' + bx1.toFixed(1) + '" y1="' + BPT + '" x2="' + bx1.toFixed(1) + '" y2="' + (BPT + bcH) + '" stroke="rgba(88,166,255,.8)" stroke-width="2" style="cursor:ew-resize"/>' +
-    '<line id="anl-brush-rh" x1="' + bx2.toFixed(1) + '" y1="' + BPT + '" x2="' + bx2.toFixed(1) + '" y2="' + (BPT + bcH) + '" stroke="rgba(88,166,255,.8)" stroke-width="2" style="cursor:ew-resize"/>' +
+    '<rect id="anl-brush-sel" x="' + bx1.toFixed(1) + '" y="' + BPT + '" width="' + selW.toFixed(1) + '" height="' + bcH + '"' +
+    ' fill="rgba(56,189,248,.1)" stroke="rgba(56,189,248,.35)" stroke-width="1" rx="2" style="cursor:ew-resize"/>' +
+    // Left handle — rounded pill
+    '<rect id="anl-brush-lh" x="' + (bx1 - 2).toFixed(1) + '" y="' + handleY + '" width="4" height="' + handleH + '"' +
+    ' fill="rgba(56,189,248,.75)" rx="2" style="cursor:ew-resize"/>' +
+    // Right handle
+    '<rect id="anl-brush-rh" x="' + (bx2 - 2).toFixed(1) + '" y="' + handleY + '" width="4" height="' + handleH + '"' +
+    ' fill="rgba(56,189,248,.75)" rx="2" style="cursor:ew-resize"/>' +
     '</svg>';
 
   var brushWrap = trendEl.querySelector('.anl-trend-brush');
@@ -1116,9 +1178,22 @@ function _anlDrawTrend(wells, trendEl) {
   var legend = visWells.map(function(w, i) {
     var clr = _ANL_CLRS[i % _ANL_CLRS.length];
     var hidden = _anlTrend.hidden[w.id];
-    return '<span class="anl-leg-item" data-lwid="' + w.id + '" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;opacity:' + (hidden ? 0.35 : 1) + '">' +
-      '<span style="display:inline-block;width:16px;height:2px;background:' + clr + ';border-radius:1px"></span>' +
-      '<span style="font-size:10px;color:var(--txt-2)">' + escHTML(w.name) + '</span></span>';
+    // Get last known flow rate for this well
+    var lastQ = null;
+    var meas = WellsState.measurements[w.id];
+    if (meas && meas.length) {
+      var fq = parseFloat(meas[meas.length - 1].flowRate);
+      if (!isNaN(fq)) lastQ = fq;
+    }
+    var qSpan = lastQ !== null
+      ? '<span style="font-size:10px;font-weight:700;color:' + clr + ';font-variant-numeric:tabular-nums;margin-left:2px">' + lastQ.toFixed(2) + '</span>'
+      : '';
+    return '<span class="anl-leg-item" data-lwid="' + w.id + '"' +
+      ' style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 8px 2px 6px;border-radius:20px;' +
+      'border:1px solid ' + clr + '33;background:' + clr + '0d;opacity:' + (hidden ? 0.35 : 1) + '">' +
+      '<span style="display:inline-block;width:14px;height:2.5px;background:' + clr + ';border-radius:2px"></span>' +
+      '<span style="font-size:10px;color:var(--txt-2)">' + escHTML(w.name) + '</span>' +
+      qSpan + '</span>';
   }).join('');
 
   var tableBtnLbl = _anlTrend.tableMode ? 'График' : 'Таблица';
