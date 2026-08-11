@@ -990,10 +990,10 @@ function _anlDrawTrendChart(wells, allD, trendEl) {
     return '<line x1="' + PL + '" y1="' + py(q).toFixed(1) + '" x2="' + (PL + cW) + '" y2="' + py(q).toFixed(1) + '"' +
            ' stroke="var(--line)" stroke-width="' + (isBase ? '1' : '0.5') + '"' +
            (isBase ? '' : ' stroke-dasharray="4,4"') + '/>' +
-           '<text x="' + (PL - 4) + '" y="' + (py(q) + 3.5).toFixed(1) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="end" font-variant-numeric="tabular-nums">' +
+           '<text x="' + (PL - 4) + '" y="' + (py(q) + 2.5).toFixed(1) + '" fill="var(--txt-3)" font-size="5.5" text-anchor="end" font-variant-numeric="tabular-nums">' +
            q.toFixed(1) + '</text>';
   }).join('') +
-  '<text x="12" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="middle" transform="rotate(-90 12 ' + (PT + cH / 2) + ')">м³/ч</text>';
+  '<text x="10" y="' + (PT + cH / 2) + '" fill="var(--txt-3)" font-size="5.5" text-anchor="middle" transform="rotate(-90 10 ' + (PT + cH / 2) + ')">м³/ч</text>';
 
   // X axis tick marks
   var step = Math.max(1, Math.ceil(n / 6));
@@ -1044,8 +1044,8 @@ function _anlDrawTrendChart(wells, allD, trendEl) {
     var lblX = dx + r + 2, lblY = dy - 7, lblW = 36, lblH = 14;
     var valueLabel = '<rect x="' + lblX + '" y="' + lblY + '" width="' + lblW + '" height="' + lblH + '"' +
                      ' fill="' + clr + '" fill-opacity=".15" rx="3"/>' +
-                     '<text x="' + (lblX + lblW / 2) + '" y="' + (lblY + 9.5) + '"' +
-                     ' fill="' + clr + '" font-size="8.5" font-weight="700" text-anchor="middle"' +
+                     '<text x="' + (lblX + lblW / 2) + '" y="' + (lblY + 8.5) + '"' +
+                     ' fill="' + clr + '" font-size="5.5" font-weight="700" text-anchor="middle"' +
                      ' font-variant-numeric="tabular-nums">' + lpQ.toFixed(2) + '</text>';
 
     var showArea = _anlTrend.chartType === 'area';
@@ -1061,7 +1061,7 @@ function _anlDrawTrendChart(wells, allD, trendEl) {
   // X axis labels
   var xL = allD.map(function(d, i) {
     if (i % step !== 0 && i !== n - 1) return '';
-    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - PB + 15) + '" fill="var(--txt-3)" font-size="8.5" text-anchor="middle">' +
+    return '<text x="' + px(i).toFixed(1) + '" y="' + (H - PB + 12) + '" fill="var(--txt-3)" font-size="5.5" text-anchor="middle">' +
       formatMonitoringDate(d).replace(/\s\d{4}/, '') + '</text>';
   }).join('');
 
