@@ -413,6 +413,9 @@ function switchTab(name) {
   if (name === 'sump-forecast' && typeof initSumpForecastTab === 'function') {
     initSumpForecastTab();
   }
+  if (name === 'registry' && typeof initRegistryTab === 'function') {
+    initRegistryTab();
+  }
   if (name === 'chem' && typeof initChemTab === 'function') {
     initChemTab();
   }
