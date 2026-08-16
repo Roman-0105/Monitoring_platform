@@ -170,10 +170,17 @@ function _wpmInitLeaflet() {
   });
   WpmState.map = map;
 
-  // Tile layer — OpenStreetMap
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Tile layer — Esri World Imagery (спутник)
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics',
+  }).addTo(map);
+
+  // Поверх спутника — дороги и подписи (Esri Reference overlay)
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    opacity: 0.6,
+    attribution: '',
   }).addTo(map);
 
   WpmState.layerGroup = L.layerGroup().addTo(map);
