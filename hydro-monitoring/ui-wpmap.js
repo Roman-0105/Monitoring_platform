@@ -45,12 +45,12 @@ function _wpmInitCSS() {
   var s = document.createElement('style');
   s.id = 'wpmap-css';
   s.textContent = [
-    /* Page — занимает весь экран, относительное позиционирование для дочерних absolute */
-    '#page-wpmap{padding:0!important;overflow:hidden!important;position:relative!important}',
-    '#page-wpmap.active{display:block!important}',
-    '.wpm-shell{position:absolute;inset:0;overflow:hidden}',
-
-    /* Map container — абсолютно заполняет shell */
+    /* Page */
+    '#page-wpmap{padding:0!important;overflow:hidden!important}',
+    '#page-wpmap.active{display:flex!important;flex-direction:column!important}',
+    /* Shell занимает всё пространство страницы через flex:1 */
+    '.wpm-shell{position:relative;flex:1;min-height:0;overflow:hidden}',
+    /* Leaflet-контейнер абсолютно заполняет shell */
     '#wpm-leaflet{position:absolute;inset:0;z-index:0}',
 
     /* Top control panel */
@@ -164,10 +164,11 @@ function _wpmInitLeaflet() {
     WpmState.markers = [];
   }
 
-  // Ensure container has real dimensions before Leaflet init
+  // Убедимся что контейнер получил реальные размеры от браузера
   var container = document.getElementById('wpm-leaflet');
-  if (!container || container.offsetWidth === 0) {
-    setTimeout(_wpmInitLeaflet, 200);
+  if (!container) return;
+  if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+    setTimeout(_wpmInitLeaflet, 250);
     return;
   }
 
@@ -451,8 +452,10 @@ async function initWpMapTab() {
 
   // Leaflet нужно инициализировать или обновить размер после того,
   // как вкладка стала видимой
-  // Всегда пересоздаём карту при входе на вкладку — гарантирует правильный размер
-  setTimeout(_wpmInitLeaflet, 100);
+  // Ждём один кадр браузера чтобы CSS применился и контейнер получил размер
+  requestAnimationFrame(function() {
+    setTimeout(_wpmInitLeaflet, 50);
+  });
 }
 
 // Экспорт
