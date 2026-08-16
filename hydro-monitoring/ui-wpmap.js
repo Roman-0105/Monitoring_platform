@@ -434,7 +434,7 @@ async function wpmReload() {
   _wpmRenderMarkers();
   _wpmRenderFilterChips();
   _wpmRenderKpi();
-  if (typeof Toast !== 'undefined') Toast.ok('Данные обновлены');
+  if (typeof Toast !== 'undefined' && typeof Toast.ok === 'function') Toast.ok('Данные обновлены');
 }
 
 // ── Инициализация вкладки ──────────────────────────────────────
