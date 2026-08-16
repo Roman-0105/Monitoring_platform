@@ -45,12 +45,13 @@ function _wpmInitCSS() {
   var s = document.createElement('style');
   s.id = 'wpmap-css';
   s.textContent = [
-    '#page-wpmap{padding:0!important;overflow:hidden!important;position:relative}',
-    '#page-wpmap.active{display:flex!important;flex-direction:column!important}',
-    '.wpm-shell{position:relative;flex:1;overflow:hidden;display:flex;flex-direction:column}',
+    /* Page — занимает весь экран, относительное позиционирование для дочерних absolute */
+    '#page-wpmap{padding:0!important;overflow:hidden!important;position:relative!important}',
+    '#page-wpmap.active{display:block!important}',
+    '.wpm-shell{position:absolute;inset:0;overflow:hidden}',
 
-    /* Map container */
-    '#wpm-leaflet{flex:1;min-height:0;z-index:0}',
+    /* Map container — абсолютно заполняет shell */
+    '#wpm-leaflet{position:absolute;inset:0;z-index:0}',
 
     /* Top control panel */
     '.wpm-ctrl{position:absolute;top:12px;left:12px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}',
@@ -159,9 +160,17 @@ function _wpmInitLeaflet() {
   if (WpmState.map) {
     WpmState.map.remove();
     WpmState.map = null;
+    WpmState.layerGroup = null;
+    WpmState.markers = [];
   }
 
-  // Default center — will fit to markers later
+  // Ensure container has real dimensions before Leaflet init
+  var container = document.getElementById('wpm-leaflet');
+  if (!container || container.offsetWidth === 0) {
+    setTimeout(_wpmInitLeaflet, 200);
+    return;
+  }
+
   var map = L.map('wpm-leaflet', {
     center: [51.1, 71.4],  // Центр Казахстана как дефолт
     zoom: 13,
@@ -442,16 +451,8 @@ async function initWpMapTab() {
 
   // Leaflet нужно инициализировать или обновить размер после того,
   // как вкладка стала видимой
-  if (!WpmState.map) {
-    setTimeout(_wpmInitLeaflet, 80);
-  } else {
-    setTimeout(function() {
-      WpmState.map.invalidateSize();
-      _wpmRenderMarkers();
-      _wpmRenderFilterChips();
-      _wpmRenderKpi();
-    }, 80);
-  }
+  // Всегда пересоздаём карту при входе на вкладку — гарантирует правильный размер
+  setTimeout(_wpmInitLeaflet, 100);
 }
 
 // Экспорт
