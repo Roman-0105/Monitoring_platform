@@ -1661,3 +1661,10 @@ body {
 .rp-toggle input:checked + .rp-toggle-pill::after {
   transform: translateX(18px);
 }
+
+/* ── Nav rail items (dew + stats) — defined here to avoid JS ordering bugs ── */
+.dew-rail-item { display:flex;align-items:center;gap:10px;padding:8px 8px;border:none;background:none;color:var(--txt-3);border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s;text-align:left;min-height:40px;position:relative }
+.dew-rail-item:hover { background:var(--bg-3);color:var(--txt-1) }
+.dew-rail-item.active { background:rgba(59,130,246,.15);color:var(--blue) }
+.dew-rail-item.dew-rail-action { color:var(--txt-3) }
+.dew-rail-item.dew-rail-action:hover { color:var(--ok) }

@@ -518,12 +518,7 @@ var _dewDiagramTheme = 'dark';
     '.dew-rail{display:flex;flex-direction:column;width:52px;min-width:52px;background:var(--bg-2);border-right:1px solid var(--line);transition:width .22s cubic-bezier(.4,0,.2,1);overflow:hidden;gap:2px;padding:6px 4px;z-index:10;flex-shrink:0}',
     '.dew-rail:hover{width:196px}',
 
-    /* Rail items */
-    '.dew-rail-item{display:flex;align-items:center;gap:10px;padding:8px 8px;border:none;background:none;color:var(--txt-3);border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s;text-align:left;min-height:40px;position:relative}',
-    '.dew-rail-item:hover{background:var(--bg-3);color:var(--txt-1)}',
-    '.dew-rail-item.active{background:rgba(59,130,246,.15);color:var(--blue)}',
-    '.dew-rail-item.dew-rail-action{color:var(--txt-3)}',
-    '.dew-rail-item.dew-rail-action:hover{color:var(--ok)}',
+    /* Rail items — base styles live in styles.css to avoid ordering issues */
 
     /* Rail icon */
     '.dew-rail-icon{width:20px;height:20px;flex-shrink:0;stroke:currentColor}',

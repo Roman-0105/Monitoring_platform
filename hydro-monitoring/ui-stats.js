@@ -978,10 +978,7 @@ function _anlDrawTrendChart(wells, allD, trendEl) {
   function px(i) { return PL + (n > 1 ? (i / (n - 1)) * cW : cW / 2); }
   function py(q)  { return PT + (1 - q / maxQ) * cH; }
 
-  // Dot-grid pattern for chart background
-  var dotGrid = '<pattern id="anlDots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">' +
-    '<circle cx="0" cy="0" r="0.8" fill="var(--txt-3)" opacity=".25"/></pattern>' +
-    '<rect x="' + PL + '" y="' + PT + '" width="' + cW + '" height="' + cH + '" fill="url(#anlDots)"/>';
+  // Dot-grid pattern is defined in gradDefs below and referenced by anlDots rect
 
   // Subtle dashed horizontal guides (no green/amber/red zones)
   var yTicks = [0, 0.25, 0.5, 0.75, 1].map(function(f) { return maxQ * f; });
