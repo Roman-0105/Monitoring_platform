@@ -849,7 +849,7 @@ function showChemProtocolForm(protocolId) {
         '<input class="chem-inp" id="pf-lab-num" placeholder="977" value="' + escHTML(proto ? (proto.lab_number||'') : '') + '"></div>' +
     '</div>' +
 
-    // Вкладки групп параметров
+    // Вкладки групп параметров — все группы рендерятся сразу, скрываются через display
     '<div style="border-top:1px solid var(--line);margin:16px -20px;padding:16px 20px 0">' +
       '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">Результаты анализа</div>' +
       '<div class="chem-gtabs" id="chem-gtabs">' +
@@ -860,7 +860,14 @@ function showChemProtocolForm(protocolId) {
           '</button>';
         }).join('') +
       '</div>' +
-      '<div id="chem-param-grid-wrap">' + _chemParamGrid(_chemFormGroup, existingResults) + '</div>' +
+      // Рендерим все панели сразу — данные в DOM сохраняются при переключении
+      '<div id="chem-param-grid-wrap">' +
+        Object.keys(CHEM_GROUPS).map(function(g) {
+          return '<div id="chem-grp-' + g + '" style="display:' + (g === _chemFormGroup ? 'block' : 'none') + '">' +
+            _chemParamGrid(g, existingResults) +
+          '</div>';
+        }).join('') +
+      '</div>' +
     '</div>';
 
   _chemOpenModal(
@@ -874,11 +881,15 @@ function showChemProtocolForm(protocolId) {
 
 function chemSwitchFormGroup(grp) {
   _chemFormGroup = grp;
+  // Переключаем активную вкладку
   document.querySelectorAll('.chem-gtab').forEach(function(b) {
     b.classList.toggle('active', b.dataset.grp === grp);
   });
-  var wrap = document.getElementById('chem-param-grid-wrap');
-  if (wrap) wrap.innerHTML = _chemParamGrid(grp, []);
+  // Показываем нужную панель — DOM не пересоздаётся, данные сохраняются
+  Object.keys(CHEM_GROUPS).forEach(function(g) {
+    var panel = document.getElementById('chem-grp-' + g);
+    if (panel) panel.style.display = g === grp ? 'block' : 'none';
+  });
 }
 
 function _chemParamGrid(grp, existingResults) {
