@@ -104,10 +104,12 @@ var ChemState = {
   results:     {},    // { protocol_id: [{param_key, value_raw, value_num, below_detection}] }
   loading:     false,
   loaded:      false,
-  activeSection: 'protocols', // 'waterpoints' | 'protocols' | 'analytics'
-  filterWpId:  '',
-  filterType:  '',
-  filterYear:  '',
+  activeSection: 'protocols', // 'waterpoints' | 'protocols' | 'analytics' | 'heatmap'
+  filterWpId:      '',
+  filterType:      '',
+  filterYear:      '',
+  filterExceedOnly: false,
+  compareIds:      [],   // up to 2 protocol IDs for comparison
 };
 
 // ── API helpers ────────────────────────────────────────────────
@@ -349,7 +351,8 @@ function _chemBuildLayout() {
         _chemRailItem('protocols',   '🧾', 'Протоколы') +
         _chemRailItem('waterpoints', '📍', 'Реестр водопунктов') +
         '<div class="chem-rail-sep"></div>' +
-        _chemRailItem('analytics',   '📈', 'Аналитика трендов') +
+        _chemRailItem('analytics',   '📈', 'Тренды') +
+        _chemRailItem('heatmap',     '🌡️', 'Тепловая карта') +
       '</nav>' +
       '<div class="chem-content" id="chem-content"></div>' +
     '</div>';
@@ -384,6 +387,7 @@ function _chemRenderSection(sec) {
   if (sec === 'protocols')   _chemRenderProtocols(cont);
   if (sec === 'waterpoints') _chemRenderWaterPoints(cont);
   if (sec === 'analytics')   _chemRenderAnalytics(cont);
+  if (sec === 'heatmap')     _chemRenderHeatmap(cont);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -436,7 +440,16 @@ function _chemRenderProtocols(cont) {
       '<select class="chem-sel" id="chem-f-year" onchange="chemFilterChange()">' +
         '<option value="">Все годы</option>' + yearOpts +
       '</select>' +
+      '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--txt-2);user-select:none">' +
+        '<input type="checkbox" id="chem-f-exceed"' + (ChemState.filterExceedOnly ? ' checked' : '') + ' onchange="chemFilterChange()" style="accent-color:#f87171;width:14px;height:14px;cursor:pointer">' +
+        'Только превышения ПДК' +
+      '</label>' +
       '<div style="flex:1"></div>' +
+      '<div id="chem-compare-bar" style="display:none;align-items:center;gap:8px">' +
+        '<span id="chem-compare-lbl" style="font-size:11px;color:var(--txt-3)"></span>' +
+        '<button class="chem-btn chem-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="showChemCompare()">≈ Сравнить</button>' +
+        '<button class="chem-btn chem-btn-danger" style="padding:5px 8px;font-size:11px" onclick="chemClearCompare()">✕</button>' +
+      '</div>' +
       '<span class="chem-filter-lbl" id="chem-count-lbl"></span>' +
     '</div>' +
 
@@ -446,8 +459,9 @@ function _chemRenderProtocols(cont) {
 }
 
 function chemFilterChange() {
-  ChemState.filterWpId  = document.getElementById('chem-f-wp')  ? document.getElementById('chem-f-wp').value  : '';
-  ChemState.filterYear  = document.getElementById('chem-f-year') ? document.getElementById('chem-f-year').value : '';
+  ChemState.filterWpId      = document.getElementById('chem-f-wp')     ? document.getElementById('chem-f-wp').value     : '';
+  ChemState.filterYear      = document.getElementById('chem-f-year')   ? document.getElementById('chem-f-year').value   : '';
+  ChemState.filterExceedOnly= document.getElementById('chem-f-exceed') ? document.getElementById('chem-f-exceed').checked : false;
   _chemRenderProtoList();
 }
 
@@ -458,6 +472,13 @@ function _chemRenderProtoList() {
   var filtered = ChemState.protocols.filter(function(p) {
     if (ChemState.filterWpId && p.water_point_id !== ChemState.filterWpId) return false;
     if (ChemState.filterYear && (!p.sampled_at || p.sampled_at.substring(0,4) !== ChemState.filterYear)) return false;
+    if (ChemState.filterExceedOnly) {
+      var rows = ChemState.results[p.id] || [];
+      var hasExceed = rows.some(function(r) {
+        return _chemPdkStatus(r.param_key, r.value_raw, r.below_detection) === 'exceed';
+      });
+      if (!hasExceed) return false;
+    }
     return true;
   });
 
@@ -483,8 +504,12 @@ function _chemRenderProtoList() {
         ? '<span class="chem-badge chem-badge-ok">✓ В норме</span>'
         : '<span class="chem-badge chem-badge-gray">Нет данных</span>';
 
+    var inCompare = ChemState.compareIds.indexOf(p.id) !== -1;
     return '<div class="chem-proto-card" id="cpc-' + p.id + '">' +
       '<div class="chem-proto-head" onclick="chemToggleProto(\'' + p.id + '\')">' +
+        '<label onclick="event.stopPropagation()" title="Добавить в сравнение" style="display:flex;align-items:center;margin-right:6px;cursor:pointer">' +
+          '<input type="checkbox" ' + (inCompare ? 'checked' : '') + ' onchange="chemToggleCompare(\'' + p.id + '\',this.checked)" style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer">' +
+        '</label>' +
         '<span class="chem-proto-date">' + _chemFmtDate(p.sampled_at) + '</span>' +
         '<div style="display:flex;flex-direction:column;gap:1px">' +
           '<span class="chem-proto-wp">' + escHTML(wp ? wp.name : '—') + '</span>' +
@@ -496,6 +521,8 @@ function _chemRenderProtoList() {
         '<div class="chem-proto-badges">' +
           badge +
           '<span class="chem-badge chem-badge-gray">' + (rows.length || '?') + ' пар.</span>' +
+          '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();showChemWpPassport(\'' + (wp ? wp.id : '') + '\')" title="Паспорт водопункта">🗒</button>' +
+          '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();_chemExportCsv(\'' + p.id + '\')" title="Экспорт CSV">⬇</button>' +
           '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();showChemProtocolForm(\'' + p.id + '\')">✏</button>' +
           '<button class="chem-btn chem-btn-danger" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();chemDeleteProtocol(\'' + p.id + '\')">✕</button>' +
         '</div>' +
@@ -636,120 +663,143 @@ function _chemRenderAnalytics(cont) {
   }).join('');
 
   cont.innerHTML =
-    '<div class="chem-hdr"><span class="chem-hdr-title">Тренды по параметрам</span></div>' +
+    '<div class="chem-hdr"><span class="chem-hdr-title">Тренды по параметрам</span>' +
+      '<span class="chem-hdr-sub">Удерживайте Ctrl для выбора нескольких параметров</span>' +
+    '</div>' +
     '<div class="chem-filters">' +
       '<span class="chem-filter-lbl">Водопункт:</span>' +
       '<select class="chem-sel" id="anl-wp" onchange="chemRenderAnlChart()">' + wpOpts + '</select>' +
-      '<span class="chem-filter-lbl">Параметр:</span>' +
-      '<select class="chem-sel" id="anl-param" onchange="chemRenderAnlChart()" style="min-width:220px">' + paramOpts + '</select>' +
+      '<span class="chem-filter-lbl">Параметры:</span>' +
+      '<select class="chem-sel" id="anl-param" multiple onchange="chemRenderAnlChart()" style="min-width:240px;height:80px">' + paramOpts + '</select>' +
     '</div>' +
-    '<div class="chem-anl-chart" id="chem-anl-chart">' +
-      '<div class="chem-empty" style="padding:40px"><div class="chem-empty-ico">📈</div>' +
-      '<div class="chem-empty-txt">Выберите водопункт и параметр</div></div>' +
-    '</div>';
+    '<div id="chem-anl-charts"></div>';
 }
 
+var CHEM_SERIES_COLORS = ['#38bdf8','#34d399','#fb923c','#a78bfa','#f472b6','#fbbf24'];
+
 function chemRenderAnlChart() {
-  var wpId    = document.getElementById('anl-wp')    ? document.getElementById('anl-wp').value    : '';
-  var paramKey= document.getElementById('anl-param') ? document.getElementById('anl-param').value : '';
-  var chart   = document.getElementById('chem-anl-chart');
-  if (!chart || !wpId || !paramKey) return;
+  var wpSel   = document.getElementById('anl-wp');
+  var pSel    = document.getElementById('anl-param');
+  var wrap    = document.getElementById('chem-anl-charts');
+  if (!wpSel || !pSel || !wrap) return;
 
-  var param = CHEM_PARAM_MAP[paramKey];
-  if (!param) return;
+  var wpId = wpSel.value;
+  var selectedKeys = Array.from(pSel.selectedOptions || []).map(function(o){ return o.value; });
 
-  // Собираем временной ряд
-  var points = [];
-  ChemState.protocols.filter(function(p) { return p.water_point_id === wpId; })
-    .forEach(function(p) {
-      var rows = ChemState.results[p.id] || [];
-      var r = rows.find(function(r) { return r.param_key === paramKey; });
-      if (r && r.value_num !== null && r.value_num !== undefined) {
-        points.push({ date: p.sampled_at, val: parseFloat(r.value_num) });
-      }
-    });
-
-  points.sort(function(a,b) { return a.date > b.date ? 1 : -1; });
-
-  if (!points.length) {
-    chart.innerHTML = '<div class="chem-empty" style="padding:40px"><div class="chem-empty-ico">🔎</div>' +
-      '<div class="chem-empty-txt">Нет данных по выбранному параметру</div></div>';
+  if (!wpId || !selectedKeys.length) {
+    wrap.innerHTML = '<div class="chem-anl-chart"><div class="chem-empty" style="padding:40px"><div class="chem-empty-ico">📈</div>' +
+      '<div class="chem-empty-txt">Выберите водопункт и параметры</div></div></div>';
     return;
   }
 
-  // Строим SVG-график
-  var W = 600, H = 180, PL = 60, PR = 16, PT = 16, PB = 36;
-  var cW = W - PL - PR, cH = H - PT - PB;
-  var vals = points.map(function(p) { return p.val; });
-  var minV = Math.min.apply(null, vals), maxV = Math.max.apply(null, vals);
-  var pdk = param.pdk_drink || param.pdk_drink_max;
+  // Collect all dates for this waterpoint
+  var protos = ChemState.protocols.filter(function(p){ return p.water_point_id === wpId; })
+    .sort(function(a,b){ return a.sampled_at > b.sampled_at ? 1 : -1; });
 
-  if (pdk !== null && pdk !== undefined) {
-    minV = Math.min(minV, 0);
-    maxV = Math.max(maxV, pdk * 1.15);
-  } else {
-    var span = maxV - minV || 1;
-    minV = Math.max(0, minV - span * 0.1);
-    maxV = maxV + span * 0.1;
-  }
-  var range = maxV - minV || 1;
-
-  function px(i) { return PL + (points.length > 1 ? (i / (points.length - 1)) * cW : cW / 2); }
-  function py(v)  { return PT + (1 - (v - minV) / range) * cH; }
-
-  var pathD = points.map(function(p, i) { return (i === 0 ? 'M' : 'L') + px(i).toFixed(1) + ',' + py(p.val).toFixed(1); }).join(' ');
-  var areaD = pathD + ' L' + px(points.length-1).toFixed(1) + ',' + (PT+cH) + ' L' + PL.toFixed(1) + ',' + (PT+cH) + ' Z';
-
-  // ПДК линия
-  var pdkLine = '';
-  if (pdk !== null && pdk !== undefined && pdk >= minV && pdk <= maxV) {
-    var pdkY = py(pdk).toFixed(1);
-    pdkLine = '<line x1="' + PL + '" y1="' + pdkY + '" x2="' + (PL+cW) + '" y2="' + pdkY + '" stroke="#f87171" stroke-width="1" stroke-dasharray="4,3" opacity=".8"/>' +
-      '<text x="' + (PL+cW+2) + '" y="' + (parseFloat(pdkY)+4) + '" fill="#f87171" font-size="9" font-weight="600">ПДК</text>';
+  if (!protos.length) {
+    wrap.innerHTML = '<div class="chem-anl-chart"><div class="chem-empty" style="padding:40px"><div class="chem-empty-ico">🔎</div>' +
+      '<div class="chem-empty-txt">Нет протоколов по этому водопункту</div></div></div>';
+    return;
   }
 
-  // Оси Y
-  var yLabels = '';
-  [0, 0.25, 0.5, 0.75, 1].forEach(function(f) {
-    var v = minV + f * range;
-    var y = py(v).toFixed(1);
-    yLabels += '<line x1="' + PL + '" y1="' + y + '" x2="' + (PL+cW) + '" y2="' + y + '" stroke="var(--line)" stroke-width="0.5"/>' +
-      '<text x="' + (PL-4) + '" y="' + (parseFloat(y)+4) + '" text-anchor="end" fill="var(--txt-3)" font-size="9" font-variant-numeric="tabular-nums">' + _chemFmtNum(v) + '</text>';
-  });
+  // Render one chart per selected parameter
+  wrap.innerHTML = selectedKeys.map(function(paramKey, ci) {
+    var param = CHEM_PARAM_MAP[paramKey];
+    if (!param) return '';
+    var color = CHEM_SERIES_COLORS[ci % CHEM_SERIES_COLORS.length];
 
-  // X метки
-  var xLabels = '';
-  var step = Math.max(1, Math.ceil(points.length / 6));
-  points.forEach(function(p, i) {
-    if (i % step !== 0 && i !== points.length - 1) return;
-    var x = px(i).toFixed(1);
-    xLabels += '<text x="' + x + '" y="' + (PT+cH+18) + '" text-anchor="middle" fill="var(--txt-3)" font-size="9">' + _chemFmtDate(p.date, true) + '</text>';
-  });
+    var points = [];
+    protos.forEach(function(p) {
+      var rows = ChemState.results[p.id] || [];
+      var r = rows.find(function(r) { return r.param_key === paramKey; });
+      if (r && r.value_num !== null && r.value_num !== undefined) {
+        points.push({ date: p.sampled_at, val: parseFloat(r.value_num), raw: r.value_raw, below: r.below_detection });
+      }
+    });
 
-  // Точки
-  var dots = points.map(function(p, i) {
-    var st = _chemPdkStatus(paramKey, String(p.val), false);
-    var clr = st === 'exceed' ? '#f87171' : '#38bdf8';
-    return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(p.val).toFixed(1) + '" r="3.5" fill="' + clr + '" stroke="var(--bg-2)" stroke-width="1.5"/>';
+    if (!points.length) {
+      return '<div class="chem-anl-chart" style="margin-bottom:8px">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--txt-2);margin-bottom:6px">' + escHTML(param.name) + '</div>' +
+        '<div style="color:var(--txt-3);font-size:12px;padding:10px 0">Нет числовых данных</div>' +
+      '</div>';
+    }
+
+    var W = 600, H = 160, PL = 60, PR = 20, PT = 14, PB = 32;
+    var cW = W - PL - PR, cH = H - PT - PB;
+    var vals = points.map(function(p){ return p.val; });
+    var minV = Math.min.apply(null, vals), maxV = Math.max.apply(null, vals);
+    var pdk = (param.pdk_drink !== null && param.pdk_drink !== undefined) ? param.pdk_drink : param.pdk_drink_max;
+
+    if (pdk !== null && pdk !== undefined) {
+      minV = Math.min(minV, 0);
+      maxV = Math.max(maxV, pdk * 1.15);
+    } else {
+      var sp = maxV - minV || 1;
+      minV = Math.max(0, minV - sp * 0.1);
+      maxV = maxV + sp * 0.1;
+    }
+    var range = maxV - minV || 1;
+
+    function px(i) { return PL + (points.length > 1 ? (i / (points.length - 1)) * cW : cW / 2); }
+    function py(v)  { return PT + (1 - (v - minV) / range) * cH; }
+
+    var pathD = points.map(function(p, i){ return (i === 0 ? 'M' : 'L') + px(i).toFixed(1) + ',' + py(p.val).toFixed(1); }).join(' ');
+    var areaD = pathD + ' L' + px(points.length-1).toFixed(1) + ',' + (PT+cH) + ' L' + PL.toFixed(1) + ',' + (PT+cH) + ' Z';
+
+    var pdkLine = '';
+    if (pdk !== null && pdk !== undefined) {
+      var pdkY = py(pdk).toFixed(1);
+      if (parseFloat(pdkY) >= PT && parseFloat(pdkY) <= PT+cH) {
+        pdkLine = '<line x1="' + PL + '" y1="' + pdkY + '" x2="' + (PL+cW) + '" y2="' + pdkY + '" stroke="#f87171" stroke-width="1" stroke-dasharray="4,3" opacity=".8"/>' +
+          '<text x="' + (PL+cW+2) + '" y="' + (parseFloat(pdkY)+4) + '" fill="#f87171" font-size="9" font-weight="600">ПДК</text>';
+      }
+    }
+
+    var yLabels = '';
+    [0, 0.25, 0.5, 0.75, 1].forEach(function(f) {
+      var v = minV + f * range;
+      var y = py(v).toFixed(1);
+      yLabels += '<line x1="' + PL + '" y1="' + y + '" x2="' + (PL+cW) + '" y2="' + y + '" stroke="var(--line)" stroke-width="0.5"/>' +
+        '<text x="' + (PL-4) + '" y="' + (parseFloat(y)+4) + '" text-anchor="end" fill="var(--txt-3)" font-size="9" font-variant-numeric="tabular-nums">' + _chemFmtNum(v) + '</text>';
+    });
+
+    var xLabels = '';
+    var step = Math.max(1, Math.ceil(points.length / 6));
+    points.forEach(function(p, i) {
+      if (i % step !== 0 && i !== points.length - 1) return;
+      xLabels += '<text x="' + px(i).toFixed(1) + '" y="' + (PT+cH+18) + '" text-anchor="middle" fill="var(--txt-3)" font-size="9">' + _chemFmtDate(p.date, true) + '</text>';
+    });
+
+    var dots = points.map(function(p, i) {
+      var st = _chemPdkStatus(paramKey, String(p.val), p.below);
+      var clr = st === 'exceed' ? '#f87171' : color;
+      var title = _chemFmtDate(p.date) + ': ' + p.val + ' ' + param.unit;
+      return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(p.val).toFixed(1) + '" r="3.5" fill="' + clr + '" stroke="var(--bg-2)" stroke-width="1.5"><title>' + escHTML(title) + '</title></circle>';
+    }).join('');
+
+    var gradId = 'chemGrad' + ci;
+    return '<div class="chem-anl-chart" style="margin-bottom:10px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + '"></span>' +
+          '<span style="font-size:13px;font-weight:600;color:var(--txt-1)">' + escHTML(param.name) + '</span>' +
+        '</div>' +
+        '<span style="font-size:11px;color:var(--txt-3)">' + escHTML(param.unit) + '</span>' +
+      '</div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;overflow:visible">' +
+        '<defs>' +
+          '<linearGradient id="' + gradId + '" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0%" stop-color="' + color + '" stop-opacity=".22"/>' +
+            '<stop offset="100%" stop-color="' + color + '" stop-opacity=".02"/>' +
+          '</linearGradient>' +
+        '</defs>' +
+        yLabels + xLabels + pdkLine +
+        '<path d="' + areaD + '" fill="url(#' + gradId + ')"/>' +
+        '<path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+        dots +
+      '</svg>' +
+    '</div>';
   }).join('');
-
-  chart.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-      '<div style="font-size:13px;font-weight:600;color:var(--txt-1)">' + escHTML(param.name) + '</div>' +
-      '<div style="font-size:11px;color:var(--txt-3)">' + escHTML(param.unit) + '</div>' +
-    '</div>' +
-    '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;overflow:visible">' +
-      '<defs>' +
-        '<linearGradient id="chemGrad" x1="0" y1="0" x2="0" y2="1">' +
-          '<stop offset="0%" stop-color="#38bdf8" stop-opacity=".25"/>' +
-          '<stop offset="100%" stop-color="#38bdf8" stop-opacity=".02"/>' +
-        '</linearGradient>' +
-      '</defs>' +
-      yLabels + xLabels + pdkLine +
-      '<path d="' + areaD + '" fill="url(#chemGrad)"/>' +
-      '<path d="' + pathD + '" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
-      dots +
-    '</svg>';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -854,9 +904,20 @@ function showChemProtocolForm(protocolId) {
       '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">Результаты анализа</div>' +
       '<div class="chem-gtabs" id="chem-gtabs">' +
         Object.keys(CHEM_GROUPS).map(function(g) {
-          var cnt = CHEM_PARAMS.filter(function(p){ return p.group === g; }).length;
-          return '<button class="chem-gtab' + (g === _chemFormGroup ? ' active' : '') + '" data-grp="' + g + '" onclick="chemSwitchFormGroup(\'' + g + '\')">' +
-            CHEM_GROUPS[g].icon + ' ' + CHEM_GROUPS[g].label + ' <span style="opacity:.5;font-size:10px">(' + cnt + ')</span>' +
+          var existFilled = existingResults.filter(function(r){
+            var p2 = CHEM_PARAM_MAP[r.param_key];
+            return p2 && p2.group === g && r.value_raw;
+          }).length;
+          var total = CHEM_PARAMS.filter(function(p){ return p.group === g; }).length;
+          var initExceed = existingResults.some(function(r) {
+            var p2 = CHEM_PARAM_MAP[r.param_key];
+            return p2 && p2.group === g && _chemPdkStatus(r.param_key, r.value_raw, r.below_detection) === 'exceed';
+          });
+          var cntTxt = '(' + existFilled + '/' + total + ')' + (initExceed ? ' ⚠' : '');
+          var exceedStyle = initExceed ? 'border-color:rgba(248,113,113,.5);' : '';
+          return '<button class="chem-gtab' + (g === _chemFormGroup ? ' active' : '') + '" data-grp="' + g + '" style="' + exceedStyle + '" onclick="chemSwitchFormGroup(\'' + g + '\')">' +
+            CHEM_GROUPS[g].icon + ' ' + CHEM_GROUPS[g].label +
+            ' <span id="chem-tab-cnt-' + g + '" style="font-size:10px;opacity:.7;margin-left:2px">' + cntTxt + '</span>' +
           '</button>';
         }).join('') +
       '</div>' +
@@ -911,10 +972,36 @@ function _chemParamGrid(grp, existingResults) {
 function _chemCheckParamInput(inp) {
   var key = inp.dataset.pkey;
   var val = inp.value.trim();
-  if (!val) { inp.classList.remove('exceed'); return; }
+  if (!val) { inp.classList.remove('exceed'); _chemUpdateTabCounters(); return; }
   var parsed = _chemParseValue(val);
   var status = parsed ? _chemPdkStatus(key, val, parsed.below) : 'no_norm';
   inp.classList.toggle('exceed', status === 'exceed');
+  _chemUpdateTabCounters();
+}
+
+function _chemUpdateTabCounters() {
+  Object.keys(CHEM_GROUPS).forEach(function(g) {
+    var params = CHEM_PARAMS.filter(function(p){ return p.group === g; });
+    var filled = 0, exceeded = 0;
+    params.forEach(function(p) {
+      var inp = document.getElementById('pr-' + p.key);
+      if (!inp || !inp.value.trim()) return;
+      filled++;
+      var parsed = _chemParseValue(inp.value.trim());
+      if (parsed && _chemPdkStatus(p.key, inp.value.trim(), parsed.below) === 'exceed') exceeded++;
+    });
+    var span = document.getElementById('chem-tab-cnt-' + g);
+    if (!span) return;
+    var total = params.length;
+    span.textContent = '(' + filled + '/' + total + ')' + (exceeded > 0 ? ' ⚠' : '');
+    var btn = span.closest ? span.closest('.chem-gtab') : null;
+    if (btn) {
+      btn.style.borderColor = exceeded > 0 ? 'rgba(248,113,113,.6)' : '';
+      if (!btn.classList.contains('active')) {
+        btn.style.color = exceeded > 0 ? '#f87171' : '';
+      }
+    }
+  });
 }
 
 async function _chemSaveProtocol(existingId) {
@@ -1232,6 +1319,334 @@ function _chemCloseModal() {
   if (ov) ov.remove();
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  ТЕПЛОВАЯ КАРТА (водопункты × параметры)
+// ═══════════════════════════════════════════════════════════════
+function _chemRenderHeatmap(cont) {
+  // Ключевые параметры для тепловой карты (выбираем наиболее нормируемые)
+  var hmKeys = ['ph_lab','tds','hardness','no3','no2','fe_total','mn','cl','so4','cu','pb','as','cr6','ni','cd','hg','cn'];
+  var hmParams = hmKeys.map(function(k){ return CHEM_PARAM_MAP[k]; }).filter(Boolean);
+
+  // Для каждого водопункта находим последний протокол с данными
+  var wps = ChemState.waterPoints;
+  if (!wps.length) {
+    cont.innerHTML = '<div class="chem-hdr"><span class="chem-hdr-title">Тепловая карта</span></div>' +
+      '<div class="chem-empty"><div class="chem-empty-ico">🌡️</div><div class="chem-empty-txt">Нет водопунктов</div></div>';
+    return;
+  }
+
+  // For each wp, get latest protocol results
+  var wpData = wps.map(function(wp) {
+    var protos = ChemState.protocols.filter(function(p){ return p.water_point_id === wp.id; })
+      .sort(function(a,b){ return a.sampled_at < b.sampled_at ? 1 : -1; });
+    var results = {};
+    protos.forEach(function(p) {
+      var rows = ChemState.results[p.id] || [];
+      rows.forEach(function(r) {
+        if (!results[r.param_key]) results[r.param_key] = r; // first = latest
+      });
+    });
+    return { wp: wp, results: results, latestDate: protos.length ? protos[0].sampled_at : null };
+  });
+
+  // Legend
+  var legendHtml =
+    '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--txt-2);margin-bottom:12px">' +
+      '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:3px;background:rgba(248,113,113,.7);display:inline-block"></span>Превышение ПДК</span>' +
+      '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:3px;background:rgba(52,211,153,.55);display:inline-block"></span>В норме</span>' +
+      '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:3px;background:rgba(139,148,158,.12);border:1px solid var(--line);display:inline-block"></span>Нет данных</span>' +
+    '</div>';
+
+  var tableHtml = '<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;white-space:nowrap">';
+  // Header row
+  tableHtml += '<thead><tr><th style="text-align:left;padding:6px 10px;color:var(--txt-3);position:sticky;left:0;background:var(--bg-1);z-index:2;min-width:140px;border-bottom:2px solid var(--line)">Водопункт</th>';
+  hmParams.forEach(function(p) {
+    tableHtml += '<th style="padding:6px 5px;color:var(--txt-3);font-size:10px;font-weight:600;text-align:center;border-bottom:2px solid var(--line);min-width:54px;max-width:70px" title="' + escHTML(p.name) + ' (' + escHTML(p.unit) + ')">' +
+      escHTML(p.key.toUpperCase().replace('_',' ').substring(0,8)) + '</th>';
+  });
+  tableHtml += '</tr></thead><tbody>';
+
+  wpData.forEach(function(item, ri) {
+    var bgRow = ri % 2 === 0 ? '' : 'background:rgba(255,255,255,.02)';
+    tableHtml += '<tr style="' + bgRow + '">';
+    tableHtml += '<td style="padding:6px 10px;font-weight:600;color:var(--txt-1);position:sticky;left:0;background:var(--bg-1);' + bgRow + 'z-index:1;border-right:1px solid var(--line)">' +
+      escHTML(item.wp.name) +
+      (item.latestDate ? '<div style="font-size:9px;color:var(--txt-3);font-weight:400">' + _chemFmtDate(item.latestDate) + '</div>' : '') +
+    '</td>';
+
+    hmParams.forEach(function(p) {
+      var r = item.results[p.key];
+      if (!r || !r.value_raw) {
+        tableHtml += '<td style="text-align:center;padding:5px;color:var(--txt-3);background:rgba(139,148,158,.08);font-size:10px">—</td>';
+        return;
+      }
+      var st = _chemPdkStatus(p.key, r.value_raw, r.below_detection);
+      var bg = st === 'exceed' ? 'rgba(248,113,113,.18)' :
+               st === 'ok'     ? 'rgba(52,211,153,.14)' : 'rgba(139,148,158,.08)';
+      var clr = st === 'exceed' ? '#f87171' : st === 'ok' ? 'var(--ok)' : 'var(--txt-2)';
+      tableHtml += '<td style="text-align:center;padding:5px;background:' + bg + ';color:' + clr + ';font-weight:' + (st==='exceed'?'700':'400') + ';font-size:10px;font-variant-numeric:tabular-nums" title="' + escHTML(p.name + ': ' + r.value_raw + ' ' + p.unit) + '">' +
+        escHTML(r.value_raw) + '</td>';
+    });
+    tableHtml += '</tr>';
+  });
+  tableHtml += '</tbody></table></div>';
+
+  cont.innerHTML =
+    '<div class="chem-hdr"><span class="chem-hdr-title">Тепловая карта ПДК</span>' +
+      '<span class="chem-hdr-sub">По последнему протоколу каждого водопункта</span>' +
+    '</div>' +
+    legendHtml +
+    '<div style="background:var(--bg-2);border:1px solid var(--line);border-radius:10px;overflow:hidden;padding:14px">' +
+      tableHtml +
+    '</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  СРАВНЕНИЕ ПРОТОКОЛОВ
+// ═══════════════════════════════════════════════════════════════
+function chemToggleCompare(id, checked) {
+  if (checked) {
+    if (ChemState.compareIds.indexOf(id) === -1) {
+      if (ChemState.compareIds.length >= 2) {
+        ChemState.compareIds.shift(); // drop oldest
+      }
+      ChemState.compareIds.push(id);
+    }
+  } else {
+    ChemState.compareIds = ChemState.compareIds.filter(function(x){ return x !== id; });
+  }
+  _chemUpdateCompareBar();
+}
+
+function _chemUpdateCompareBar() {
+  var bar = document.getElementById('chem-compare-bar');
+  var lbl = document.getElementById('chem-compare-lbl');
+  if (!bar) return;
+  var n = ChemState.compareIds.length;
+  if (n === 0) {
+    bar.style.display = 'none';
+  } else {
+    bar.style.display = 'flex';
+    lbl.textContent = 'Выбрано: ' + n + '/2';
+    var compareBtn = bar.querySelector('button');
+    if (compareBtn) compareBtn.disabled = n < 2;
+  }
+}
+
+function chemClearCompare() {
+  ChemState.compareIds = [];
+  _chemRenderProtoList();
+}
+
+function showChemCompare() {
+  var ids = ChemState.compareIds;
+  if (ids.length < 2) return;
+  var p1 = ChemState.protocols.find(function(p){ return p.id === ids[0]; });
+  var p2 = ChemState.protocols.find(function(p){ return p.id === ids[1]; });
+  if (!p1 || !p2) return;
+
+  var wp1 = ChemState.waterPoints.find(function(w){ return w.id === p1.water_point_id; });
+  var wp2 = ChemState.waterPoints.find(function(w){ return w.id === p2.water_point_id; });
+  var r1  = ChemState.results[p1.id] || [];
+  var r2  = ChemState.results[p2.id] || [];
+
+  var r1map = {}, r2map = {};
+  r1.forEach(function(r){ r1map[r.param_key] = r; });
+  r2.forEach(function(r){ r2map[r.param_key] = r; });
+
+  var hdr1 = escHTML((wp1 ? wp1.name : '?') + '  ' + _chemFmtDate(p1.sampled_at));
+  var hdr2 = escHTML((wp2 ? wp2.name : '?') + '  ' + _chemFmtDate(p2.sampled_at));
+
+  var rows = '';
+  var groupOrder = ['organo','physico','macro','metals','organic'];
+  groupOrder.forEach(function(g) {
+    var params = CHEM_PARAMS.filter(function(p){ return p.group === g; });
+    var hasData = params.some(function(p){ return r1map[p.key] || r2map[p.key]; });
+    if (!hasData) return;
+    var grpInfo = CHEM_GROUPS[g];
+    rows += '<tr style="background:rgba(255,255,255,.03)"><td colspan="4" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--txt-2)">' + grpInfo.icon + ' ' + grpInfo.label + '</td></tr>';
+    params.forEach(function(p) {
+      var v1 = r1map[p.key], v2 = r2map[p.key];
+      if (!v1 && !v2) return;
+      var s1 = v1 ? _chemPdkStatus(p.key, v1.value_raw, v1.below_detection) : 'nd';
+      var s2 = v2 ? _chemPdkStatus(p.key, v2.value_raw, v2.below_detection) : 'nd';
+      function cellStyle(st) {
+        if (st === 'exceed') return 'color:#f87171;font-weight:700';
+        if (st === 'ok')     return 'color:var(--ok)';
+        return 'color:var(--txt-3)';
+      }
+      rows += '<tr>' +
+        '<td style="padding:5px 8px;color:var(--txt-3);font-size:11px">' + p.no + '. ' + escHTML(p.name) + '</td>' +
+        '<td style="padding:5px 8px;text-align:right;font-size:12px;' + cellStyle(s1) + '">' + (v1 ? escHTML(v1.value_raw) : '—') + '</td>' +
+        '<td style="padding:5px 8px;text-align:right;font-size:12px;' + cellStyle(s2) + '">' + (v2 ? escHTML(v2.value_raw) : '—') + '</td>' +
+        '<td style="padding:5px 8px;text-align:center;font-size:10px;color:var(--txt-3)">' + escHTML(p.unit) + '</td>' +
+      '</tr>';
+    });
+  });
+
+  _chemOpenModal(
+    'Сравнение протоколов',
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<thead><tr style="border-bottom:2px solid var(--line)">' +
+        '<th style="text-align:left;padding:8px;color:var(--txt-3);font-size:10px;text-transform:uppercase;letter-spacing:.05em">Параметр</th>' +
+        '<th style="text-align:right;padding:8px;color:var(--blue);font-size:12px;font-weight:700">' + hdr1 + '</th>' +
+        '<th style="text-align:right;padding:8px;color:#fb923c;font-size:12px;font-weight:700">' + hdr2 + '</th>' +
+        '<th style="text-align:center;padding:8px;color:var(--txt-3);font-size:10px">Ед.</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody>' +
+    '</table>',
+    '<button class="chem-btn chem-btn-ghost" onclick="_chemCloseModal()">Закрыть</button>',
+    'max-width:780px'
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ПАСПОРТ ВОДОПУНКТА
+// ═══════════════════════════════════════════════════════════════
+function showChemWpPassport(wpId) {
+  if (!wpId) return;
+  var wp = ChemState.waterPoints.find(function(w){ return w.id === wpId; });
+  if (!wp) return;
+
+  var protos = ChemState.protocols.filter(function(p){ return p.water_point_id === wpId; })
+    .sort(function(a,b){ return a.sampled_at < b.sampled_at ? 1 : -1; });
+
+  // Сводка по параметрам (мин/макс/последнее)
+  var paramStats = {};
+  protos.forEach(function(p) {
+    var rows = ChemState.results[p.id] || [];
+    rows.forEach(function(r) {
+      if (!paramStats[r.param_key]) paramStats[r.param_key] = { vals: [], lastDate: '', lastVal: '', exceedCount: 0 };
+      var st = paramStats[r.param_key];
+      if (r.value_num !== null && r.value_num !== undefined) st.vals.push(r.value_num);
+      if (!st.lastDate || p.sampled_at > st.lastDate) {
+        st.lastDate = p.sampled_at;
+        st.lastVal  = r.value_raw;
+        st.lastBelow = r.below_detection;
+      }
+      if (_chemPdkStatus(r.param_key, r.value_raw, r.below_detection) === 'exceed') st.exceedCount++;
+    });
+  });
+
+  // Protocol history table
+  var histHtml = '<div style="margin-bottom:16px">' +
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">История протоколов</div>';
+  if (!protos.length) {
+    histHtml += '<div style="color:var(--txt-3);font-size:12px">Протоколов нет</div>';
+  } else {
+    histHtml += '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<thead><tr><th style="text-align:left;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Дата</th>' +
+      '<th style="text-align:left;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Лаборатория / №</th>' +
+      '<th style="text-align:center;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Параметров</th>' +
+      '<th style="text-align:center;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Превышений</th>' +
+      '</tr></thead><tbody>' +
+      protos.map(function(p) {
+        var rows = ChemState.results[p.id] || [];
+        var exc = rows.filter(function(r){ return _chemPdkStatus(r.param_key, r.value_raw, r.below_detection) === 'exceed'; }).length;
+        return '<tr>' +
+          '<td style="padding:5px 8px;font-weight:600;color:var(--blue)">' + _chemFmtDate(p.sampled_at) + '</td>' +
+          '<td style="padding:5px 8px;color:var(--txt-2)">' + escHTML((p.lab_name || '') + (p.lab_protocol_number ? ' №' + p.lab_protocol_number : '')) + '</td>' +
+          '<td style="padding:5px 8px;text-align:center">' + rows.length + '</td>' +
+          '<td style="padding:5px 8px;text-align:center;' + (exc > 0 ? 'color:#f87171;font-weight:700' : 'color:var(--ok)') + '">' + (exc > 0 ? '⚠ ' + exc : '✓') + '</td>' +
+        '</tr>';
+      }).join('') +
+    '</tbody></table>';
+  }
+  histHtml += '</div>';
+
+  // Param summary (only params with data)
+  var paramHtml = '<div>' +
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">Сводка по параметрам</div>';
+  var paramKeys = Object.keys(paramStats);
+  if (!paramKeys.length) {
+    paramHtml += '<div style="color:var(--txt-3);font-size:12px">Нет данных</div>';
+  } else {
+    paramHtml += '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<thead><tr>' +
+        '<th style="text-align:left;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Параметр</th>' +
+        '<th style="text-align:right;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Последнее</th>' +
+        '<th style="text-align:right;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Мин</th>' +
+        '<th style="text-align:right;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Макс</th>' +
+        '<th style="text-align:center;padding:5px 8px;color:var(--txt-3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Превыш.</th>' +
+      '</tr></thead><tbody>' +
+      paramKeys.map(function(key) {
+        var p = CHEM_PARAM_MAP[key];
+        if (!p) return '';
+        var st = paramStats[key];
+        var lastStatus = _chemPdkStatus(key, st.lastVal, st.lastBelow);
+        var hasVals = st.vals.length > 0;
+        var minVal = hasVals ? Math.min.apply(null, st.vals) : null;
+        var maxVal = hasVals ? Math.max.apply(null, st.vals) : null;
+        return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
+          '<td style="padding:5px 8px;color:var(--txt-1)">' + p.no + '. ' + escHTML(p.name) + '<span style="color:var(--txt-3);font-size:10px;margin-left:4px">' + escHTML(p.unit) + '</span></td>' +
+          '<td style="padding:5px 8px;text-align:right;font-weight:600;' + (lastStatus==='exceed'?'color:#f87171':lastStatus==='ok'?'color:var(--ok)':'color:var(--txt-2)') + '">' + escHTML(st.lastVal || '—') + '</td>' +
+          '<td style="padding:5px 8px;text-align:right;color:var(--txt-2);font-variant-numeric:tabular-nums">' + (minVal !== null ? _chemFmtNum(minVal) : '—') + '</td>' +
+          '<td style="padding:5px 8px;text-align:right;color:var(--txt-2);font-variant-numeric:tabular-nums">' + (maxVal !== null ? _chemFmtNum(maxVal) : '—') + '</td>' +
+          '<td style="padding:5px 8px;text-align:center;' + (st.exceedCount > 0 ? 'color:#f87171;font-weight:700' : 'color:var(--ok)') + '">' + (st.exceedCount > 0 ? st.exceedCount : '✓') + '</td>' +
+        '</tr>';
+      }).join('') +
+    '</tbody></table>';
+  }
+  paramHtml += '</div>';
+
+  var typeLabel = CHEM_WP_TYPES[wp.type] || wp.type;
+  _chemOpenModal(
+    '📋 Паспорт: ' + escHTML(wp.name),
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)">' +
+      '<div style="flex:1;min-width:160px"><div style="font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Тип</div><div style="font-size:13px;color:var(--txt-1)">' + escHTML(typeLabel) + '</div></div>' +
+      '<div style="flex:1;min-width:120px"><div style="font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Код</div><div style="font-size:13px;color:var(--blue);font-weight:600">' + escHTML(wp.code || '—') + '</div></div>' +
+      '<div style="flex:2;min-width:200px"><div style="font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Местоположение</div><div style="font-size:13px;color:var(--txt-2)">' + escHTML(wp.location_desc || '—') + '</div></div>' +
+      '<div style="flex:1;min-width:100px"><div style="font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Протоколов</div><div style="font-size:20px;font-weight:700;color:var(--txt-1)">' + protos.length + '</div></div>' +
+    '</div>' +
+    histHtml + paramHtml,
+    '<button class="chem-btn chem-btn-ghost" onclick="_chemCloseModal()">Закрыть</button>',
+    'max-width:860px'
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ЭКСПОРТ ПРОТОКОЛА В CSV
+// ═══════════════════════════════════════════════════════════════
+function _chemExportCsv(protocolId) {
+  var proto = ChemState.protocols.find(function(p){ return p.id === protocolId; });
+  if (!proto) return;
+  var wp = ChemState.waterPoints.find(function(w){ return w.id === proto.water_point_id; });
+  var rows = ChemState.results[protocolId];
+  if (!rows || !rows.length) { alert('Нет данных для экспорта'); return; }
+
+  var rmap = {};
+  rows.forEach(function(r){ rmap[r.param_key] = r; });
+
+  var lines = [
+    ['Водопункт', wp ? wp.name : '?'],
+    ['Дата отбора', _chemFmtDate(proto.sampled_at)],
+    ['Лаборатория', proto.lab_name || ''],
+    ['№ протокола', proto.lab_protocol_number || ''],
+    ['Лаб. номер', proto.lab_number || ''],
+    [],
+    ['№', 'Параметр', 'Группа', 'Значение', 'Ед. изм.', 'ПДК питьевая', 'Статус'],
+  ];
+
+  CHEM_PARAMS.forEach(function(p) {
+    var r = rmap[p.key];
+    if (!r) return;
+    var st = _chemPdkStatus(p.key, r.value_raw, r.below_detection);
+    var statusTxt = st === 'exceed' ? 'Превышение ПДК' : st === 'ok' ? 'Норма' : 'Нет нормы';
+    lines.push([p.no, p.name, CHEM_GROUPS[p.group] ? CHEM_GROUPS[p.group].label : p.group, r.value_raw, p.unit, _chemPdkStr(p), statusTxt]);
+  });
+
+  var csv = '﻿' + lines.map(function(row) {
+    return row.map(function(v){ return '"' + String(v || '').replace(/"/g, '""') + '"'; }).join(';');
+  }).join('\r\n');
+
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'protocol_' + (proto.lab_protocol_number || proto.id.substring(0,8)) + '_' + (proto.sampled_at || 'date') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // Экспорт в глобальный scope
 window.initChemTab         = initChemTab;
 window.chemFilterChange    = chemFilterChange;
@@ -1249,3 +1664,9 @@ window._chemSaveProtocol   = _chemSaveProtocol;
 window._chemImportCsv      = _chemImportCsv;
 window._chemDownloadTemplate = _chemDownloadTemplate;
 window._chemCheckParamInput  = _chemCheckParamInput;
+window._chemUpdateTabCounters= _chemUpdateTabCounters;
+window.chemToggleCompare   = chemToggleCompare;
+window.chemClearCompare    = chemClearCompare;
+window.showChemCompare     = showChemCompare;
+window.showChemWpPassport  = showChemWpPassport;
+window._chemExportCsv      = _chemExportCsv;
