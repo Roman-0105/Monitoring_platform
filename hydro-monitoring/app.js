@@ -419,6 +419,9 @@ function switchTab(name) {
   if (name === 'chem' && typeof initChemTab === 'function') {
     initChemTab();
   }
+  if (name === 'wpmap' && typeof initWpMapTab === 'function') {
+    initWpMapTab();
+  }
   var tooltipEl = document.getElementById('map-tooltip');
   if (tooltipEl) tooltipEl.style.display = 'none';
   document.querySelectorAll('.map-point-card').forEach(function(el){ el.remove(); });
