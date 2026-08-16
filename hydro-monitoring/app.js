@@ -413,6 +413,9 @@ function switchTab(name) {
   if (name === 'sump-forecast' && typeof initSumpForecastTab === 'function') {
     initSumpForecastTab();
   }
+  if (name === 'chem' && typeof initChemTab === 'function') {
+    initChemTab();
+  }
   var tooltipEl = document.getElementById('map-tooltip');
   if (tooltipEl) tooltipEl.style.display = 'none';
   document.querySelectorAll('.map-point-card').forEach(function(el){ el.remove(); });

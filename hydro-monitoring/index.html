@@ -41,6 +41,10 @@
           <button class="tab-btn" data-tab="sump-forecast"><span class="tab-icon">◎</span><span class="tab-label"> Прогноз зумпфов</span></button>
         </div>
         <div class="sidebar-section">
+          <span class="sidebar-section-label">Качество воды</span>
+          <button class="tab-btn" data-tab="chem"><span class="tab-icon">🔬</span><span class="tab-label"> Хим. мониторинг</span></button>
+        </div>
+        <div class="sidebar-section">
           <span class="sidebar-section-label">Риски</span>
           <button class="tab-btn" onclick="window.open('../risk-inspection/index.html', '_blank')" title="Открывается в новой вкладке"><span class="tab-icon">⚠</span><span class="tab-label"> Фиксация рисков</span></button>
         </div>
@@ -742,6 +746,9 @@
     </div><!-- /stats flex wrapper -->
   </div><!-- /page-stats -->
 
+  <!-- Химический мониторинг воды -->
+  <div class="page" id="page-chem" style="padding:0;overflow:hidden"></div>
+
   <!-- Tooltip для карты -->
   <div id="map-tooltip" class="map-tooltip" style="display:none"></div>
   <!-- Статус-бар -->
@@ -937,6 +944,7 @@
 <script src="ui-dewatering.js"></script>
 <script src="ui-dustsuppression.js"></script>
 <script src="ui-sump-forecast.js"></script>
+<script src="ui-chem.js"></script>
 <script src="app.js"></script>
 
 
