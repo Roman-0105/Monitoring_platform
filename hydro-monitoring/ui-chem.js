@@ -162,6 +162,16 @@ var CHEM_WP_TYPES = {
 };
 
 // ── Состояние ──────────────────────────────────────────────────
+/* ── Подписи и цвета для видов протоколов ──────────────────────*/
+var CHEM_PROTO_TYPE_META = {
+  sha:        { label: 'СХА',                   icon: '🧪', color: '#3b82f6' },
+  radio:      { label: 'Радиология',             icon: '☢️', color: '#a855f7' },
+  cn:         { label: 'Цианиды',                icon: '⚗️', color: '#f59e0b' },
+  micro:      { label: 'Микрокомпоненты',        icon: '🔩', color: '#10b981' },
+  radio_full: { label: 'Развёрнутая радиология', icon: '☢️', color: '#8b5cf6' },
+  full:       { label: 'Полный анализ',          icon: '📋', color: '#6b7280' },
+};
+
 var ChemState = {
   waterPoints: [],    // [{id, name, code, type, ...}]
   protocols:   [],    // [{id, water_point_id, sampled_at, ...}]
@@ -169,11 +179,12 @@ var ChemState = {
   loading:     false,
   loaded:      false,
   activeSection: 'protocols', // 'waterpoints' | 'protocols' | 'analytics' | 'heatmap'
-  filterWpId:      '',
-  filterType:      '',
-  filterYear:      '',
-  filterExceedOnly: false,
-  compareIds:      [],   // up to 2 protocol IDs for comparison
+  filterWpId:        '',
+  filterProtoType:   '',
+  filterType:        '',
+  filterYear:        '',
+  filterExceedOnly:  false,
+  compareIds:        [],   // up to 2 protocol IDs for comparison
 };
 
 // ── API helpers ────────────────────────────────────────────────
@@ -500,6 +511,14 @@ function _chemRenderProtocols(cont) {
     '<div class="chem-filters">' +
       '<span class="chem-filter-lbl">Водопункт:</span>' +
       '<select class="chem-sel" id="chem-f-wp" onchange="chemFilterChange()">' + wpOpts + '</select>' +
+      '<span class="chem-filter-lbl">Вид:</span>' +
+      '<select class="chem-sel" id="chem-f-ptype" onchange="chemFilterChange()">' +
+        '<option value="">Все виды</option>' +
+        Object.keys(CHEM_PROTO_TYPE_META).map(function(k) {
+          var m = CHEM_PROTO_TYPE_META[k];
+          return '<option value="' + k + '"' + (ChemState.filterProtoType === k ? ' selected' : '') + '>' + m.icon + ' ' + m.label + '</option>';
+        }).join('') +
+      '</select>' +
       '<span class="chem-filter-lbl">Год:</span>' +
       '<select class="chem-sel" id="chem-f-year" onchange="chemFilterChange()">' +
         '<option value="">Все годы</option>' + yearOpts +
@@ -523,9 +542,10 @@ function _chemRenderProtocols(cont) {
 }
 
 function chemFilterChange() {
-  ChemState.filterWpId      = document.getElementById('chem-f-wp')     ? document.getElementById('chem-f-wp').value     : '';
-  ChemState.filterYear      = document.getElementById('chem-f-year')   ? document.getElementById('chem-f-year').value   : '';
-  ChemState.filterExceedOnly= document.getElementById('chem-f-exceed') ? document.getElementById('chem-f-exceed').checked : false;
+  ChemState.filterWpId       = document.getElementById('chem-f-wp')     ? document.getElementById('chem-f-wp').value     : '';
+  ChemState.filterProtoType  = document.getElementById('chem-f-ptype')  ? document.getElementById('chem-f-ptype').value  : '';
+  ChemState.filterYear       = document.getElementById('chem-f-year')   ? document.getElementById('chem-f-year').value   : '';
+  ChemState.filterExceedOnly = document.getElementById('chem-f-exceed') ? document.getElementById('chem-f-exceed').checked : false;
   _chemRenderProtoList();
 }
 
@@ -535,6 +555,7 @@ function _chemRenderProtoList() {
 
   var filtered = ChemState.protocols.filter(function(p) {
     if (ChemState.filterWpId && p.water_point_id !== ChemState.filterWpId) return false;
+    if (ChemState.filterProtoType && (p.protocol_type || 'full') !== ChemState.filterProtoType) return false;
     if (ChemState.filterYear && (!p.sampled_at || p.sampled_at.substring(0,4) !== ChemState.filterYear)) return false;
     if (ChemState.filterExceedOnly) {
       var rows = ChemState.results[p.id] || [];
@@ -568,6 +589,9 @@ function _chemRenderProtoList() {
         ? '<span class="chem-badge chem-badge-ok">✓ В норме</span>'
         : '<span class="chem-badge chem-badge-gray">Нет данных</span>';
 
+    var ptMeta = CHEM_PROTO_TYPE_META[p.protocol_type] || CHEM_PROTO_TYPE_META['full'];
+    var ptBadge = '<span class="chem-badge" style="background:' + ptMeta.color + '18;color:' + ptMeta.color + ';border-color:' + ptMeta.color + '40">' + ptMeta.icon + ' ' + ptMeta.label + '</span>';
+
     var inCompare = ChemState.compareIds.indexOf(p.id) !== -1;
     return '<div class="chem-proto-card" id="cpc-' + p.id + '">' +
       '<div class="chem-proto-head" onclick="chemToggleProto(\'' + p.id + '\')">' +
@@ -580,9 +604,11 @@ function _chemRenderProtoList() {
           '<span class="chem-proto-lab">' +
             (p.lab_name ? escHTML(p.lab_name) : '') +
             (p.lab_protocol_number ? ' №' + escHTML(p.lab_protocol_number) : '') +
+            (p.lab_number ? ' (проба ' + escHTML(p.lab_number) + ')' : '') +
           '</span>' +
         '</div>' +
         '<div class="chem-proto-badges">' +
+          ptBadge +
           badge +
           '<span class="chem-badge chem-badge-gray">' + (rows.length || '?') + ' пар.</span>' +
           '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();showChemWpPassport(\'' + (wp ? wp.id : '') + '\')" title="Паспорт водопункта">🗒</button>' +
@@ -962,6 +988,17 @@ function showChemProtocolForm(protocolId) {
       '<div class="chem-fld"><label>Лаб. номер пробы</label>' +
         '<input class="chem-inp" id="pf-lab-num" placeholder="977" value="' + escHTML(proto ? (proto.lab_number||'') : '') + '"></div>' +
     '</div>' +
+    '<div class="chem-form-row">' +
+      '<div class="chem-fld"><label>Вид протокола</label>' +
+        '<select class="chem-inp" id="pf-proto-type">' +
+          Object.keys(CHEM_PROTO_TYPE_META).map(function(k) {
+            var m = CHEM_PROTO_TYPE_META[k];
+            var sel = proto && proto.protocol_type === k ? ' selected' : (!proto && k === 'sha' ? ' selected' : '');
+            return '<option value="' + k + '"' + sel + '>' + m.icon + ' ' + m.label + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+    '</div>' +
 
     // Вкладки групп параметров — все группы рендерятся сразу, скрываются через display
     '<div style="border-top:1px solid var(--line);margin:16px -20px;padding:16px 20px 0">' +
@@ -1080,7 +1117,7 @@ async function _chemSaveProtocol(existingId) {
     lab_name:            document.getElementById('pf-lab').value.trim() || null,
     lab_protocol_number: document.getElementById('pf-proto-num').value.trim() || null,
     lab_number:          document.getElementById('pf-lab-num').value.trim() || null,
-    protocol_type:       'full',
+    protocol_type:       document.getElementById('pf-proto-type').value || 'sha',
     source:              'manual',
   };
   if (existingId) protoRow.id = existingId;
@@ -1290,7 +1327,8 @@ function _chemPreviewUpload() {
       }
     });
 
-    _chemImportCache = { headers: headers, dataRows: dataRows };
+    var tplTypeKey = document.getElementById('chem-tpl-type') ? document.getElementById('chem-tpl-type').value : 'sha';
+    _chemImportCache = { headers: headers, dataRows: dataRows, protoType: tplTypeKey };
 
     var html = '';
     if (knownCount > 0) {
@@ -1355,7 +1393,7 @@ async function _chemImportFile() {
 
   // Используем уже разобранные данные из предпросмотра
   if (_chemImportCache && _chemImportCache.headers && _chemImportCache.dataRows) {
-    var result = await _chemImportRows(_chemImportCache.headers, _chemImportCache.dataRows);
+    var result = await _chemImportRows(_chemImportCache.headers, _chemImportCache.dataRows, _chemImportCache.protoType);
     _chemImportDone(result.imported, result.errors, result.skipped);
     _chemImportCache = null;
     return;
@@ -1416,10 +1454,11 @@ async function _chemImportCsv(file) {
   reader.readAsText(file, 'UTF-8');
 }
 
-/* Общая логика импорта строк. headers — массив строк (первые 7: фиксированные, далее param_key).
-   rows — массив массивов ячеек. */
-async function _chemImportRows(headers, rows) {
+/* Общая логика импорта строк. headers — массив строк (первые 8: фиксированные, далее param_key).
+   rows — массив массивов ячеек. protoType — ключ вида протокола (sha, radio, cn, micro, radio_full). */
+async function _chemImportRows(headers, rows, protoType) {
   var imported = 0, errors = 0, skipped = 0;
+  var resolvedProtoType = (protoType && CHEM_PROTO_TYPE_META[protoType]) ? protoType : 'sha';
 
   for (var ri = 0; ri < rows.length; ri++) {
     var cols = rows[ri];
@@ -1462,7 +1501,7 @@ async function _chemImportRows(headers, rows) {
       lab_protocol_number: protoNum || null,
       lab_name:            labName  || null,
       lab_number:          labNum   || null,
-      protocol_type:       'full',
+      protocol_type:       resolvedProtoType,
       source:              'excel',
     };
     var pRes = await ChemApi.upsertProtocol(protoRow);
