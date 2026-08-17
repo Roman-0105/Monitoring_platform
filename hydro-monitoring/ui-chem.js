@@ -1451,16 +1451,19 @@ async function _chemImportRows(headers, rows) {
     }
 
     var protoRow = {
-      water_point_id: wp.id,
-      sampled_at: isoDate,
+      water_point_id:      wp.id,
+      sampled_at:          isoDate,
       lab_protocol_number: protoNum || null,
-      lab_name: labName || null,
-      sampler: sampler || null,
-      notes: notes || null,
-      source: 'xlsx_import',
+      lab_name:            labName  || null,
+      protocol_type:       'full',
+      source:              'xlsx_import',
     };
     var pRes = await ChemApi.upsertProtocol(protoRow);
-    if (pRes.error) { errors++; continue; }
+    if (pRes.error) {
+      console.error('[chem import] protocol upsert error row', ri, ':', pRes.error.message, pRes.error);
+      errors++;
+      continue;
+    }
     var proto = pRes.data;
 
     // Результаты — колонки с 7-й и далее
