@@ -194,6 +194,18 @@ function _regInitCSS() {
     '.reg-type-opt.selected{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.5);color:var(--blue)}',
     '.reg-type-opt-lbl{font-size:10px;font-weight:600;text-align:center;line-height:1.3}',
 
+    /* Interval tables */
+    '.reg-itbl-wrap{display:flex;flex-direction:column;gap:6px}',
+    '.reg-itbl-head{display:grid;gap:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);padding:0 4px}',
+    '.reg-itbl-row{display:grid;gap:6px;align-items:center}',
+    '.reg-itbl-row .reg-inp{padding:5px 8px;font-size:12px}',
+    '.reg-itbl-add{display:inline-flex;align-items:center;gap:5px;background:none;border:1px dashed var(--line);color:var(--txt-3);padding:5px 12px;border-radius:7px;font-size:11px;cursor:pointer;transition:all .15s;width:100%;justify-content:center;margin-top:2px}',
+    '.reg-itbl-add:hover{background:var(--bg-3);color:var(--txt-1);border-color:rgba(59,130,246,.4)}',
+    '.reg-itbl-del{background:none;border:none;color:var(--txt-3);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:14px;line-height:1;transition:color .15s;flex-shrink:0}',
+    '.reg-itbl-del:hover{color:#f87171}',
+    '.reg-itbl-3{grid-template-columns:1fr 1fr 1fr 28px}',
+    '.reg-itbl-head-3{grid-template-columns:1fr 1fr 1fr 28px}',
+
     /* Responsive */
     '@media(max-width:640px){.reg-kpi-row{grid-template-columns:1fr 1fr}.reg-row-3,.reg-row-4{grid-template-columns:1fr 1fr}.reg-type-grid{grid-template-columns:repeat(3,1fr)}}',
     '@media(max-width:480px){.reg-row-2,.reg-row-3,.reg-row-4{grid-template-columns:1fr}.reg-type-grid{grid-template-columns:repeat(2,1fr)}}',
@@ -335,12 +347,25 @@ function _regTable(items) {
 
 function _regParamSummary(w) {
   var parts = [];
-  if (w.depth)     parts.push('H=' + w.depth + ' м');
-  if (w.diameter)  parts.push('Ø' + w.diameter + ' мм');
-  if (w.filter_from !== null && w.filter_from !== undefined && w.filter_to)
-    parts.push('фильтр ' + w.filter_from + '–' + w.filter_to + ' м');
-  if (w.aquifer)   parts.push(escHTML(w.aquifer));
-  if (w.pump_model) parts.push('Насос: ' + escHTML(w.pump_model));
+  if (w.depth)   parts.push('H=' + w.depth + ' м');
+  if (w.elev_z !== null && w.elev_z !== undefined) parts.push('Z=' + w.elev_z + ' м');
+  if (w.aquifer) parts.push(escHTML(w.aquifer));
+  if (w.drill_company) parts.push(escHTML(w.drill_company));
+  // Filter intervals summary
+  if (Array.isArray(w.filter_intervals) && w.filter_intervals.length) {
+    var fi = w.filter_intervals.map(function(r){
+      return (r.from || '?') + '–' + (r.to || '?') + ' м' + (r.diameter ? ' Ø' + r.diameter : '');
+    });
+    parts.push('фильтр: ' + fi.join(', '));
+  }
+  // Drill intervals summary
+  if (Array.isArray(w.drill_intervals) && w.drill_intervals.length) {
+    var di = w.drill_intervals.map(function(r){
+      return (r.from || '?') + '–' + (r.to || '?') + ' м' + (r.diameter ? ' Ø' + r.diameter : '');
+    });
+    parts.push('бур: ' + di.join(', '));
+  }
+  if (w.pump_model)    parts.push('Насос: ' + escHTML(w.pump_model));
   if (w.pump_capacity) parts.push(w.pump_capacity + ' м³/ч');
   return parts.join(' · ') || '—';
 }
@@ -440,19 +465,47 @@ function _regFormBody(item) {
 
   // Доп. поля для скважин
   if (isWell) {
+    var filterRows  = Array.isArray(v.filter_intervals)  ? v.filter_intervals  : [];
+    var drillRows   = Array.isArray(v.drill_intervals)   ? v.drill_intervals   : [];
+    var casingRows  = Array.isArray(v.casing_intervals)  ? v.casing_intervals  : [];
+
     html +=
+      // Общие параметры + абс. отметка
       '<div class="reg-section">' +
-        '<div class="reg-section-title">Конструкция скважины</div>' +
-        '<div class="reg-row reg-row-4">' +
+        '<div class="reg-section-title">Общие параметры скважины</div>' +
+        '<div class="reg-row reg-row-3">' +
           _regFld('Глубина скв.', 'rf-depth',  'text', v.depth  || '', '120.0', 'м') +
-          _regFld('Диаметр тр.', 'rf-diam',   'text', v.diameter || '', '168', 'мм') +
-          _regFld('Фильтр от',   'rf-ff',     'text', v.filter_from || '', '95.0', 'м') +
-          _regFld('Фильтр до',   'rf-ft',     'text', v.filter_to   || '', '115.0', 'м') +
+          _regFld('Абс. отметка (Z)', 'rf-elev-z', 'text', v.elev_z || '', '245.60', 'м') +
+          _regFld('Водоносный горизонт', 'rf-aquifer', 'text', v.aquifer || '', 'Юрский в/г') +
         '</div>' +
-        '<div class="reg-row reg-row-2">' +
-          _regFld('Водоносный горизонт', 'rf-aquifer', 'text', v.aquifer || '', 'Юрский водоносный горизонт') +
-          _regFld('Дата бурения',        'rf-drilled', 'date', v.drilled_at || '', '') +
+      '</div>' +
+
+      // Буровая компания
+      '<div class="reg-section">' +
+        '<div class="reg-section-title">Буровая компания</div>' +
+        '<div class="reg-row reg-row-3">' +
+          _regFld('Наименование компании', 'rf-drill-co', 'text', v.drill_company || '', 'ООО «БурСервис»') +
+          _regFld('Начало бурения', 'rf-drill-start', 'date', v.drill_date_start || '', '') +
+          _regFld('Окончание бурения', 'rf-drill-end', 'date', v.drill_date_end || '', '') +
         '</div>' +
+      '</div>' +
+
+      // Интервалы фильтров
+      '<div class="reg-section">' +
+        '<div class="reg-section-title">Интервалы фильтров</div>' +
+        _regIntervalTable('rf-filter-tbl', filterRows, ['От, м', 'До, м', 'Диаметр, мм']) +
+      '</div>' +
+
+      // Интервалы бурения
+      '<div class="reg-section">' +
+        '<div class="reg-section-title">Диаметры бурения по интервалам</div>' +
+        _regIntervalTable('rf-drill-tbl', drillRows, ['От, м', 'До, м', 'Диаметр, мм']) +
+      '</div>' +
+
+      // Интервалы обсадки
+      '<div class="reg-section">' +
+        '<div class="reg-section-title">Обсадные трубы по интервалам</div>' +
+        _regIntervalTable('rf-casing-tbl', casingRows, ['От, м', 'До, м', 'Диаметр, мм']) +
       '</div>';
   }
 
@@ -482,6 +535,89 @@ function _regFormBody(item) {
     '</div>';
 
   return html;
+}
+
+/* ── Интервальные таблицы ───────────────────────────────────────*/
+function _regIntervalTable(tableId, rows, colLabels) {
+  var headCols = colLabels.map(function(l){ return '<span>' + l + '</span>'; }).join('');
+  var rowsHtml = rows.map(function(r, i){
+    return _regIntervalRow(tableId, r.from, r.to, r.diameter, i);
+  }).join('');
+
+  return '<div class="reg-itbl-wrap" id="' + tableId + '">' +
+    (rows.length ? '<div class="reg-itbl-head reg-itbl-head-3">' + headCols + '<span></span></div>' : '') +
+    rowsHtml +
+    '<button class="reg-itbl-add" type="button" onclick="_regAddIntervalRow(\'' + tableId + '\')">' +
+      '+ Добавить интервал' +
+    '</button>' +
+  '</div>';
+}
+
+function _regIntervalRow(tableId, from, to, diameter, idx) {
+  var f = from !== undefined && from !== null ? from : '';
+  var t = to   !== undefined && to   !== null ? to   : '';
+  var d = diameter !== undefined && diameter !== null ? diameter : '';
+  return '<div class="reg-itbl-row reg-itbl-3" data-row="' + (idx || 0) + '">' +
+    '<input class="reg-inp" type="text" placeholder="0.0" value="' + escHTML(String(f)) + '">' +
+    '<input class="reg-inp" type="text" placeholder="0.0" value="' + escHTML(String(t)) + '">' +
+    '<input class="reg-inp" type="text" placeholder="168" value="' + escHTML(String(d)) + '">' +
+    '<button class="reg-itbl-del" type="button" title="Удалить" onclick="_regRemoveIntervalRow(this)">✕</button>' +
+  '</div>';
+}
+
+function _regAddIntervalRow(tableId) {
+  var wrap = document.getElementById(tableId);
+  if (!wrap) return;
+  var existingRows = wrap.querySelectorAll('.reg-itbl-row');
+
+  // Ensure header visible
+  var head = wrap.querySelector('.reg-itbl-head');
+  if (!head) {
+    head = document.createElement('div');
+    head.className = 'reg-itbl-head reg-itbl-head-3';
+    head.innerHTML = '<span>От, м</span><span>До, м</span><span>Диаметр, мм</span><span></span>';
+    wrap.insertBefore(head, wrap.querySelector('.reg-itbl-add'));
+  }
+
+  var addBtn = wrap.querySelector('.reg-itbl-add');
+  var rowEl = document.createElement('div');
+  rowEl.className = 'reg-itbl-row reg-itbl-3';
+  rowEl.dataset.row = existingRows.length;
+  rowEl.innerHTML =
+    '<input class="reg-inp" type="text" placeholder="0.0">' +
+    '<input class="reg-inp" type="text" placeholder="0.0">' +
+    '<input class="reg-inp" type="text" placeholder="168">' +
+    '<button class="reg-itbl-del" type="button" title="Удалить" onclick="_regRemoveIntervalRow(this)">✕</button>';
+  wrap.insertBefore(rowEl, addBtn);
+}
+
+function _regRemoveIntervalRow(btn) {
+  var row = btn.closest('.reg-itbl-row');
+  if (!row) return;
+  var wrap = row.closest('.reg-itbl-wrap');
+  row.remove();
+  // If no rows left, remove header
+  if (wrap && !wrap.querySelectorAll('.reg-itbl-row').length) {
+    var head = wrap.querySelector('.reg-itbl-head');
+    if (head) head.remove();
+  }
+}
+
+function _regReadIntervalTable(tableId) {
+  var wrap = document.getElementById(tableId);
+  if (!wrap) return [];
+  var result = [];
+  wrap.querySelectorAll('.reg-itbl-row').forEach(function(row) {
+    var inputs = row.querySelectorAll('input');
+    if (inputs.length < 3) return;
+    var f = parseFloat((inputs[0].value || '').replace(',', '.'));
+    var t = parseFloat((inputs[1].value || '').replace(',', '.'));
+    var d = parseFloat((inputs[2].value || '').replace(',', '.'));
+    if (!isNaN(f) || !isNaN(t) || !isNaN(d)) {
+      result.push({ from: isNaN(f) ? null : f, to: isNaN(t) ? null : t, diameter: isNaN(d) ? null : d });
+    }
+  });
+  return result;
 }
 
 function _regFld(label, id, type, val, placeholder, hint) {
@@ -523,12 +659,15 @@ async function _regSave(existingId) {
   };
 
   if (isWell) {
-    row.depth       = fn('rf-depth');
-    row.diameter    = fn('rf-diam');
-    row.filter_from = fn('rf-ff');
-    row.filter_to   = fn('rf-ft');
-    row.aquifer     = fv('rf-aquifer') || null;
-    row.drilled_at  = fv('rf-drilled') || null;
+    row.depth            = fn('rf-depth');
+    row.elev_z           = fn('rf-elev-z');
+    row.aquifer          = fv('rf-aquifer') || null;
+    row.drill_company    = fv('rf-drill-co') || null;
+    row.drill_date_start = fv('rf-drill-start') || null;
+    row.drill_date_end   = fv('rf-drill-end')   || null;
+    row.filter_intervals = _regReadIntervalTable('rf-filter-tbl');
+    row.drill_intervals  = _regReadIntervalTable('rf-drill-tbl');
+    row.casing_intervals = _regReadIntervalTable('rf-casing-tbl');
   }
   if (isExp) {
     row.pump_model    = fv('rf-pump-model')    || null;
@@ -589,11 +728,13 @@ function _regCloseModal() {
 }
 
 /* ── Экспорт в глобальный scope ─────────────────────────────────*/
-window.initRegistryTab = initRegistryTab;
-window.showRegForm     = showRegForm;
-window.regSelectType   = regSelectType;
-window.regFilterType   = regFilterType;
-window.regSearch       = regSearch;
-window.regDelete       = regDelete;
-window._regSave        = _regSave;
-window._regCloseModal  = _regCloseModal;
+window.initRegistryTab       = initRegistryTab;
+window.showRegForm           = showRegForm;
+window.regSelectType         = regSelectType;
+window.regFilterType         = regFilterType;
+window.regSearch             = regSearch;
+window.regDelete             = regDelete;
+window._regSave              = _regSave;
+window._regCloseModal        = _regCloseModal;
+window._regAddIntervalRow    = _regAddIntervalRow;
+window._regRemoveIntervalRow = _regRemoveIntervalRow;
