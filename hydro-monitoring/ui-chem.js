@@ -1318,7 +1318,7 @@ function _chemPreviewUpload() {
       try {
         var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
         var ws = wb.Sheets[wb.SheetNames[0]];
-        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
         if (rows.length < 2) { preview.innerHTML = '<div style="color:#f87171;font-size:11px">Файл пустой</div>'; return; }
         var headers = rows[1].map(function(h){ return String(h).trim(); });
         var dataRows = rows.slice(4).filter(function(r){ return r[0] && String(r[0]).trim() && String(r[0]).charAt(0) !== '#'; });
@@ -1372,9 +1372,9 @@ async function _chemImportXlsx(file) {
   var reader = new FileReader();
   reader.onload = async function(e) {
     try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       var ws = wb.Sheets[wb.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
 
       // Строка 1 (индекс 1) — заголовки (ключи), строки 2-3 — метаданные, 4+ — данные
       if (rows.length < 2) { alert('Файл пустой'); return; }
@@ -1444,7 +1444,11 @@ async function _chemImportRows(headers, rows) {
 
     // Дата: нормализуем любой формат в YYYY-MM-DD
     var isoDate = _chemParseDate(dateStr);
-    if (!isoDate) continue;  // пропускаем строку без валидной даты
+    if (!isoDate) {
+      console.warn('[chem import] unparseable date at row', ri, ':', JSON.stringify(dateStr));
+      errors++;
+      continue;
+    }
 
     var protoRow = {
       water_point_id: wp.id,
