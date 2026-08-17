@@ -1276,7 +1276,9 @@ function _chemPreviewUpload() {
       var key  = code || name;
       if (!key) return;
       var found = ChemState.waterPoints.find(function(w){
-        return (w.code && w.code === code) || w.name === key;
+        if (name && w.name === name) return true;
+        if (code && !name && w.code === code) return true;
+        return false;
       });
       if (found) {
         knownCount++;
@@ -1435,10 +1437,13 @@ async function _chemImportRows(headers, rows) {
     if (!wpCode && !wpName2) continue;
     if (!dateStr) continue;
 
-    // Найти водопункт по коду, затем по названию — НЕ создаём новых, пропускаем неизвестные
-    var wpSearch = wpCode || wpName2;
+    // Поиск водопункта: приоритет — точное совпадение имени (колонка B),
+    // затем код+имя, затем только код (если имя не заполнено)
     var wp = ChemState.waterPoints.find(function(w){
-      return (w.code && w.code === wpCode) || w.name === wpSearch;
+      if (wpName2 && w.name === wpName2) return true;
+      if (wpCode && wpName2 && w.code === wpCode && w.name === wpName2) return true;
+      if (wpCode && !wpName2 && w.code === wpCode) return true;
+      return false;
     });
     if (!wp) { skipped++; continue; }
 
