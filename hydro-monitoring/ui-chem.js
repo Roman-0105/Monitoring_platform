@@ -1456,7 +1456,7 @@ async function _chemImportRows(headers, rows) {
       lab_protocol_number: protoNum || null,
       lab_name:            labName  || null,
       protocol_type:       'full',
-      source:              'xlsx_import',
+      source:              'excel',
     };
     var pRes = await ChemApi.upsertProtocol(protoRow);
     if (pRes.error) {
