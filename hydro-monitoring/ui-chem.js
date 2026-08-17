@@ -919,7 +919,7 @@ async function _chemSaveWp(existingId) {
   }
   _chemCloseModal();
   _chemRenderSection('waterpoints');
-  if (typeof Toast !== 'undefined') Toast.ok('Водопункт сохранён');
+  if (typeof Toast !== 'undefined') Toast.done('msg', 'Водопункт сохранён');
 }
 
 async function chemDeleteWp(id) {
@@ -1124,7 +1124,7 @@ async function _chemSaveProtocol(existingId) {
 
   _chemCloseModal();
   _chemRenderSection('protocols');
-  if (typeof Toast !== 'undefined') Toast.ok('Протокол сохранён');
+  if (typeof Toast !== 'undefined') Toast.done('msg', 'Протокол сохранён');
 }
 
 async function chemDeleteProtocol(id) {
@@ -1299,9 +1299,9 @@ async function _chemImportXlsx(file) {
   var reader = new FileReader();
   reader.onload = async function(e) {
     try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
       var ws = wb.Sheets[wb.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
 
       // Строка 1 (индекс 1) — заголовки (ключи), строки 2-3 — метаданные, 4+ — данные
       if (rows.length < 2) { alert('Файл пустой'); return; }
@@ -1310,10 +1310,11 @@ async function _chemImportXlsx(file) {
         return r[0] && String(r[0]).trim() && String(r[0]).charAt(0) !== '#';
       });
 
-      var result = await _chemImportRows(headers, dataRows, ';');
+      var result = await _chemImportRows(headers, dataRows);
       _chemImportDone(result.imported, result.errors);
     } catch(ex) {
       alert('Ошибка чтения Excel: ' + ex.message);
+      console.error('[xlsx import]', ex);
     }
   };
   reader.readAsArrayBuffer(file);
@@ -1373,12 +1374,9 @@ async function _chemImportRows(headers, rows) {
       ChemState.waterPoints.push(wp);
     }
 
-    // Дата: ДД.ММ.ГГГГ → ISO, или уже ISO
-    var isoDate = dateStr;
-    if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) {
-      var dp = dateStr.split('.');
-      isoDate = dp[2] + '-' + dp[1] + '-' + dp[0];
-    }
+    // Дата: нормализуем любой формат в YYYY-MM-DD
+    var isoDate = _chemParseDate(dateStr);
+    if (!isoDate) continue;  // пропускаем строку без валидной даты
 
     var protoRow = {
       water_point_id: wp.id,
@@ -1425,9 +1423,9 @@ function _chemImportDone(imported, errors) {
   _chemRenderSection('protocols');
   if (typeof Toast !== 'undefined') {
     if (errors) {
-      Toast.ok('Импортировано ' + imported + ' протоколов, ошибок: ' + errors);
+      Toast.done('msg', 'Импортировано ' + imported + ' протоколов, ошибок: ' + errors);
     } else {
-      Toast.ok('Импортировано ' + imported + ' протоколов');
+      Toast.done('msg', 'Импортировано ' + imported + ' протоколов');
     }
   }
 }
@@ -1435,6 +1433,25 @@ function _chemImportDone(imported, errors) {
 // ═══════════════════════════════════════════════════════════════
 //  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ═══════════════════════════════════════════════════════════════
+/* Нормализует дату из любого формата в YYYY-MM-DD.
+   Поддерживает: ДД.ММ.ГГГГ, ГГГГ-ММ-ДД, ГГГГ-ММ-ДД HH:MM:SS (SheetJS), М/Д/ГГГГ */
+function _chemParseDate(s) {
+  if (!s) return null;
+  var str = String(s).trim();
+  // ДД.ММ.ГГГГ
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(str)) {
+    var p = str.split('.');
+    return p[2] + '-' + p[1] + '-' + p[0];
+  }
+  // ГГГГ-ММ-ДД (с возможным временем)
+  var m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  // М/Д/ГГГГ или ММ/ДД/ГГГГ (SheetJS raw:false для en-locale)
+  m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return m[3] + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0');
+  return null;
+}
+
 function _chemParseValue(str) {
   if (!str) return null;
   var s = str.trim().replace(',', '.');
