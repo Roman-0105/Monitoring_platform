@@ -1251,42 +1251,115 @@ function _chemDownloadTemplate(typeKey) {
   URL.revokeObjectURL(url);
 }
 
+// Хранит данные после предпросмотра — чтобы не парсить файл дважды
+var _chemImportCache = null;
+
 function _chemPreviewUpload() {
+  _chemImportCache = null;
   var file = document.getElementById('chem-xl-file') && document.getElementById('chem-xl-file').files[0];
   if (!file) return;
   var preview = document.getElementById('chem-xl-preview');
   if (!preview) return;
+  preview.innerHTML = '<div style="font-size:11px;color:var(--txt-3)">Анализ файла…</div>';
 
   var isXlsx = /\.(xlsx|xls)$/i.test(file.name);
+
+  function _analyze(headers, dataRows) {
+    // Проверяем каждую строку: известен ли водопункт
+    var unknown = [];   // { code, name, rows }
+    var knownCount = 0;
+    var unknownSet = {};
+
+    dataRows.forEach(function(row) {
+      var code = String(row[0] || '').trim();
+      var name = String(row[1] || '').trim();
+      var key  = code || name;
+      if (!key) return;
+      var found = ChemState.waterPoints.find(function(w){
+        return (w.code && w.code === code) || w.name === key;
+      });
+      if (found) {
+        knownCount++;
+      } else {
+        if (!unknownSet[key]) {
+          unknownSet[key] = true;
+          unknown.push({ code: code, name: name });
+        }
+      }
+    });
+
+    _chemImportCache = { headers: headers, dataRows: dataRows };
+
+    var html = '';
+    if (knownCount > 0) {
+      html += '<div style="font-size:11px;color:var(--ok);margin-bottom:6px">✓ Распознано строк: <b>' + knownCount + '</b></div>';
+    }
+    if (unknown.length) {
+      html += '<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:8px;padding:10px 12px;">' +
+        '<div style="font-size:11px;font-weight:700;color:#fbbf24;margin-bottom:6px">⚠ Не найдены в реестре (' + unknown.length + ' водопункта/ов) — строки будут пропущены:</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
+          unknown.map(function(u){
+            return '<span style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2);border-radius:5px;padding:2px 8px;font-size:11px;font-family:monospace;color:#fbbf24">' +
+              escHTML(u.code || u.name) + '</span>';
+          }).join('') +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--txt-3);margin-top:6px">Сначала добавьте эти водопункты в реестр, затем повторите импорт</div>' +
+      '</div>';
+    }
+    if (knownCount === 0 && unknown.length === 0) {
+      html = '<div style="font-size:11px;color:var(--txt-3)">Строк с данными не найдено</div>';
+    }
+    if (preview) preview.innerHTML = html;
+  }
+
   if (isXlsx && typeof XLSX !== 'undefined') {
     var reader = new FileReader();
     reader.onload = function(e) {
       try {
-        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
         var ws = wb.Sheets[wb.SheetNames[0]];
-        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        // skip row 0 (title), row 1 = headers, skip rows 2-3 (units/pdk), data from row 4
-        var dataRows = rows.slice(4).filter(function(r){ return r[0] && String(r[0]).charAt(0) !== '#'; });
-        preview.innerHTML = '<div style="font-size:11px;color:var(--blue);margin-bottom:4px">✓ Excel: ' + dataRows.length + ' строк для импорта</div>';
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
+        if (rows.length < 2) { preview.innerHTML = '<div style="color:#f87171;font-size:11px">Файл пустой</div>'; return; }
+        var headers = rows[1].map(function(h){ return String(h).trim(); });
+        var dataRows = rows.slice(4).filter(function(r){ return r[0] && String(r[0]).trim() && String(r[0]).charAt(0) !== '#'; });
+        _analyze(headers, dataRows);
       } catch(ex) {
-        preview.innerHTML = '<div style="font-size:11px;color:#f87171">Ошибка чтения файла: ' + ex.message + '</div>';
+        preview.innerHTML = '<div style="font-size:11px;color:#f87171">Ошибка чтения: ' + escHTML(ex.message) + '</div>';
       }
     };
     reader.readAsArrayBuffer(file);
   } else {
     var reader2 = new FileReader();
     reader2.onload = function(e) {
-      var text = e.target.result;
-      var lines = text.split(/\r?\n/).filter(function(l){ return l.trim() && l.charAt(0) !== '#'; });
-      preview.innerHTML = '<div style="font-size:11px;color:var(--blue);margin-bottom:4px">CSV: ' + (lines.length-1) + ' строк для импорта</div>';
+      try {
+        var text = e.target.result;
+        var rawLines = text.split(/\r?\n/).filter(function(l){ return l.trim() && l.trim().charAt(0) !== '#'; });
+        if (rawLines.length < 2) { preview.innerHTML = '<div style="font-size:11px;color:#f87171">Файл пустой</div>'; return; }
+        var sep = rawLines[0].includes(';') ? ';' : ',';
+        var headers = rawLines[0].split(sep).map(function(h){ return h.trim().replace(/^﻿/, ''); });
+        var dataRows = rawLines.slice(1).map(function(l){ return l.split(sep); });
+        _analyze(headers, dataRows);
+      } catch(ex) {
+        preview.innerHTML = '<div style="font-size:11px;color:#f87171">Ошибка чтения: ' + escHTML(ex.message) + '</div>';
+      }
     };
     reader2.readAsText(file, 'UTF-8');
   }
 }
 
-function _chemImportFile() {
+async function _chemImportFile() {
   var file = document.getElementById('chem-xl-file') && document.getElementById('chem-xl-file').files[0];
   if (!file) { alert('Выберите файл'); return; }
+
+  // Используем уже разобранные данные из предпросмотра
+  if (_chemImportCache && _chemImportCache.headers && _chemImportCache.dataRows) {
+    var result = await _chemImportRows(_chemImportCache.headers, _chemImportCache.dataRows);
+    _chemImportDone(result.imported, result.errors, result.skipped);
+    _chemImportCache = null;
+    return;
+  }
+
+  // Запасной путь — если предпросмотр не был выполнен
   var isXlsx = /\.(xlsx|xls)$/i.test(file.name);
   if (isXlsx && typeof XLSX !== 'undefined') {
     _chemImportXlsx(file);
@@ -1299,9 +1372,9 @@ async function _chemImportXlsx(file) {
   var reader = new FileReader();
   reader.onload = async function(e) {
     try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       var ws = wb.Sheets[wb.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
 
       // Строка 1 (индекс 1) — заголовки (ключи), строки 2-3 — метаданные, 4+ — данные
       if (rows.length < 2) { alert('Файл пустой'); return; }
@@ -1344,7 +1417,7 @@ async function _chemImportCsv(file) {
 /* Общая логика импорта строк. headers — массив строк (первые 7: фиксированные, далее param_key).
    rows — массив массивов ячеек. */
 async function _chemImportRows(headers, rows) {
-  var imported = 0, errors = 0;
+  var imported = 0, errors = 0, skipped = 0;
 
   for (var ri = 0; ri < rows.length; ri++) {
     var cols = rows[ri];
@@ -1362,21 +1435,20 @@ async function _chemImportRows(headers, rows) {
     if (!wpCode && !wpName2) continue;
     if (!dateStr) continue;
 
-    // Найти водопункт по коду, затем по названию
+    // Найти водопункт по коду, затем по названию — НЕ создаём новых, пропускаем неизвестные
     var wpSearch = wpCode || wpName2;
     var wp = ChemState.waterPoints.find(function(w){
       return (w.code && w.code === wpCode) || w.name === wpSearch;
     });
-    if (!wp) {
-      var wpRes = await ChemApi.upsertWaterPoint({ name: wpName2 || wpCode, code: wpCode || null });
-      if (wpRes.error) { errors++; continue; }
-      wp = wpRes.data;
-      ChemState.waterPoints.push(wp);
-    }
+    if (!wp) { skipped++; continue; }
 
     // Дата: нормализуем любой формат в YYYY-MM-DD
     var isoDate = _chemParseDate(dateStr);
-    if (!isoDate) continue;  // пропускаем строку без валидной даты
+    if (!isoDate) {
+      console.warn('[chem import] unparseable date at row', ri, ':', JSON.stringify(dateStr));
+      errors++;
+      continue;
+    }
 
     var protoRow = {
       water_point_id: wp.id,
@@ -1415,18 +1487,17 @@ async function _chemImportRows(headers, rows) {
     ChemState.results[proto.id] = resultRows;
     imported++;
   }
-  return { imported: imported, errors: errors };
+  return { imported: imported, errors: errors, skipped: skipped };
 }
 
-function _chemImportDone(imported, errors) {
+function _chemImportDone(imported, errors, skipped) {
   _chemCloseModal();
   _chemRenderSection('protocols');
   if (typeof Toast !== 'undefined') {
-    if (errors) {
-      Toast.done('msg', 'Импортировано ' + imported + ' протоколов, ошибок: ' + errors);
-    } else {
-      Toast.done('msg', 'Импортировано ' + imported + ' протоколов');
-    }
+    var msg = 'Импортировано ' + imported + ' протоколов';
+    if (skipped) msg += ', пропущено ' + skipped + ' (нет в реестре)';
+    if (errors)  msg += ', ошибок: ' + errors;
+    Toast.done('import', msg);
   }
 }
 
