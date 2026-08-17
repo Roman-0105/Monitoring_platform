@@ -75,6 +75,29 @@ var CHEM_PARAMS = [
   { key:'hg',          no:55, name:'Ртуть',                       unit:'мг/дм³',         group:'metals',  pdk_type:'max',   pdk_drink:0.0005, pdk_tech:null },
   { key:'si',          no:56, name:'Кремний',                     unit:'мг/дм³',         group:'macro',   pdk_type:'max',   pdk_drink:10,     pdk_tech:null },
   { key:'iodide',      no:57, name:'Йодид ионы',                  unit:'мг/дм³',         group:'macro',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  // Цианиды — расширенные
+  { key:'cn_free',    no:58, name:'Цианиды свободные',           unit:'мг/дм³',         group:'organic', pdk_type:'max',   pdk_drink:0.035,  pdk_tech:null },
+  { key:'cn_weak',    no:59, name:'Цианиды слабосвязанные',      unit:'мг/дм³',         group:'organic', pdk_type:'max',   pdk_drink:0.07,   pdk_tech:null },
+  { key:'cn_strong',  no:60, name:'Цианиды прочносвязанные',     unit:'мг/дм³',         group:'organic', pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'cns',        no:61, name:'Роданиды (CNS⁻)',             unit:'мг/дм³',         group:'organic', pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  // Радиология — базовая
+  { key:'alpha_total',no:62, name:'Суммарная α-активность',      unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:0.1,    pdk_tech:null },
+  { key:'beta_total', no:63, name:'Суммарная β-активность',      unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:1.0,    pdk_tech:null },
+  { key:'ra226',      no:64, name:'Радий-226 (Ra-226)',           unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:0.49,   pdk_tech:null },
+  { key:'rn222',      no:65, name:'Радон-222 (Rn-222)',           unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:60,     pdk_tech:null },
+  { key:'u_nat',      no:66, name:'Уран природный (U)',           unit:'мг/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:0.015,  pdk_tech:null },
+  // Радиология — расширенная
+  { key:'cs137',      no:67, name:'Цезий-137 (Cs-137)',           unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'sr90',       no:68, name:'Стронций-90 (Sr-90)',          unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:0.49,   pdk_tech:null },
+  { key:'pu239',      no:69, name:'Плутоний-239 (Pu-239)',        unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'pu240',      no:70, name:'Плутоний-240 (Pu-240)',        unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'am241',      no:71, name:'Америций-241 (Am-241)',         unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'th232',      no:72, name:'Торий-232 (Th-232)',            unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'u234',       no:73, name:'Уран-234 (U-234)',              unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'u235',       no:74, name:'Уран-235 (U-235)',              unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'u238',       no:75, name:'Уран-238 (U-238)',              unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'ra228',      no:76, name:'Радий-228 (Ra-228)',            unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'k40',        no:77, name:'Калий-40 (K-40)',              unit:'Бк/дм³',         group:'radio',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
 ];
 
 var CHEM_PARAM_MAP = {};
@@ -86,6 +109,46 @@ var CHEM_GROUPS = {
   macro:   { label:'Макроэлементы',    icon:'🧪' },
   metals:  { label:'Металлы',          icon:'🔩' },
   organic: { label:'Органика',         icon:'🛢️' },
+  radio:   { label:'Радиология',       icon:'☢️' },
+};
+
+/* ── Типы шаблонов протоколов ───────────────────────────────────*/
+var CHEM_TEMPLATE_TYPES = {
+  sha: {
+    label: 'СХА',
+    desc:  'Стандартный химический анализ',
+    icon:  '🧪',
+    params: ['smell','taste','color','turbidity','transp',
+             'ph_lab','ph_field','tds','hardness','oxidability','apav','dry_res','alkalinity',
+             'na','k','ca','mg','nh4','nh3','co3','hco3','no3','no2','so4','cl','f','si','iodide',
+             'fe2','fe3','fe_total','mn','cu','zn','al','ba','oil','phenol'],
+  },
+  radio: {
+    label: 'Радиология',
+    desc:  'Базовый радиологический анализ',
+    icon:  '☢️',
+    params: ['alpha_total','beta_total','ra226','rn222','u_nat'],
+  },
+  cn: {
+    label: 'Цианиды (CN)',
+    desc:  'Полный анализ по цианидам',
+    icon:  '⚗️',
+    params: ['cn','cn_free','cn_weak','cn_strong','cns'],
+  },
+  micro: {
+    label: 'Микрокомпоненты',
+    desc:  'Тяжёлые металлы и микроэлементы',
+    icon:  '🔩',
+    params: ['as','pb','cd','cr3','cr6','cu','zn','ni','co_metal','hg',
+             'mo','sb','se','ba','be','v','al','b','li','tl','ag','sr','mn','fe_total'],
+  },
+  radio_full: {
+    label: 'Развёрнутая радиология',
+    desc:  'Полный спектр радионуклидов',
+    icon:  '☢️',
+    params: ['alpha_total','beta_total','cs137','sr90','pu239','pu240',
+             'am241','th232','u234','u235','u238','ra226','ra228','rn222','k40'],
+  },
 };
 
 var CHEM_WP_TYPES = {
@@ -1077,142 +1140,295 @@ async function chemDeleteProtocol(id) {
 //  ИМПОРТ EXCEL
 // ═══════════════════════════════════════════════════════════════
 function showChemExcelImport() {
+  var typeOpts = Object.keys(CHEM_TEMPLATE_TYPES).map(function(k) {
+    var t = CHEM_TEMPLATE_TYPES[k];
+    return '<option value="' + k + '">' + t.icon + ' ' + t.label + ' — ' + t.desc + '</option>';
+  }).join('');
+
   _chemOpenModal(
-    'Импорт из Excel',
-    '<div style="margin-bottom:16px">' +
-      '<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:12px 14px;margin-bottom:14px">' +
-        '<div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:6px">📋 Формат шаблона Excel</div>' +
-        '<div style="font-size:11px;color:var(--txt-2);line-height:1.6">' +
-          'Файл должен содержать колонки: <b>Водопункт</b> (название или код), <b>Дата</b> (ДД.ММ.ГГГГ), ' +
-          '<b>№ протокола</b>, <b>Лаборатория</b>, и затем колонки с ключами параметров.<br>' +
-          'Ключи параметров: <code>ph_lab</code>, <code>turbidity</code>, <code>tds</code>, <code>no3</code>, <code>fe_total</code> и т.д.<br>' +
-          'Значения: числа с точкой или запятой, знаки &lt; и &gt; поддерживаются (напр. <code>&lt;0.05</code>).' +
+    'Шаблоны и импорт протоколов',
+    // ── Секция скачивания шаблона ──────────────────────────────
+    '<div style="margin-bottom:20px">' +
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3);margin-bottom:10px">① Скачать шаблон Excel</div>' +
+      '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">' +
+        '<div class="chem-fld" style="margin:0">' +
+          '<label style="font-size:11px;color:var(--txt-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Тип протокола</label>' +
+          '<select id="chem-tpl-type" class="chem-inp">' + typeOpts + '</select>' +
         '</div>' +
+        '<button class="chem-btn chem-btn-ghost" style="white-space:nowrap" onclick="_chemDownloadTemplate(document.getElementById(\'chem-tpl-type\').value)">⬇ Скачать .xlsx</button>' +
       '</div>' +
-      '<button class="chem-btn chem-btn-ghost" style="margin-bottom:12px" onclick="_chemDownloadTemplate()">⬇ Скачать шаблон CSV</button>' +
-      '<div class="chem-fld"><label>Выберите файл CSV / Excel</label>' +
+      '<div style="font-size:10px;color:var(--txt-3);margin-top:6px;line-height:1.5">' +
+        'Шаблон содержит строку заголовков с ключами параметров, строку с единицами и нормами ПДК, и строку-пример.' +
+      '</div>' +
+    '</div>' +
+
+    '<div style="border-top:1px solid var(--line);margin:0 -20px 20px;padding-top:20px;padding-left:20px;padding-right:20px">' +
+    // ── Секция импорта ─────────────────────────────────────────
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3);margin-bottom:10px">② Загрузить заполненный файл</div>' +
+      '<div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--txt-2);line-height:1.6">' +
+        '• Файл должен быть скачан как шаблон этой системы (.xlsx или .csv)<br>' +
+        '• Колонка <b>Код водопункта</b> — код из реестра (ищется по коду, затем по названию)<br>' +
+        '• Дата в формате <b>ДД.ММ.ГГГГ</b> или <b>ГГГГ-ММ-ДД</b><br>' +
+        '• Значения: число, или со знаком <code>&lt;</code> (ниже порога обнаружения)' +
+      '</div>' +
+      '<div class="chem-fld">' +
+        '<label style="font-size:11px;color:var(--txt-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Файл (.xlsx или .csv)</label>' +
         '<input type="file" id="chem-xl-file" accept=".csv,.xlsx,.xls" class="chem-inp" style="padding:6px">' +
       '</div>' +
-      '<div id="chem-xl-preview" style="margin-top:12px"></div>' +
+      '<div id="chem-xl-preview" style="margin-top:10px"></div>' +
     '</div>',
     '<button class="chem-btn chem-btn-ghost" onclick="_chemCloseModal()">Отмена</button>' +
-    '<button class="chem-btn chem-btn-prim" onclick="_chemImportCsv()">Импортировать</button>'
+    '<button class="chem-btn chem-btn-prim" onclick="_chemImportFile()">Импортировать</button>'
   );
+
   setTimeout(function() {
     var fileInp = document.getElementById('chem-xl-file');
-    if (fileInp) fileInp.addEventListener('change', _chemPreviewCsv);
+    if (fileInp) fileInp.addEventListener('change', _chemPreviewUpload);
   }, 100);
 }
 
-function _chemDownloadTemplate() {
-  var header = ['Водопункт','Дата (ДД.ММ.ГГГГ)','№ протокола','Лаборатория'].concat(
-    CHEM_PARAMS.map(function(p){ return p.key + ' (' + p.name + ', ' + p.unit + ')'; })
-  );
-  var example = ['ПН-1 Гордеевка','11.06.2026','421/2','EcoExpert'].concat(
-    CHEM_PARAMS.map(function(p){ return ''; })
-  );
-  var csv = header.join(';') + '\n' + example.join(';');
-  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+function _chemDownloadTemplate(typeKey) {
+  var tplType = CHEM_TEMPLATE_TYPES[typeKey] || CHEM_TEMPLATE_TYPES.sha;
+  var params = tplType.params.map(function(k){ return CHEM_PARAM_MAP[k]; }).filter(Boolean);
+
+  // Фиксированные колонки
+  var fixedHeaders = ['Код водопункта','Наименование','Дата (ДД.ММ.ГГГГ)','№ протокола','Лаборатория','Пробоотборщик','Примечание'];
+  var fixedUnits   = ['','','','','','',''];
+  var fixedPdk     = ['','','','','','',''];
+  var fixedExample = ['ПН-1','Скважина ПН-1', '11.06.2026','421/2','EcoExpert','Иванов И.И.',''];
+
+  var paramHeaders = params.map(function(p){ return p.key; });
+  var paramNames   = params.map(function(p){ return p.name; });
+  var paramUnits   = params.map(function(p){ return p.unit; });
+  var paramPdk     = params.map(function(p){
+    if (p.pdk_type === 'range') return 'ПДК ' + (p.pdk_drink_min||'') + '–' + (p.pdk_drink_max||'');
+    return p.pdk_drink != null ? 'ПДК≤' + p.pdk_drink : '';
+  });
+
+  // Строки листа
+  var rows = [
+    // 0: название шаблона
+    [tplType.icon + ' Шаблон протоколов: ' + tplType.label + ' — ' + tplType.desc],
+    // 1: ключи (эта строка используется при импорте)
+    fixedHeaders.concat(paramHeaders),
+    // 2: названия параметров
+    fixedUnits.concat(paramNames),
+    // 3: единицы и ПДК
+    fixedPdk.concat(paramUnits.map(function(u,i){ return u + (paramPdk[i] ? '  ' + paramPdk[i] : ''); })),
+    // 4: строка-пример (серым — не импортируется, начинается с #)
+    ['#ПРИМЕР'].concat(fixedExample.slice(1)).concat(params.map(function(){ return ''; })),
+    // 5-9: пустые строки для заполнения
+    [], [], [], [], [],
+  ];
+
+  if (typeof XLSX === 'undefined') {
+    alert('Библиотека SheetJS не загружена. Проверьте соединение.');
+    return;
+  }
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Ширина колонок
+  var colWidths = fixedHeaders.map(function(h,i){
+    return { wch: [14,20,16,14,16,18,20][i] || 14 };
+  }).concat(params.map(function(){ return { wch: 12 }; }));
+  ws['!cols'] = colWidths;
+
+  // Заморозить первые 4 строки и 2 колонки
+  ws['!freeze'] = { xSplit: 2, ySplit: 4, topLeftCell: 'C5', activePane: 'bottomRight', state: 'frozen' };
+
+  XLSX.utils.book_append_sheet(wb, ws, tplType.label.substring(0,31));
+
+  var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  var blob = new Blob([wbOut], { type: 'application/octet-stream' });
   var url = URL.createObjectURL(blob);
-  var a = document.createElement('a'); a.href = url; a.download = 'chem_template.csv';
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'chem_template_' + typeKey + '.xlsx';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-function _chemPreviewCsv() {
+function _chemPreviewUpload() {
   var file = document.getElementById('chem-xl-file') && document.getElementById('chem-xl-file').files[0];
   if (!file) return;
   var preview = document.getElementById('chem-xl-preview');
   if (!preview) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var text = e.target.result;
-    var lines = text.split(/\r?\n/).filter(function(l){ return l.trim(); });
-    preview.innerHTML = '<div style="font-size:11px;color:var(--txt-3);margin-bottom:4px">Предпросмотр (' + (lines.length-1) + ' строк данных):</div>' +
-      '<div style="background:var(--bg-1);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:10px;font-family:monospace;overflow-x:auto;max-height:120px;overflow-y:auto;color:var(--txt-2)">' +
-      escHTML(lines.slice(0,5).join('\n')) + '</div>';
-  };
-  reader.readAsText(file, 'UTF-8');
+
+  var isXlsx = /\.(xlsx|xls)$/i.test(file.name);
+  if (isXlsx && typeof XLSX !== 'undefined') {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        // skip row 0 (title), row 1 = headers, skip rows 2-3 (units/pdk), data from row 4
+        var dataRows = rows.slice(4).filter(function(r){ return r[0] && String(r[0]).charAt(0) !== '#'; });
+        preview.innerHTML = '<div style="font-size:11px;color:var(--blue);margin-bottom:4px">✓ Excel: ' + dataRows.length + ' строк для импорта</div>';
+      } catch(ex) {
+        preview.innerHTML = '<div style="font-size:11px;color:#f87171">Ошибка чтения файла: ' + ex.message + '</div>';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    var reader2 = new FileReader();
+    reader2.onload = function(e) {
+      var text = e.target.result;
+      var lines = text.split(/\r?\n/).filter(function(l){ return l.trim() && l.charAt(0) !== '#'; });
+      preview.innerHTML = '<div style="font-size:11px;color:var(--blue);margin-bottom:4px">CSV: ' + (lines.length-1) + ' строк для импорта</div>';
+    };
+    reader2.readAsText(file, 'UTF-8');
+  }
 }
 
-async function _chemImportCsv() {
+function _chemImportFile() {
   var file = document.getElementById('chem-xl-file') && document.getElementById('chem-xl-file').files[0];
   if (!file) { alert('Выберите файл'); return; }
+  var isXlsx = /\.(xlsx|xls)$/i.test(file.name);
+  if (isXlsx && typeof XLSX !== 'undefined') {
+    _chemImportXlsx(file);
+  } else {
+    _chemImportCsv(file);
+  }
+}
+
+async function _chemImportXlsx(file) {
+  var reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // Строка 1 (индекс 1) — заголовки (ключи), строки 2-3 — метаданные, 4+ — данные
+      if (rows.length < 2) { alert('Файл пустой'); return; }
+      var headers = rows[1].map(function(h){ return String(h).trim(); });
+      var dataRows = rows.slice(4).filter(function(r){
+        return r[0] && String(r[0]).trim() && String(r[0]).charAt(0) !== '#';
+      });
+
+      var result = await _chemImportRows(headers, dataRows, ';');
+      _chemImportDone(result.imported, result.errors);
+    } catch(ex) {
+      alert('Ошибка чтения Excel: ' + ex.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function _chemImportCsv(file) {
   var reader = new FileReader();
   reader.onload = async function(e) {
     try {
       var text = e.target.result;
-      var lines = text.split(/\r?\n/).filter(function(l){ return l.trim(); });
+      var rawLines = text.split(/\r?\n/);
+      // пропускаем строки-комментарии (#) и пустые
+      var lines = rawLines.filter(function(l){ return l.trim() && l.trim().charAt(0) !== '#'; });
       if (lines.length < 2) { alert('Файл пустой или содержит только заголовок'); return; }
       var sep = lines[0].includes(';') ? ';' : ',';
       var headers = lines[0].split(sep).map(function(h){ return h.trim().replace(/^﻿/, ''); });
-
-      var imported = 0, errors = 0;
-      for (var li = 1; li < lines.length; li++) {
-        var cols = lines[li].split(sep);
-        var wpName = cols[0] ? cols[0].trim() : '';
-        var dateStr = cols[1] ? cols[1].trim() : '';
-        var protoNum = cols[2] ? cols[2].trim() : '';
-        var labName  = cols[3] ? cols[3].trim() : '';
-        if (!wpName || !dateStr) continue;
-
-        // Найти или создать водопункт
-        var wp = ChemState.waterPoints.find(function(w){
-          return w.name === wpName || w.code === wpName;
-        });
-        if (!wp) {
-          var wpRes = await ChemApi.upsertWaterPoint({ name: wpName });
-          if (wpRes.error) { errors++; continue; }
-          wp = wpRes.data;
-          ChemState.waterPoints.push(wp);
-        }
-
-        // Дата: ДД.ММ.ГГГГ → YYYY-MM-DD
-        var dateParts = dateStr.split('.');
-        var isoDate = dateParts.length === 3
-          ? dateParts[2] + '-' + dateParts[1] + '-' + dateParts[0]
-          : dateStr;
-
-        var protoRow = {
-          water_point_id: wp.id, sampled_at: isoDate,
-          lab_protocol_number: protoNum || null, lab_name: labName || null,
-          protocol_type: 'full', source: 'excel',
-        };
-        var pRes = await ChemApi.upsertProtocol(protoRow);
-        if (pRes.error) { errors++; continue; }
-        var proto = pRes.data;
-
-        // Результаты
-        var resultRows = [];
-        for (var hi = 4; hi < headers.length; hi++) {
-          var hdr = headers[hi].split(' ')[0]; // берём только ключ до скобки
-          var param = CHEM_PARAM_MAP[hdr];
-          if (!param) continue;
-          var raw = cols[hi] ? cols[hi].trim() : '';
-          if (!raw) continue;
-          var parsed = _chemParseValue(raw);
-          resultRows.push({
-            protocol_id: proto.id, param_key: param.key,
-            value_raw: raw,
-            value_num: parsed && !parsed.below && !parsed.above ? parsed.num : null,
-            below_detection: parsed ? parsed.below : false,
-            above_range:     parsed ? parsed.above : false,
-          });
-        }
-        if (resultRows.length) await ChemApi.upsertResults(resultRows);
-        ChemState.protocols.unshift(proto);
-        ChemState.results[proto.id] = resultRows;
-        imported++;
-      }
-
-      _chemCloseModal();
-      _chemRenderSection('protocols');
-      if (typeof Toast !== 'undefined') Toast.ok('Импортировано: ' + imported + ' протоколов' + (errors ? ', ошибок: ' + errors : ''));
+      var dataRows = lines.slice(1).map(function(l){ return l.split(sep); });
+      var result = await _chemImportRows(headers, dataRows);
+      _chemImportDone(result.imported, result.errors);
     } catch(err) {
       alert('Ошибка разбора файла: ' + err.message);
     }
   };
   reader.readAsText(file, 'UTF-8');
+}
+
+/* Общая логика импорта строк. headers — массив строк (первые 7: фиксированные, далее param_key).
+   rows — массив массивов ячеек. */
+async function _chemImportRows(headers, rows) {
+  var imported = 0, errors = 0;
+
+  for (var ri = 0; ri < rows.length; ri++) {
+    var cols = rows[ri];
+    var getCel = function(i){ return cols[i] !== undefined ? String(cols[i]).trim() : ''; };
+
+    // Фиксированные колонки: Код ВП | Наименование | Дата | № протокола | Лаборатория | Пробоотборщик | Примечание
+    var wpCode   = getCel(0);
+    var wpName2  = getCel(1);
+    var dateStr  = getCel(2);
+    var protoNum = getCel(3);
+    var labName  = getCel(4);
+    var sampler  = getCel(5);
+    var notes    = getCel(6);
+
+    if (!wpCode && !wpName2) continue;
+    if (!dateStr) continue;
+
+    // Найти водопункт по коду, затем по названию
+    var wpSearch = wpCode || wpName2;
+    var wp = ChemState.waterPoints.find(function(w){
+      return (w.code && w.code === wpCode) || w.name === wpSearch;
+    });
+    if (!wp) {
+      var wpRes = await ChemApi.upsertWaterPoint({ name: wpName2 || wpCode, code: wpCode || null });
+      if (wpRes.error) { errors++; continue; }
+      wp = wpRes.data;
+      ChemState.waterPoints.push(wp);
+    }
+
+    // Дата: ДД.ММ.ГГГГ → ISO, или уже ISO
+    var isoDate = dateStr;
+    if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) {
+      var dp = dateStr.split('.');
+      isoDate = dp[2] + '-' + dp[1] + '-' + dp[0];
+    }
+
+    var protoRow = {
+      water_point_id: wp.id,
+      sampled_at: isoDate,
+      lab_protocol_number: protoNum || null,
+      lab_name: labName || null,
+      sampler: sampler || null,
+      notes: notes || null,
+      source: 'xlsx_import',
+    };
+    var pRes = await ChemApi.upsertProtocol(protoRow);
+    if (pRes.error) { errors++; continue; }
+    var proto = pRes.data;
+
+    // Результаты — колонки с 7-й и далее
+    var resultRows = [];
+    for (var hi = 7; hi < headers.length; hi++) {
+      var paramKey = headers[hi].trim();
+      var param = CHEM_PARAM_MAP[paramKey];
+      if (!param) continue;
+      var raw = getCel(hi);
+      if (!raw) continue;
+      var parsed = _chemParseValue(raw);
+      if (!parsed) continue;
+      resultRows.push({
+        protocol_id: proto.id,
+        param_key: param.key,
+        value_raw: raw,
+        value_num: (!parsed.below && !parsed.above) ? parsed.num : null,
+        below_detection: parsed.below,
+        above_range:     parsed.above,
+      });
+    }
+    if (resultRows.length) await ChemApi.upsertResults(resultRows);
+    ChemState.protocols.unshift(proto);
+    ChemState.results[proto.id] = resultRows;
+    imported++;
+  }
+  return { imported: imported, errors: errors };
+}
+
+function _chemImportDone(imported, errors) {
+  _chemCloseModal();
+  _chemRenderSection('protocols');
+  if (typeof Toast !== 'undefined') {
+    if (errors) {
+      Toast.ok('Импортировано ' + imported + ' протоколов, ошибок: ' + errors);
+    } else {
+      Toast.ok('Импортировано ' + imported + ' протоколов');
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1661,7 +1877,9 @@ window.chemRenderAnlChart  = chemRenderAnlChart;
 window._chemCloseModal     = _chemCloseModal;
 window._chemSaveWp         = _chemSaveWp;
 window._chemSaveProtocol   = _chemSaveProtocol;
-window._chemImportCsv      = _chemImportCsv;
+window._chemImportCsv        = _chemImportCsv;
+window._chemImportFile       = _chemImportFile;
+window._chemImportXlsx       = _chemImportXlsx;
 window._chemDownloadTemplate = _chemDownloadTemplate;
 window._chemCheckParamInput  = _chemCheckParamInput;
 window._chemUpdateTabCounters= _chemUpdateTabCounters;
