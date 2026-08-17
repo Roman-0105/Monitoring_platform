@@ -1193,10 +1193,10 @@ function _chemDownloadTemplate(typeKey) {
   var params = tplType.params.map(function(k){ return CHEM_PARAM_MAP[k]; }).filter(Boolean);
 
   // Фиксированные колонки
-  var fixedHeaders = ['Код водопункта','Наименование','Дата (ДД.ММ.ГГГГ)','№ протокола','Лаборатория','Пробоотборщик','Примечание'];
-  var fixedUnits   = ['','','','','','',''];
-  var fixedPdk     = ['','','','','','',''];
-  var fixedExample = ['ПН-1','Скважина ПН-1', '11.06.2026','421/2','EcoExpert','Иванов И.И.',''];
+  var fixedHeaders = ['Код водопункта','Наименование','Дата (ДД.ММ.ГГГГ)','№ протокола','Лаборатория','Лаб. номер пробы','Пробоотборщик','Примечание'];
+  var fixedUnits   = ['','','','','','','',''];
+  var fixedPdk     = ['','','','','','','',''];
+  var fixedExample = ['ПН-1','Скважина ПН-1','11.06.2026','421/2','EcoExpert','977','Иванов И.И.',''];
 
   var paramHeaders = params.map(function(p){ return p.key; });
   var paramNames   = params.map(function(p){ return p.name; });
@@ -1232,7 +1232,7 @@ function _chemDownloadTemplate(typeKey) {
 
   // Ширина колонок
   var colWidths = fixedHeaders.map(function(h,i){
-    return { wch: [14,20,16,14,16,18,20][i] || 14 };
+    return { wch: [14,20,16,14,16,14,18,20][i] || 14 };
   }).concat(params.map(function(){ return { wch: 12 }; }));
   ws['!cols'] = colWidths;
 
@@ -1425,14 +1425,15 @@ async function _chemImportRows(headers, rows) {
     var cols = rows[ri];
     var getCel = function(i){ return cols[i] !== undefined ? String(cols[i]).trim() : ''; };
 
-    // Фиксированные колонки: Код ВП | Наименование | Дата | № протокола | Лаборатория | Пробоотборщик | Примечание
+    // Фиксированные колонки: Код ВП | Наименование | Дата | № протокола | Лаборатория | Лаб. номер пробы | Пробоотборщик | Примечание
     var wpCode   = getCel(0);
     var wpName2  = getCel(1);
     var dateStr  = getCel(2);
     var protoNum = getCel(3);
     var labName  = getCel(4);
-    var sampler  = getCel(5);
-    var notes    = getCel(6);
+    var labNum   = getCel(5);
+    var sampler  = getCel(6);
+    var notes    = getCel(7);
 
     if (!wpCode && !wpName2) continue;
     if (!dateStr) continue;
@@ -1460,6 +1461,7 @@ async function _chemImportRows(headers, rows) {
       sampled_at:          isoDate,
       lab_protocol_number: protoNum || null,
       lab_name:            labName  || null,
+      lab_number:          labNum   || null,
       protocol_type:       'full',
       source:              'excel',
     };
@@ -1471,9 +1473,9 @@ async function _chemImportRows(headers, rows) {
     }
     var proto = pRes.data;
 
-    // Результаты — колонки с 7-й и далее
+    // Результаты — колонки с 8-й и далее
     var resultRows = [];
-    for (var hi = 7; hi < headers.length; hi++) {
+    for (var hi = 8; hi < headers.length; hi++) {
       var paramKey = headers[hi].trim();
       var param = CHEM_PARAM_MAP[paramKey];
       if (!param) continue;
