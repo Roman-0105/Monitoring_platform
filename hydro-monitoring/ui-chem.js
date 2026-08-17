@@ -75,6 +75,7 @@ var CHEM_PARAMS = [
   { key:'hg',          no:55, name:'Ртуть',                       unit:'мг/дм³',         group:'metals',  pdk_type:'max',   pdk_drink:0.0005, pdk_tech:null },
   { key:'si',          no:56, name:'Кремний',                     unit:'мг/дм³',         group:'macro',   pdk_type:'max',   pdk_drink:10,     pdk_tech:null },
   { key:'iodide',      no:57, name:'Йодид ионы',                  unit:'мг/дм³',         group:'macro',   pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
+  { key:'density',     no:58, name:'Плотность',                   unit:'г/см³',           group:'physico', pdk_type:'max',   pdk_drink:null,   pdk_tech:null },
   // Цианиды — расширенные
   { key:'cn_free',    no:58, name:'Цианиды свободные',           unit:'мг/дм³',         group:'organic', pdk_type:'max',   pdk_drink:0.035,  pdk_tech:null },
   { key:'cn_weak',    no:59, name:'Цианиды слабосвязанные',      unit:'мг/дм³',         group:'organic', pdk_type:'max',   pdk_drink:0.07,   pdk_tech:null },
@@ -119,9 +120,9 @@ var CHEM_TEMPLATE_TYPES = {
     desc:  'Стандартный химический анализ',
     icon:  '🧪',
     params: ['smell','taste','color','turbidity','transp',
-             'ph_lab','ph_field','tds','hardness','oxidability','apav','dry_res','alkalinity',
+             'ph_lab','ph_field','tds','hardness','oxidability','apav','dry_res','alkalinity','density',
              'na','k','ca','mg','nh4','nh3','co3','hco3','no3','no2','so4','cl','f','si','iodide',
-             'fe2','fe3','fe_total','mn','cu','zn','al','ba','oil','phenol'],
+             'fe2','fe3','fe_total','mn','cu','zn','al','ba','ni','mo','oil','phenol'],
   },
   radio: {
     label: 'Радиология',
