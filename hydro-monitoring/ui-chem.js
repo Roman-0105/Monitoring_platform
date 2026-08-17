@@ -1520,9 +1520,12 @@ function _chemParseDate(s) {
   // ГГГГ-ММ-ДД (с возможным временем)
   var m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return m[1] + '-' + m[2] + '-' + m[3];
-  // М/Д/ГГГГ или ММ/ДД/ГГГГ (SheetJS raw:false для en-locale)
-  m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (m) return m[3] + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0');
+  // М/Д/ГГГГ или ММ/ДД/ГГГГ или М/Д/ГГ (SheetJS raw:false, dateNF не всегда даёт 4-значный год)
+  m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    var yr = m[3].length === 2 ? '20' + m[3] : m[3];
+    return yr + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0');
+  }
   return null;
 }
 
