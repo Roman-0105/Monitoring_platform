@@ -153,6 +153,28 @@ function _wpmInitCSS() {
     '.wpm-info-lbl{font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;font-weight:600}',
     '.wpm-info-val{font-size:13px;color:var(--txt-1)}',
 
+    /* Calc panel */
+    '.wpm-calc-panel{position:absolute;top:50px;right:12px;z-index:2000;width:330px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;overflow:hidden;pointer-events:all;backdrop-filter:blur(8px);display:none;box-shadow:0 12px 40px rgba(0,0,0,.5)}',
+    '.wpm-calc-panel.open{display:flex;flex-direction:column}',
+    '.wpm-calc-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}',
+    '.wpm-calc-title{font-size:13px;font-weight:700;color:var(--txt-1)}',
+    '.wpm-calc-close{background:none;border:none;color:var(--txt-3);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:5px}',
+    '.wpm-calc-body{padding:12px 14px;overflow-y:auto;max-height:80vh;display:flex;flex-direction:column;gap:14px}',
+    '.wpm-calc-section{border:1px solid var(--line);border-radius:8px;overflow:hidden}',
+    '.wpm-calc-sec-hdr{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--line)}',
+    '.wpm-calc-sec-title{font-size:11px;font-weight:700;color:var(--txt-2);text-transform:uppercase;letter-spacing:.06em}',
+    '.wpm-calc-sec-body{padding:10px}',
+    '.wpm-calc-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}',
+    '.wpm-calc-field:last-child{margin-bottom:0}',
+    '.wpm-calc-lbl{font-size:10px;color:var(--txt-3);font-weight:600;text-transform:uppercase;letter-spacing:.05em}',
+    '.wpm-calc-inp{background:var(--bg-3,#0f172a);border:1px solid var(--line);border-radius:6px;color:var(--txt-1);font-size:12px;font-family:monospace;padding:5px 8px;outline:none;width:100%;box-sizing:border-box}',
+    '.wpm-calc-inp:focus{border-color:rgba(59,130,246,.5)}',
+    '.wpm-calc-inp.readonly{color:var(--txt-2);background:rgba(255,255,255,.02);cursor:default}',
+    '.wpm-calc-dms{font-size:10px;color:var(--txt-3);font-family:monospace;margin-top:2px;min-height:14px}',
+    '.wpm-calc-from-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;border:1px solid rgba(59,130,246,.4);background:rgba(59,130,246,.1);color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;margin-top:2px}',
+    '.wpm-calc-from-btn:hover{background:rgba(59,130,246,.22)}',
+    '.wpm-calc-note{font-size:10px;color:var(--txt-3);line-height:1.5;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}',
+
     /* Settings panel */
     '.wpm-settings-panel{position:absolute;top:50px;right:12px;z-index:2000;width:320px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;overflow:hidden;pointer-events:all;backdrop-filter:blur(8px);display:none;box-shadow:0 12px 40px rgba(0,0,0,.5)}',
     '.wpm-settings-panel.open{display:flex;flex-direction:column}',
@@ -197,6 +219,7 @@ function _wpmBuildLayout() {
           '<button class="wpm-layer-btn" id="wpm-layer-topo" onclick="wpmSetLayer(\'topo\')" title="Топографическая карта">🏔 Рельеф</button>' +
         '</div>' +
         '<button class="wpm-btn" id="wpm-labels-btn" onclick="wpmToggleLabels()" title="Показать/скрыть подписи">🏷 Подписи</button>' +
+        '<button class="wpm-btn" id="wpm-calc-btn" onclick="wpmOpenCalc()" title="Калькулятор координат">📐 Пересчёт</button>' +
         '<button class="wpm-btn" onclick="wpmOpenSettings()" title="Настройки маркеров">⚙️</button>' +
         '<button class="wpm-btn" onclick="wpmReload()">⟳ Обновить</button>' +
       '</div>' +
@@ -208,6 +231,78 @@ function _wpmBuildLayout() {
           '<button class="wpm-info-close" onclick="_wpmCloseInfo()">✕</button>' +
         '</div>' +
         '<div class="wpm-info-body" id="wpm-info-body"></div>' +
+      '</div>' +
+
+      // Calc panel
+      '<div class="wpm-calc-panel" id="wpm-calc-panel">' +
+        '<div class="wpm-calc-hdr">' +
+          '<span class="wpm-calc-title">📐 Пересчёт координат</span>' +
+          '<button class="wpm-calc-close" onclick="wpmCloseCalc()">✕</button>' +
+        '</div>' +
+        '<div class="wpm-calc-body">' +
+
+          // WGS-84 block
+          '<div class="wpm-calc-section">' +
+            '<div class="wpm-calc-sec-hdr">' +
+              '<span class="wpm-calc-sec-title">WGS-84 (GPS)</span>' +
+              '<button class="wpm-calc-from-btn" onclick="wpmCalcFrom(\'wgs\')">↕ Пересчитать</button>' +
+            '</div>' +
+            '<div class="wpm-calc-sec-body">' +
+              '<div class="wpm-calc-field">' +
+                '<span class="wpm-calc-lbl">Широта (lat)</span>' +
+                '<input id="wc-lat" class="wpm-calc-inp" type="text" placeholder="52.488520" oninput="wpmCalcHint(\'wgs\')">' +
+                '<span class="wpm-calc-dms" id="wc-lat-dms"></span>' +
+              '</div>' +
+              '<div class="wpm-calc-field">' +
+                '<span class="wpm-calc-lbl">Долгота (lon)</span>' +
+                '<input id="wc-lon" class="wpm-calc-inp" type="text" placeholder="69.711210" oninput="wpmCalcHint(\'wgs\')">' +
+                '<span class="wpm-calc-dms" id="wc-lon-dms"></span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          // SK-42 block
+          '<div class="wpm-calc-section">' +
+            '<div class="wpm-calc-sec-hdr">' +
+              '<span class="wpm-calc-sec-title">СК-42 / Пулково-1942</span>' +
+              '<button class="wpm-calc-from-btn" onclick="wpmCalcFrom(\'sk42\')">↕ Пересчитать</button>' +
+            '</div>' +
+            '<div class="wpm-calc-sec-body">' +
+              '<div class="wpm-calc-field">' +
+                '<span class="wpm-calc-lbl">Северная X (N), м</span>' +
+                '<input id="wc-sk42n" class="wpm-calc-inp" type="text" placeholder="5815200.000">' +
+              '</div>' +
+              '<div class="wpm-calc-field">' +
+                '<span class="wpm-calc-lbl">Восточная Y (E) с номером зоны, м</span>' +
+                '<input id="wc-sk42e" class="wpm-calc-inp" type="text" placeholder="12546300.000">' +
+              '</div>' +
+              '<div class="wpm-calc-field">' +
+                '<span class="wpm-calc-lbl">Зона (авто по долготе)</span>' +
+                '<input id="wc-sk42z" class="wpm-calc-inp" type="text" placeholder="12" style="width:60px">' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          // Local coords block
+          '<div class="wpm-calc-section">' +
+            '<div class="wpm-calc-sec-hdr">' +
+              '<span class="wpm-calc-sec-title">Местные (схема карьера)</span>' +
+              '<button class="wpm-calc-from-btn" onclick="wpmCalcFrom(\'local\')">↕ Пересчитать</button>' +
+            '</div>' +
+            '<div class="wpm-calc-sec-body">' +
+              '<div class="wpm-calc-field">' +
+                '<span class="wpm-calc-lbl">X (запад–восток)</span>' +
+                '<input id="wc-lx" class="wpm-calc-inp" type="text" placeholder="46100.000">' +
+              '</div>' +
+              '<div class="wpm-calc-field">' +
+                '<span class="wpm-calc-lbl">Y (север–юг)</span>' +
+                '<input id="wc-ly" class="wpm-calc-inp" type="text" placeholder="16400.000">' +
+              '</div>' +
+              '<div class="wpm-calc-note">X = СК-42 E − зона·10⁶ − 500 000<br>Y = СК-42 N − 5 800 000<br>Зона карьера: 12, OFF_Y = 5 800 000</div>' +
+            '</div>' +
+          '</div>' +
+
+        '</div>' +
       '</div>' +
 
       // Settings panel
@@ -510,6 +605,7 @@ var SHAPE_OPTIONS = ['circle', 'square', 'diamond', 'triangle', 'hexagon'];
 var SHAPE_LABELS  = { circle:'Круг', square:'Квадрат', diamond:'Ромб', triangle:'Треугольник', hexagon:'Шестиугольник' };
 
 function wpmOpenSettings() {
+  wpmCloseCalc();
   var panel = document.getElementById('wpm-settings-panel');
   var body  = document.getElementById('wpm-stt-body');
   if (!panel || !body) return;
@@ -656,6 +752,187 @@ function _wpmUpdateEmptyState() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  Калькулятор координат
+//  WGS-84 ↔ СК-42 (Пулково-1942, Гаусс-Крюгер) ↔ Местные
+//
+//  Параметры эллипсоида Красовского:
+//    a = 6 378 245.0, b = 6 356 863.019
+//  OFF_Y = 5 800 000 (смещение Северной координаты)
+//  Зона карьера = 12 (L0 = 69°)
+// ═══════════════════════════════════════════════════════════════
+
+var CALC_KRAS_A   = 6378245.0;
+var CALC_KRAS_B   = 6356863.019;
+var CALC_OFF_Y    = 5800000;
+var CALC_ZONE_DEF = 12;
+
+function _calcE2() {
+  var a = CALC_KRAS_A, b = CALC_KRAS_B;
+  return (a * a - b * b) / (a * a);
+}
+
+// WGS-84 (lat°, lon°) → СК-42 {north, east, zone}
+function calcWgsToSk42(latDeg, lonDeg) {
+  var a  = CALC_KRAS_A;
+  var e2 = _calcE2();
+  var e4 = e2 * e2, e6 = e4 * e2;
+  var latR = latDeg * Math.PI / 180;
+  var lonR = lonDeg * Math.PI / 180;
+  var zone = Math.floor(lonDeg / 6) + 1;
+  var L0   = (zone * 6 - 3) * Math.PI / 180;
+  var dL   = lonR - L0;
+  var sinL = Math.sin(latR), cosL = Math.cos(latR), tanL = Math.tan(latR);
+  var t    = tanL * tanL;
+  var eta2 = e2 * cosL * cosL / (1 - e2);
+  var N    = a / Math.sqrt(1 - e2 * sinL * sinL);
+  var M    = a * (
+    (1 - e2/4 - 3*e4/64 - 5*e6/256) * latR
+    - (3*e2/8 + 3*e4/32 + 45*e6/1024) * Math.sin(2*latR)
+    + (15*e4/256 + 45*e6/1024) * Math.sin(4*latR)
+    - (35*e6/3072) * Math.sin(6*latR)
+  );
+  var north = M
+    + N*sinL*cosL*dL*dL/2
+    + N*sinL*Math.pow(cosL,3)*(5-t+9*eta2+4*eta2*eta2)*Math.pow(dL,4)/24
+    + N*sinL*Math.pow(cosL,5)*(61-58*t+t*t)*Math.pow(dL,6)/720;
+  var east_local = N*cosL*dL
+    + N*Math.pow(cosL,3)*(1-t+eta2)*Math.pow(dL,3)/6
+    + N*Math.pow(cosL,5)*(5-18*t+t*t+14*eta2-58*t*eta2)*Math.pow(dL,5)/120;
+  var east = east_local + zone * 1000000 + 500000;
+  return { north: north, east: east, zone: zone };
+}
+
+// СК-42 {north, east, zone} → WGS-84 {lat°, lon°}
+function calcSk42ToWgs(north, east, zone) {
+  var a  = CALC_KRAS_A;
+  var e2 = _calcE2();
+  var east_local = east - zone * 1000000 - 500000;
+  var lat = north / (a * (1 - e2/4 - 3*e2*e2/64 - 5*e2*e2*e2/256));
+  for (var i = 0; i < 10; i++) {
+    var M = a * (
+      (1-e2/4-3*e2*e2/64-5*e2*e2*e2/256)*lat
+      -(3*e2/8+3*e2*e2/32+45*e2*e2*e2/1024)*Math.sin(2*lat)
+      +(15*e2*e2/256+45*e2*e2*e2/1024)*Math.sin(4*lat)
+      -(35*e2*e2*e2/3072)*Math.sin(6*lat)
+    );
+    lat += (north - M) / (a * (1 - e2 * Math.sin(lat) * Math.sin(lat)));
+  }
+  var sinL = Math.sin(lat), cosL = Math.cos(lat), tanL = Math.tan(lat);
+  var eta2 = e2 * cosL * cosL / (1 - e2);
+  var N    = a / Math.sqrt(1 - e2 * sinL * sinL);
+  var t    = tanL * tanL;
+  var dL   = east_local / (N*cosL)
+    - Math.pow(east_local,3) / (6*Math.pow(N,3)*cosL) * (1+2*t+eta2)
+    + Math.pow(east_local,5) / (120*Math.pow(N,5)*cosL) * (5+28*t+24*t*t);
+  var L0 = (zone * 6 - 3) * Math.PI / 180;
+  return {
+    lat: parseFloat((lat * 180 / Math.PI).toFixed(7)),
+    lon: parseFloat(((L0 + dL) * 180 / Math.PI).toFixed(7)),
+  };
+}
+
+// Decimal degrees → "D° M' S.sss""
+function _ddToDms(dd, isLat) {
+  var sign = dd < 0 ? -1 : 1;
+  var abs  = Math.abs(dd);
+  var d    = Math.floor(abs);
+  var m    = Math.floor((abs - d) * 60);
+  var s    = ((abs - d - m/60) * 3600).toFixed(3);
+  var hem  = isLat ? (sign >= 0 ? 'N' : 'S') : (sign >= 0 ? 'E' : 'W');
+  return hem + ' ' + d + '° ' + m + '\' ' + s + '"';
+}
+
+// Populate all fields given source system
+function wpmCalcFrom(source) {
+  var err = null;
+
+  if (source === 'wgs') {
+    var lat = parseFloat(document.getElementById('wc-lat').value);
+    var lon = parseFloat(document.getElementById('wc-lon').value);
+    if (isNaN(lat) || isNaN(lon)) { err = 'Введите корректные lat и lon'; }
+    else {
+      var sk = calcWgsToSk42(lat, lon);
+      _calcSetSk42(sk.north, sk.east, sk.zone);
+      _calcSetLocal(sk.east - sk.zone*1e6 - 500000, sk.north - CALC_OFF_Y);
+      _calcSetDms(lat, lon);
+    }
+  } else if (source === 'sk42') {
+    var north = parseFloat(document.getElementById('wc-sk42n').value);
+    var east  = parseFloat(document.getElementById('wc-sk42e').value);
+    var zone  = parseInt(document.getElementById('wc-sk42z').value) || CALC_ZONE_DEF;
+    if (isNaN(north) || isNaN(east)) { err = 'Введите N и E'; }
+    else {
+      var wgs = calcSk42ToWgs(north, east, zone);
+      _calcSetWgs(wgs.lat, wgs.lon);
+      _calcSetLocal(east - zone*1e6 - 500000, north - CALC_OFF_Y);
+      document.getElementById('wc-sk42z').value = zone;
+    }
+  } else if (source === 'local') {
+    var lx = parseFloat(document.getElementById('wc-lx').value);
+    var ly = parseFloat(document.getElementById('wc-ly').value);
+    var zone = CALC_ZONE_DEF;
+    if (isNaN(lx) || isNaN(ly)) { err = 'Введите X и Y'; }
+    else {
+      var north = ly + CALC_OFF_Y;
+      var east  = lx + zone*1e6 + 500000;
+      var wgs = calcSk42ToWgs(north, east, zone);
+      _calcSetWgs(wgs.lat, wgs.lon);
+      _calcSetSk42(north, east, zone);
+    }
+  }
+
+  if (err && typeof Toast !== 'undefined') Toast.done(err, 'error');
+}
+
+function _calcSetWgs(lat, lon) {
+  document.getElementById('wc-lat').value = lat;
+  document.getElementById('wc-lon').value = lon;
+  _calcSetDms(lat, lon);
+}
+function _calcSetSk42(north, east, zone) {
+  document.getElementById('wc-sk42n').value = north.toFixed(3);
+  document.getElementById('wc-sk42e').value = east.toFixed(3);
+  document.getElementById('wc-sk42z').value = zone;
+}
+function _calcSetLocal(x, y) {
+  document.getElementById('wc-lx').value = x.toFixed(4);
+  document.getElementById('wc-ly').value = y.toFixed(4);
+}
+function _calcSetDms(lat, lon) {
+  var ld = document.getElementById('wc-lat-dms');
+  var lo = document.getElementById('wc-lon-dms');
+  if (ld) ld.textContent = !isNaN(lat) ? _ddToDms(lat, true)  : '';
+  if (lo) lo.textContent = !isNaN(lon) ? _ddToDms(lon, false) : '';
+}
+
+// Live DMS hint while typing WGS
+function wpmCalcHint(source) {
+  if (source === 'wgs') {
+    var lat = parseFloat(document.getElementById('wc-lat').value);
+    var lon = parseFloat(document.getElementById('wc-lon').value);
+    _calcSetDms(lat, lon);
+  }
+}
+
+function wpmOpenCalc() {
+  var p = document.getElementById('wpm-calc-panel');
+  if (p) {
+    var isOpen = p.classList.contains('open');
+    // Close settings if open
+    wpmCloseSettings();
+    p.classList.toggle('open', !isOpen);
+    var btn = document.getElementById('wpm-calc-btn');
+    if (btn) btn.classList.toggle('active', !isOpen);
+  }
+}
+function wpmCloseCalc() {
+  var p = document.getElementById('wpm-calc-panel');
+  if (p) p.classList.remove('open');
+  var btn = document.getElementById('wpm-calc-btn');
+  if (btn) btn.classList.remove('active');
+}
+
 // ── Переходы ───────────────────────────────────────────────────
 function wpmGoToChem(wpName) {
   if (typeof switchTab === 'function') switchTab('chem');
@@ -709,6 +986,10 @@ window.wpmOpenSettings  = wpmOpenSettings;
 window.wpmCloseSettings = wpmCloseSettings;
 window.wpmSettingChange = wpmSettingChange;
 window.wpmSaveSettings  = wpmSaveSettings;
+window.wpmOpenCalc      = wpmOpenCalc;
+window.wpmCloseCalc     = wpmCloseCalc;
+window.wpmCalcFrom      = wpmCalcFrom;
+window.wpmCalcHint      = wpmCalcHint;
 window.wpmReload        = wpmReload;
 window.wpmGoToChem      = wpmGoToChem;
 window.wpmGoToRegistry  = wpmGoToRegistry;
