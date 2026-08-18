@@ -754,81 +754,97 @@ function _wpmUpdateEmptyState() {
 
 // ═══════════════════════════════════════════════════════════════
 //  Калькулятор координат
-//  WGS-84 ↔ СК-42 (Пулково-1942, Гаусс-Крюгер) ↔ Местные
+//  WGS-84 ↔ СК-42 (Пулково-1942, Гаусс-Крюгер) ↔ Местные (схема)
 //
-//  Параметры эллипсоида Красовского:
-//    a = 6 378 245.0, b = 6 356 863.019
-//  OFF_Y = 5 800 000 (смещение Северной координаты)
-//  Зона карьера = 12 (L0 = 69°)
+//  Алгоритм идентичен map.js (wgs84ToXY / xyToWgs84):
+//    Эллипсоид Красовского: a=6378245, b=6356863.019
+//    Гаусс-Крюгер, зона 12 (L0=69 градусов)
+//    OFF = 5 800 000 (смещение северной координаты)
+//
+//  Связь систем координат:
+//    СК-42 X (северная) = Местная Y + 5 800 000
+//    СК-42 Y (восточная, ПОЛНАЯ) = Местная X + зона * 1 000 000 + 500 000
+//                                = Местная X + 12 500 000  (для зоны 12)
+//  Обратно:
+//    Местная X = СК-42 Y − 12 500 000
+//    Местная Y = СК-42 X − 5 800 000
 // ═══════════════════════════════════════════════════════════════
 
-var CALC_KRAS_A   = 6378245.0;
-var CALC_KRAS_B   = 6356863.019;
-var CALC_OFF_Y    = 5800000;
-var CALC_ZONE_DEF = 12;
+// Константы — идентично map.js
+var _KA  = 6378245.0;
+var _KB  = 6356863.019;
+var _KE2 = (_KA*_KA - _KB*_KB) / (_KA*_KA);
+var _CALC_ZONE = 12;    // зона карьера (lon ≈ 69°, L0 = 69°)
+var _CALC_OFF  = 5800000;  // смещение северной координаты
 
-function _calcE2() {
-  var a = CALC_KRAS_A, b = CALC_KRAS_B;
-  return (a * a - b * b) / (a * a);
-}
-
-// WGS-84 (lat°, lon°) → СК-42 {north, east, zone}
-function calcWgsToSk42(latDeg, lonDeg) {
-  var a  = CALC_KRAS_A;
-  var e2 = _calcE2();
-  var e4 = e2 * e2, e6 = e4 * e2;
-  var latR = latDeg * Math.PI / 180;
-  var lonR = lonDeg * Math.PI / 180;
-  var zone = Math.floor(lonDeg / 6) + 1;
-  var L0   = (zone * 6 - 3) * Math.PI / 180;
+// WGS-84 (lat°, lon°) → все три системы
+// Структурно идентично map.js wgs84ToXY, + восстановление полной СК-42
+function _calcWgsToAll(lat, lon) {
+  var a = _KA, e2 = _KE2;
+  var e4 = e2*e2, e6 = e4*e2;
+  var latR = lat * Math.PI/180;
+  var lonR = lon * Math.PI/180;
+  var zone = Math.floor(lon / 6) + 1;
+  var L0   = (zone*6 - 3) * Math.PI/180;
   var dL   = lonR - L0;
   var sinL = Math.sin(latR), cosL = Math.cos(latR), tanL = Math.tan(latR);
-  var t    = tanL * tanL;
-  var eta2 = e2 * cosL * cosL / (1 - e2);
-  var N    = a / Math.sqrt(1 - e2 * sinL * sinL);
-  var M    = a * (
-    (1 - e2/4 - 3*e4/64 - 5*e6/256) * latR
-    - (3*e2/8 + 3*e4/32 + 45*e6/1024) * Math.sin(2*latR)
-    + (15*e4/256 + 45*e6/1024) * Math.sin(4*latR)
-    - (35*e6/3072) * Math.sin(6*latR)
-  );
-  var north = M
+  var t    = tanL*tanL;
+  var eta2 = e2*cosL*cosL/(1-e2);
+  var N    = a/Math.sqrt(1 - e2*sinL*sinL);
+  var M    = a*((1-e2/4-3*e4/64-5*e6/256)*latR
+               -(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*latR)
+               +(15*e4/256+45*e6/1024)*Math.sin(4*latR)
+               -(35*e6/3072)*Math.sin(6*latR));
+  // sk42x = северная координата
+  var sk42x = M
     + N*sinL*cosL*dL*dL/2
     + N*sinL*Math.pow(cosL,3)*(5-t+9*eta2+4*eta2*eta2)*Math.pow(dL,4)/24
     + N*sinL*Math.pow(cosL,5)*(61-58*t+t*t)*Math.pow(dL,6)/720;
-  var east_local = N*cosL*dL
+  // sk42y_local = восточная БЕЗ номера зоны (map.js передаёт именно это в dL)
+  var sk42y_local = N*cosL*dL
     + N*Math.pow(cosL,3)*(1-t+eta2)*Math.pow(dL,3)/6
     + N*Math.pow(cosL,5)*(5-18*t+t*t+14*eta2-58*t*eta2)*Math.pow(dL,5)/120;
-  var east = east_local + zone * 1000000 + 500000;
-  return { north: north, east: east, zone: zone };
+  // sk42y_full = полная восточная с номером зоны
+  var sk42y_full = sk42y_local + zone*1000000 + 500000;
+
+  return {
+    zone:      zone,
+    sk42x:     sk42x,                                     // СК-42 X (северная)
+    sk42y_f:   sk42y_full,                                // СК-42 Y (полная, с зоной)
+    sk42y_l:   sk42y_local,                               // восточная без зоны
+    localX:    parseFloat(sk42y_local.toFixed(4)),        // = sk42y_f − зона·1e6 − 500000
+    localY:    parseFloat((sk42x - _CALC_OFF).toFixed(4)),// = sk42x − 5800000
+  };
 }
 
-// СК-42 {north, east, zone} → WGS-84 {lat°, lon°}
-function calcSk42ToWgs(north, east, zone) {
-  var a  = CALC_KRAS_A;
-  var e2 = _calcE2();
-  var east_local = east - zone * 1000000 - 500000;
-  var lat = north / (a * (1 - e2/4 - 3*e2*e2/64 - 5*e2*e2*e2/256));
+// СК-42 {northing=sk42x, localEast=sk42y_local, zone} → WGS-84
+// Структурно идентично map.js xyToWgs84(localX, localY):
+//   sk42x = localY + 5800000  (northing)
+//   sk42y_local = localX       (восточная БЕЗ зоны)
+function _calcSk42ToWgs(sk42x, sk42y_local, zone) {
+  var a = _KA, e2 = _KE2;
+  var lat = sk42x / (a*(1-e2/4-3*e2*e2/64-5*e2*e2*e2/256));
   for (var i = 0; i < 10; i++) {
-    var M = a * (
+    var M = a*(
       (1-e2/4-3*e2*e2/64-5*e2*e2*e2/256)*lat
       -(3*e2/8+3*e2*e2/32+45*e2*e2*e2/1024)*Math.sin(2*lat)
       +(15*e2*e2/256+45*e2*e2*e2/1024)*Math.sin(4*lat)
       -(35*e2*e2*e2/3072)*Math.sin(6*lat)
     );
-    lat += (north - M) / (a * (1 - e2 * Math.sin(lat) * Math.sin(lat)));
+    lat += (sk42x - M) / (a*(1 - e2*Math.sin(lat)*Math.sin(lat)));
   }
   var sinL = Math.sin(lat), cosL = Math.cos(lat), tanL = Math.tan(lat);
-  var eta2 = e2 * cosL * cosL / (1 - e2);
-  var N    = a / Math.sqrt(1 - e2 * sinL * sinL);
-  var t    = tanL * tanL;
-  var dL   = east_local / (N*cosL)
-    - Math.pow(east_local,3) / (6*Math.pow(N,3)*cosL) * (1+2*t+eta2)
-    + Math.pow(east_local,5) / (120*Math.pow(N,5)*cosL) * (5+28*t+24*t*t);
-  var L0 = (zone * 6 - 3) * Math.PI / 180;
+  var eta2 = e2*cosL*cosL/(1-e2);
+  var N    = a/Math.sqrt(1-e2*sinL*sinL);
+  var t    = tanL*tanL;
+  // ВАЖНО: в dL используется sk42y_local (без зоны), как в map.js
+  var dL = sk42y_local/(N*cosL)
+    - Math.pow(sk42y_local,3)/(6*Math.pow(N,3)*cosL)*(1+2*t+eta2)
+    + Math.pow(sk42y_local,5)/(120*Math.pow(N,5)*cosL)*(5+28*t+24*t*t);
+  var L0 = (zone*6 - 3)*Math.PI/180;
   return {
-    lat: parseFloat((lat * 180 / Math.PI).toFixed(7)),
-    lon: parseFloat(((L0 + dL) * 180 / Math.PI).toFixed(7)),
+    lat: parseFloat((lat * 180/Math.PI).toFixed(7)),
+    lon: parseFloat(((L0 + dL) * 180/Math.PI).toFixed(7)),
   };
 }
 
@@ -840,50 +856,73 @@ function _ddToDms(dd, isLat) {
   var m    = Math.floor((abs - d) * 60);
   var s    = ((abs - d - m/60) * 3600).toFixed(3);
   var hem  = isLat ? (sign >= 0 ? 'N' : 'S') : (sign >= 0 ? 'E' : 'W');
-  return hem + ' ' + d + '° ' + m + '\' ' + s + '"';
+  return hem + ' ' + d + '° ' + m + '\'' + ' ' + s + '"';
 }
 
-// Populate all fields given source system
+// ── Пересчёт ────────────────────────────────────────────────────
 function wpmCalcFrom(source) {
   var err = null;
 
   if (source === 'wgs') {
+    // WGS-84 → СК-42 → Местные
     var lat = parseFloat(document.getElementById('wc-lat').value);
     var lon = parseFloat(document.getElementById('wc-lon').value);
-    if (isNaN(lat) || isNaN(lon)) { err = 'Введите корректные lat и lon'; }
+    if (isNaN(lat) || isNaN(lon)) { err = 'Введите корректные широту и долготу'; }
     else {
-      var sk = calcWgsToSk42(lat, lon);
-      _calcSetSk42(sk.north, sk.east, sk.zone);
-      _calcSetLocal(sk.east - sk.zone*1e6 - 500000, sk.north - CALC_OFF_Y);
+      var r = _calcWgsToAll(lat, lon);
+      // СК-42: X (северная), Y (восточная ПОЛНАЯ с зоной)
+      document.getElementById('wc-sk42n').value = r.sk42x.toFixed(3);
+      document.getElementById('wc-sk42e').value = r.sk42y_f.toFixed(3);
+      document.getElementById('wc-sk42z').value = r.zone;
+      // Местные: X = sk42y_local, Y = sk42x − 5800000
+      document.getElementById('wc-lx').value = r.localX.toFixed(4);
+      document.getElementById('wc-ly').value = r.localY.toFixed(4);
       _calcSetDms(lat, lon);
     }
+
   } else if (source === 'sk42') {
-    var north = parseFloat(document.getElementById('wc-sk42n').value);
-    var east  = parseFloat(document.getElementById('wc-sk42e').value);
-    var zone  = parseInt(document.getElementById('wc-sk42z').value) || CALC_ZONE_DEF;
-    if (isNaN(north) || isNaN(east)) { err = 'Введите N и E'; }
+    // СК-42 → Местные → WGS-84
+    // sk42n = СК-42 X (северная), sk42e = СК-42 Y (восточная ПОЛНАЯ с зоной)
+    var sk42x  = parseFloat(document.getElementById('wc-sk42n').value);
+    var sk42y_f = parseFloat(document.getElementById('wc-sk42e').value);
+    var zone   = parseInt(document.getElementById('wc-sk42z').value) || _CALC_ZONE;
+    if (isNaN(sk42x) || isNaN(sk42y_f)) { err = 'Введите X и Y СК-42'; }
     else {
-      var wgs = calcSk42ToWgs(north, east, zone);
+      // Местная X = СК-42 Y − зона·1е6 − 500000 = sk42y_local
+      var localX = sk42y_f - zone*1e6 - 500000;
+      // Местная Y = СК-42 X − 5 800 000
+      var localY = sk42x - _CALC_OFF;
+      document.getElementById('wc-lx').value = localX.toFixed(4);
+      document.getElementById('wc-ly').value = localY.toFixed(4);
+      // WGS: передаём sk42x (северная) и localX (восточная БЕЗ зоны)
+      var wgs = _calcSk42ToWgs(sk42x, localX, zone);
       _calcSetWgs(wgs.lat, wgs.lon);
-      _calcSetLocal(east - zone*1e6 - 500000, north - CALC_OFF_Y);
-      document.getElementById('wc-sk42z').value = zone;
     }
+
   } else if (source === 'local') {
-    var lx = parseFloat(document.getElementById('wc-lx').value);
-    var ly = parseFloat(document.getElementById('wc-ly').value);
-    var zone = CALC_ZONE_DEF;
-    if (isNaN(lx) || isNaN(ly)) { err = 'Введите X и Y'; }
+    // Местные → СК-42 → WGS-84
+    var localX = parseFloat(document.getElementById('wc-lx').value);
+    var localY = parseFloat(document.getElementById('wc-ly').value);
+    if (isNaN(localX) || isNaN(localY)) { err = 'Введите X и Y'; }
     else {
-      var north = ly + CALC_OFF_Y;
-      var east  = lx + zone*1e6 + 500000;
-      var wgs = calcSk42ToWgs(north, east, zone);
+      var zone = _CALC_ZONE;
+      // СК-42 X (северная) = Местная Y + 5 800 000
+      var sk42x = localY + _CALC_OFF;
+      // СК-42 Y (восточная ПОЛНАЯ) = Местная X + зона·1е6 + 500 000
+      var sk42y_f = localX + zone*1e6 + 500000;
+      // Заполняем СК-42
+      document.getElementById('wc-sk42n').value = sk42x.toFixed(3);
+      document.getElementById('wc-sk42e').value = sk42y_f.toFixed(3);
+      document.getElementById('wc-sk42z').value = zone;
+      // WGS: sk42x = северная, localX = восточная БЕЗ зоны (sk42y_local)
+      var wgs = _calcSk42ToWgs(sk42x, localX, zone);
       _calcSetWgs(wgs.lat, wgs.lon);
-      _calcSetSk42(north, east, zone);
     }
   }
 
   if (err && typeof Toast !== 'undefined') Toast.done(err, 'error');
 }
+
 
 function _calcSetWgs(lat, lon) {
   document.getElementById('wc-lat').value = lat;
