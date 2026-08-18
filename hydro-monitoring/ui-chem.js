@@ -184,6 +184,7 @@ var ChemState = {
   filterType:        '',
   filterYear:        '',
   filterExceedOnly:  false,
+  filterWpSearch:    '',
   compareIds:        [],   // up to 2 protocol IDs for comparison
 };
 
@@ -591,6 +592,9 @@ function _chemRenderProtoList() {
 
     var ptMeta = CHEM_PROTO_TYPE_META[p.protocol_type] || CHEM_PROTO_TYPE_META['full'];
     var ptBadge = '<span class="chem-badge" style="background:' + ptMeta.color + '18;color:' + ptMeta.color + ';border-color:' + ptMeta.color + '40">' + ptMeta.icon + ' ' + ptMeta.label + '</span>';
+    var controlBadge = p.is_control
+      ? '<span class="chem-badge" style="background:rgba(245,158,11,.12);color:#f59e0b;border-color:rgba(245,158,11,.3)">🔬 Контрольная</span>'
+      : '';
 
     var inCompare = ChemState.compareIds.indexOf(p.id) !== -1;
     return '<div class="chem-proto-card" id="cpc-' + p.id + '">' +
@@ -609,6 +613,7 @@ function _chemRenderProtoList() {
         '</div>' +
         '<div class="chem-proto-badges">' +
           ptBadge +
+          controlBadge +
           badge +
           '<span class="chem-badge chem-badge-gray">' + (rows.length || '?') + ' пар.</span>' +
           '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();showChemWpPassport(\'' + (wp ? wp.id : '') + '\')" title="Паспорт водопункта">🗒</button>' +
@@ -661,7 +666,9 @@ function _chemRenderResultsTable(protocolId) {
     '<th>№</th><th>Параметр</th><th>Значение</th><th>Ед. изм.</th>' +
     '<th>ПДК питьев.</th><th>Статус</th></tr></thead><tbody>';
 
-  var groupOrder = ['organo','physico','macro','metals','organic'];
+  var groupOrder = ['organo','physico','macro','metals','organic','radio'];
+  // Любые группы не из стандартного порядка — рендерим в конце
+  Object.keys(byGroup).forEach(function(g){ if (groupOrder.indexOf(g) === -1) groupOrder.push(g); });
   groupOrder.forEach(function(grp) {
     if (!byGroup[grp] || !byGroup[grp].length) return;
     var grpInfo = CHEM_GROUPS[grp] || { label: grp, icon: '•' };
@@ -707,6 +714,12 @@ function _chemRenderWaterPoints(cont) {
       '<div class="chem-hdr-gap"></div>' +
       '<button class="chem-btn chem-btn-prim" onclick="showChemWpForm()">+ Добавить водопункт</button>' +
     '</div>' +
+    '<div class="chem-filters" style="margin-bottom:12px">' +
+      '<span class="chem-filter-lbl">Поиск:</span>' +
+      '<input class="chem-sel" id="chem-wp-search" placeholder="Код или наименование…" style="min-width:220px" ' +
+        'oninput="chemWpSearchChange()" value="' + escHTML(ChemState.filterWpSearch || '') + '">' +
+      '<span id="chem-wp-count-lbl" class="chem-filter-lbl" style="margin-left:auto"></span>' +
+    '</div>' +
     '<div style="background:var(--bg-2);border:1px solid var(--line);border-radius:10px;overflow:hidden">' +
       '<table class="chem-wp-tbl">' +
         '<thead><tr>' +
@@ -717,15 +730,39 @@ function _chemRenderWaterPoints(cont) {
     '</div>';
 }
 
+function chemWpSearchChange() {
+  var inp = document.getElementById('chem-wp-search');
+  ChemState.filterWpSearch = inp ? inp.value : '';
+  var tbody = document.getElementById('chem-wp-tbody');
+  if (tbody) tbody.innerHTML = _chemWpRows();
+}
+
 function _chemWpRows() {
+  var q = (ChemState.filterWpSearch || '').toLowerCase().trim();
+  var list = ChemState.waterPoints.filter(function(w) {
+    if (!q) return true;
+    return (w.code || '').toLowerCase().indexOf(q) !== -1 ||
+           (w.name || '').toLowerCase().indexOf(q) !== -1;
+  });
+
+  var lbl = document.getElementById('chem-wp-count-lbl');
+  if (lbl) lbl.textContent = q ? ('Показано: ' + list.length + ' / ' + ChemState.waterPoints.length) : '';
+
   if (!ChemState.waterPoints.length) {
     return '<tr><td colspan="6"><div class="chem-empty" style="padding:40px">' +
       '<div class="chem-empty-ico">📍</div>' +
       '<div class="chem-empty-txt">Водопункты не добавлены</div>' +
       '<div class="chem-empty-sub">Добавьте первый водопункт для привязки протоколов анализа</div></div></td></tr>';
   }
-  return ChemState.waterPoints.map(function(w) {
+  if (!list.length) {
+    return '<tr><td colspan="6"><div style="padding:24px;text-align:center;color:var(--txt-3);font-size:13px">Ничего не найдено</div></td></tr>';
+  }
+  return list.map(function(w) {
     var protoCount = ChemState.protocols.filter(function(p){ return p.water_point_id === w.id; }).length;
+    var canDelete = protoCount === 0;
+    var delBtn = canDelete
+      ? '<button class="chem-btn chem-btn-danger" style="padding:4px 8px;font-size:11px" onclick="chemDeleteWp(\'' + w.id + '\')" title="Удалить водопункт">✕</button>'
+      : '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px;opacity:.4;cursor:not-allowed" title="Есть привязанные протоколы — удаление невозможно" disabled>✕</button>';
     return '<tr>' +
       '<td style="font-weight:600;color:var(--blue)">' + escHTML(w.code || '—') + '</td>' +
       '<td style="font-weight:600">' + escHTML(w.name) + '</td>' +
@@ -734,7 +771,7 @@ function _chemWpRows() {
       '<td style="text-align:center">' + protoCount + '</td>' +
       '<td style="text-align:right;white-space:nowrap">' +
         '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="showChemWpForm(\'' + w.id + '\')">✏</button>' +
-        (protoCount === 0 ? '<button class="chem-btn chem-btn-danger" style="padding:4px 8px;font-size:11px" onclick="chemDeleteWp(\'' + w.id + '\')">✕</button>' : '') +
+        delBtn +
       '</td>' +
     '</tr>';
   }).join('');
@@ -988,7 +1025,7 @@ function showChemProtocolForm(protocolId) {
       '<div class="chem-fld"><label>Лаб. номер пробы</label>' +
         '<input class="chem-inp" id="pf-lab-num" placeholder="977" value="' + escHTML(proto ? (proto.lab_number||'') : '') + '"></div>' +
     '</div>' +
-    '<div class="chem-form-row">' +
+    '<div class="chem-form-row" style="align-items:flex-end">' +
       '<div class="chem-fld"><label>Вид протокола</label>' +
         '<select class="chem-inp" id="pf-proto-type">' +
           Object.keys(CHEM_PROTO_TYPE_META).map(function(k) {
@@ -997,6 +1034,12 @@ function showChemProtocolForm(protocolId) {
             return '<option value="' + k + '"' + sel + '>' + m.icon + ' ' + m.label + '</option>';
           }).join('') +
         '</select>' +
+      '</div>' +
+      '<div class="chem-fld" style="flex:0 0 auto">' +
+        '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--txt-2);padding-bottom:6px;user-select:none">' +
+          '<input type="checkbox" id="pf-is-control" style="accent-color:#f59e0b;width:15px;height:15px;cursor:pointer"' + (proto && proto.is_control ? ' checked' : '') + '>' +
+          '🔬 Контрольная проба' +
+        '</label>' +
       '</div>' +
     '</div>' +
 
@@ -1118,6 +1161,7 @@ async function _chemSaveProtocol(existingId) {
     lab_protocol_number: document.getElementById('pf-proto-num').value.trim() || null,
     lab_number:          document.getElementById('pf-lab-num').value.trim() || null,
     protocol_type:       document.getElementById('pf-proto-type').value || 'sha',
+    is_control:          document.getElementById('pf-is-control') ? document.getElementById('pf-is-control').checked : false,
     source:              'manual',
   };
   if (existingId) protoRow.id = existingId;
@@ -2007,6 +2051,7 @@ function _chemExportCsv(protocolId) {
 // Экспорт в глобальный scope
 window.initChemTab         = initChemTab;
 window.chemFilterChange    = chemFilterChange;
+window.chemWpSearchChange  = chemWpSearchChange;
 window.chemToggleProto     = chemToggleProto;
 window.showChemWpForm      = showChemWpForm;
 window.chemDeleteWp        = chemDeleteWp;
