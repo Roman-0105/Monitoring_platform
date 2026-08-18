@@ -1859,7 +1859,12 @@ function showChemCompare() {
   var hdr2 = escHTML((wp2 ? wp2.name : '?') + '  ' + _chemFmtDate(p2.sampled_at));
 
   var rows = '';
-  var groupOrder = ['organo','physico','macro','metals','organic'];
+  var groupOrder = ['organo','physico','macro','metals','organic','radio'];
+  // Добавляем любые нестандартные группы из данных обоих протоколов
+  r1.concat(r2).forEach(function(r) {
+    var param = CHEM_PARAM_MAP[r.param_key];
+    if (param && groupOrder.indexOf(param.group) === -1) groupOrder.push(param.group);
+  });
   groupOrder.forEach(function(g) {
     var params = CHEM_PARAMS.filter(function(p){ return p.group === g; });
     var hasData = params.some(function(p){ return r1map[p.key] || r2map[p.key]; });
