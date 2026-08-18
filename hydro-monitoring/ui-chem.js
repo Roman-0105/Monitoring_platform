@@ -193,13 +193,26 @@ var ChemApi = {
   _sb: function() { return Api.client(); },
 
   getWaterPoints: async function() {
-    return this._sb().from('water_points').select('*').order('name');
+    // Единый реестр — читаем из wp_registry
+    return this._sb().from('wp_registry')
+      .select('id, name, code, wp_type, location_desc, coord_x, coord_y, active')
+      .order('code', { nullsFirst: false })
+      .order('name');
   },
   upsertWaterPoint: async function(row) {
-    return this._sb().from('water_points').upsert(row, { onConflict: 'id' }).select().single();
+    // row.type → row.wp_type для wp_registry
+    var regRow = {
+      name:          row.name,
+      code:          row.code          || null,
+      wp_type:       row.type          || row.wp_type || 'other',
+      location_desc: row.location_desc || null,
+      active:        row.active !== false,
+    };
+    if (row.id) regRow.id = row.id;
+    return this._sb().from('wp_registry').upsert(regRow, { onConflict: 'id' }).select().single();
   },
   deleteWaterPoint: async function(id) {
-    return this._sb().from('water_points').delete().eq('id', id);
+    return this._sb().from('wp_registry').delete().eq('id', id);
   },
 
   getProtocols: async function() {
@@ -232,8 +245,14 @@ async function loadChemData() {
       ChemApi.getWaterPoints(),
       ChemApi.getProtocols(),
     ]);
-    if (!wpRes.error) ChemState.waterPoints = wpRes.data || [];
-    if (!prRes.error) ChemState.protocols   = prRes.data || [];
+    if (!wpRes.error) {
+      // wp_registry использует wp_type; нормализуем для обратной совместимости
+      ChemState.waterPoints = (wpRes.data || []).map(function(w) {
+        if (w.wp_type && !w.type) w.type = w.wp_type;
+        return w;
+      });
+    }
+    if (!prRes.error) ChemState.protocols = prRes.data || [];
 
     // Загружаем результаты только для первых 50 протоколов (ленивая загрузка остальных)
     var recentIds = ChemState.protocols.slice(0, 50).map(function(p) { return p.id; });
@@ -766,7 +785,7 @@ function _chemWpRows() {
     return '<tr>' +
       '<td style="font-weight:600;color:var(--blue)">' + escHTML(w.code || '—') + '</td>' +
       '<td style="font-weight:600">' + escHTML(w.name) + '</td>' +
-      '<td><span class="chem-wp-type">' + escHTML(CHEM_WP_TYPES[w.type] || w.type) + '</span></td>' +
+      '<td><span class="chem-wp-type">' + escHTML(CHEM_WP_TYPES[w.wp_type || w.type] || w.wp_type || w.type) + '</span></td>' +
       '<td style="color:var(--txt-2)">' + escHTML(w.location_desc || '—') + '</td>' +
       '<td style="text-align:center">' + protoCount + '</td>' +
       '<td style="text-align:right;white-space:nowrap">' +
@@ -935,7 +954,7 @@ function chemRenderAnlChart() {
 function showChemWpForm(wpId) {
   var wp = wpId ? ChemState.waterPoints.find(function(w){ return w.id === wpId; }) : null;
   var typeOpts = Object.keys(CHEM_WP_TYPES).map(function(k) {
-    return '<option value="' + k + '"' + (wp && wp.type === k ? ' selected' : '') + '>' + CHEM_WP_TYPES[k] + '</option>';
+    return '<option value="' + k + '"' + (wp && (wp.wp_type || wp.type) === k ? ' selected' : '') + '>' + CHEM_WP_TYPES[k] + '</option>';
   }).join('');
 
   _chemOpenModal(
@@ -975,10 +994,20 @@ async function _chemSaveWp(existingId) {
   var res = await ChemApi.upsertWaterPoint(row);
   if (res.error) { alert('Ошибка сохранения: ' + res.error.message); return; }
   var saved = res.data;
+  // wp_registry возвращает wp_type — нормализуем для обратной совместимости
+  if (saved && saved.wp_type && !saved.type) saved.type = saved.wp_type;
   if (existingId) {
     ChemState.waterPoints = ChemState.waterPoints.map(function(w){ return w.id === existingId ? saved : w; });
   } else {
     ChemState.waterPoints.push(saved);
+  }
+  // Обновляем реестр если он уже загружен (единый источник)
+  if (typeof RegistryState !== 'undefined' && RegistryState.loaded) {
+    if (existingId) {
+      RegistryState.items = RegistryState.items.map(function(w){ return w.id === existingId ? saved : w; });
+    } else {
+      RegistryState.items.push(saved);
+    }
   }
   _chemCloseModal();
   _chemRenderSection('waterpoints');
@@ -986,10 +1015,14 @@ async function _chemSaveWp(existingId) {
 }
 
 async function chemDeleteWp(id) {
-  if (!confirm('Удалить водопункт? Это действие нельзя отменить.')) return;
+  if (!confirm('Удалить водопункт из единого реестра? Это также удалит его с карты. Действие нельзя отменить.')) return;
   var res = await ChemApi.deleteWaterPoint(id);
   if (res.error) { alert('Ошибка удаления: ' + res.error.message); return; }
   ChemState.waterPoints = ChemState.waterPoints.filter(function(w){ return w.id !== id; });
+  // Синхронизируем реестр карты
+  if (typeof RegistryState !== 'undefined' && RegistryState.loaded) {
+    RegistryState.items = RegistryState.items.filter(function(w){ return w.id !== id; });
+  }
   _chemRenderSection('waterpoints');
 }
 
@@ -2002,7 +2035,7 @@ function showChemWpPassport(wpId) {
   }
   paramHtml += '</div>';
 
-  var typeLabel = CHEM_WP_TYPES[wp.type] || wp.type;
+  var typeLabel = CHEM_WP_TYPES[wp.wp_type || wp.type] || wp.wp_type || wp.type;
   _chemOpenModal(
     '📋 Паспорт: ' + escHTML(wp.name),
     '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)">' +

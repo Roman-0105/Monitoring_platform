@@ -81,7 +81,17 @@ async function initRegistryTab() {
   if (!RegistryState.loaded && !RegistryState.loading) {
     RegistryState.loading = true;
     var res = await RegistryApi.getAll();
-    if (!res.error) RegistryState.items = res.data || [];
+    if (!res.error) {
+      RegistryState.items = res.data || [];
+      // Единый реестр: синхронизируем ChemState.waterPoints если химия уже загружена
+      if (typeof ChemState !== 'undefined' && ChemState.loaded) {
+        ChemState.waterPoints = RegistryState.items.map(function(w) {
+          var wc = Object.assign({}, w);
+          if (wc.wp_type && !wc.type) wc.type = wc.wp_type;
+          return wc;
+        });
+      }
+    }
     RegistryState.loaded  = true;
     RegistryState.loading = false;
   }
