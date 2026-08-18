@@ -432,6 +432,24 @@ function _chemInitCSS() {
 
     /* Responsive */
     '@media(max-width:600px){.chem-kpi-row{grid-template-columns:1fr 1fr}.chem-param-grid{grid-template-columns:1fr}.chem-form-row,.chem-form-row-3{grid-template-columns:1fr}}',
+
+    /* Hydrochem diagrams layout */
+    '.chem-proto-split{display:flex;gap:0;align-items:stretch;min-height:0}',
+    '.chem-proto-tbl-col{flex:0 0 auto;width:360px;max-height:480px;overflow-y:auto;border-right:1px solid var(--line)}',
+    '.chem-diag-col{flex:1;min-width:0;display:flex;flex-direction:column}',
+    '.chem-diag-tabs{display:flex;border-bottom:1px solid var(--line);background:var(--bg-1);flex-shrink:0}',
+    '.chem-diag-tab{padding:8px 16px;font-size:12px;font-weight:500;color:var(--txt-3);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap}',
+    '.chem-diag-tab.active{color:var(--gold,#22d3ee);border-bottom-color:var(--gold,#22d3ee)}',
+    '.chem-diag-tab:hover:not(.active){color:var(--txt-1)}',
+    '.chem-diag-body{flex:1;display:flex;align-items:center;justify-content:center;padding:12px;min-height:380px}',
+    '.chem-diag-pane{display:none;width:100%;height:100%;align-items:center;justify-content:center}',
+    '.chem-diag-pane.active{display:flex}',
+    '.chem-kurlov-box{font-family:Georgia,serif;text-align:center;padding:20px;line-height:2.4;color:var(--txt-1)}',
+    '.chem-kurlov-formula{font-size:15px;letter-spacing:.03em}',
+    '.chem-kurlov-frac{display:inline-block;vertical-align:middle;text-align:center;margin:0 4px}',
+    '.chem-kurlov-num{display:block;border-bottom:1px solid currentColor;padding:0 4px;font-size:13px}',
+    '.chem-kurlov-den{display:block;padding:0 4px;font-size:13px}',
+    '.chem-no-macro{padding:30px;color:var(--txt-3);font-size:13px;text-align:center}',
   ].join('\n');
   document.head.appendChild(s);
 }
@@ -642,7 +660,7 @@ function _chemRenderProtoList() {
         '</div>' +
       '</div>' +
       '<div class="chem-proto-body" id="cpb-' + p.id + '">' +
-        _chemRenderResultsTable(p.id) +
+        _chemRenderProtoBody(p.id) +
       '</div>' +
     '</div>';
   }).join('');
@@ -661,8 +679,11 @@ function chemToggleProto(id) {
       } else {
         ChemState.results[id] = [];
       }
-      body.innerHTML = _chemRenderResultsTable(id);
+      body.innerHTML = _chemRenderProtoBody(id);
+      _chemInitDiagrams(id);
     });
+  } else if (open) {
+    _chemInitDiagrams(id);
   }
 }
 
@@ -2092,6 +2113,516 @@ function _chemExportCsv(protocolId) {
   a.download = 'protocol_' + (proto.lab_protocol_number || proto.id.substring(0,8)) + '_' + (proto.sampled_at || 'date') + '.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ГИДРОХИМИЧЕСКИЕ ДИАГРАММЫ
+// ═══════════════════════════════════════════════════════════════
+
+// Эквивалентные массы (мг-экв/л)
+var _CHEM_EW = { ca:20.04, mg:12.15, na:23.0, k:39.1, hco3:61.0, co3:30.0, so4:48.0, cl:35.45 };
+
+function _chemCalcMeq(protocolId) {
+  var rows = ChemState.results[protocolId] || [];
+  var v = {};
+  rows.forEach(function(r) {
+    var key = r.param_key;
+    if (_CHEM_EW[key] !== undefined) {
+      var num = parseFloat(r.value_raw);
+      if (!isNaN(num) && num >= 0) v[key] = num;
+    }
+  });
+  // convert mg/L → meq/L
+  var meq = {};
+  Object.keys(v).forEach(function(k) { meq[k] = v[k] / _CHEM_EW[k]; });
+  // combined fields
+  meq.nak  = (meq.na  || 0) + (meq.k   || 0);
+  meq.ca   = meq.ca   || 0;
+  meq.mg   = meq.mg   || 0;
+  meq.hco3 = meq.hco3 || 0;
+  meq.so4  = meq.so4  || 0;
+  meq.cl   = meq.cl   || 0;
+  meq.co3  = meq.co3  || 0;
+  // also store mg/L originals for Kurlov
+  meq._raw = v;
+  // Check if we have enough data
+  var catSum = meq.ca + meq.mg + meq.nak;
+  var anSum  = meq.hco3 + meq.so4 + meq.cl + meq.co3;
+  meq._valid = catSum > 0 && anSum > 0;
+  meq._catSum = catSum;
+  meq._anSum  = anSum;
+  // percent meq
+  if (catSum > 0) {
+    meq.ca_pct  = meq.ca  / catSum * 100;
+    meq.mg_pct  = meq.mg  / catSum * 100;
+    meq.nak_pct = meq.nak / catSum * 100;
+  }
+  if (anSum > 0) {
+    meq.hco3_pct = meq.hco3 / anSum * 100;
+    meq.so4_pct  = meq.so4  / anSum * 100;
+    meq.cl_pct   = meq.cl   / anSum * 100;
+    meq.co3_pct  = meq.co3  / anSum * 100;
+  }
+  // also get ph, m (TDS)
+  var phRow = rows.find(function(r){ return r.param_key === 'ph_lab' || r.param_key === 'ph_field'; });
+  meq.ph = phRow ? parseFloat(phRow.value_raw) : NaN;
+  var tdsRow = rows.find(function(r){ return r.param_key === 'tds' || r.param_key === 'dry_res'; });
+  meq.m_gl = tdsRow ? parseFloat(tdsRow.value_raw) / 1000 : NaN;
+  return meq;
+}
+
+function _chemRenderProtoBody(protocolId) {
+  var meq = _chemCalcMeq(protocolId);
+  var hasMacro = meq._valid;
+  var tblHtml = _chemRenderResultsTable(protocolId);
+
+  var diagContent = hasMacro
+    ? '<div class="chem-diag-tabs" id="chem-diag-tabs-' + protocolId + '">' +
+        '<button class="chem-diag-tab active" onclick="chemSwitchDiag(\'' + protocolId + '\',\'piper\',this)">📐 Диаграмма Пайпера</button>' +
+        '<button class="chem-diag-tab" onclick="chemSwitchDiag(\'' + protocolId + '\',\'stiff\',this)">📊 Стифф · Шоллер</button>' +
+        '<button class="chem-diag-tab" onclick="chemSwitchDiag(\'' + protocolId + '\',\'kurlov\',this)">ƒ Формула Курлова</button>' +
+      '</div>' +
+      '<div class="chem-diag-body">' +
+        '<div class="chem-diag-pane active" id="chem-dpane-' + protocolId + '-piper">' +
+          '<canvas id="chem-cv-piper-' + protocolId + '" width="420" height="440" style="max-width:100%"></canvas>' +
+        '</div>' +
+        '<div class="chem-diag-pane" id="chem-dpane-' + protocolId + '-stiff">' +
+          '<div style="display:flex;flex-direction:column;gap:12px;width:100%">' +
+            '<canvas id="chem-cv-stiff-' + protocolId + '" width="340" height="180" style="max-width:100%"></canvas>' +
+            '<canvas id="chem-cv-scho-' + protocolId + '" width="420" height="220" style="max-width:100%"></canvas>' +
+          '</div>' +
+        '</div>' +
+        '<div class="chem-diag-pane" id="chem-dpane-' + protocolId + '-kurlov">' +
+          '<div class="chem-kurlov-box" id="chem-kurlov-' + protocolId + '"></div>' +
+        '</div>' +
+      '</div>'
+    : '<div class="chem-no-macro">Нет данных макрокомпонентного состава для построения диаграмм</div>';
+
+  return '<div class="chem-proto-split">' +
+    '<div class="chem-proto-tbl-col">' + tblHtml + '</div>' +
+    '<div class="chem-diag-col">' + diagContent + '</div>' +
+  '</div>';
+}
+
+function chemSwitchDiag(protocolId, tab, btn) {
+  var tabs  = document.getElementById('chem-diag-tabs-' + protocolId);
+  var body  = document.querySelector('#cpb-' + protocolId + ' .chem-diag-body');
+  if (!tabs || !body) return;
+  tabs.querySelectorAll('.chem-diag-tab').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  body.querySelectorAll('.chem-diag-pane').forEach(function(p){ p.classList.remove('active'); });
+  var pane = document.getElementById('chem-dpane-' + protocolId + '-' + tab);
+  if (pane) pane.classList.add('active');
+}
+window.chemSwitchDiag = chemSwitchDiag;
+
+function _chemInitDiagrams(protocolId) {
+  var meq = _chemCalcMeq(protocolId);
+  if (!meq._valid) return;
+
+  // Collect all meqs for same water point (Piper + Schoeller multi-sample)
+  var proto = ChemState.protocols.find(function(p){ return p.id === protocolId; });
+  var allMeqs = [];
+  if (proto) {
+    ChemState.protocols.filter(function(p){ return p.water_point_id === proto.water_point_id; }).forEach(function(p) {
+      var m = _chemCalcMeq(p.id);
+      if (m._valid) allMeqs.push({ meq: m, id: p.id, date: p.sampled_at });
+    });
+  }
+  if (!allMeqs.length) allMeqs = [{ meq: meq, id: protocolId, date: '' }];
+
+  // Draw Piper
+  var cvP = document.getElementById('chem-cv-piper-' + protocolId);
+  if (cvP) _chemDrawPiper(cvP, allMeqs, protocolId);
+
+  // Draw Stiff
+  var cvS = document.getElementById('chem-cv-stiff-' + protocolId);
+  if (cvS) _chemDrawStiff(cvS, meq);
+
+  // Draw Schoeller
+  var cvSc = document.getElementById('chem-cv-scho-' + protocolId);
+  if (cvSc) _chemDrawSchoeller(cvSc, allMeqs, protocolId);
+
+  // Build Kurlov
+  var kurEl = document.getElementById('chem-kurlov-' + protocolId);
+  if (kurEl) kurEl.innerHTML = _chemBuildKurlov(meq);
+}
+
+// ── Диаграмма Пайпера ──────────────────────────────────────────
+function _chemDrawPiper(canvas, allMeqs, currentId) {
+  var W = canvas.width, H = canvas.height;
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  if (dpr > 1 && canvas.dataset.scaled !== '1') {
+    canvas.dataset.scaled = '1';
+    canvas.width  = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr);
+  }
+  ctx.clearRect(0, 0, W, H);
+
+  var isDark = !document.documentElement.getAttribute('data-theme') ||
+               document.documentElement.getAttribute('data-theme') === 'dark';
+  var COL_LINE = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+  var COL_TXT  = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
+  var COL_AXIS = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)';
+  var COL_FILL = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
+  var GOLD = '#22d3ee';
+
+  var S  = 178;   // triangle side
+  var H3 = S * Math.sqrt(3) / 2;
+  var GAP = 28;   // gap between triangles
+  var OX = W / 2; // center x
+  var BY = H - 28; // base y
+
+  // Left triangle (cations): Ca=BL, Mg=TOP, NaK=BR
+  var LBL = { x: OX - GAP/2 - S,   y: BY };
+  var LBR = { x: OX - GAP/2,        y: BY };
+  var LBT = { x: OX - GAP/2 - S/2, y: BY - H3 };
+
+  // Right triangle (anions): HCO3=BL, SO4=TOP, Cl=BR
+  var RBL = { x: OX + GAP/2,        y: BY };
+  var RBR = { x: OX + GAP/2 + S,    y: BY };
+  var RBT = { x: OX + GAP/2 + S/2,  y: BY - H3 };
+
+  // Diamond vertices
+  var D_BOT   = { x: OX, y: BY };
+  var DH      = H3 * 1.55;
+  var D_TOP   = { x: OX,         y: BY - DH };
+  var D_LEFT  = { x: OX - S/2,   y: BY - DH/2 };
+  var D_RIGHT = { x: OX + S/2,   y: BY - DH/2 };
+
+  function tri(v0, v1, v2) {
+    ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath();
+  }
+  function rhombus() {
+    ctx.beginPath(); ctx.moveTo(D_BOT.x, D_BOT.y); ctx.lineTo(D_RIGHT.x, D_RIGHT.y);
+    ctx.lineTo(D_TOP.x, D_TOP.y); ctx.lineTo(D_LEFT.x, D_LEFT.y); ctx.closePath();
+  }
+  function gridLines(v0, v1, v2, steps) {
+    ctx.save(); ctx.strokeStyle = COL_LINE; ctx.lineWidth = 0.8;
+    for (var i = 1; i < steps; i++) {
+      var t = i / steps;
+      ctx.beginPath();
+      ctx.moveTo(v0.x*(1-t)+v1.x*t, v0.y*(1-t)+v1.y*t);
+      ctx.lineTo(v0.x*(1-t)+v2.x*t, v0.y*(1-t)+v2.y*t);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(v1.x*(1-t)+v0.x*t, v1.y*(1-t)+v0.y*t);
+      ctx.lineTo(v1.x*(1-t)+v2.x*t, v1.y*(1-t)+v2.y*t);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(v2.x*(1-t)+v0.x*t, v2.y*(1-t)+v0.y*t);
+      ctx.lineTo(v2.x*(1-t)+v1.x*t, v2.y*(1-t)+v1.y*t);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Draw triangles
+  ctx.fillStyle = COL_FILL; ctx.strokeStyle = COL_AXIS; ctx.lineWidth = 1.2;
+  tri(LBL, LBR, LBT); ctx.fill(); ctx.stroke();
+  tri(RBL, RBR, RBT); ctx.fill(); ctx.stroke();
+  rhombus();            ctx.fill(); ctx.stroke();
+
+  gridLines(LBL, LBR, LBT, 5);
+  gridLines(RBL, RBR, RBT, 5);
+
+  // Diamond grid
+  ctx.save(); ctx.strokeStyle = COL_LINE; ctx.lineWidth = 0.8;
+  for (var i = 1; i < 5; i++) {
+    var t = i/5;
+    // Parallel to D_BOT→D_RIGHT / D_LEFT→D_TOP
+    var p1 = { x: D_BOT.x + t*(D_RIGHT.x-D_BOT.x) + 0*(D_LEFT.x-D_BOT.x), y: D_BOT.y + t*(D_RIGHT.y-D_BOT.y) };
+    var p2 = { x: D_BOT.x + t*(D_RIGHT.x-D_BOT.x) + 1*(D_LEFT.x-D_BOT.x), y: D_BOT.y + t*(D_RIGHT.y-D_BOT.y) + 1*(D_LEFT.y-D_BOT.y) };
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    // Parallel to D_BOT→D_LEFT
+    var q1 = { x: D_BOT.x + 0*(D_RIGHT.x-D_BOT.x) + t*(D_LEFT.x-D_BOT.x), y: D_BOT.y + t*(D_LEFT.y-D_BOT.y) };
+    var q2 = { x: D_BOT.x + 1*(D_RIGHT.x-D_BOT.x) + t*(D_LEFT.x-D_BOT.x), y: D_BOT.y + 1*(D_RIGHT.y-D_BOT.y) + t*(D_LEFT.y-D_BOT.y) };
+    ctx.beginPath(); ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Labels
+  ctx.font = 'bold 11px Inter,sans-serif'; ctx.fillStyle = COL_TXT; ctx.textAlign = 'center';
+  ctx.fillText('Ca²⁺', LBL.x - 10, LBL.y + 14);
+  ctx.fillText('Mg²⁺', LBT.x, LBT.y - 8);
+  ctx.fillText('Na⁺+K⁺', LBR.x + 10, LBR.y + 14);
+  ctx.fillText('HCO₃⁻', RBL.x - 10, RBL.y + 14);
+  ctx.fillText('SO₄²⁻', RBT.x, RBT.y - 8);
+  ctx.fillText('Cl⁻', RBR.x + 10, RBR.y + 14);
+  ctx.fillText('%мг-экв', D_TOP.x, D_TOP.y - 8);
+
+  // Barycentric to pixel (triangle)
+  function bary(v0, v1, v2, b0, b1, b2) {
+    var s = b0 + b1 + b2 || 1;
+    return { x: (v0.x*b0 + v1.x*b1 + v2.x*b2)/s, y: (v0.y*b0 + v1.y*b1 + v2.y*b2)/s };
+  }
+  // Diamond parallelogram mapping: u=NaK_frac ∈[0,1], v=(SO4+Cl)_frac ∈[0,1]
+  function diamondPt(m) {
+    var u = m._catSum > 0 ? m.nak / m._catSum : 0;
+    var v = m._anSum  > 0 ? (m.so4 + m.cl) / m._anSum : 0;
+    return {
+      x: D_BOT.x + u*(D_RIGHT.x-D_BOT.x) + v*(D_LEFT.x-D_BOT.x),
+      y: D_BOT.y + u*(D_RIGHT.y-D_BOT.y) + v*(D_LEFT.y-D_BOT.y),
+    };
+  }
+
+  var COLORS = ['#22d3ee','#f59e0b','#10b981','#f87171','#a78bfa','#fb923c'];
+
+  allMeqs.forEach(function(item, idx) {
+    var m   = item.meq;
+    var isCurrent = item.id === currentId;
+    var col = isCurrent ? GOLD : COLORS[(idx + 1) % COLORS.length];
+    var r   = isCurrent ? 6 : 4;
+
+    // Cation triangle point: Ca=LBL, Mg=LBT, NaK=LBR
+    var cp = bary(LBL, LBT, LBR, m.ca, m.mg, m.nak);
+    // Anion triangle point: HCO3=RBL, SO4=RBT, Cl=RBR
+    var ap = bary(RBL, RBT, RBR, m.hco3, m.so4, m.cl);
+    var dp = diamondPt(m);
+
+    [cp, ap, dp].forEach(function(pt) {
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, Math.PI*2);
+      ctx.fillStyle = col;
+      if (isCurrent) { ctx.shadowColor = col; ctx.shadowBlur = 10; }
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    });
+  });
+
+  // Guide lines for current point
+  var cur = allMeqs.find(function(a){ return a.id === currentId; });
+  if (cur) {
+    var m = cur.meq;
+    var cp = bary(LBL, LBT, LBR, m.ca, m.mg, m.nak);
+    var ap = bary(RBL, RBT, RBR, m.hco3, m.so4, m.cl);
+    var dp = diamondPt(m);
+
+    ctx.save(); ctx.setLineDash([4,3]); ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(34,211,238,0.5)';
+
+    function drawGuides3(pt, v0, v1, v2) {
+      function lineIntersect(p1,d1,p2,d2) {
+        var dx=p2.x-p1.x, dy=p2.y-p1.y;
+        var det=d1.x*d2.y-d1.y*d2.x; if (Math.abs(det)<1e-9) return null;
+        var t=(dx*d2.y-dy*d2.x)/det;
+        return { x:p1.x+t*d1.x, y:p1.y+t*d1.y };
+      }
+      var sides = [[v0,v1],[v1,v2],[v2,v0]];
+      sides.forEach(function(s) {
+        var d = { x:s[1].x-s[0].x, y:s[1].y-s[0].y };
+        var perp = { x:-d.y, y:d.x };
+        var A = lineIntersect(pt, d, s[0], { x:s[1].x-s[0].x, y:s[1].y-s[0].y });
+        // foot from pt to side
+        var len = Math.sqrt(d.x*d.x+d.y*d.y); if (len===0) return;
+        var t = ((pt.x-s[0].x)*d.x+(pt.y-s[0].y)*d.y)/(len*len);
+        var foot = { x:s[0].x+t*d.x, y:s[0].y+t*d.y };
+        ctx.beginPath(); ctx.moveTo(pt.x,pt.y); ctx.lineTo(foot.x,foot.y); ctx.stroke();
+      });
+    }
+    drawGuides3(cp, LBL, LBT, LBR);
+    drawGuides3(ap, RBL, RBT, RBR);
+
+    // Diamond guides
+    function drawDiamondGuides(pt) {
+      var dR = { x:D_RIGHT.x-D_BOT.x, y:D_RIGHT.y-D_BOT.y };
+      var dL = { x:D_LEFT.x-D_BOT.x,  y:D_LEFT.y-D_BOT.y  };
+      // Line through pt parallel to dR: extend to D_LEFT side
+      var len = Math.sqrt(dL.x*dL.x+dL.y*dL.y);
+      var t1 = ((pt.x-D_BOT.x)*dL.x+(pt.y-D_BOT.y)*dL.y)/(len*len);
+      var t2 = ((pt.x-D_RIGHT.x)*dL.x+(pt.y-D_RIGHT.y)*dL.y)/(len*len);
+      var p1 = { x:D_BOT.x+t1*dL.x, y:D_BOT.y+t1*dL.y };
+      var p2 = { x:D_RIGHT.x+t2*dL.x, y:D_RIGHT.y+t2*dL.y };
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+      // Line through pt parallel to dL: extend to D_RIGHT side
+      var lenR = Math.sqrt(dR.x*dR.x+dR.y*dR.y);
+      var s1 = ((pt.x-D_BOT.x)*dR.x+(pt.y-D_BOT.y)*dR.y)/(lenR*lenR);
+      var s2 = ((pt.x-D_LEFT.x)*dR.x+(pt.y-D_LEFT.y)*dR.y)/(lenR*lenR);
+      var q1 = { x:D_BOT.x+s1*dR.x, y:D_BOT.y+s1*dR.y };
+      var q2 = { x:D_LEFT.x+s2*dR.x, y:D_LEFT.y+s2*dR.y };
+      ctx.beginPath(); ctx.moveTo(q1.x,q1.y); ctx.lineTo(q2.x,q2.y); ctx.stroke();
+    }
+    drawDiamondGuides(dp);
+    ctx.restore();
+  }
+}
+
+// ── Диаграмма Стиффа ───────────────────────────────────────────
+function _chemDrawStiff(canvas, meq) {
+  var W = canvas.width, H = canvas.height;
+  var ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  var isDark = !document.documentElement.getAttribute('data-theme') ||
+               document.documentElement.getAttribute('data-theme') === 'dark';
+  var COL_TXT  = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+  var GOLD = '#22d3ee';
+
+  var cx = W/2, padT = 18, padB = 18, padX = 60;
+  var areaW = W/2 - padX - 8;
+  var rows = [
+    { left: meq.ca,  right: meq.hco3, lbl: 'Ca²⁺ / HCO₃⁻' },
+    { left: meq.mg,  right: meq.so4,  lbl: 'Mg²⁺ / SO₄²⁻' },
+    { left: meq.nak, right: meq.cl,   lbl: 'Na⁺+K⁺ / Cl⁻'  },
+  ];
+  var maxVal = 0;
+  rows.forEach(function(r){ maxVal = Math.max(maxVal, r.left, r.right); });
+  if (maxVal <= 0) return;
+  var rowH = (H - padT - padB) / rows.length;
+  var scale = areaW / maxVal;
+
+  // Center axis
+  ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, H - padB); ctx.stroke();
+
+  // Polygon points
+  var pts = [];
+  rows.forEach(function(r, i) {
+    var y = padT + rowH*(i+0.5);
+    pts.push({ x: cx - r.left*scale, y: y });   // left side
+  });
+  rows.slice().reverse().forEach(function(r, i) {
+    var j = rows.length - 1 - i;
+    var y = padT + rowH*(j+0.5);
+    pts.push({ x: cx + r.right*scale, y: y });
+  });
+
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  pts.forEach(function(p){ ctx.lineTo(p.x, p.y); });
+  ctx.closePath();
+  ctx.fillStyle = GOLD + '22'; ctx.fill();
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+
+  // Row labels + values
+  ctx.font = '10px Inter,sans-serif'; ctx.fillStyle = COL_TXT;
+  rows.forEach(function(r, i) {
+    var y = padT + rowH*(i+0.5);
+    ctx.textAlign = 'right';
+    ctx.fillText(r.left.toFixed(2), cx - r.left*scale - 4, y + 4);
+    ctx.textAlign = 'left';
+    ctx.fillText(r.right.toFixed(2), cx + r.right*scale + 4, y + 4);
+    ctx.textAlign = 'center';
+    ctx.fillText(r.lbl, cx, padT + rowH*i + 11);
+  });
+
+  // Axis ticks
+  ctx.fillStyle = COL_TXT; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'center';
+  [0.25,0.5,0.75,1].forEach(function(f) {
+    var xR = cx + f*maxVal*scale;
+    var xL = cx - f*maxVal*scale;
+    [xR, xL].forEach(function(x) {
+      ctx.fillText((f*maxVal).toFixed(1), x, H - padB + 12);
+      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+      ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, H-padB); ctx.stroke();
+    });
+  });
+  ctx.fillStyle = COL_TXT; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('мг-экв/л', cx, H - 4);
+}
+
+// ── График Шоллера ─────────────────────────────────────────────
+function _chemDrawSchoeller(canvas, allMeqs, currentId) {
+  var W = canvas.width, H = canvas.height;
+  var ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  var isDark = !document.documentElement.getAttribute('data-theme') ||
+               document.documentElement.getAttribute('data-theme') === 'dark';
+  var COL_TXT  = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
+  var COL_GRID = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  var GOLD = '#22d3ee';
+
+  var ions = ['ca','mg','nak','hco3','so4','cl'];
+  var ionLbl = ['Ca²⁺','Mg²⁺','Na⁺+K⁺','HCO₃⁻','SO₄²⁻','Cl⁻'];
+  var padL=42, padR=12, padT=12, padB=30;
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+  var logMin = Math.log10(0.05), logMax = Math.log10(30);
+  function yOf(v) {
+    if (!v || v <= 0) v = 0.05;
+    return padT + plotH * (1 - (Math.log10(v) - logMin) / (logMax - logMin));
+  }
+  function xOf(i) { return padL + (i / (ions.length-1)) * plotW; }
+
+  // Grid
+  [0.1,0.2,0.5,1,2,5,10,20].forEach(function(v) {
+    var y = yOf(v);
+    ctx.strokeStyle = COL_GRID; ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W-padR, y); ctx.stroke();
+    ctx.fillStyle = COL_TXT; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(v < 1 ? v.toFixed(1) : v, padL - 3, y + 3);
+  });
+
+  // Ion labels
+  ctx.fillStyle = COL_TXT; ctx.font = '10px Inter,sans-serif'; ctx.textAlign = 'center';
+  ionLbl.forEach(function(l, i){ ctx.fillText(l, xOf(i), H - 6); });
+
+  var COLORS = ['#22d3ee','#f59e0b','#10b981','#f87171','#a78bfa','#fb923c'];
+  allMeqs.forEach(function(item, idx) {
+    var m = item.meq;
+    var isCurrent = item.id === currentId;
+    var col = isCurrent ? GOLD : COLORS[(idx+1) % COLORS.length];
+    ctx.beginPath();
+    ions.forEach(function(k, i) {
+      var y = yOf(m[k] || 0.05);
+      if (i === 0) ctx.moveTo(xOf(i), y); else ctx.lineTo(xOf(i), y);
+    });
+    ctx.strokeStyle = col;
+    ctx.lineWidth = isCurrent ? 2 : 1.2;
+    if (!isCurrent) ctx.setLineDash([4,3]); else ctx.setLineDash([]);
+    ctx.stroke(); ctx.setLineDash([]);
+
+    if (isCurrent) {
+      ions.forEach(function(k, i) {
+        var y = yOf(m[k] || 0.05);
+        ctx.beginPath(); ctx.arc(xOf(i), y, 3.5, 0, Math.PI*2);
+        ctx.fillStyle = col; ctx.fill();
+      });
+    }
+  });
+
+  // Y-axis label
+  ctx.save(); ctx.translate(10, padT + plotH/2); ctx.rotate(-Math.PI/2);
+  ctx.fillStyle = COL_TXT; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('мг-экв/л (log)', 0, 0); ctx.restore();
+}
+
+// ── Формула Курлова ────────────────────────────────────────────
+function _chemBuildKurlov(meq) {
+  function fmt1(v){ return v < 10 ? v.toFixed(1) : Math.round(v).toString(); }
+
+  // Cations and anions > 10% meq, sorted descending
+  var cats = [
+    { sym:'HCO₃', pct: meq.hco3_pct||0 },  // these go to anion — keeping variable naming for clarity
+  ];
+  var anions = [
+    { sym:'HCO₃', pct: meq.hco3_pct||0 },
+    { sym:'SO₄',  pct: meq.so4_pct||0 },
+    { sym:'Cl',   pct: meq.cl_pct||0 },
+    { sym:'CO₃',  pct: meq.co3_pct||0 },
+  ].filter(function(x){ return x.pct > 10; }).sort(function(a,b){ return b.pct-a.pct; });
+
+  var cations = [
+    { sym:'Ca',   pct: meq.ca_pct||0 },
+    { sym:'Mg',   pct: meq.mg_pct||0 },
+    { sym:'Na+K', pct: meq.nak_pct||0 },
+  ].filter(function(x){ return x.pct > 10; }).sort(function(a,b){ return b.pct-a.pct; });
+
+  function makeFrac(num, den) {
+    return '<span class="chem-kurlov-frac">' +
+      '<span class="chem-kurlov-num">' + num + '</span>' +
+      '<span class="chem-kurlov-den">' + den + '</span>' +
+    '</span>';
+  }
+
+  var numStr = anions.map(function(x){ return x.sym + '<sup>' + fmt1(x.pct) + '</sup>'; }).join(' ');
+  var denStr = cations.map(function(x){ return x.sym + '<sub>' + fmt1(x.pct) + '</sub>'; }).join(' ');
+
+  var mStr  = isNaN(meq.m_gl)  ? '' : 'M<sub>' + meq.m_gl.toFixed(2) + '</sub> · ';
+  var phStr = isNaN(meq.ph)    ? '' : '  pH ' + meq.ph.toFixed(1);
+  var tdStr = isNaN(meq.m_gl)  ? '' : '<div style="font-size:11px;color:var(--txt-3);margin-top:8px">Минерализация: ' + (meq.m_gl*1000).toFixed(0) + ' мг/л</div>';
+
+  return '<div class="chem-kurlov-formula">' +
+    mStr + makeFrac(numStr || '—', denStr || '—') + phStr +
+  '</div>' + tdStr;
 }
 
 // Экспорт в глобальный scope
