@@ -412,8 +412,12 @@ function _wpmUpdateEmptyState() {
   var existing = document.getElementById('wpm-empty');
   if (existing) existing.remove();
 
-  var hasCoords = WpmState.items.some(function(i){ return i.lat && i.lng; });
-  if (!hasCoords && WpmState.loaded) {
+  var withWgs    = WpmState.items.filter(function(i){ return i.lat && i.lng; });
+  var withLocal  = WpmState.items.filter(function(i){ return !i.lat && !i.lng && (i.coord_x || i.coord_y); });
+  var noCoords   = WpmState.items.filter(function(i){ return !i.lat && !i.lng && !i.coord_x && !i.coord_y; });
+
+  if (!withWgs.length && WpmState.loaded) {
+    // Nothing to show at all — full empty state
     var el = document.createElement('div');
     el.id = 'wpm-empty';
     el.className = 'wpm-empty';
@@ -421,6 +425,22 @@ function _wpmUpdateEmptyState() {
       '<div class="wpm-empty-ico">📍</div>' +
       '<div class="wpm-empty-txt">Координаты не заданы</div>' +
       '<div class="wpm-empty-sub">Откройте Реестр водопунктов и укажите координаты WGS-84 (широта / долгота) для отображения на карте</div>';
+    shell.appendChild(el);
+  } else if (withLocal.length > 0 && WpmState.loaded) {
+    // Some points have only local coordinates — show a notice banner
+    var names = withLocal.slice(0, 3).map(function(i){ return i.name; }).join(', ');
+    if (withLocal.length > 3) names += ' и ещё ' + (withLocal.length - 3);
+    var el = document.createElement('div');
+    el.id = 'wpm-empty';
+    el.style.cssText = 'position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:1000;' +
+      'background:var(--bg-2,#1e293b);border:1px solid #f59e0b;border-radius:10px;padding:10px 16px;' +
+      'max-width:480px;text-align:center;pointer-events:all;font-size:12px;color:var(--txt-1,#e2e8f0)';
+    el.innerHTML =
+      '<span style="font-size:16px">⚠️</span> ' +
+      '<strong>' + withLocal.length + ' водопункт' + (withLocal.length === 1 ? '' : (withLocal.length < 5 ? 'а' : 'ов')) + '</strong>' +
+      ' ' + (withLocal.length === 1 ? 'имеет' : 'имеют') + ' только местные координаты (X/Y) и не отображаются на карте.<br>' +
+      '<span style="opacity:.75">' + names + '</span><br>' +
+      '<span style="opacity:.6">Откройте карточку водопункта и укажите поля <b>Широта / Долгота</b> (WGS-84).</span>';
     shell.appendChild(el);
   }
 }
@@ -434,7 +454,7 @@ async function wpmReload() {
   _wpmRenderMarkers();
   _wpmRenderFilterChips();
   _wpmRenderKpi();
-  if (typeof Toast !== 'undefined' && typeof Toast.ok === 'function') Toast.ok('Данные обновлены');
+  if (typeof Toast !== 'undefined') Toast.done('Данные обновлены', 'success');
 }
 
 // ── Инициализация вкладки ──────────────────────────────────────
