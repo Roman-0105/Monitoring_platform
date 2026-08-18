@@ -433,23 +433,28 @@ function _chemInitCSS() {
     /* Responsive */
     '@media(max-width:600px){.chem-kpi-row{grid-template-columns:1fr 1fr}.chem-param-grid{grid-template-columns:1fr}.chem-form-row,.chem-form-row-3{grid-template-columns:1fr}}',
 
+    /* Protocol detail modal */
+    '.chem-pm-card{background:var(--bg-2);border:1px solid var(--line);border-radius:14px;width:96vw;max-width:1200px;height:90vh;display:flex;flex-direction:column;overflow:hidden}',
+    '.chem-pm-hdr{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);flex-shrink:0}',
+    '.chem-pm-body{flex:1;display:flex;overflow:hidden;min-height:0}',
+
     /* Hydrochem diagrams layout */
-    '.chem-proto-split{display:flex;gap:0;align-items:stretch;min-height:0}',
-    '.chem-proto-tbl-col{flex:0 0 auto;width:360px;max-height:480px;overflow-y:auto;border-right:1px solid var(--line)}',
-    '.chem-diag-col{flex:1;min-width:0;display:flex;flex-direction:column}',
-    '.chem-diag-tabs{display:flex;border-bottom:1px solid var(--line);background:var(--bg-1);flex-shrink:0}',
-    '.chem-diag-tab{padding:8px 16px;font-size:12px;font-weight:500;color:var(--txt-3);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap}',
+    '.chem-proto-split{display:flex;width:100%;height:100%;overflow:hidden}',
+    '.chem-proto-tbl-col{flex:0 0 340px;overflow-y:auto;border-right:1px solid var(--line);padding:0}',
+    '.chem-diag-col{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-1)}',
+    '.chem-diag-tabs{display:flex;border-bottom:1px solid var(--line);background:var(--bg-2);flex-shrink:0;padding:0 8px}',
+    '.chem-diag-tab{padding:10px 18px;font-size:12px;font-weight:500;color:var(--txt-3);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap}',
     '.chem-diag-tab.active{color:var(--gold,#22d3ee);border-bottom-color:var(--gold,#22d3ee)}',
     '.chem-diag-tab:hover:not(.active){color:var(--txt-1)}',
-    '.chem-diag-body{flex:1;display:flex;align-items:center;justify-content:center;padding:12px;min-height:380px}',
-    '.chem-diag-pane{display:none;width:100%;height:100%;align-items:center;justify-content:center}',
+    '.chem-diag-body{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:16px}',
+    '.chem-diag-pane{display:none;flex-direction:column;align-items:center;gap:16px;width:100%}',
     '.chem-diag-pane.active{display:flex}',
-    '.chem-kurlov-box{font-family:Georgia,serif;text-align:center;padding:20px;line-height:2.4;color:var(--txt-1)}',
-    '.chem-kurlov-formula{font-size:15px;letter-spacing:.03em}',
-    '.chem-kurlov-frac{display:inline-block;vertical-align:middle;text-align:center;margin:0 4px}',
-    '.chem-kurlov-num{display:block;border-bottom:1px solid currentColor;padding:0 4px;font-size:13px}',
-    '.chem-kurlov-den{display:block;padding:0 4px;font-size:13px}',
-    '.chem-no-macro{padding:30px;color:var(--txt-3);font-size:13px;text-align:center}',
+    '.chem-kurlov-box{font-family:Georgia,serif;text-align:center;padding:32px 24px;line-height:2.6;color:var(--txt-1);max-width:560px}',
+    '.chem-kurlov-formula{font-size:17px;letter-spacing:.03em;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}',
+    '.chem-kurlov-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 2px}',
+    '.chem-kurlov-num{border-bottom:1px solid currentColor;padding:0 6px 2px;font-size:14px;white-space:nowrap}',
+    '.chem-kurlov-den{padding:2px 6px 0;font-size:14px;white-space:nowrap}',
+    '.chem-no-macro{padding:40px;color:var(--txt-3);font-size:13px;text-align:center}',
   ].join('\n');
   document.head.appendChild(s);
 }
@@ -634,8 +639,8 @@ function _chemRenderProtoList() {
       : '';
 
     var inCompare = ChemState.compareIds.indexOf(p.id) !== -1;
-    return '<div class="chem-proto-card" id="cpc-' + p.id + '">' +
-      '<div class="chem-proto-head" onclick="chemToggleProto(\'' + p.id + '\')">' +
+    return '<div class="chem-proto-card" id="cpc-' + p.id + '" onclick="chemOpenProtoModal(\'' + p.id + '\')" style="cursor:pointer">' +
+      '<div class="chem-proto-head">' +
         '<label onclick="event.stopPropagation()" title="Добавить в сравнение" style="display:flex;align-items:center;margin-right:6px;cursor:pointer">' +
           '<input type="checkbox" ' + (inCompare ? 'checked' : '') + ' onchange="chemToggleCompare(\'' + p.id + '\',this.checked)" style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer">' +
         '</label>' +
@@ -659,31 +664,73 @@ function _chemRenderProtoList() {
           '<button class="chem-btn chem-btn-danger" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();chemDeleteProtocol(\'' + p.id + '\')">✕</button>' +
         '</div>' +
       '</div>' +
-      '<div class="chem-proto-body" id="cpb-' + p.id + '">' +
-        _chemRenderProtoBody(p.id) +
-      '</div>' +
     '</div>';
   }).join('');
 }
 
-function chemToggleProto(id) {
-  var body = document.getElementById('cpb-' + id);
-  if (!body) return;
-  var open = body.classList.toggle('open');
-  // Ленивая загрузка результатов если ещё не загружены
-  if (open && !ChemState.results[id]) {
-    body.innerHTML = '<div style="padding:20px;color:var(--txt-3);text-align:center">Загрузка…</div>';
-    ChemApi.getResults(id).then(function(res) {
-      if (!res.error && res.data) {
-        ChemState.results[id] = res.data;
-      } else {
-        ChemState.results[id] = [];
-      }
-      body.innerHTML = _chemRenderProtoBody(id);
-      _chemInitDiagrams(id);
-    });
-  } else if (open) {
+// Kept for backwards-compat — now unused but harmless
+function chemToggleProto(id) { chemOpenProtoModal(id); }
+
+function chemOpenProtoModal(id) {
+  // Remove existing modal if any
+  var existing = document.getElementById('chem-proto-modal');
+  if (existing) existing.remove();
+
+  var p  = ChemState.protocols.find(function(x){ return x.id === id; });
+  if (!p) return;
+  var wp = ChemState.waterPoints.find(function(w){ return w.id === p.water_point_id; });
+  var ptMeta = CHEM_PROTO_TYPE_META[p.protocol_type] || CHEM_PROTO_TYPE_META['full'];
+
+  var overlay = document.createElement('div');
+  overlay.id = 'chem-proto-modal';
+  overlay.className = 'chem-overlay';
+  overlay.style.cssText = 'z-index:3000';
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+
+  overlay.innerHTML =
+    '<div class="chem-pm-card">' +
+      '<div class="chem-pm-hdr">' +
+        '<div style="display:flex;flex-direction:column;gap:3px">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<span style="font-size:16px;font-weight:700;color:var(--txt-1)">' + escHTML(wp ? wp.name : '—') + '</span>' +
+            '<span class="chem-badge" style="background:' + ptMeta.color + '18;color:' + ptMeta.color + '">' + ptMeta.icon + ' ' + ptMeta.label + '</span>' +
+            (p.is_control ? '<span class="chem-badge" style="background:rgba(245,158,11,.12);color:#f59e0b">🔬 Контрольная</span>' : '') +
+          '</div>' +
+          '<span style="font-size:12px;color:var(--txt-3)">' +
+            _chemFmtDate(p.sampled_at) +
+            (p.lab_name ? ' · ' + escHTML(p.lab_name) : '') +
+            (p.lab_protocol_number ? ' №' + escHTML(p.lab_protocol_number) : '') +
+            (p.lab_number ? ' · проба ' + escHTML(p.lab_number) : '') +
+          '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;margin-left:auto;align-items:center">' +
+          '<button class="chem-btn chem-btn-ghost" style="font-size:12px" onclick="_chemExportCsv(\'' + id + '\')">⬇ CSV</button>' +
+          '<button class="chem-btn chem-btn-ghost" style="font-size:12px" onclick="showChemProtocolForm(\'' + id + '\')">✏ Редакт.</button>' +
+          '<button class="chem-modal-close" onclick="document.getElementById(\'chem-proto-modal\').remove()">✕</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="chem-pm-body" id="chem-pm-body-' + id + '">' +
+        '<div style="padding:30px;text-align:center;color:var(--txt-3)">Загрузка…</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  // Load results if needed
+  function _render() {
+    var pmBody = document.getElementById('chem-pm-body-' + id);
+    if (!pmBody) return;
+    pmBody.innerHTML = _chemRenderProtoBody(id);
     _chemInitDiagrams(id);
+  }
+
+  if (!ChemState.results[id]) {
+    ChemApi.getResults(id).then(function(res) {
+      ChemState.results[id] = (!res.error && res.data) ? res.data : [];
+      _render();
+    });
+  } else {
+    _render();
   }
 }
 
@@ -2184,13 +2231,11 @@ function _chemRenderProtoBody(protocolId) {
       '</div>' +
       '<div class="chem-diag-body">' +
         '<div class="chem-diag-pane active" id="chem-dpane-' + protocolId + '-piper">' +
-          '<canvas id="chem-cv-piper-' + protocolId + '" width="420" height="440" style="max-width:100%"></canvas>' +
+          '<canvas id="chem-cv-piper-' + protocolId + '" width="580" height="520" style="max-width:100%"></canvas>' +
         '</div>' +
         '<div class="chem-diag-pane" id="chem-dpane-' + protocolId + '-stiff">' +
-          '<div style="display:flex;flex-direction:column;gap:12px;width:100%">' +
-            '<canvas id="chem-cv-stiff-' + protocolId + '" width="340" height="180" style="max-width:100%"></canvas>' +
-            '<canvas id="chem-cv-scho-' + protocolId + '" width="420" height="220" style="max-width:100%"></canvas>' +
-          '</div>' +
+          '<canvas id="chem-cv-stiff-' + protocolId + '" width="500" height="220" style="max-width:100%"></canvas>' +
+          '<canvas id="chem-cv-scho-' + protocolId + '" width="560" height="280" style="max-width:100%"></canvas>' +
         '</div>' +
         '<div class="chem-diag-pane" id="chem-dpane-' + protocolId + '-kurlov">' +
           '<div class="chem-kurlov-box" id="chem-kurlov-' + protocolId + '"></div>' +
@@ -2264,16 +2309,16 @@ function _chemDrawPiper(canvas, allMeqs, currentId) {
   var isDark = !document.documentElement.getAttribute('data-theme') ||
                document.documentElement.getAttribute('data-theme') === 'dark';
   var COL_LINE = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
-  var COL_TXT  = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
-  var COL_AXIS = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)';
-  var COL_FILL = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
+  var COL_TXT  = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+  var COL_AXIS = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)';
+  var COL_FILL = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
   var GOLD = '#22d3ee';
 
-  var S  = 178;   // triangle side
+  var S  = 200;   // triangle side
   var H3 = S * Math.sqrt(3) / 2;
-  var GAP = 28;   // gap between triangles
+  var GAP = 36;   // gap between triangles
   var OX = W / 2; // center x
-  var BY = H - 28; // base y
+  var BY = H - 36; // base y
 
   // Left triangle (cations): Ca=BL, Mg=TOP, NaK=BR
   var LBL = { x: OX - GAP/2 - S,   y: BY };
@@ -2455,69 +2500,108 @@ function _chemDrawStiff(canvas, meq) {
   ctx.clearRect(0,0,W,H);
   var isDark = !document.documentElement.getAttribute('data-theme') ||
                document.documentElement.getAttribute('data-theme') === 'dark';
-  var COL_TXT  = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+  var COL_TXT  = isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)';
+  var COL_GRID = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   var GOLD = '#22d3ee';
 
-  var cx = W/2, padT = 18, padB = 18, padX = 60;
-  var areaW = W/2 - padX - 8;
   var rows = [
-    { left: meq.ca,  right: meq.hco3, lbl: 'Ca²⁺ / HCO₃⁻' },
-    { left: meq.mg,  right: meq.so4,  lbl: 'Mg²⁺ / SO₄²⁻' },
-    { left: meq.nak, right: meq.cl,   lbl: 'Na⁺+K⁺ / Cl⁻'  },
+    { left: meq.ca,  right: meq.hco3, catLbl: 'Ca²⁺',    anLbl: 'HCO₃⁻' },
+    { left: meq.mg,  right: meq.so4,  catLbl: 'Mg²⁺',    anLbl: 'SO₄²⁻' },
+    { left: meq.nak, right: meq.cl,   catLbl: 'Na⁺+K⁺',  anLbl: 'Cl⁻'   },
   ];
   var maxVal = 0;
   rows.forEach(function(r){ maxVal = Math.max(maxVal, r.left, r.right); });
   if (maxVal <= 0) return;
+
+  // Layout: labels left, diagram center, labels right
+  var lblW = 56;  // left label col width
+  var numW = 38;  // left value col width
+  var padT = 14, padB = 28;
+  var cx = W / 2;
+  var areaW = cx - lblW - numW - 4; // half-diagram width
+  var scale = areaW / (maxVal * 1.05);
   var rowH = (H - padT - padB) / rows.length;
-  var scale = areaW / maxVal;
+
+  // Grid lines
+  var nTicks = 4;
+  for (var ti = 1; ti <= nTicks; ti++) {
+    var tv = ti / nTicks * maxVal;
+    var gxR = cx + tv * scale;
+    var gxL = cx - tv * scale;
+    ctx.strokeStyle = COL_GRID; ctx.lineWidth = 0.6;
+    [gxR, gxL].forEach(function(gx) {
+      ctx.beginPath(); ctx.moveTo(gx, padT); ctx.lineTo(gx, H - padB); ctx.stroke();
+    });
+    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)';
+    ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(tv.toFixed(tv < 1 ? 1 : 0), gxR, H - padB + 11);
+    ctx.fillText(tv.toFixed(tv < 1 ? 1 : 0), gxL, H - padB + 11);
+  }
 
   // Center axis
-  ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
-  ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, H - padB); ctx.stroke();
+  ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(cx, padT - 4); ctx.lineTo(cx, H - padB); ctx.stroke();
 
-  // Polygon points
+  // Row separators
+  rows.forEach(function(_, i) {
+    if (i === 0) return;
+    var y = padT + rowH * i;
+    ctx.strokeStyle = COL_GRID; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(lblW, y); ctx.lineTo(W - lblW, y); ctx.stroke();
+  });
+
+  // Polygon
   var pts = [];
   rows.forEach(function(r, i) {
-    var y = padT + rowH*(i+0.5);
-    pts.push({ x: cx - r.left*scale, y: y });   // left side
+    var y = padT + rowH * (i + 0.5);
+    pts.push({ x: cx - r.left * scale, y: y });
   });
   rows.slice().reverse().forEach(function(r, i) {
     var j = rows.length - 1 - i;
-    var y = padT + rowH*(j+0.5);
-    pts.push({ x: cx + r.right*scale, y: y });
+    var y = padT + rowH * (j + 0.5);
+    pts.push({ x: cx + r.right * scale, y: y });
   });
-
   ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
   pts.forEach(function(p){ ctx.lineTo(p.x, p.y); });
   ctx.closePath();
-  ctx.fillStyle = GOLD + '22'; ctx.fill();
-  ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+  ctx.fillStyle = GOLD + '28'; ctx.fill();
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 2; ctx.stroke();
 
-  // Row labels + values
-  ctx.font = '10px Inter,sans-serif'; ctx.fillStyle = COL_TXT;
+  // Vertex dots + value labels (outside polygon)
+  ctx.font = '10px Inter,sans-serif';
   rows.forEach(function(r, i) {
-    var y = padT + rowH*(i+0.5);
-    ctx.textAlign = 'right';
-    ctx.fillText(r.left.toFixed(2), cx - r.left*scale - 4, y + 4);
-    ctx.textAlign = 'left';
-    ctx.fillText(r.right.toFixed(2), cx + r.right*scale + 4, y + 4);
-    ctx.textAlign = 'center';
-    ctx.fillText(r.lbl, cx, padT + rowH*i + 11);
+    var y = padT + rowH * (i + 0.5);
+    var xL = cx - r.left * scale;
+    var xR = cx + r.right * scale;
+
+    // Dots
+    [xL, xR].forEach(function(x) {
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2);
+      ctx.fillStyle = GOLD; ctx.fill();
+    });
+
+    // Values outside polygon
+    ctx.fillStyle = COL_TXT;
+    ctx.textAlign = 'right'; ctx.fillText(r.left.toFixed(2),  xL - 6, y + 4);
+    ctx.textAlign = 'left';  ctx.fillText(r.right.toFixed(2), xR + 6, y + 4);
+
+    // Ion labels in far columns
+    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+    ctx.textAlign = 'right'; ctx.fillText(r.catLbl, cx - areaW - 8, y + 4);
+    ctx.textAlign = 'left';  ctx.fillText(r.anLbl,  cx + areaW + 8, y + 4);
   });
 
-  // Axis ticks
-  ctx.fillStyle = COL_TXT; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'center';
-  [0.25,0.5,0.75,1].forEach(function(f) {
-    var xR = cx + f*maxVal*scale;
-    var xL = cx - f*maxVal*scale;
-    [xR, xL].forEach(function(x) {
-      ctx.fillText((f*maxVal).toFixed(1), x, H - padB + 12);
-      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-      ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, H-padB); ctx.stroke();
-    });
-  });
-  ctx.fillStyle = COL_TXT; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'center';
+  // Axis label
+  ctx.fillStyle = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)';
+  ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('мг-экв/л', cx, H - 4);
+
+  // Title
+  ctx.fillStyle = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+  ctx.font = '10px Inter,sans-serif';
+  ctx.textAlign = 'left'; ctx.fillText('Катионы', 4, padT + 10);
+  ctx.textAlign = 'right'; ctx.fillText('Анионы', W - 4, padT + 10);
 }
 
 // ── График Шоллера ─────────────────────────────────────────────
@@ -2651,3 +2735,13 @@ window.chemClearCompare    = chemClearCompare;
 window.showChemCompare     = showChemCompare;
 window.showChemWpPassport  = showChemWpPassport;
 window._chemExportCsv      = _chemExportCsv;
+window.chemOpenProtoModal  = chemOpenProtoModal;
+window.chemToggleProto     = chemToggleProto;
+
+// Close protocol modal on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var m = document.getElementById('chem-proto-modal');
+    if (m) m.remove();
+  }
+});
