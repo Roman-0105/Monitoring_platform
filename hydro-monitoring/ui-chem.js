@@ -1855,8 +1855,16 @@ function showChemCompare() {
   r1.forEach(function(r){ r1map[r.param_key] = r; });
   r2.forEach(function(r){ r2map[r.param_key] = r; });
 
-  var hdr1 = escHTML((wp1 ? wp1.name : '?') + '  ' + _chemFmtDate(p1.sampled_at));
-  var hdr2 = escHTML((wp2 ? wp2.name : '?') + '  ' + _chemFmtDate(p2.sampled_at));
+  function _cmpProtoHeader(p, wp) {
+    var lines = [];
+    lines.push('<span style="font-weight:700">' + escHTML((wp ? wp.name : '?')) + '</span>');
+    lines.push('<span style="font-size:11px;opacity:.8">' + _chemFmtDate(p.sampled_at) + '</span>');
+    if (p.lab_protocol_number) lines.push('<span style="font-size:10px;opacity:.65">№ ' + escHTML(p.lab_protocol_number) + '</span>');
+    if (p.lab_number) lines.push('<span style="font-size:10px;opacity:.65">Проба: ' + escHTML(p.lab_number) + '</span>');
+    return lines.join('<br>');
+  }
+  var hdr1 = _cmpProtoHeader(p1, wp1);
+  var hdr2 = _cmpProtoHeader(p2, wp2);
 
   var rows = '';
   var groupOrder = ['organo','physico','macro','metals','organic','radio'];
@@ -1895,8 +1903,8 @@ function showChemCompare() {
     '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
       '<thead><tr style="border-bottom:2px solid var(--line)">' +
         '<th style="text-align:left;padding:8px;color:var(--txt-3);font-size:10px;text-transform:uppercase;letter-spacing:.05em">Параметр</th>' +
-        '<th style="text-align:right;padding:8px;color:var(--blue);font-size:12px;font-weight:700">' + hdr1 + '</th>' +
-        '<th style="text-align:right;padding:8px;color:#fb923c;font-size:12px;font-weight:700">' + hdr2 + '</th>' +
+        '<th style="text-align:right;padding:8px;color:var(--blue);font-size:12px;line-height:1.5;vertical-align:top">' + hdr1 + '</th>' +
+        '<th style="text-align:right;padding:8px;color:#fb923c;font-size:12px;line-height:1.5;vertical-align:top">' + hdr2 + '</th>' +
         '<th style="text-align:center;padding:8px;color:var(--txt-3);font-size:10px">Ед.</th>' +
       '</tr></thead><tbody>' + rows + '</tbody>' +
     '</table>',
