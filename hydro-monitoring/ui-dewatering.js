@@ -343,12 +343,29 @@ var DewateringState = {
 
   addElevation: function(d) {
     d.id=this._id('elv'); this.sumpElevationHistory.push(d); this.save();
-    if (window.Api) Api.upsertDewElev(dewElevToRow(d)).catch(function() {});
+    if (window.Api) Api.upsertDewElev(dewElevToRow(d)).catch(function(e) {
+      console.error('[dewatering] Supabase: не удалось сохранить отметку дна', d.id, e);
+      if (window.Toast) Toast.show('⚠️ Отметка сохранена локально, но не синхронизирована с сервером', 'warning');
+    });
     return d;
+  },
+  updateElevation: function(id, d) {
+    var i=this.sumpElevationHistory.findIndex(function(h){return h.id===id;});
+    if(i>=0){ this.sumpElevationHistory[i]=Object.assign({},this.sumpElevationHistory[i],d); this.save();
+      if (window.Api) Api.upsertDewElev(dewElevToRow(this.sumpElevationHistory[i])).catch(function(e) {
+        console.error('[dewatering] Supabase: не удалось обновить отметку дна', id, e);
+        if (window.Toast) Toast.show('⚠️ Изменение сохранено локально, но не синхронизировано с сервером', 'warning');
+      }); }
+  },
+  elevationFor: function(sumpId, date) {
+    return this.sumpElevationHistory.find(function(h) { return h.sumpId === sumpId && h.date === date; }) || null;
   },
   deleteElevation: function(id) {
     this.sumpElevationHistory=this.sumpElevationHistory.filter(function(h){return h.id!==id;}); this.save();
-    if (window.Api) Api.deleteDewElev(id).catch(function() {});
+    if (window.Api) Api.deleteDewElev(id).catch(function(e) {
+      console.error('[dewatering] Supabase: не удалось удалить отметку дна', id, e);
+      if (window.Toast) Toast.show('⚠️ Отметка удалена локально, но не удалена с сервера', 'warning');
+    });
   },
 
   addPump: function(d) {
@@ -2623,6 +2640,7 @@ function _dewRenderLevelsChart(records, sumpId) {
   });
   var labelDates = allDates.slice(-60);
 
+  var isSingle = sumpOrder.length === 1;
   var datasets = sumpOrder.map(function(sid, idx) {
     var sump = DewateringState.sumpById(sid);
     var readings = grouped[sid];
@@ -2631,7 +2649,6 @@ function _dewRenderLevelsChart(records, sumpId) {
     readings.forEach(function(r) { byDate[r.date] = parseFloat(r.elevation || 0); });
     var data = labelDates.map(function(d) { return byDate[d] != null ? byDate[d] : null; });
     var color = LEVEL_COLORS[idx % LEVEL_COLORS.length];
-    var isSingle = sumpOrder.length === 1;
     return {
       label: sump ? sump.name : sid,
       data: data,
@@ -2649,6 +2666,32 @@ function _dewRenderLevelsChart(records, sumpId) {
     };
   });
 
+  // Отметка дна зумпфа на ту же ось — рисуем пунктиром поверх уровня воды,
+  // тем же цветом, что и линия уровня для этого зумпфа, чтобы пара
+  // "уровень/дно" читалась как одно целое. Дно меняется редко (чистка,
+  // углубление), поэтому это фактически ступенчатая линия — берём отметку,
+  // действовавшую на каждую дату графика, через sumpElevationAsOf.
+  sumpOrder.forEach(function(sid, idx) {
+    var hasElevHistory = DewateringState.sumpElevationHistory.some(function(h) { return h.sumpId === sid; });
+    if (!hasElevHistory) return;
+    var sump = DewateringState.sumpById(sid);
+    var color = LEVEL_COLORS[idx % LEVEL_COLORS.length];
+    var data = labelDates.map(function(d) { return DewateringState.sumpElevationAsOf(sid, d); });
+    datasets.push({
+      label: 'Дно' + (isSingle ? '' : ' — ' + (sump ? sump.name : sid)),
+      data: data,
+      fill: false,
+      borderColor: color.replace('1)', '0.55)'),
+      borderDash: [5, 4],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointBackgroundColor: color,
+      tension: 0,
+      spanGaps: true,
+    });
+  });
+
   wrap.innerHTML = '<canvas id="dew-canvas-levels"></canvas>';
   var canvas = wrap.querySelector('canvas');
   canvas.style.width = '100%';
@@ -2661,9 +2704,12 @@ function _dewRenderLevelsChart(records, sumpId) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: sumpOrder.length > 1, position: 'top', labels: { font: {size:11}, boxWidth: 12, padding: 12 } },
+        legend: { display: datasets.length > 1, position: 'top', labels: { font: {size:11}, boxWidth: 12, padding: 12 } },
         tooltip: {
+          mode: 'index',
+          intersect: false,
           callbacks: {
             title: function(items) { return labelDates[items[0].dataIndex] || ''; },
             label: function(item) { return ' ' + item.dataset.label + ': ' + (item.raw != null ? item.raw.toFixed(2) + ' м абс.' : '—'); }
@@ -2702,8 +2748,11 @@ function _dewDeleteWaterLevel(id) {
 // на эту дату. Так можно за один файл занести историю сразу по
 // нескольким зумпфам за любой период, не по одной записи за раз.
 
+var _dewBulkMode = 'levels'; // 'levels' | 'elevation' — какой из двух режимов сейчас открыт в модалке
+
 function _dewOpenLevelsImportModal() {
   _dewCloseLevelsImportModal();
+  _dewBulkMode = 'levels';
   var ov = document.createElement('div');
   ov.className = 'modal-overlay';
   ov.id = 'dew-lv-import-overlay';
@@ -2711,30 +2760,81 @@ function _dewOpenLevelsImportModal() {
   ov.innerHTML =
     '<div class="modal-box" style="width:min(560px,100%)">' +
       '<div class="modal-header">' +
-        '<span class="modal-title">Массовая загрузка уровней воды</span>' +
+        '<span class="modal-title">Массовая загрузка данных по зумпфам</span>' +
         '<button class="modal-close" onclick="_dewCloseLevelsImportModal()">✕</button>' +
       '</div>' +
       '<div class="modal-body">' +
-        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">① Скачать шаблон</div>' +
-        '<p style="font-size:12px;color:var(--txt-2);margin:0 0 10px;line-height:1.6">В шаблоне уже есть колонка на каждый имеющийся зумпф. Заполните строки по датам за любой период — пустая ячейка означает, что этот замер трогать не нужно.</p>' +
-        '<button class="btn btn-sm btn-outline" onclick="_dewDownloadLevelsTemplate()">⬇ Скачать шаблон .xlsx</button>' +
-        '<div style="border-top:1px solid var(--line);margin:16px 0"></div>' +
-        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">② Загрузить заполненный файл</div>' +
-        '<div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:var(--txt-2);line-height:1.6">' +
-          '• Пустая ячейка — замер не создаётся и не меняется<br>' +
-          '• Если на эту дату для зумпфа уже есть замер — он обновится, если нет — создастся новый<br>' +
-          '• Дата — в формате ДД.ММ.ГГГГ или ГГГГ-ММ-ДД' +
+        '<div style="display:flex;gap:4px;margin-bottom:16px;padding:3px;background:var(--bg-2);border-radius:8px;border:1px solid var(--line)">' +
+          '<button class="btn btn-sm" id="dew-bi-tab-levels" onclick="_dewSwitchBulkMode(\'levels\')">Уровни воды</button>' +
+          '<button class="btn btn-sm btn-outline" id="dew-bi-tab-elevation" onclick="_dewSwitchBulkMode(\'elevation\')">Отметки дна</button>' +
         '</div>' +
-        '<input type="file" id="dew-lv-import-file" accept=".xlsx,.xls" class="form-control" style="padding:6px">' +
-        '<div id="dew-lv-import-status" style="margin-top:10px;font-size:11px"></div>' +
-        '<div style="display:flex;gap:8px;margin-top:16px">' +
-          '<button class="btn btn-sm btn-outline" onclick="_dewCloseLevelsImportModal()">Отмена</button>' +
-          '<button class="btn btn-sm" style="background:var(--gold);color:#000" onclick="_dewImportLevelsFile()">Импортировать</button>' +
-        '</div>' +
+        '<div id="dew-bi-body"></div>' +
       '</div>' +
     '</div>';
   ov.addEventListener('click', function(e) { if (e.target === ov) _dewCloseLevelsImportModal(); });
   document.body.appendChild(ov);
+  _dewRenderBulkImportTabs();
+  _dewRenderBulkImportBody();
+}
+
+function _dewSwitchBulkMode(mode) {
+  _dewBulkMode = mode;
+  _dewRenderBulkImportTabs();
+  _dewRenderBulkImportBody();
+}
+
+function _dewRenderBulkImportTabs() {
+  var tl = document.getElementById('dew-bi-tab-levels');
+  var te = document.getElementById('dew-bi-tab-elevation');
+  if (!tl || !te) return;
+  var base = 'flex:1;font-size:11px';
+  var activeExtra = ';background:var(--gold);color:#000;border-color:var(--gold)';
+  tl.setAttribute('style', base + (_dewBulkMode === 'levels' ? activeExtra : ''));
+  te.setAttribute('style', base + (_dewBulkMode === 'elevation' ? activeExtra : ''));
+  tl.className = 'btn btn-sm' + (_dewBulkMode === 'levels' ? '' : ' btn-outline');
+  te.className = 'btn btn-sm' + (_dewBulkMode === 'elevation' ? '' : ' btn-outline');
+}
+
+function _dewRenderBulkImportBody() {
+  var body = document.getElementById('dew-bi-body');
+  if (!body) return;
+  var cfg = _dewBulkMode === 'levels'
+    ? {
+        desc: 'В шаблоне уже есть колонка на каждый имеющийся зумпф. Заполните строки по датам за любой период — пустая ячейка означает, что этот замер трогать не нужно.',
+        dlOnclick: '_dewDownloadLevelsTemplate()',
+        rules: [
+          'Пустая ячейка — замер не создаётся и не меняется',
+          'Если на эту дату для зумпфа уже есть замер — он обновится, если нет — создастся новый',
+          'Дата — в формате ДД.ММ.ГГГГ или ГГГГ-ММ-ДД',
+        ],
+        goOnclick: '_dewImportLevelsFile()',
+      }
+    : {
+        desc: 'Тоже колонка на каждый зумпф, но вместо ежедневных замеров сюда вносятся редкие изменения отметки дна — после чистки или углубления зумпфа. Пустая ячейка — не трогаем.',
+        dlOnclick: '_dewDownloadElevationTemplate()',
+        rules: [
+          'Пустая ячейка — отметка не создаётся и не меняется',
+          'Если на эту дату для зумпфа уже есть отметка дна — она обновится, если нет — создастся новая',
+          'Дата — в формате ДД.ММ.ГГГГ или ГГГГ-ММ-ДД',
+        ],
+        goOnclick: '_dewImportElevationFile()',
+      };
+
+  body.innerHTML =
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">① Скачать шаблон</div>' +
+    '<p style="font-size:12px;color:var(--txt-2);margin:0 0 10px;line-height:1.6">' + cfg.desc + '</p>' +
+    '<button class="btn btn-sm btn-outline" onclick="' + cfg.dlOnclick + '">⬇ Скачать шаблон .xlsx</button>' +
+    '<div style="border-top:1px solid var(--line);margin:16px 0"></div>' +
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">② Загрузить заполненный файл</div>' +
+    '<div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:var(--txt-2);line-height:1.6">' +
+      cfg.rules.map(function(r) { return '• ' + r; }).join('<br>') +
+    '</div>' +
+    '<input type="file" id="dew-bi-file" accept=".xlsx,.xls" class="form-control" style="padding:6px">' +
+    '<div id="dew-bi-status" style="margin-top:10px;font-size:11px"></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px">' +
+      '<button class="btn btn-sm btn-outline" onclick="_dewCloseLevelsImportModal()">Отмена</button>' +
+      '<button class="btn btn-sm" style="background:var(--gold);color:#000" onclick="' + cfg.goOnclick + '">Импортировать</button>' +
+    '</div>';
 }
 
 function _dewCloseLevelsImportModal() {
@@ -2827,9 +2927,9 @@ function _dewParseImportTime(v) {
 }
 
 function _dewImportLevelsFile() {
-  var fileInp = document.getElementById('dew-lv-import-file');
+  var fileInp = document.getElementById('dew-bi-file');
   var file = fileInp && fileInp.files[0];
-  var status = document.getElementById('dew-lv-import-status');
+  var status = document.getElementById('dew-bi-status');
   if (!file) { if (status) status.innerHTML = '<span style="color:var(--warn)">Выберите файл</span>'; return; }
   if (typeof XLSX === 'undefined') { if (status) status.innerHTML = '<span style="color:var(--bad)">Библиотека SheetJS не загружена</span>'; return; }
 
@@ -2913,6 +3013,129 @@ function _dewImportLevelsFile() {
       Toast.show(msg, errors || unknownCols.length ? 'warning' : 'success');
     } catch (ex) {
       console.error('[dewatering] ошибка импорта уровней воды', ex);
+      if (status) status.innerHTML = '<span style="color:var(--bad)">Ошибка чтения файла: ' + escHTML(ex.message) + '</span>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Массовая загрузка отметок дна зумпфа (тот же принцип, что и уровни
+// воды — колонка на зумпф, строка на дату, пусто = не трогаем) ─────────
+
+function _dewDownloadElevationTemplate() {
+  if (typeof XLSX === 'undefined') { alert('Библиотека SheetJS не загружена. Проверьте соединение.'); return; }
+  if (!DewateringState.sumps.length) { alert('Сначала добавьте хотя бы один зумпф на вкладке "Зумпфы".'); return; }
+
+  var sumps = DewateringState.sumps.slice().sort(function(a, b) {
+    var qa = a.quarry || '', qb = b.quarry || '';
+    if (qa !== qb) return qa < qb ? -1 : 1;
+    return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+  });
+
+  var fixedHeaders = ['Дата (ДД.ММ.ГГГГ)', 'Примечание'];
+  var headerRow  = fixedHeaders.concat(sumps.map(function(s) { return s.name; }));
+  var quarryRow  = ['Карьер зумпфа →', ''].concat(sumps.map(function(s) { return s.quarry || ''; }));
+  var exampleRow = ['#ПРИМЕР', 'Углубление на 2 м'].concat(sumps.map(function(_, i) { return i === 0 ? -120.0 : ''; }));
+
+  var rows = [
+    ['Шаблон отметок дна зумпфа — оставьте ячейку пустой, если менять эту отметку не нужно'],
+    quarryRow,
+    headerRow,
+    exampleRow,
+  ];
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 16 }, { wch: 20 }].concat(sumps.map(function() { return { wch: 14 }; }));
+  ws['!freeze'] = { xSplit: 2, ySplit: 3, topLeftCell: 'C4', activePane: 'bottomRight', state: 'frozen' };
+  XLSX.utils.book_append_sheet(wb, ws, 'Отметки дна');
+
+  var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  var blob = new Blob([wbOut], { type: 'application/octet-stream' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'dew_sump_bottom_template.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function _dewImportElevationFile() {
+  var fileInp = document.getElementById('dew-bi-file');
+  var file = fileInp && fileInp.files[0];
+  var status = document.getElementById('dew-bi-status');
+  if (!file) { if (status) status.innerHTML = '<span style="color:var(--warn)">Выберите файл</span>'; return; }
+  if (typeof XLSX === 'undefined') { if (status) status.innerHTML = '<span style="color:var(--bad)">Библиотека SheetJS не загружена</span>'; return; }
+
+  if (status) status.innerHTML = '<span style="color:var(--txt-3)">Обработка файла…</span>';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+      if (rows.length < 4) { status.innerHTML = '<span style="color:var(--bad)">Файл пустой или не похож на шаблон</span>'; return; }
+
+      // Строка 2 (индекс 2) — заголовки-ключи; данные — с индекса 3, кроме
+      // строки-примера (маркер "#", а не фиксированный номер строки — см.
+      // ту же логику и пояснение в _dewImportLevelsFile).
+      var headers = rows[2].map(function(h) { return String(h).trim(); });
+      var dataRows = rows.slice(3).filter(function(r) {
+        return r[0] && String(r[0]).trim() && String(r[0]).trim().charAt(0) !== '#';
+      });
+
+      // Колонки с зумпфами начинаются с индекса 2 (после Даты и Примечания)
+      var sumpCols = [];
+      var unknownCols = [];
+      for (var ci = 2; ci < headers.length; ci++) {
+        var name = headers[ci];
+        if (!name) continue;
+        var sump = DewateringState.sumps.find(function(s) { return s.name === name; });
+        if (sump) sumpCols.push({ col: ci, sumpId: sump.id });
+        else unknownCols.push(name);
+      }
+      if (!sumpCols.length) {
+        status.innerHTML = '<span style="color:var(--bad)">Не найдено ни одной знакомой колонки-зумпфа. Скачайте актуальный шаблон заново.</span>';
+        return;
+      }
+
+      var created = 0, updated = 0, errors = 0;
+      dataRows.forEach(function(row) {
+        var isoDate = _dewParseImportDate(row[0]);
+        if (!isoDate) { errors++; return; }
+        var notes = row[1] == null ? '' : String(row[1]).trim();
+
+        sumpCols.forEach(function(sc) {
+          var raw = row[sc.col];
+          if (raw === undefined || raw === null || raw === '') return; // пустая ячейка — не трогаем существующие данные
+
+          var val = (typeof raw === 'number') ? raw : parseFloat(String(raw).trim().replace(',', '.'));
+          if (isNaN(val)) { errors++; return; }
+
+          var existing = DewateringState.elevationFor(sc.sumpId, isoDate);
+          if (existing) {
+            var patch = { elevation: val };
+            if (notes) patch.notes = notes;
+            DewateringState.updateElevation(existing.id, patch);
+            updated++;
+          } else {
+            DewateringState.addElevation({ sumpId: sc.sumpId, date: isoDate, elevation: val, notes: notes });
+            created++;
+          }
+        });
+      });
+
+      if (unknownCols.length) console.warn('[dewatering] импорт отметок дна: колонки не распознаны как зумпфы —', unknownCols.join(', '));
+
+      _dewCloseLevelsImportModal();
+      _dewRenderLevels();
+      var msg = 'Загрузка завершена: создано ' + created + ', обновлено ' + updated;
+      if (errors) msg += ', ошибок ' + errors;
+      if (unknownCols.length) msg += ', не распознано колонок: ' + unknownCols.length;
+      Toast.show(msg, errors || unknownCols.length ? 'warning' : 'success');
+    } catch (ex) {
+      console.error('[dewatering] ошибка импорта отметок дна', ex);
       if (status) status.innerHTML = '<span style="color:var(--bad)">Ошибка чтения файла: ' + escHTML(ex.message) + '</span>';
     }
   };
