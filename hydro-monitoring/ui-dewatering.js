@@ -252,6 +252,10 @@ var DewateringState = {
     return this.meterReadings.find(function(r) { return r.pumpId === pumpId && r.date === date; }) || null;
   },
 
+  waterLevelFor: function(sumpId, date) {
+    return this.waterLevels.find(function(w) { return w.sumpId === sumpId && w.date === date; }) || null;
+  },
+
   prevReading: function(pumpId, date) {
     var candidates = this.meterReadings
       .filter(function(r) { return r.pumpId === pumpId && r.date < date; })
@@ -2372,7 +2376,10 @@ function _dewRenderLevels() {
     '<div style="display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start">' +
       // LEFT: add form
       '<div>' +
-        '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);margin-bottom:8px">Новый замер уровня</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">' +
+          '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)">Новый замер уровня</div>' +
+          '<button class="btn btn-sm btn-outline" style="font-size:10px;padding:3px 7px;white-space:nowrap" onclick="_dewOpenLevelsImportModal()" title="Загрузить уровни сразу по нескольким зумпфам и датам из Excel">📥 Массовая загрузка</button>' +
+        '</div>' +
         '<div class="card" style="padding:14px">' +
         '<div class="form-group"><label class="form-label">Зумпф</label>' +
         '<select id="dew-lv-sump" class="form-control">' + lvSumpOpts('', true) + '</select></div>' +
@@ -2686,6 +2693,188 @@ function _dewDeleteWaterLevel(id) {
   DewateringState.deleteWaterLevel(id);
   _dewEditLevelId = null;
   _dewRenderLevelsTable(_dewLFilter.sumpId);
+}
+
+// ── Массовая загрузка уровней воды (шаблон Excel) ──────────────
+// Формат: одна строка = одна дата, один столбец = один зумпф (плюс
+// Время/Кто замерил на всю строку). Пустая ячейка = этот замер не
+// трогаем; заполненная — создаём запись или обновляем существующую
+// на эту дату. Так можно за один файл занести историю сразу по
+// нескольким зумпфам за любой период, не по одной записи за раз.
+
+function _dewOpenLevelsImportModal() {
+  _dewCloseLevelsImportModal();
+  var ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.id = 'dew-lv-import-overlay';
+  ov.style.display = 'flex';
+  ov.innerHTML =
+    '<div class="modal-box" style="width:min(560px,100%)">' +
+      '<div class="modal-header">' +
+        '<span class="modal-title">Массовая загрузка уровней воды</span>' +
+        '<button class="modal-close" onclick="_dewCloseLevelsImportModal()">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">① Скачать шаблон</div>' +
+        '<p style="font-size:12px;color:var(--txt-2);margin:0 0 10px;line-height:1.6">В шаблоне уже есть колонка на каждый имеющийся зумпф. Заполните строки по датам за любой период — пустая ячейка означает, что этот замер трогать не нужно.</p>' +
+        '<button class="btn btn-sm btn-outline" onclick="_dewDownloadLevelsTemplate()">⬇ Скачать шаблон .xlsx</button>' +
+        '<div style="border-top:1px solid var(--line);margin:16px 0"></div>' +
+        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">② Загрузить заполненный файл</div>' +
+        '<div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:var(--txt-2);line-height:1.6">' +
+          '• Пустая ячейка — замер не создаётся и не меняется<br>' +
+          '• Если на эту дату для зумпфа уже есть замер — он обновится, если нет — создастся новый<br>' +
+          '• Дата — в формате ДД.ММ.ГГГГ или ГГГГ-ММ-ДД' +
+        '</div>' +
+        '<input type="file" id="dew-lv-import-file" accept=".xlsx,.xls" class="form-control" style="padding:6px">' +
+        '<div id="dew-lv-import-status" style="margin-top:10px;font-size:11px"></div>' +
+        '<div style="display:flex;gap:8px;margin-top:16px">' +
+          '<button class="btn btn-sm btn-outline" onclick="_dewCloseLevelsImportModal()">Отмена</button>' +
+          '<button class="btn btn-sm" style="background:var(--gold);color:#000" onclick="_dewImportLevelsFile()">Импортировать</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  ov.addEventListener('click', function(e) { if (e.target === ov) _dewCloseLevelsImportModal(); });
+  document.body.appendChild(ov);
+}
+
+function _dewCloseLevelsImportModal() {
+  var ov = document.getElementById('dew-lv-import-overlay');
+  if (ov) ov.remove();
+}
+
+function _dewDownloadLevelsTemplate() {
+  if (typeof XLSX === 'undefined') { alert('Библиотека SheetJS не загружена. Проверьте соединение.'); return; }
+  if (!DewateringState.sumps.length) { alert('Сначала добавьте хотя бы один зумпф на вкладке "Зумпфы".'); return; }
+
+  var sumps = DewateringState.sumps.slice().sort(function(a, b) {
+    var qa = a.quarry || '', qb = b.quarry || '';
+    if (qa !== qb) return qa < qb ? -1 : 1;
+    return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+  });
+
+  var fixedHeaders = ['Дата (ДД.ММ.ГГГГ)', 'Время', 'Кто замерил'];
+  var headerRow  = fixedHeaders.concat(sumps.map(function(s) { return s.name; }));
+  var quarryRow  = ['Карьер зумпфа →', '', ''].concat(sumps.map(function(s) { return s.quarry || ''; }));
+  var exampleRow = ['#ПРИМЕР', '06:00', 'Иванов И.И.'].concat(sumps.map(function(_, i) { return i === 0 ? 171.15 : ''; }));
+
+  var rows = [
+    ['Шаблон замеров уровня воды — оставьте ячейку пустой, если этот замер менять не нужно'],
+    quarryRow,
+    headerRow,
+    exampleRow,
+  ];
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 16 }, { wch: 8 }, { wch: 16 }].concat(sumps.map(function() { return { wch: 14 }; }));
+  ws['!freeze'] = { xSplit: 3, ySplit: 3, topLeftCell: 'D4', activePane: 'bottomRight', state: 'frozen' };
+  XLSX.utils.book_append_sheet(wb, ws, 'Уровни воды');
+
+  var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  var blob = new Blob([wbOut], { type: 'application/octet-stream' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'dew_water_levels_template.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function _dewParseImportDate(s) {
+  if (!s) return null;
+  var str = String(s).trim();
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(str)) {
+    var p = str.split('.');
+    return p[2] + '-' + p[1] + '-' + p[0];
+  }
+  var m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[1] + '-' + m[2] + '-' + m[3]) : null;
+}
+
+function _dewImportLevelsFile() {
+  var fileInp = document.getElementById('dew-lv-import-file');
+  var file = fileInp && fileInp.files[0];
+  var status = document.getElementById('dew-lv-import-status');
+  if (!file) { if (status) status.innerHTML = '<span style="color:var(--warn)">Выберите файл</span>'; return; }
+  if (typeof XLSX === 'undefined') { if (status) status.innerHTML = '<span style="color:var(--bad)">Библиотека SheetJS не загружена</span>'; return; }
+
+  if (status) status.innerHTML = '<span style="color:var(--txt-3)">Обработка файла…</span>';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
+      if (rows.length < 4) { status.innerHTML = '<span style="color:var(--bad)">Файл пустой или не похож на шаблон</span>'; return; }
+
+      // Строка 2 (индекс 2) — заголовки-ключи, строка 3 — пример (#ПРИМЕР), 4+ — данные
+      var headers = rows[2].map(function(h) { return String(h).trim(); });
+      var dataRows = rows.slice(4).filter(function(r) {
+        return r[0] && String(r[0]).trim() && String(r[0]).trim().charAt(0) !== '#';
+      });
+
+      // Сопоставляем колонки с 4-й (индекс 3) с зумпфами по точному названию
+      var sumpCols = [];
+      var unknownCols = [];
+      for (var ci = 3; ci < headers.length; ci++) {
+        var name = headers[ci];
+        if (!name) continue;
+        var sump = DewateringState.sumps.find(function(s) { return s.name === name; });
+        if (sump) sumpCols.push({ col: ci, sumpId: sump.id });
+        else unknownCols.push(name);
+      }
+      if (!sumpCols.length) {
+        status.innerHTML = '<span style="color:var(--bad)">Не найдено ни одной знакомой колонки-зумпфа. Скачайте актуальный шаблон заново.</span>';
+        return;
+      }
+
+      var created = 0, updated = 0, errors = 0;
+      dataRows.forEach(function(row) {
+        var isoDate = _dewParseImportDate(row[0]);
+        if (!isoDate) { errors++; return; }
+        var time       = String(row[1] || '').trim();
+        var measuredBy = String(row[2] || '').trim();
+
+        sumpCols.forEach(function(sc) {
+          var raw = row[sc.col];
+          var str = (raw === undefined || raw === null) ? '' : String(raw).trim();
+          if (!str) return; // пустая ячейка — не трогаем существующие данные
+
+          var val = parseFloat(str.replace(',', '.'));
+          if (isNaN(val)) { errors++; return; }
+
+          var existing = DewateringState.waterLevelFor(sc.sumpId, isoDate);
+          if (existing) {
+            var patch = { elevation: val };
+            if (time)       patch.time       = time;
+            if (measuredBy) patch.measuredBy = measuredBy;
+            DewateringState.updateWaterLevel(existing.id, patch);
+            updated++;
+          } else {
+            DewateringState.addWaterLevel({
+              sumpId: sc.sumpId, date: isoDate, time: time || '06:00',
+              elevation: val, measuredBy: measuredBy, notes: '',
+            });
+            created++;
+          }
+        });
+      });
+
+      if (unknownCols.length) console.warn('[dewatering] импорт уровней: колонки не распознаны как зумпфы —', unknownCols.join(', '));
+
+      _dewCloseLevelsImportModal();
+      _dewRenderLevels();
+      var msg = 'Загрузка завершена: создано ' + created + ', обновлено ' + updated;
+      if (errors) msg += ', ошибок ' + errors;
+      if (unknownCols.length) msg += ', не распознано колонок: ' + unknownCols.length;
+      Toast.show(msg, errors || unknownCols.length ? 'warning' : 'success');
+    } catch (ex) {
+      console.error('[dewatering] ошибка импорта уровней воды', ex);
+      if (status) status.innerHTML = '<span style="color:var(--bad)">Ошибка чтения файла: ' + escHTML(ex.message) + '</span>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 // ── Аналитика ────────────────────────────────────────────────
