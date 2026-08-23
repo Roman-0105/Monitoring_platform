@@ -2399,7 +2399,19 @@ function _dewRenderLevels() {
 
   _dewRenderLevelsTable(_dewLFilter.sumpId);
 
-  document.getElementById('dew-lv-sump').addEventListener('change', function() { _dewLvUpdateDepthHint(); });
+  document.getElementById('dew-lv-sump').addEventListener('change', function() {
+    _dewLvUpdateDepthHint();
+    // Фильтр истории справа и выбор зумпфа в форме слева читают один и тот
+    // же _dewLFilter — держим их синхронными здесь же, иначе новый замер
+    // сохраняется, но остаётся невидимым под старым фильтром справа.
+    var sump = DewateringState.sumpById(this.value);
+    _dewLFilter.sumpId = this.value;
+    _dewLFilter.quarry = (sump && sump.quarry) || '';
+    var qf = document.getElementById('dew-lv-filter-quarry'); if (qf) qf.value = _dewLFilter.quarry;
+    var sf = document.getElementById('dew-lv-filter-sump');
+    if (sf) sf.innerHTML = lvSumpOpts(_dewLFilter.quarry, false);
+    _dewRenderLevelsTable(_dewLFilter.sumpId);
+  });
   document.getElementById('dew-lv-elev').addEventListener('input', function() { _dewLvUpdateDepthHint(); });
   document.getElementById('dew-lv-filter-quarry').addEventListener('change', function() {
     _dewLFilter.quarry = this.value;
