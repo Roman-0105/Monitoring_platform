@@ -699,7 +699,7 @@ async function _regSave(existingId) {
 
   _regCloseModal();
   _regRender();
-  if (typeof Toast !== 'undefined') Toast.ok('Водопункт сохранён');
+  if (typeof Toast !== 'undefined') Toast.show('Водопункт сохранён', 'success');
 }
 
 /* ── Удаление ───────────────────────────────────────────────────*/
@@ -710,7 +710,7 @@ async function regDelete(id) {
   if (res.error) { alert('Ошибка удаления: ' + res.error.message); return; }
   RegistryState.items = RegistryState.items.filter(function(w){ return w.id !== id; });
   _regRender();
-  if (typeof Toast !== 'undefined') Toast.ok('Водопункт удалён');
+  if (typeof Toast !== 'undefined') Toast.show('Водопункт удалён', 'success');
 }
 
 /* ── Модальное окно ─────────────────────────────────────────────*/
