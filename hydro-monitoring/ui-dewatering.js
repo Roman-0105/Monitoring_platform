@@ -495,7 +495,8 @@ var DEW_EVENT_TYPE = {
 var _dewInited          = false;
 var _dewSubTab          = 'overview';
 var _dewJFilter         = { quarry: '', sumpId: '', date: '', histDateFrom: '', histDateTo: '' };
-var _dewLFilter         = { quarry: '', sumpId: '' };
+var _dewLFilter         = { quarry: '', sumpId: '', days: 0, dateFrom: '', dateTo: '' }; // days:0 = весь период
+var _dewLChartCfg       = { yAuto: true, yMin: null, yMax: null };
 var _dewAFilter         = { quarry: '', sumpId: '', days: 30, dateFrom: '', dateTo: '' };
 // null = all; array of IDs = only these included in analytics
 var _dewAnlSettings     = { includedSumpIds: null, includedPumpIds: null };
@@ -2373,6 +2374,45 @@ function _dewDeleteReading(id) {
 
 // ── Уровни воды ──────────────────────────────────────────────
 
+var _DEW_LV_PRESETS = [['7', '7д'], ['30', '30д'], ['90', '90д'], ['365', '1г'], ['0', 'Всё']];
+
+function _dewLvPresetBtnsHtml() {
+  var btnStyle = function(active) {
+    return 'padding:4px 10px;border-radius:5px;border:1px solid var(--line);font-size:11px;font-weight:600;cursor:pointer;transition:.15s;' +
+      (active ? 'background:var(--accent,#3b82f6);color:#fff;border-color:var(--accent,#3b82f6)' : 'background:var(--bg-3,var(--bg-2));color:var(--txt-2)');
+  };
+  return _DEW_LV_PRESETS.map(function(p) {
+    var active = !_dewLFilter.dateFrom && !_dewLFilter.dateTo && String(_dewLFilter.days) === p[0];
+    return '<button id="dew-lv-dp' + p[0] + '" style="' + btnStyle(active) + '">' + p[1] + '</button>';
+  }).join('');
+}
+
+function _dewLvUpdatePresetBtns() {
+  var hasCustom = !!(_dewLFilter.dateFrom || _dewLFilter.dateTo);
+  _DEW_LV_PRESETS.forEach(function(p) {
+    var btn = document.getElementById('dew-lv-dp' + p[0]);
+    if (!btn) return;
+    var active = !hasCustom && String(_dewLFilter.days) === p[0];
+    btn.style.cssText = 'padding:4px 10px;border-radius:5px;border:1px solid var(--line);font-size:11px;font-weight:600;cursor:pointer;transition:.15s;' +
+      (active ? 'background:var(--accent,#3b82f6);color:#fff;border-color:var(--accent,#3b82f6)' : 'background:var(--bg-3,var(--bg-2));color:var(--txt-2)');
+  });
+}
+
+// Явные даты в фильтре побеждают пресет; иначе пресет "N дней" считается от
+// сегодня, а "0" (Всё) не задаёт границ вообще — так вся история зумпфа
+// видна на графике по умолчанию, ничего не обрезается молча.
+function _dewLvDateRange() {
+  if (_dewLFilter.dateFrom || _dewLFilter.dateTo) {
+    return { from: _dewLFilter.dateFrom || '', to: _dewLFilter.dateTo || '' };
+  }
+  var days = _dewLFilter.days || 0;
+  if (!days) return { from: '', to: '' };
+  var to = new Date();
+  var from = new Date();
+  from.setDate(from.getDate() - days);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
 function _dewRenderLevels() {
   var el = document.getElementById('dew-panel-levels');
   if (!el) return;
@@ -2412,12 +2452,29 @@ function _dewRenderLevels() {
       // RIGHT: history per sump
       '<div>' +
         '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);margin-bottom:8px">История замеров</div>' +
-        '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">' +
+        '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;padding:8px 10px;background:var(--bg-2);border-radius:var(--r);border:1px solid var(--line)">' +
           '<select id="dew-lv-filter-quarry" class="form-control" style="font-size:12px;width:130px">' + _dewQuarryOpts(_dewLFilter.quarry) + '</select>' +
           '<select id="dew-lv-filter-sump" class="form-control" style="font-size:12px;width:160px">' + lvSumpOpts(_dewLFilter.quarry, false) + '</select>' +
+          '<span style="width:1px;height:20px;background:var(--line);margin:0 2px"></span>' +
+          _dewLvPresetBtnsHtml() +
+          '<span style="font-size:11px;color:var(--txt-3)">или</span>' +
+          '<input type="date" id="dew-lv-filter-datefrom" class="form-control" style="width:130px;font-size:12px" value="' + (_dewLFilter.dateFrom || '') + '" title="Начало периода">' +
+          '<span style="font-size:11px;color:var(--txt-3)">—</span>' +
+          '<input type="date" id="dew-lv-filter-dateto" class="form-control" style="width:130px;font-size:12px" value="' + (_dewLFilter.dateTo || '') + '" title="Конец периода">' +
         '</div>' +
         '<div id="dew-lv-table"></div>' +
-        '<div id="dew-lv-chart" style="margin-top:12px"></div>' +
+        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 6px;font-size:11px;color:var(--txt-3)">' +
+          '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">' +
+            '<input type="checkbox" id="dew-lv-yauto"' + (_dewLChartCfg.yAuto ? ' checked' : '') + '> ось Y: авто' +
+          '</label>' +
+          '<input type="number" id="dew-lv-ymin" class="form-control" placeholder="мин" style="width:72px;font-size:11px;padding:3px 6px"' + (_dewLChartCfg.yAuto ? ' disabled' : '') + ' value="' + (_dewLChartCfg.yMin != null ? _dewLChartCfg.yMin : '') + '">' +
+          '<span>—</span>' +
+          '<input type="number" id="dew-lv-ymax" class="form-control" placeholder="макс" style="width:72px;font-size:11px;padding:3px 6px"' + (_dewLChartCfg.yAuto ? ' disabled' : '') + ' value="' + (_dewLChartCfg.yMax != null ? _dewLChartCfg.yMax : '') + '">' +
+          '<span style="width:1px;height:16px;background:var(--line);margin:0 2px"></span>' +
+          '<button id="dew-lv-resetzoom" class="btn btn-sm btn-outline" style="font-size:10px;padding:3px 8px" title="Сбросить приближение по оси X (колесо мыши/перетаскивание для приближения)">↺ Масштаб X</button>' +
+          '<button id="dew-lv-exportpng" class="btn btn-sm btn-outline" style="font-size:10px;padding:3px 8px" title="Скачать график как изображение">📷 PNG</button>' +
+        '</div>' +
+        '<div id="dew-lv-chart"></div>' +
       '</div>' +
     '</div>';
 
@@ -2448,6 +2505,64 @@ function _dewRenderLevels() {
     _dewLFilter.sumpId = this.value;
     _dewRenderLevelsTable(this.value);
   });
+
+  // Пресеты периода (7д/30д/90д/1г/Всё) — по умолчанию "Всё", чтобы вся
+  // введённая история (хоть за полтора года) сразу была видна на графике,
+  // а не обрезалась молча до последних N точек, как раньше.
+  _DEW_LV_PRESETS.forEach(function(p) {
+    var btn = document.getElementById('dew-lv-dp' + p[0]);
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      _dewLFilter.days = parseInt(p[0], 10);
+      _dewLFilter.dateFrom = '';
+      _dewLFilter.dateTo = '';
+      var fi = document.getElementById('dew-lv-filter-datefrom');
+      var ti = document.getElementById('dew-lv-filter-dateto');
+      if (fi) fi.value = '';
+      if (ti) ti.value = '';
+      _dewLvUpdatePresetBtns();
+      _dewRenderLevelsTable(_dewLFilter.sumpId);
+    });
+  });
+  function onLvDateRangeChange() {
+    _dewLFilter.dateFrom = document.getElementById('dew-lv-filter-datefrom').value;
+    _dewLFilter.dateTo   = document.getElementById('dew-lv-filter-dateto').value;
+    _dewLvUpdatePresetBtns();
+    _dewRenderLevelsTable(_dewLFilter.sumpId);
+  }
+  document.getElementById('dew-lv-filter-datefrom').addEventListener('change', onLvDateRangeChange);
+  document.getElementById('dew-lv-filter-dateto').addEventListener('change', onLvDateRangeChange);
+
+  // Настройка оси Y: авто (по видимым данным) или заданные вручную границы —
+  // полезно, например, чтобы держать масштаб неизменным при сравнении
+  // разных периодов одного зумпфа.
+  document.getElementById('dew-lv-yauto').addEventListener('change', function() {
+    _dewLChartCfg.yAuto = this.checked;
+    document.getElementById('dew-lv-ymin').disabled = this.checked;
+    document.getElementById('dew-lv-ymax').disabled = this.checked;
+    _dewRenderLevelsTable(_dewLFilter.sumpId);
+  });
+  document.getElementById('dew-lv-ymin').addEventListener('change', function() {
+    _dewLChartCfg.yMin = this.value === '' ? null : parseFloat(this.value);
+    _dewRenderLevelsTable(_dewLFilter.sumpId);
+  });
+  document.getElementById('dew-lv-ymax').addEventListener('change', function() {
+    _dewLChartCfg.yMax = this.value === '' ? null : parseFloat(this.value);
+    _dewRenderLevelsTable(_dewLFilter.sumpId);
+  });
+  document.getElementById('dew-lv-resetzoom').addEventListener('click', function() {
+    var chart = _dewCharts['levels'];
+    if (chart && chart.resetZoom) chart.resetZoom();
+  });
+  document.getElementById('dew-lv-exportpng').addEventListener('click', function() {
+    var chart = _dewCharts['levels'];
+    if (!chart) { Toast.show('График пуст — нечего экспортировать', 'warning'); return; }
+    var a = document.createElement('a');
+    a.href = chart.toBase64Image();
+    a.download = 'уровни_воды_' + (DewateringState.sumpById(_dewLFilter.sumpId) ? DewateringState.sumpById(_dewLFilter.sumpId).name + '_' : '') + new Date().toISOString().slice(0,10) + '.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  });
+
   document.getElementById('dew-lv-save').addEventListener('click', function() {
     var sumpId = document.getElementById('dew-lv-sump').value;
     var elev   = document.getElementById('dew-lv-elev').value.trim();
@@ -2483,13 +2598,19 @@ function _dewRenderLevelsTable(sumpId) {
   var el = document.getElementById('dew-lv-table');
   if (!el) return;
 
-  var records = DewateringState.waterLevels
-    .filter(function(w) { return !sumpId || w.sumpId === sumpId; })
+  var range = _dewLvDateRange();
+  var forSump = DewateringState.waterLevels.filter(function(w) { return !sumpId || w.sumpId === sumpId; });
+  var records = forSump
+    .filter(function(w) { return (!range.from || w.date >= range.from) && (!range.to || w.date <= range.to); })
     .sort(function(a, b) { return (b.date + b.time).localeCompare(a.date + a.time); });
 
   if (!records.length) {
-    el.innerHTML = '<div class="card" style="padding:16px;text-align:center;color:var(--txt-3);font-size:12px">' +
-      (DewateringState.waterLevels.length ? 'Нет замеров по выбранному зумпфу' : 'Замеры не добавлены — заполните форму слева') + '</div>';
+    var emptyMsg = !DewateringState.waterLevels.length
+      ? 'Замеры не добавлены — заполните форму слева'
+      : (!forSump.length
+        ? 'Нет замеров по выбранному зумпфу'
+        : 'Нет замеров за выбранный период — раздвиньте даты или нажмите «Всё»');
+    el.innerHTML = '<div class="card" style="padding:16px;text-align:center;color:var(--txt-3);font-size:12px">' + emptyMsg + '</div>';
     _dewRenderLevelsChart([], sumpId);
     return;
   }
@@ -2627,33 +2748,42 @@ function _dewRenderLevelsChart(records, sumpId) {
     grouped[r.sumpId].push(r);
   });
 
-  // Collect all unique dates for labels
+  // Все уникальные даты в пределах уже отфильтрованных `records` — без
+  // искусственного лимита в 60 последних точек, который раньше молча обрезал
+  // длинную историю (например, введённую с начала прошлого года). Видимый
+  // диапазон теперь целиком определяется фильтром по датам над таблицей.
   var allDates = [];
   var dateSet = {};
   records.forEach(function(r) {
     if (!dateSet[r.date]) { dateSet[r.date] = true; allDates.push(r.date); }
   });
   allDates.sort();
-  var labels = allDates.slice(-60).map(function(d) {
+  var labelDates = allDates;
+  var spansYears = labelDates.length > 1 && labelDates[0].slice(0, 4) !== labelDates[labelDates.length - 1].slice(0, 4);
+  var labels = labelDates.map(function(d) {
     var dt = new Date(d + 'T00:00:00');
-    return dt.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
+    return dt.toLocaleDateString('ru-RU', spansYears
+      ? { day: '2-digit', month: '2-digit', year: '2-digit' }
+      : { day: '2-digit', month: '2-digit' });
   });
-  var labelDates = allDates.slice(-60);
 
   var isSingle = sumpOrder.length === 1;
+  var levelDatasetIndex = {}; // sumpId -> индекс в datasets, нужно для заливки "водяного столба" у линии дна
   var datasets = sumpOrder.map(function(sid, idx) {
     var sump = DewateringState.sumpById(sid);
     var readings = grouped[sid];
-    // Map each label date to a value
     var byDate = {};
-    readings.forEach(function(r) { byDate[r.date] = parseFloat(r.elevation || 0); });
-    var data = labelDates.map(function(d) { return byDate[d] != null ? byDate[d] : null; });
+    readings.forEach(function(r) { byDate[r.date] = r; });
+    var data = labelDates.map(function(d) { return byDate[d] ? parseFloat(byDate[d].elevation || 0) : null; });
+    var meta = labelDates.map(function(d) { return byDate[d] || null; });
     var color = LEVEL_COLORS[idx % LEVEL_COLORS.length];
+    levelDatasetIndex[sid] = idx;
     return {
       label: sump ? sump.name : sid,
       data: data,
-      fill: isSingle,
-      backgroundColor: isSingle ? color.replace('1)', '0.2)') : 'transparent',
+      meta: meta,
+      _kind: 'level',
+      fill: false,
       borderColor: color,
       borderWidth: 2,
       pointRadius: 3,
@@ -2661,32 +2791,47 @@ function _dewRenderLevelsChart(records, sumpId) {
       pointBackgroundColor: color,
       pointBorderColor: 'rgba(18,24,38,0.9)',
       pointBorderWidth: 1.5,
-      tension: 0.35,
+      tension: 0.25,
       spanGaps: true,
     };
   });
 
-  // Отметка дна зумпфа на ту же ось — рисуем пунктиром поверх уровня воды,
-  // тем же цветом, что и линия уровня для этого зумпфа, чтобы пара
-  // "уровень/дно" читалась как одно целое. Дно меняется редко (чистка,
-  // углубление), поэтому это фактически ступенчатая линия — берём отметку,
-  // действовавшую на каждую дату графика, через sumpElevationAsOf.
+  // Отметка дна зумпфа на ту же ось — пунктиром, тем же цветом, что и
+  // уровень для этого зумпфа, чтобы пара "уровень/дно" читалась как одно
+  // целое. Дно меняется редко (чистка, углубление), поэтому это фактически
+  // ступенчатая линия — берём отметку, действовавшую на каждую дату
+  // графика, через sumpElevationAsOf. Отдельно запоминаем, где стоит
+  // настоящая запись из истории (elevationFor), а где значение просто
+  // протянуто вперёд — по этому же признаку крупная точка ставится только
+  // на реальных замерах, а не на каждой дате графика.
+  // При одном выбранном зумпфе область между дном и уровнем закрашивается —
+  // наглядный "столб воды" в зумпфе на каждую дату.
   sumpOrder.forEach(function(sid, idx) {
     var hasElevHistory = DewateringState.sumpElevationHistory.some(function(h) { return h.sumpId === sid; });
     if (!hasElevHistory) return;
     var sump = DewateringState.sumpById(sid);
     var color = LEVEL_COLORS[idx % LEVEL_COLORS.length];
     var data = labelDates.map(function(d) { return DewateringState.sumpElevationAsOf(sid, d); });
+    var meta = labelDates.map(function(d) { return DewateringState.elevationFor(sid, d); });
+    var fillCfg = false;
+    if (isSingle && levelDatasetIndex[sid] !== undefined) {
+      var fillColor = color.replace('1)', '0.10)');
+      fillCfg = { target: levelDatasetIndex[sid], above: fillColor, below: fillColor };
+    }
     datasets.push({
       label: 'Дно' + (isSingle ? '' : ' — ' + (sump ? sump.name : sid)),
       data: data,
-      fill: false,
+      meta: meta,
+      _kind: 'bottom',
+      fill: fillCfg,
       borderColor: color.replace('1)', '0.55)'),
       borderDash: [5, 4],
       borderWidth: 1.5,
-      pointRadius: 0,
-      pointHoverRadius: 4,
+      pointRadius: function(ctx) { return (ctx.dataset.meta && ctx.dataset.meta[ctx.dataIndex]) ? 4 : 0; },
+      pointHoverRadius: 5,
       pointBackgroundColor: color,
+      pointBorderColor: 'rgba(18,24,38,0.9)',
+      pointBorderWidth: 1,
       tension: 0,
       spanGaps: true,
     });
@@ -2695,8 +2840,20 @@ function _dewRenderLevelsChart(records, sumpId) {
   wrap.innerHTML = '<canvas id="dew-canvas-levels"></canvas>';
   var canvas = wrap.querySelector('canvas');
   canvas.style.width = '100%';
-  canvas.style.height = '220px';
+  canvas.style.height = '260px';
   var ctx = canvas.getContext('2d');
+
+  // Ось Y: по умолчанию авто (Chart.js сам подбирает границы под видимые
+  // данные — при переключении зумпфа масштаб пересчитывается заново), либо
+  // заданные вручную границы из панели настроек под таблицей.
+  var yScale = {
+    grid: { color: 'rgba(255,255,255,0.06)' },
+    ticks: { font: { size: 11 }, callback: function(v) { return v.toFixed(1); } },
+  };
+  if (!_dewLChartCfg.yAuto) {
+    if (_dewLChartCfg.yMin != null && !isNaN(_dewLChartCfg.yMin)) yScale.min = _dewLChartCfg.yMin;
+    if (_dewLChartCfg.yMax != null && !isNaN(_dewLChartCfg.yMax)) yScale.max = _dewLChartCfg.yMax;
+  }
 
   _dewCharts['levels'] = new Chart(ctx, {
     type: 'line',
@@ -2712,7 +2869,27 @@ function _dewRenderLevelsChart(records, sumpId) {
           intersect: false,
           callbacks: {
             title: function(items) { return labelDates[items[0].dataIndex] || ''; },
-            label: function(item) { return ' ' + item.dataset.label + ': ' + (item.raw != null ? item.raw.toFixed(2) + ' м абс.' : '—'); }
+            label: function(item) { return ' ' + item.dataset.label + ': ' + (item.raw != null ? item.raw.toFixed(2) + ' м абс.' : '—'); },
+            // Разворачиваем точку по всем показателям: для уровня воды —
+            // глубина, время, кто замерил, примечание; для дна — пометка,
+            // что это настоящий замер (не протянутое значение), и его
+            // примечание, если есть.
+            afterLabel: function(item) {
+              var meta = item.dataset.meta && item.dataset.meta[item.dataIndex];
+              if (!meta) return undefined;
+              var lines = [];
+              if (item.dataset._kind === 'level') {
+                var botElev = DewateringState.sumpElevationAsOf(meta.sumpId, meta.date);
+                if (botElev != null) lines.push('   ↕ глубина: ' + (parseFloat(meta.elevation) - botElev).toFixed(2) + ' м');
+                if (meta.time)       lines.push('   ⏱ ' + meta.time);
+                if (meta.measuredBy) lines.push('   👤 ' + meta.measuredBy);
+                if (meta.notes)      lines.push('   💬 ' + meta.notes);
+              } else if (item.dataset._kind === 'bottom') {
+                lines.push('   📍 фактический замер дна');
+                if (meta.notes) lines.push('   💬 ' + meta.notes);
+              }
+              return lines.length ? lines : undefined;
+            }
           }
         },
         zoom: {
@@ -2723,12 +2900,9 @@ function _dewRenderLevelsChart(records, sumpId) {
       scales: {
         x: {
           grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { font: { size: 11 }, maxTicksLimit: 10, maxRotation: 30 }
+          ticks: { font: { size: 11 }, maxTicksLimit: 12, maxRotation: 30 }
         },
-        y: {
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: { font: { size: 11 }, callback: function(v) { return v.toFixed(1); } }
-        }
+        y: yScale
       }
     }
   });
