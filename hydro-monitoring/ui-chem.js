@@ -161,6 +161,20 @@ var CHEM_WP_TYPES = {
   other:    'Прочее',
 };
 
+// Квартал пробы: 1 из calendar-месяца даты отбора, если протокол не хранит
+// свой квартал явно (p.quarter — ручная правка пользователя имеет приоритет).
+function chemQuarterFromDate(dateStr) {
+  if (!dateStr) return null;
+  var m = parseInt(dateStr.substring(5, 7), 10);
+  return m ? Math.ceil(m / 3) : null;
+}
+function chemQuarterOf(p) {
+  if (!p) return null;
+  if (p.quarter) return p.quarter;
+  return chemQuarterFromDate(p.sampled_at);
+}
+function _chemRomanQ(q) { return ['I','II','III','IV'][q - 1] || q; }
+
 // ── Состояние ──────────────────────────────────────────────────
 /* ── Подписи и цвета для видов протоколов ──────────────────────*/
 var CHEM_PROTO_TYPE_META = {
@@ -178,14 +192,23 @@ var ChemState = {
   results:     {},    // { protocol_id: [{param_key, value_raw, value_num, below_detection}] }
   loading:     false,
   loaded:      false,
-  activeSection: 'protocols', // 'waterpoints' | 'protocols' | 'analytics' | 'heatmap'
+  activeSection: 'protocols', // 'waterpoints' | 'protocols' | 'wpanalytics' | 'analytics' | 'heatmap'
   filterWpId:        '',
   filterProtoType:   '',
   filterType:        '',
   filterYear:        '',
+  filterQuarter:     '',
   filterExceedOnly:  false,
   filterWpSearch:    '',
   compareIds:        [],   // up to 2 protocol IDs for comparison
+
+  // Шаблоны лабораторий (мастер настройки шаблонов)
+  labTemplates:       [],  // [{id, lab_name, template_name, base_type, params:[keys...]}]
+
+  // "Хим. аналитика" — Piper/Stiff/Schoeller across every protocol of one water point
+  wpaSelectedWpId:    '',  // водопункт, выбранный в разделе "Хим. аналитика"
+  wpaSelectedProtoId: '',  // какая именно проба сейчас раскрыта/подсвечена
+  _wpaMeqList:        [],  // [{meq, id, date}] — кэш валидных проб выбранного водопункта (пересчитывается при смене водопункта)
 };
 
 // ── API helpers ────────────────────────────────────────────────
@@ -194,10 +217,18 @@ var ChemApi = {
 
   getWaterPoints: async function() {
     // Единый реестр — читаем из wp_registry
-    return this._sb().from('wp_registry')
-      .select('id, name, code, wp_type, location_desc, coord_x, coord_y, active')
+    var res = await this._sb().from('wp_registry')
+      .select('id, name, code, wp_type, location_desc, coord_x, coord_y, active, default_template_id')
       .order('code', { nullsFirst: false })
       .order('name');
+    if (res.error && /default_template_id/i.test(res.error.message || '')) {
+      // Колонка ещё не создана (миграция wp_default_template.sql не выполнена)
+      res = await this._sb().from('wp_registry')
+        .select('id, name, code, wp_type, location_desc, coord_x, coord_y, active')
+        .order('code', { nullsFirst: false })
+        .order('name');
+    }
+    return res;
   },
   upsertWaterPoint: async function(row) {
     // row.type → row.wp_type для wp_registry
@@ -207,9 +238,16 @@ var ChemApi = {
       wp_type:       row.type          || row.wp_type || 'other',
       location_desc: row.location_desc || null,
       active:        row.active !== false,
+      default_template_id: row.default_template_id || null,
     };
     if (row.id) regRow.id = row.id;
-    return this._sb().from('wp_registry').upsert(regRow, { onConflict: 'id' }).select().single();
+    var res = await this._sb().from('wp_registry').upsert(regRow, { onConflict: 'id' }).select().single();
+    if (res.error && /default_template_id/i.test(res.error.message || '')) {
+      // Колонка ещё не создана (миграция wp_default_template.sql не выполнена) — не блокируем сохранение
+      delete regRow.default_template_id;
+      res = await this._sb().from('wp_registry').upsert(regRow, { onConflict: 'id' }).select().single();
+    }
+    return res;
   },
   deleteWaterPoint: async function(id) {
     return this._sb().from('wp_registry').delete().eq('id', id);
@@ -234,6 +272,33 @@ var ChemApi = {
   deleteResults: async function(protocolId) {
     return this._sb().from('chem_results').delete().eq('protocol_id', protocolId);
   },
+
+  // CHEM-08: журнал изменений протокола
+  addProtocolHistory: async function(row) {
+    return this._sb().from('chem_protocol_history').insert(row);
+  },
+  getProtocolHistory: async function(protocolId) {
+    return this._sb().from('chem_protocol_history').select('*').eq('protocol_id', protocolId).order('changed_at', { ascending: false });
+  },
+
+  // CHEM-07: скан-копия протокола (Supabase Storage, бакет chem-scans)
+  uploadProtocolScan: async function(protocolId, file) {
+    var path = protocolId + '/' + Date.now() + '_' + file.name;
+    var up = await this._sb().storage.from('chem-scans').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+    if (up.error) return { error: up.error };
+    var urlRes = this._sb().storage.from('chem-scans').getPublicUrl(path);
+    return { data: { url: urlRes.data ? urlRes.data.publicUrl : path, name: file.name } };
+  },
+
+  getLabTemplates: async function() {
+    return this._sb().from('chem_lab_templates').select('*').order('lab_name').order('template_name');
+  },
+  upsertLabTemplate: async function(row) {
+    return this._sb().from('chem_lab_templates').upsert(row, { onConflict: 'id' }).select().single();
+  },
+  deleteLabTemplate: async function(id) {
+    return this._sb().from('chem_lab_templates').delete().eq('id', id);
+  },
 };
 
 // ── Загрузка данных ────────────────────────────────────────────
@@ -241,9 +306,10 @@ async function loadChemData() {
   if (!window.Api) return;
   ChemState.loading = true;
   try {
-    var [wpRes, prRes] = await Promise.all([
+    var [wpRes, prRes, ltRes] = await Promise.all([
       ChemApi.getWaterPoints(),
       ChemApi.getProtocols(),
+      ChemApi.getLabTemplates(),
     ]);
     if (!wpRes.error) {
       // wp_registry использует wp_type; нормализуем для обратной совместимости
@@ -253,6 +319,8 @@ async function loadChemData() {
       });
     }
     if (!prRes.error) ChemState.protocols = prRes.data || [];
+    // Таблица шаблонов может ещё не существовать (миграция не выполнена) — не падаем
+    ChemState.labTemplates = (!ltRes.error && ltRes.data) ? ltRes.data : [];
 
     // Загружаем результаты только для первых 50 протоколов (ленивая загрузка остальных)
     var recentIds = ChemState.protocols.slice(0, 50).map(function(p) { return p.id; });
@@ -352,6 +420,8 @@ function _chemInitCSS() {
     '.chem-proto-date{font-size:13px;font-weight:700;color:var(--blue);min-width:80px}',
     '.chem-proto-wp{font-size:13px;font-weight:600;color:var(--txt-1)}',
     '.chem-proto-lab{font-size:11px;color:var(--txt-3)}',
+    '.chem-spark{display:inline-flex;align-items:center;gap:3px;vertical-align:middle}',
+    '.chem-spark-trend{font-size:11px;font-weight:800}',
     '.chem-proto-badges{display:flex;gap:6px;margin-left:auto;align-items:center}',
     '.chem-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap}',
     '.chem-badge-ok{background:var(--ok-glow);color:var(--ok)}',
@@ -369,6 +439,7 @@ function _chemInitCSS() {
     '.chem-rtbl tr.chem-row-exceed td:first-child{border-left:2px solid #f87171}',
     '.chem-rtbl tr.chem-row-ok td:first-child{border-left:2px solid var(--ok)}',
     '.chem-rtbl tr.chem-row-nonorm td:first-child{border-left:2px solid var(--line)}',
+    '.chem-rtbl-sub{font-size:9.5px;color:var(--txt-3);margin-top:1px;font-weight:400}',
     '.chem-group-hdr td{background:rgba(255,255,255,.03);font-weight:700;font-size:11px;color:var(--txt-2);padding:6px 8px;border-bottom:1px solid var(--line)}',
 
     /* PDK cell */
@@ -425,6 +496,41 @@ function _chemInitCSS() {
     '.chem-param-inp:focus{border-color:rgba(59,130,246,.5)}',
     '.chem-param-inp.exceed{border-color:rgba(248,113,113,.6);background:rgba(248,113,113,.04)}',
 
+    /* Баланс ионов */
+    '.chem-ion-balance-badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:7px;margin-bottom:12px}',
+    '.chem-ion-balance-badge.ok{background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.25)}',
+    '.chem-ion-balance-badge.bad{background:rgba(248,113,113,.1);color:#f87171;border:1px solid rgba(248,113,113,.3)}',
+
+    /* Мастер шаблонов лабораторий */
+    '.chem-wiz-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:320px}',
+    '.chem-wiz-col{border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}',
+    '.chem-wiz-col-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);padding:8px 10px;border-bottom:1px solid var(--line);background:var(--bg-3);flex-shrink:0}',
+    '.chem-wiz-catalog,.chem-wiz-selected{overflow-y:auto;max-height:400px;padding:6px}',
+    '.chem-wiz-cat-grp{margin-bottom:8px}',
+    '.chem-wiz-cat-grp-hdr{font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em;padding:4px 6px}',
+    '.chem-wiz-cat-item{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--txt-2)}',
+    '.chem-wiz-cat-item:hover{background:var(--bg-3)}',
+    '.chem-wiz-cat-item.checked{color:var(--txt-1);background:rgba(59,130,246,.08)}',
+    '.chem-wiz-cat-item input{accent-color:var(--blue);flex-shrink:0}',
+    '.chem-wiz-cat-item span:first-of-type{flex:1}',
+    '.chem-wiz-cat-unit{font-size:10px;color:var(--txt-3);opacity:.8}',
+    '.chem-wiz-sel-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--bg-3);margin-bottom:4px}',
+    '.chem-wiz-sel-no{font-size:10px;color:var(--txt-3);font-weight:700;flex-shrink:0;width:18px;text-align:center}',
+    '.chem-wiz-sel-name{flex:1;font-size:12px;color:var(--txt-1);display:flex;flex-direction:column}',
+    '.chem-wiz-sel-name span{font-size:10px;color:var(--txt-3)}',
+    '.chem-wiz-sel-btns{display:flex;gap:2px;flex-shrink:0}',
+    '.chem-wiz-sel-btns button{background:none;border:1px solid var(--line);color:var(--txt-3);border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer;transition:all .15s}',
+    '.chem-wiz-sel-btns button:hover:not(:disabled){color:var(--txt-1);border-color:rgba(255,255,255,.3)}',
+    '.chem-wiz-sel-btns button:disabled{opacity:.3;cursor:default}',
+    '.chem-wiz-lab-grp{margin-bottom:16px}',
+    '.chem-wiz-lab-grp-hdr{font-size:13px;font-weight:700;color:var(--txt-1);margin-bottom:8px}',
+    '.chem-wiz-tpl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}',
+    '.chem-wiz-tpl-info{display:flex;flex-direction:column;gap:2px}',
+    '.chem-wiz-tpl-name{font-size:13px;font-weight:600;color:var(--txt-1)}',
+    '.chem-wiz-tpl-meta{font-size:11px;color:var(--txt-3)}',
+    '.chem-wiz-tpl-btns{display:flex;gap:6px;flex-shrink:0}',
+    '@media(max-width:700px){.chem-wiz-cols{grid-template-columns:1fr}}',
+
     /* Analytics */
     '.chem-anl-sel-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}',
     '.chem-anl-chart{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:hidden}',
@@ -440,21 +546,47 @@ function _chemInitCSS() {
 
     /* Hydrochem diagrams layout */
     '.chem-proto-split{display:flex;width:100%;height:100%;overflow:hidden}',
-    '.chem-proto-tbl-col{flex:0 0 340px;overflow-y:auto;border-right:1px solid var(--line);padding:0}',
+    '.chem-proto-tbl-col{flex:0 0 300px;overflow-y:auto;border-right:1px solid var(--line);padding:0}',
     '.chem-diag-col{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-1)}',
-    '.chem-diag-tabs{display:flex;border-bottom:1px solid var(--line);background:var(--bg-2);flex-shrink:0;padding:0 8px}',
-    '.chem-diag-tab{padding:10px 18px;font-size:12px;font-weight:500;color:var(--txt-3);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap}',
-    '.chem-diag-tab.active{color:var(--gold,#22d3ee);border-bottom-color:var(--gold,#22d3ee)}',
-    '.chem-diag-tab:hover:not(.active){color:var(--txt-1)}',
+    /* Компактный переключатель диаграмм — раньше 3 кнопки с полным текстом
+       занимали половину ширины панели и заметно ужимали сами диаграммы;
+       теперь это узкая группа кнопок-иконок (полное название — во всплывающей
+       подсказке title), высота и ширина минимальны. */
+    '.chem-diag-tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);background:var(--bg-2);flex-shrink:0;padding:5px 6px}',
+    '.chem-diag-tab{width:32px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:var(--txt-3);border:1px solid transparent;border-radius:6px;background:none;cursor:pointer;transition:background .15s,color .15s,border-color .15s}',
+    '.chem-diag-tab.active{color:var(--gold,#22d3ee);background:rgba(34,211,238,.14);border-color:rgba(34,211,238,.3)}',
+    '.chem-diag-tab:hover:not(.active){background:var(--bg-3);color:var(--txt-1)}',
     '.chem-diag-body{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:16px}',
     '.chem-diag-pane{display:none;flex-direction:column;align-items:center;gap:16px;width:100%}',
     '.chem-diag-pane.active{display:flex}',
+    /* flex-direction здесь — только стартовое значение до первой отрисовки;
+       дальше им управляет JS (_chemLayoutDiagPane), переключая row/column по
+       фактически измеренной ширине контейнера. Раньше это решал сам браузер
+       через flex-wrap — а он ориентируется на реальную ширину контента,
+       которая чуть отличается от протокола к протоколу (разная длина текста
+       типа воды/формулы Курлова), из-за чего один и тот же по размеру экран
+       у одного протокола укладывался в строку, а у другого — переносился
+       вниз или обрезался сбоку. flex-wrap:nowrap здесь принципиально —
+       перенос по содержимому больше не должен срабатывать никогда, только
+       по явному решению JS. */
+    '.chem-diag-pane-piper{flex-direction:row;align-items:flex-start;justify-content:center;gap:24px;flex-wrap:nowrap}',
+    '.chem-piper-info{min-width:220px;max-width:280px;display:flex;flex-direction:column}',
+    '.chem-piper-info-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:6px}',
+    '.chem-piper-info-type{font-size:14px;font-weight:700;color:var(--txt-1);line-height:1.4;margin-bottom:2px}',
+    '.chem-piper-info-hint{font-size:10.5px;color:var(--txt-3);line-height:1.55;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}',
     '.chem-kurlov-box{font-family:Georgia,serif;text-align:center;padding:32px 24px;line-height:2.6;color:var(--txt-1);max-width:560px}',
-    '.chem-kurlov-formula{font-size:17px;letter-spacing:.03em;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}',
+    '.chem-kurlov-formula{font-size:16px;letter-spacing:.03em;display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:6px}',
     '.chem-kurlov-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 2px}',
     '.chem-kurlov-num{border-bottom:1px solid currentColor;padding:0 6px 2px;font-size:14px;white-space:nowrap}',
     '.chem-kurlov-den{padding:2px 6px 0;font-size:14px;white-space:nowrap}',
     '.chem-no-macro{padding:40px;color:var(--txt-3);font-size:13px;text-align:center}',
+
+    /* "Хим. аналитика" — chips выбора пробы */
+    '.chem-wpa-chips{display:flex;gap:6px;flex-wrap:wrap}',
+    '.chem-wpa-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:var(--bg-2);color:var(--txt-2);font-size:11px;cursor:pointer;transition:border-color .15s,background .15s}',
+    '.chem-wpa-chip:hover{border-color:var(--txt-3)}',
+    '.chem-wpa-chip-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}',
+    '.chem-wpa-chip-num{opacity:.65;font-size:10px}',
   ].join('\n');
   document.head.appendChild(s);
 }
@@ -469,6 +601,7 @@ function _chemBuildLayout() {
         _chemRailItem('protocols',   '🧾', 'Протоколы') +
         _chemRailItem('waterpoints', '📍', 'Реестр водопунктов') +
         '<div class="chem-rail-sep"></div>' +
+        _chemRailItem('wpanalytics', '💧', 'Хим. аналитика') +
         _chemRailItem('analytics',   '📈', 'Тренды') +
         _chemRailItem('heatmap',     '🌡️', 'Тепловая карта') +
       '</nav>' +
@@ -504,6 +637,7 @@ function _chemRenderSection(sec) {
   }
   if (sec === 'protocols')   _chemRenderProtocols(cont);
   if (sec === 'waterpoints') _chemRenderWaterPoints(cont);
+  if (sec === 'wpanalytics') _chemRenderWpAnalytics(cont);
   if (sec === 'analytics')   _chemRenderAnalytics(cont);
   if (sec === 'heatmap')     _chemRenderHeatmap(cont);
 }
@@ -540,6 +674,8 @@ function _chemRenderProtocols(cont) {
       '<span class="chem-hdr-title">Протоколы химического анализа</span>' +
       '<span class="chem-hdr-sub">СХА / ПХА / Радиология</span>' +
       '<div class="chem-hdr-gap"></div>' +
+      '<button class="chem-btn chem-btn-ghost" onclick="showChemExceedanceReport()">📊 Отчёт по превышениям</button>' +
+      '<button class="chem-btn chem-btn-ghost" onclick="showChemLabTemplateWizard()">⚙️ Шаблоны лабораторий</button>' +
       '<button class="chem-btn chem-btn-ghost" onclick="showChemExcelImport()">↑ Импорт Excel</button>' +
       '<button class="chem-btn chem-btn-prim" onclick="showChemProtocolForm()">+ Новый протокол</button>' +
     '</div>' +
@@ -566,6 +702,13 @@ function _chemRenderProtocols(cont) {
       '<select class="chem-sel" id="chem-f-year" onchange="chemFilterChange()">' +
         '<option value="">Все годы</option>' + yearOpts +
       '</select>' +
+      '<span class="chem-filter-lbl">Квартал:</span>' +
+      '<select class="chem-sel" id="chem-f-quarter" onchange="chemFilterChange()">' +
+        '<option value="">Все кварталы</option>' +
+        [1,2,3,4].map(function(q) {
+          return '<option value="' + q + '"' + (ChemState.filterQuarter === String(q) ? ' selected' : '') + '>' + _chemRomanQ(q) + ' кв.</option>';
+        }).join('') +
+      '</select>' +
       '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--txt-2);user-select:none">' +
         '<input type="checkbox" id="chem-f-exceed"' + (ChemState.filterExceedOnly ? ' checked' : '') + ' onchange="chemFilterChange()" style="accent-color:#f87171;width:14px;height:14px;cursor:pointer">' +
         'Только превышения ПДК' +
@@ -588,8 +731,55 @@ function chemFilterChange() {
   ChemState.filterWpId       = document.getElementById('chem-f-wp')     ? document.getElementById('chem-f-wp').value     : '';
   ChemState.filterProtoType  = document.getElementById('chem-f-ptype')  ? document.getElementById('chem-f-ptype').value  : '';
   ChemState.filterYear       = document.getElementById('chem-f-year')   ? document.getElementById('chem-f-year').value   : '';
+  ChemState.filterQuarter    = document.getElementById('chem-f-quarter')? document.getElementById('chem-f-quarter').value: '';
   ChemState.filterExceedOnly = document.getElementById('chem-f-exceed') ? document.getElementById('chem-f-exceed').checked : false;
   _chemRenderProtoList();
+}
+
+// Мини-график тренда минерализации скважины прямо в карточке списка (UX-03) —
+// чтобы увидеть динамику по водопункту, не открывая «Аналитику» для каждой
+// карточки отдельно. Использует уже загруженные ChemState.results — если для
+// какого-то протокола скважины данные ещё не подгружены (ленивая загрузка
+// первых 50), эта точка просто выпадает из графика, без доп. запросов.
+function _chemMineralSparklineSvg(wpId, currentProtoId) {
+  var pts = ChemState.protocols
+    .filter(function(p) { return p.water_point_id === wpId && p.sampled_at; })
+    .slice()
+    .sort(function(a, b) { return a.sampled_at.localeCompare(b.sampled_at); })
+    .map(function(p) {
+      var meq = _chemCalcMeq(p.id);
+      return { id: p.id, date: p.sampled_at, val: (meq._valid && !isNaN(meq.m_gl)) ? meq.m_gl : null };
+    })
+    .filter(function(p) { return p.val != null; });
+
+  if (pts.length < 2) return '';
+
+  var W = 80, H = 24, PAD = 3;
+  var vals = pts.map(function(p) { return p.val; });
+  var vMin = Math.min.apply(null, vals), vMax = Math.max.apply(null, vals);
+  if (vMax - vMin < 1e-9) { vMax += 0.05; vMin -= 0.05; }
+  function xAt(i) { return PAD + (i / (pts.length - 1)) * (W - PAD * 2); }
+  function yAt(v) { return H - PAD - ((v - vMin) / (vMax - vMin)) * (H - PAD * 2); }
+
+  var first = pts[0].val, last = pts[pts.length - 1].val;
+  var rising = last > first * 1.03, falling = last < first * 0.97;
+  var color = rising ? '#f97316' : falling ? '#22c55e' : '#64748b';
+  var trendIcon = rising ? '↑' : falling ? '↓' : '→';
+
+  var poly = pts.map(function(p, i) { return xAt(i).toFixed(1) + ',' + yAt(p.val).toFixed(1); }).join(' ');
+  var dots = pts.map(function(p, i) {
+    var isCur = p.id === currentProtoId;
+    return '<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(p.val).toFixed(1) + '" r="' + (isCur ? 2.6 : 1.5) + '" fill="' + (isCur ? '#3b82f6' : color) + '"/>';
+  }).join('');
+
+  var tip = pts.map(function(p) { return _chemFmtDate(p.date, true) + '=' + p.val.toFixed(2) + ' г/л'; }).join(', ');
+  return '<span class="chem-spark" title="Минерализация по истории скважины: ' + escHTML(tip) + '">' +
+    '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
+      '<polyline points="' + poly + '" fill="none" stroke="' + color + '" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>' +
+      dots +
+    '</svg>' +
+    '<span class="chem-spark-trend" style="color:' + color + '">' + trendIcon + '</span>' +
+  '</span>';
 }
 
 function _chemRenderProtoList() {
@@ -600,6 +790,7 @@ function _chemRenderProtoList() {
     if (ChemState.filterWpId && p.water_point_id !== ChemState.filterWpId) return false;
     if (ChemState.filterProtoType && (p.protocol_type || 'full') !== ChemState.filterProtoType) return false;
     if (ChemState.filterYear && (!p.sampled_at || p.sampled_at.substring(0,4) !== ChemState.filterYear)) return false;
+    if (ChemState.filterQuarter && String(chemQuarterOf(p)) !== ChemState.filterQuarter) return false;
     if (ChemState.filterExceedOnly) {
       var rows = ChemState.results[p.id] || [];
       var hasExceed = rows.some(function(r) {
@@ -645,8 +836,12 @@ function _chemRenderProtoList() {
           '<input type="checkbox" ' + (inCompare ? 'checked' : '') + ' onchange="chemToggleCompare(\'' + p.id + '\',this.checked)" style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer">' +
         '</label>' +
         '<span class="chem-proto-date">' + _chemFmtDate(p.sampled_at) + '</span>' +
+        (chemQuarterOf(p) ? '<span class="chem-badge chem-badge-gray" style="margin-right:6px">' + _chemRomanQ(chemQuarterOf(p)) + ' кв.</span>' : '') +
         '<div style="display:flex;flex-direction:column;gap:1px">' +
-          '<span class="chem-proto-wp">' + escHTML(wp ? wp.name : '—') + '</span>' +
+          '<div style="display:flex;align-items:center;gap:6px">' +
+            '<span class="chem-proto-wp">' + escHTML(wp ? wp.name : '—') + '</span>' +
+            _chemMineralSparklineSvg(p.water_point_id, p.id) +
+          '</div>' +
           '<span class="chem-proto-lab">' +
             (p.lab_name ? escHTML(p.lab_name) : '') +
             (p.lab_protocol_number ? ' №' + escHTML(p.lab_protocol_number) : '') +
@@ -658,9 +853,11 @@ function _chemRenderProtoList() {
           controlBadge +
           badge +
           '<span class="chem-badge chem-badge-gray">' + (rows.length || '?') + ' пар.</span>' +
+          (p.scan_url ? '<a href="' + escHTML(p.scan_url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Открыть скан протокола" style="text-decoration:none;font-size:14px;padding:0 2px">📎</a>' : '') +
           '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();showChemWpPassport(\'' + (wp ? wp.id : '') + '\')" title="Паспорт водопункта">🗒</button>' +
           '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();_chemExportCsv(\'' + p.id + '\')" title="Экспорт CSV">⬇</button>' +
           '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();showChemProtocolForm(\'' + p.id + '\')">✏</button>' +
+          '<button class="chem-btn chem-btn-ghost" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();chemDuplicateProtocol(\'' + p.id + '\')" title="Дублировать как новый протокол">⧉</button>' +
           '<button class="chem-btn chem-btn-danger" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();chemDeleteProtocol(\'' + p.id + '\')">✕</button>' +
         '</div>' +
       '</div>' +
@@ -670,6 +867,41 @@ function _chemRenderProtoList() {
 
 // Kept for backwards-compat — now unused but harmless
 function chemToggleProto(id) { chemOpenProtoModal(id); }
+
+// CHEM-08: журнал изменений — раскрывающаяся панель в модалке протокола
+async function chemToggleHistory(id) {
+  var panel = document.getElementById('chem-history-' + id);
+  if (!panel) return;
+  var isOpen = panel.style.display !== 'none';
+  if (isOpen) { panel.style.display = 'none'; return; }
+
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="font-size:12px;color:var(--txt-3)">Загрузка…</div>';
+  var res = await ChemApi.getProtocolHistory(id);
+  if (res.error) {
+    panel.innerHTML = '<div style="font-size:12px;color:var(--txt-3)">Журнал изменений ещё не подключён — выполните миграцию migrations/chem_protocol_history.sql</div>';
+    return;
+  }
+  var rows = res.data || [];
+  if (!rows.length) {
+    panel.innerHTML = '<div style="font-size:12px;color:var(--txt-3)">Записей пока нет</div>';
+    return;
+  }
+  panel.innerHTML = rows.map(function(h) {
+    var when = new Date(h.changed_at).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    var who = h.changed_by ? escHTML(h.changed_by) : 'неизвестно';
+    var actionLabel = h.action === 'created' ? 'Протокол создан' : 'Изменён';
+    var changesHtml = (h.changes || []).map(function(c) {
+      return '<div style="font-size:11.5px;color:var(--txt-3);padding-left:14px">' +
+        escHTML(c.label) + ': ' + (c.old ? '<s>' + escHTML(String(c.old)) + '</s> → ' : '') + '<span style="color:var(--txt-2)">' + escHTML(String(c.new)) + '</span>' +
+      '</div>';
+    }).join('');
+    return '<div style="margin-bottom:10px">' +
+      '<div style="font-size:12px;color:var(--txt-1)"><b>' + when + '</b> · ' + who + ' · ' + actionLabel + '</div>' +
+      changesHtml +
+    '</div>';
+  }).join('');
+}
 
 function chemOpenProtoModal(id) {
   // Remove existing modal if any
@@ -706,9 +938,11 @@ function chemOpenProtoModal(id) {
         '<div style="display:flex;gap:8px;margin-left:auto;align-items:center">' +
           '<button class="chem-btn chem-btn-ghost" style="font-size:12px" onclick="_chemExportCsv(\'' + id + '\')">⬇ CSV</button>' +
           '<button class="chem-btn chem-btn-ghost" style="font-size:12px" onclick="showChemProtocolForm(\'' + id + '\')">✏ Редакт.</button>' +
+          '<button class="chem-btn chem-btn-ghost" style="font-size:12px" onclick="chemToggleHistory(\'' + id + '\')" id="chem-hist-btn-' + id + '">🕓 История</button>' +
           '<button class="chem-modal-close" onclick="document.getElementById(\'chem-proto-modal\').remove()">✕</button>' +
         '</div>' +
       '</div>' +
+      '<div id="chem-history-' + id + '" style="display:none;padding:14px 20px;border-bottom:1px solid var(--line);max-height:220px;overflow-y:auto"></div>' +
       '<div class="chem-pm-body" id="chem-pm-body-' + id + '">' +
         '<div style="padding:30px;text-align:center;color:var(--txt-3)">Загрузка…</div>' +
       '</div>' +
@@ -749,9 +983,13 @@ function _chemRenderResultsTable(protocolId) {
     byGroup[grp].push({ row: r, param: param });
   });
 
+  // 4 колонки вместо прежних 6 — "Ед. изм." переехала подстрокой под
+  // название параметра, а "Статус" убран как колонка: он и так виден по
+  // цвету/иконке самого значения и по цветной полоске слева от строки —
+  // отдельный текстовый столбец "▲ Превышение / ✓ Норма" только отъедал
+  // ширину, которой и так не хватало в узкой боковой колонке.
   var html = '<table class="chem-rtbl"><thead><tr>' +
-    '<th>№</th><th>Параметр</th><th>Значение</th><th>Ед. изм.</th>' +
-    '<th>ПДК питьев.</th><th>Статус</th></tr></thead><tbody>';
+    '<th>№</th><th>Параметр</th><th>Значение</th><th>ПДК</th></tr></thead><tbody>';
 
   var groupOrder = ['organo','physico','macro','metals','organic','radio'];
   // Любые группы не из стандартного порядка — рендерим в конце
@@ -759,7 +997,7 @@ function _chemRenderResultsTable(protocolId) {
   groupOrder.forEach(function(grp) {
     if (!byGroup[grp] || !byGroup[grp].length) return;
     var grpInfo = CHEM_GROUPS[grp] || { label: grp, icon: '•' };
-    html += '<tr class="chem-group-hdr"><td colspan="6">' + grpInfo.icon + ' ' + grpInfo.label + '</td></tr>';
+    html += '<tr class="chem-group-hdr"><td colspan="4">' + grpInfo.icon + ' ' + grpInfo.label + '</td></tr>';
     byGroup[grp].forEach(function(item) {
       var p = item.param;
       var r = item.row;
@@ -767,22 +1005,17 @@ function _chemRenderResultsTable(protocolId) {
       var status = _chemPdkStatus(r.param_key, r.value_raw, r.below_detection);
       var pdkStr = _chemPdkStr(p);
       var rowCls = status === 'exceed' ? 'chem-row-exceed' : status === 'ok' ? 'chem-row-ok' : 'chem-row-nonorm';
-      var statusHtml = status === 'exceed'
-        ? '<span class="chem-pdk-exceed">▲ Превышение</span>'
-        : status === 'ok'
-          ? '<span class="chem-pdk-ok">✓ Норма</span>'
-          : '<span class="chem-pdk-nonorm">—</span>';
+      var icon = status === 'exceed' ? '▲ ' : status === 'ok' ? '✓ ' : '';
+      var valCls = status === 'exceed' ? 'chem-pdk-exceed' : status === 'ok' ? 'chem-pdk-ok' : '';
       var valHtml = r.below_detection
         ? '<span class="chem-val-below">' + escHTML(r.value_raw || '') + '</span>'
-        : escHTML(r.value_raw || '—');
+        : '<span class="' + valCls + '">' + icon + escHTML(r.value_raw || '—') + '</span>';
 
       html += '<tr class="' + rowCls + '">' +
         '<td style="color:var(--txt-3)">' + p.no + '</td>' +
-        '<td>' + escHTML(p.name) + '</td>' +
+        '<td>' + escHTML(p.name) + '<div class="chem-rtbl-sub">' + escHTML(p.unit) + '</div></td>' +
         '<td>' + valHtml + '</td>' +
-        '<td style="color:var(--txt-3)">' + escHTML(p.unit) + '</td>' +
-        '<td style="color:var(--txt-3);font-variant-numeric:tabular-nums">' + pdkStr + '</td>' +
-        '<td>' + statusHtml + '</td>' +
+        '<td style="color:var(--txt-3);font-variant-numeric:tabular-nums;white-space:nowrap">' + pdkStr + '</td>' +
         '</tr>';
     });
   });
@@ -862,6 +1095,316 @@ function _chemWpRows() {
       '</td>' +
     '</tr>';
   }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  СЕКЦИЯ: ХИМ. АНАЛИТИКА (Пайпер/Стифф/Шоллер по всем протоколам одного
+//  водопункта сразу — та же тройка диаграмм, что и в карточке протокола,
+//  только теперь охватывает всю историю, а не только "соседей" по одному
+//  открытому протоколу).
+// ═══════════════════════════════════════════════════════════════
+function _chemRenderWpAnalytics(cont) {
+  var wpOpts = '<option value="">— Выберите водопункт —</option>' + ChemState.waterPoints.map(function(w) {
+    return '<option value="' + w.id + '"' + (ChemState.wpaSelectedWpId === w.id ? ' selected' : '') + '>' + escHTML(w.name) + '</option>';
+  }).join('');
+
+  cont.innerHTML =
+    '<div class="chem-hdr">' +
+      '<span class="chem-hdr-title">Химическая аналитика по водопункту</span>' +
+      '<span class="chem-hdr-sub">Все протоколы одного водопункта на одних диаграммах Пайпера/Стиффа/Шоллера — видно, как менялся состав со временем</span>' +
+    '</div>' +
+    '<div class="chem-filters" style="margin-bottom:12px">' +
+      '<span class="chem-filter-lbl">Водопункт:</span>' +
+      '<select class="chem-sel" id="chem-wpa-wp" onchange="chemWpaSelectWp(this.value)" style="min-width:240px">' + wpOpts + '</select>' +
+    '</div>' +
+    '<div id="chem-wpa-body"></div>';
+
+  _chemRenderWpaBody();
+}
+
+function chemWpaSelectWp(wpId) {
+  ChemState.wpaSelectedWpId = wpId;
+  ChemState.wpaSelectedProtoId = '';
+  _chemRenderWpaBody();
+}
+
+function _chemRenderWpaBody() {
+  var body = document.getElementById('chem-wpa-body');
+  if (!body) return;
+  var wpId = ChemState.wpaSelectedWpId;
+  if (!wpId) {
+    body.innerHTML = '<div class="chem-empty"><div class="chem-empty-ico">💧</div>' +
+      '<div class="chem-empty-txt">Выберите водопункт</div>' +
+      '<div class="chem-empty-sub">Соберём диаграммы Пайпера, Стиффа и Шоллера по всем его протоколам сразу — кликом по любой точке открывается состав именно той пробы</div></div>';
+    return;
+  }
+
+  var wp = ChemState.waterPoints.find(function(w){ return w.id === wpId; });
+  var allProtos = ChemState.protocols.filter(function(p){ return p.water_point_id === wpId; })
+    .sort(function(a,b){ return a.sampled_at < b.sampled_at ? 1 : -1; }); // новые сверху
+
+  var meqList = [];
+  allProtos.forEach(function(p) {
+    var m = _chemCalcMeq(p.id);
+    if (m._valid) meqList.push({ meq: m, id: p.id, date: p.sampled_at });
+  });
+  ChemState._wpaMeqList = meqList;
+
+  if (!meqList.length) {
+    body.innerHTML = '<div class="chem-empty"><div class="chem-empty-ico">🔬</div>' +
+      '<div class="chem-empty-txt">Нет данных для построения диаграмм</div>' +
+      '<div class="chem-empty-sub">' +
+      (allProtos.length
+        ? 'Есть ' + allProtos.length + ' протокол(а) по «' + escHTML(wp.name) + '», но ни в одном нет полного макрокомпонентного состава (Ca, Mg, Na+K, HCO₃, SO₄, Cl)'
+        : 'По водопункту «' + escHTML(wp.name) + '» протоколов пока нет') +
+      '</div></div>';
+    return;
+  }
+
+  if (!ChemState.wpaSelectedProtoId || !meqList.some(function(m){ return m.id === ChemState.wpaSelectedProtoId; })) {
+    ChemState.wpaSelectedProtoId = meqList[0].id; // самая свежая проба по умолчанию
+  }
+
+  var excludedCount = allProtos.length - meqList.length;
+
+  // Цвет чипа = CHEM_DATE_COLORS[idx] — тот же индекс и тот же массив
+  // (ChemState._wpaMeqList), что уходит в _chemDrawPiper/_chemDrawSchoeller
+  // ниже, так что цвет чипа гарантированно совпадает с цветом точки/линии
+  // этой же пробы на обеих диаграммах.
+  var chipsHtml = '<div class="chem-wpa-chips">' +
+    meqList.map(function(item, idx) {
+      var p = allProtos.find(function(pp){ return pp.id === item.id; });
+      var color = CHEM_DATE_COLORS[idx % CHEM_DATE_COLORS.length];
+      var isActive = item.id === ChemState.wpaSelectedProtoId;
+      var style = isActive
+        ? 'border-color:' + color + ';background:' + color + '22;color:var(--txt-1);font-weight:600'
+        : '';
+      return '<button class="chem-wpa-chip" data-pid="' + item.id + '" data-color="' + color + '" style="' + style + '" onclick="chemWpaSelectProto(\'' + item.id + '\')">' +
+        '<span class="chem-wpa-chip-dot" style="background:' + color + '"></span>' +
+        _chemFmtDate(item.date) +
+        (p && p.lab_protocol_number ? ' <span class="chem-wpa-chip-num">№' + escHTML(p.lab_protocol_number) + '</span>' : '') +
+      '</button>';
+    }).join('') +
+  '</div>';
+
+  var diagHtml =
+    '<div class="chem-diag-tabs" id="chem-diag-tabs-wpa">' +
+      '<button class="chem-diag-tab active" title="Диаграмма Пайпера" onclick="chemSwitchDiag(\'wpa\',\'piper\',this)">📐</button>' +
+      '<button class="chem-diag-tab" title="Стифф · Шоллер" onclick="chemSwitchDiag(\'wpa\',\'stiff\',this)">📊</button>' +
+      '<button class="chem-diag-tab" title="Квадрат Толстихина" onclick="chemSwitchDiag(\'wpa\',\'tolst\',this)">▦</button>' +
+    '</div>' +
+    '<div class="chem-diag-body">' +
+      '<div class="chem-diag-pane active chem-diag-pane-piper" id="chem-dpane-wpa-piper">' +
+        '<canvas id="chem-cv-piper-wpa" style="max-width:100%"></canvas>' +
+        '<div class="chem-piper-info">' +
+          '<div class="chem-piper-info-title">Тип воды по Пайперу — выбранная проба</div>' +
+          '<div class="chem-piper-info-type" id="chem-wtype-wpa">—</div>' +
+          '<div class="chem-kurlov-box" id="chem-kurlov-wpa" style="padding:8px 0 0;text-align:left;max-width:none;line-height:2.2"></div>' +
+          '<div class="chem-piper-info-hint">ⓘ На диаграмме сразу все пробы этого водопункта — цвет точки = дата (см. легенду). Кликните по точке (в любом из трёх полей) или по дате в списке выше — ниже раскроется полный состав именно этой пробы.</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="chem-diag-pane" id="chem-dpane-wpa-stiff">' +
+        '<canvas id="chem-cv-stiff-wpa" style="max-width:100%"></canvas>' +
+        '<canvas id="chem-cv-scho-wpa" style="max-width:100%"></canvas>' +
+      '</div>' +
+      '<div class="chem-diag-pane chem-diag-pane-piper" id="chem-dpane-wpa-tolst">' +
+        '<canvas id="chem-cv-tolst-wpa" style="max-width:100%"></canvas>' +
+        '<div class="chem-piper-info">' +
+          '<div class="chem-piper-info-title">Квадрат Толстихина — выбранная проба</div>' +
+          '<div class="chem-piper-info-type" id="chem-tolst-cell-wpa">—</div>' +
+          '<div class="chem-piper-info-hint">' +
+            'ⓘ Все пробы этого водопункта сразу, цвет = дата. По горизонтали доля Cl+SO₄ среди анионов, по вертикали — доля ' +
+            'Ca+Mg среди катионов. Сетка 10×10 — как в методике Толстихина/Джикия; номер ячейки — её позиция (столбец-строка), ' +
+            'подтверждённой исторической таблицы генетических классов по номерам не нашлось.' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  body.innerHTML =
+    '<div class="chem-kpi-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">' +
+      _chemKpi('Протоколов', allProtos.length, 'у «' + escHTML(wp.name) + '»') +
+      _chemKpi('На диаграмме', meqList.length, excludedCount ? excludedCount + ' без макросостава' : 'все с полным составом') +
+      _chemKpi('Период', meqList.length > 1 ? _chemFmtDate(meqList[meqList.length-1].date, true) + ' — ' + _chemFmtDate(meqList[0].date, true) : _chemFmtDate(meqList[0].date), '') +
+    '</div>' +
+    chipsHtml +
+    '<div class="chem-pm-body" id="chem-pm-body-wpa" style="height:640px;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:10px">' + diagHtml + '</div>' +
+    '<div id="chem-wpa-detail" style="margin-top:14px"></div>';
+
+  _chemInitWpaDiagrams();
+  _chemRenderWpaDetail();
+}
+
+// Раскладка панели "диаграмма + инфо-колонка справа" (Пайпер, квадрат
+// Толстихина). Раньше решение "в строку или перенести вниз" отдавалось
+// браузеру (flex-wrap) — а он ориентируется на фактическую ширину контента,
+// которая чуть-чуть отличается от протокола к протоколу (разная длина
+// текста типа воды/формулы Курлова), поэтому один и тот же по размеру
+// экран у одного протокола укладывался в строку, а у другого — нет:
+// раскладка "прыгала" не из-за окна, а из-за конкретных данных.
+//
+// Теперь решение принимается один раз здесь, по одному-единственному
+// критерию — фактической ширине контейнера, — и одинаково для всех
+// протоколов при одном и том же размере окна:
+//   • если помещаются оба минимума (canvasMin + зазор + INFO_MIN) — строка,
+//     колонка получает пропорционально доступное место (220–280px);
+//   • если нет — столбец на всю ширину (колонка растягивается под
+//     диаграмму, а не обрезается сбоку).
+// Возвращает ширину canvas; сама переключает pane.style.flexDirection.
+var CHEM_INFO_MIN = 220, CHEM_INFO_MAX = 280, CHEM_ROW_GAP = 24;
+function _chemLayoutDiagPane(pane, canvasMin, canvasMax) {
+  var avail = pane ? pane.clientWidth : canvasMax + CHEM_ROW_GAP + CHEM_INFO_MAX;
+  var info = pane ? pane.querySelector('.chem-piper-info') : null;
+  var fitsRow = avail >= canvasMin + CHEM_ROW_GAP + CHEM_INFO_MIN;
+  if (pane) pane.style.flexDirection = fitsRow ? 'row' : 'column';
+  if (info) info.style.maxWidth = fitsRow ? '' : 'none';
+  if (fitsRow) {
+    return Math.max(canvasMin, Math.min(canvasMax, avail - CHEM_ROW_GAP - CHEM_INFO_MAX));
+  }
+  return Math.max(240, Math.min(canvasMax, avail));
+}
+
+// Перерисовывает диаграмму Пайпера в разделе "Хим. аналитика" под текущую
+// ширину контейнера — вызывается и при первой отрисовке, и при resize.
+function _chemWpaRedrawPiper() {
+  var cvP = document.getElementById('chem-cv-piper-wpa');
+  if (!cvP) return false;
+  var paneP = cvP.closest('.chem-diag-pane-piper');
+  var piperW = _chemLayoutDiagPane(paneP, 420, 640);
+  cvP._piperSelectedId = ChemState.wpaSelectedProtoId;
+  _chemDrawPiper(cvP, ChemState._wpaMeqList, ChemState.wpaSelectedProtoId, piperW, function(id) {
+    ChemState.wpaSelectedProtoId = id;
+    _chemRedrawWpaSecondary();
+    _chemWpaRedrawTolstikhin();
+    _chemRenderWpaDetail();
+    _chemHighlightWpaChip(id);
+  });
+  return true;
+}
+
+// То же самое для квадрата Толстихина — своя ширина по контейнеру, клик по
+// точке синхронизирует выбор и с Пайпером/Стиффом·Шоллером, и с чипами дат.
+function _chemWpaRedrawTolstikhin() {
+  var cvT = document.getElementById('chem-cv-tolst-wpa');
+  if (!cvT) return false;
+  var paneT = cvT.closest('.chem-diag-pane-piper');
+  var tolstW = _chemLayoutDiagPane(paneT, 420, 640);
+  cvT._tolstSelectedId = ChemState.wpaSelectedProtoId;
+  _chemDrawTolstikhin(cvT, ChemState._wpaMeqList, ChemState.wpaSelectedProtoId, tolstW, function(id) {
+    ChemState.wpaSelectedProtoId = id;
+    _chemRedrawWpaSecondary();
+    _chemWpaRedrawPiper();
+    _chemRenderWpaDetail();
+    _chemHighlightWpaChip(id);
+    // Раньше эта строка стояла только ниже, вне колбэка — обновлялась один
+    // раз при построении диаграммы, но не при клике по точке (баг: всё
+    // остальное — Пайпер, Стифф·Шоллер, карточка, чипы — обновлялось, а
+    // текст "Ячейка X-Y" у самого квадрата оставался старым).
+    _chemUpdateTolstCellInfo('wpa', ChemState._wpaMeqList, id);
+  });
+  _chemUpdateTolstCellInfo('wpa', ChemState._wpaMeqList, ChemState.wpaSelectedProtoId);
+  return true;
+}
+
+// Стифф/Шоллер + формула Курлова/тип воды — всё, что зависит от того, какая
+// именно проба сейчас выбрана (а не от размера контейнера).
+function _chemRedrawWpaSecondary() {
+  var meqList = ChemState._wpaMeqList || [];
+  var sel = meqList.find(function(m){ return m.id === ChemState.wpaSelectedProtoId; }) || meqList[0];
+  if (!sel) return;
+
+  var cvS = document.getElementById('chem-cv-stiff-wpa');
+  if (cvS) {
+    var availS = cvS.parentElement ? cvS.parentElement.clientWidth : 500;
+    _chemDrawStiff(cvS, sel.meq, Math.max(320, availS), 220);
+  }
+  var cvSc = document.getElementById('chem-cv-scho-wpa');
+  if (cvSc) {
+    var availSc = cvSc.parentElement ? cvSc.parentElement.clientWidth : 560;
+    _chemDrawSchoeller(cvSc, meqList, ChemState.wpaSelectedProtoId, Math.max(320, availSc), 280);
+  }
+  var kurEl   = document.getElementById('chem-kurlov-wpa');
+  var wtypeEl = document.getElementById('chem-wtype-wpa');
+  if (kurEl)   kurEl.innerHTML   = _chemBuildKurlov(sel.meq);
+  if (wtypeEl) wtypeEl.innerHTML = _chemWtypeHtml(sel.meq);
+}
+
+function _chemHighlightWpaChip(id) {
+  document.querySelectorAll('.chem-wpa-chip').forEach(function(b) {
+    var color = b.dataset.color || 'var(--blue)';
+    if (b.dataset.pid === id) {
+      b.style.borderColor = color; b.style.background = color + '22';
+      b.style.color = 'var(--txt-1)'; b.style.fontWeight = '600';
+    } else {
+      b.style.borderColor = ''; b.style.background = ''; b.style.color = ''; b.style.fontWeight = '';
+    }
+  });
+}
+
+// Клик по дате в списке чипов — тот же эффект, что клик прямо по точке на
+// диаграмме Пайпера, только более прицельный (полезно, когда несколько проб
+// легли близко друг к другу и в них трудно попасть кликом).
+function chemWpaSelectProto(id) {
+  ChemState.wpaSelectedProtoId = id;
+  _chemWpaRedrawPiper();
+  _chemWpaRedrawTolstikhin();
+  _chemRedrawWpaSecondary();
+  _chemRenderWpaDetail();
+  _chemHighlightWpaChip(id);
+}
+
+function _chemRenderWpaDetail() {
+  var el = document.getElementById('chem-wpa-detail');
+  if (!el) return;
+  var meqList = ChemState._wpaMeqList || [];
+  var sel = meqList.find(function(m){ return m.id === ChemState.wpaSelectedProtoId; });
+  if (!sel) { el.innerHTML = ''; return; }
+
+  if (!ChemState.results[sel.id]) {
+    el.innerHTML = '<div style="padding:20px;color:var(--txt-3);font-size:12px">Загрузка результатов…</div>';
+    ChemApi.getResults(sel.id).then(function(res) {
+      ChemState.results[sel.id] = (!res.error && res.data) ? res.data : [];
+      _chemRenderWpaDetail();
+    });
+    return;
+  }
+
+  var p = ChemState.protocols.find(function(pp){ return pp.id === sel.id; });
+  if (!p) { el.innerHTML = ''; return; }
+  var ptMeta = CHEM_PROTO_TYPE_META[p.protocol_type] || CHEM_PROTO_TYPE_META['full'];
+
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">' +
+      '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)">Выбранный протокол:</span>' +
+      '<span style="font-size:14px;font-weight:700;color:var(--txt-1)">' + _chemFmtDate(p.sampled_at) + '</span>' +
+      '<span class="chem-badge" style="background:' + ptMeta.color + '18;color:' + ptMeta.color + '">' + ptMeta.icon + ' ' + ptMeta.label + '</span>' +
+      (p.lab_name || p.lab_protocol_number ? '<span style="font-size:12px;color:var(--txt-3)">' +
+        escHTML(p.lab_name || '') + (p.lab_protocol_number ? ' №' + escHTML(p.lab_protocol_number) : '') + '</span>' : '') +
+      '<div style="flex:1"></div>' +
+      '<button class="chem-btn chem-btn-ghost" style="font-size:11px" onclick="_chemExportCsv(\'' + sel.id + '\')">⬇ CSV</button>' +
+      '<button class="chem-btn chem-btn-ghost" style="font-size:11px" onclick="showChemProtocolForm(\'' + sel.id + '\')">✏ Редакт.</button>' +
+    '</div>' +
+    _chemRenderResultsTable(sel.id);
+}
+
+// Первичная отрисовка + подписка на resize (само отписывается, как только
+// контейнер #chem-pm-body-wpa пропадёт из DOM — то есть при уходе с вкладки).
+function _chemInitWpaDiagrams() {
+  _chemWpaRedrawPiper();
+  _chemWpaRedrawTolstikhin();
+  _chemRedrawWpaSecondary();
+
+  var _wpaResizeTimer = null;
+  function onResize() {
+    clearTimeout(_wpaResizeTimer);
+    _wpaResizeTimer = setTimeout(function() {
+      if (!document.getElementById('chem-pm-body-wpa')) { window.removeEventListener('resize', onResize); return; }
+      _chemWpaRedrawPiper();
+      _chemWpaRedrawTolstikhin();
+      _chemRedrawWpaSecondary();
+    }, 120);
+  }
+  window.addEventListener('resize', onResize);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1040,6 +1583,18 @@ function showChemWpForm(wpId) {
         '<input class="chem-inp" id="wf-loc" placeholder="Северный борт, гор. +820" value="' + escHTML(wp ? (wp.location_desc||'') : '') + '"></div>' +
     '</div>' +
     '<div class="chem-form-row-1 chem-form-row">' +
+      '<div class="chem-fld"><label>Шаблон лаборатории по умолчанию</label>' +
+        '<select class="chem-inp" id="wf-default-template">' +
+          '<option value="">— не задан —</option>' +
+          ChemState.labTemplates.map(function(t) {
+            var sel = wp && wp.default_template_id === t.id ? ' selected' : '';
+            return '<option value="' + t.id + '"' + sel + '>' + escHTML(t.lab_name) + ' / ' + escHTML(t.template_name) + '</option>';
+          }).join('') +
+        '</select>' +
+        '<span style="font-size:10.5px;color:var(--txt-3);margin-top:3px;display:block">Подставится в новый протокол для этого водопункта автоматически</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="chem-form-row-1 chem-form-row">' +
       '<div class="chem-fld"><label>Примечание</label>' +
         '<input class="chem-inp" id="wf-notes" value="' + escHTML(wp ? (wp.notes||'') : '') + '"></div>' +
     '</div>',
@@ -1057,6 +1612,7 @@ async function _chemSaveWp(existingId) {
     type:          document.getElementById('wf-type').value,
     location_desc: document.getElementById('wf-loc').value.trim() || null,
     notes:         document.getElementById('wf-notes').value.trim() || null,
+    default_template_id: (document.getElementById('wf-default-template') && document.getElementById('wf-default-template').value) || null,
   };
   if (existingId) row.id = existingId;
   var res = await ChemApi.upsertWaterPoint(row);
@@ -1095,38 +1651,366 @@ async function chemDeleteWp(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  МАСТЕР ШАБЛОНОВ ЛАБОРАТОРИЙ
+//  Позволяет для каждой лаборатории (напр. EcoExpert) настроить свой
+//  набор и порядок параметров (из существующего каталога CHEM_PARAMS) —
+//  используется и в форме ручного ввода, и в загрузочном Excel-шаблоне.
+// ═══════════════════════════════════════════════════════════════
+
+function _chemDistinctLabNames() {
+  var set = {};
+  ChemState.labTemplates.forEach(function(t) { if (t.lab_name) set[t.lab_name] = true; });
+  ChemState.protocols.forEach(function(p) { if (p.lab_name) set[p.lab_name] = true; });
+  return Object.keys(set).sort();
+}
+
+// Поле "Лаборатория": текст (для новых названий) + гарантированно рабочий
+// выпадающий список уже известных лабораторий рядом. Обычный <datalist>
+// в некоторых браузерах/политиках безопасности не открывается по клику
+// (перекрывается автозаполнением) — этот select работает всегда.
+function _chemLabFieldHtml(inputId, currentValue, oninputExpr, pickFnName) {
+  var labs = _chemDistinctLabNames();
+  var pickOpts = labs.map(function(l) { return '<option value="' + escHTML(l) + '">' + escHTML(l) + '</option>'; }).join('');
+  return (
+    '<div style="display:flex;gap:4px">' +
+      '<input class="chem-inp" id="' + inputId + '" placeholder="EcoExpert" autocomplete="off" value="' + escHTML(currentValue || '') + '" oninput="' + oninputExpr + '" style="flex:1;min-width:0">' +
+      (labs.length
+        ? '<select class="chem-inp" title="Выбрать из уже известных лабораторий" style="flex:0 0 40px;padding:7px 2px;text-align:center" onchange="' + pickFnName + '(this.value);this.value=\'\'">' +
+            '<option value="">▾</option>' + pickOpts +
+          '</select>'
+        : '') +
+    '</div>'
+  );
+}
+function chemFormLabPick(val) {
+  if (!val) return;
+  var inp = document.getElementById('pf-lab');
+  if (inp) inp.value = val;
+  chemFormLabChanged();
+}
+function chemWizLabPick(val) {
+  if (!val) return;
+  _chemWiz.lab = val;
+  var inp = document.getElementById('chem-wiz-lab');
+  if (inp) inp.value = val;
+}
+
+var _chemWiz = { screen: 'list', editingId: null, lab: '', name: '', baseType: 'sha', selected: [], search: '' };
+
+function showChemLabTemplateWizard() {
+  _chemWiz = { screen: 'list', editingId: null, lab: '', name: '', baseType: 'sha', selected: [], search: '' };
+  _chemWizRender();
+}
+
+function _chemWizRender() {
+  if (_chemWiz.screen === 'editor') {
+    _chemOpenModal(
+      (_chemWiz.editingId ? 'Изменить шаблон' : 'Новый шаблон') + (_chemWiz.lab ? ' — ' + escHTML(_chemWiz.lab) : ''),
+      _chemWizEditorHtml(),
+      '<button class="chem-btn chem-btn-ghost" onclick="chemWizBackToList()">← Назад к списку</button>' +
+      '<button class="chem-btn chem-btn-prim" onclick="chemWizSaveTemplate()">💾 Сохранить шаблон</button>',
+      'max-width:920px'
+    );
+  } else {
+    _chemOpenModal(
+      '🧪 Шаблоны лабораторий',
+      '<div style="margin-bottom:14px;font-size:12px;color:var(--txt-3);line-height:1.6">' +
+        'Настройте под конкретную лабораторию свой набор и порядок параметров — он станет доступен при ручном вводе протокола и при скачивании загрузочного Excel-шаблона.' +
+      '</div>' +
+      '<div style="margin-bottom:14px"><button class="chem-btn chem-btn-prim" onclick="chemWizNewTemplate()">+ Новый шаблон</button></div>' +
+      '<div id="chem-wiz-list">' + _chemWizListHtml() + '</div>',
+      '<button class="chem-btn chem-btn-ghost" onclick="_chemCloseModal()">Закрыть</button>',
+      'max-width:640px'
+    );
+  }
+}
+
+function _chemWizListHtml() {
+  if (!ChemState.labTemplates.length) {
+    return '<div class="chem-empty"><div class="chem-empty-ico">🧪</div>' +
+      '<div class="chem-empty-txt">Шаблонов ещё нет</div>' +
+      '<div class="chem-empty-sub">Создайте первый шаблон для своей лаборатории — например EcoExpert — с нужным набором и порядком параметров</div></div>';
+  }
+  var byLab = {};
+  ChemState.labTemplates.forEach(function(t) {
+    if (!byLab[t.lab_name]) byLab[t.lab_name] = [];
+    byLab[t.lab_name].push(t);
+  });
+  var html = '';
+  Object.keys(byLab).sort().forEach(function(lab) {
+    html += '<div class="chem-wiz-lab-grp"><div class="chem-wiz-lab-grp-hdr">🧪 ' + escHTML(lab) + '</div>';
+    byLab[lab].forEach(function(t) {
+      var meta = CHEM_PROTO_TYPE_META[t.base_type] || CHEM_PROTO_TYPE_META.sha;
+      html += '<div class="chem-wiz-tpl-row">' +
+        '<div class="chem-wiz-tpl-info">' +
+          '<span class="chem-wiz-tpl-name">' + escHTML(t.template_name) + '</span>' +
+          '<span class="chem-wiz-tpl-meta">' + meta.icon + ' ' + meta.label + ' · ' + (t.params||[]).length + ' показателей</span>' +
+        '</div>' +
+        '<div class="chem-wiz-tpl-btns">' +
+          '<button class="chem-btn chem-btn-ghost" onclick="chemWizEditTemplate(\'' + t.id + '\')">✎ Изменить</button>' +
+          '<button class="chem-btn chem-btn-ghost" onclick="chemWizDuplicateTemplate(\'' + t.id + '\')">⧉ Дублировать</button>' +
+          '<button class="chem-btn chem-btn-ghost" style="color:#f87171" onclick="chemWizDeleteTemplate(\'' + t.id + '\')">🗑</button>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+  });
+  return html;
+}
+
+function _chemWizEditorHtml() {
+  var typeOpts = Object.keys(CHEM_PROTO_TYPE_META).map(function(k) {
+    var m = CHEM_PROTO_TYPE_META[k];
+    return '<option value="' + k + '"' + (k === _chemWiz.baseType ? ' selected' : '') + '>' + m.icon + ' ' + m.label + '</option>';
+  }).join('');
+  return (
+    '<div class="chem-form-row chem-form-row-3">' +
+      '<div class="chem-fld"><label>Лаборатория *</label>' +
+        _chemLabFieldHtml('chem-wiz-lab', _chemWiz.lab, '_chemWiz.lab=this.value', 'chemWizLabPick') +
+      '</div>' +
+      '<div class="chem-fld"><label>Название шаблона *</label>' +
+        '<input class="chem-inp" id="chem-wiz-name" placeholder="Вариант 1" value="' + escHTML(_chemWiz.name) + '" oninput="_chemWiz.name=this.value">' +
+      '</div>' +
+      '<div class="chem-fld"><label>Вид протокола (по умолчанию)</label>' +
+        '<select class="chem-inp" id="chem-wiz-basetype" onchange="_chemWiz.baseType=this.value">' + typeOpts + '</select>' +
+      '</div>' +
+    '</div>' +
+    '<div class="chem-fld" style="margin-bottom:10px">' +
+      '<input class="chem-inp" id="chem-wiz-search" placeholder="🔍 Поиск параметра по названию…" oninput="chemWizSearchChange(this.value)">' +
+    '</div>' +
+    '<div class="chem-wiz-cols">' +
+      '<div class="chem-wiz-col">' +
+        '<div class="chem-wiz-col-hdr">Каталог параметров — отметьте нужные</div>' +
+        '<div class="chem-wiz-catalog" id="chem-wiz-catalog">' + _chemWizCatalogHtml() + '</div>' +
+      '</div>' +
+      '<div class="chem-wiz-col">' +
+        '<div class="chem-wiz-col-hdr">Выбрано и порядок ввода (<span id="chem-wiz-sel-count">' + _chemWiz.selected.length + '</span>)</div>' +
+        '<div class="chem-wiz-selected" id="chem-wiz-selected">' + _chemWizSelectedHtml() + '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function _chemWizCatalogHtml() {
+  var q = (_chemWiz.search || '').toLowerCase().trim();
+  var html = '';
+  Object.keys(CHEM_GROUPS).forEach(function(g) {
+    var params = CHEM_PARAMS.filter(function(p) {
+      if (p.group !== g) return false;
+      if (!q) return true;
+      return p.name.toLowerCase().indexOf(q) >= 0 || p.key.toLowerCase().indexOf(q) >= 0;
+    });
+    if (!params.length) return;
+    html += '<div class="chem-wiz-cat-grp"><div class="chem-wiz-cat-grp-hdr">' + CHEM_GROUPS[g].icon + ' ' + CHEM_GROUPS[g].label + '</div>';
+    params.forEach(function(p) {
+      var checked = _chemWiz.selected.indexOf(p.key) >= 0;
+      html += '<label class="chem-wiz-cat-item' + (checked ? ' checked' : '') + '">' +
+        '<input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="chemWizToggleParam(\'' + p.key + '\')">' +
+        '<span>' + p.no + '. ' + escHTML(p.name) + '</span><span class="chem-wiz-cat-unit">' + escHTML(p.unit) + '</span>' +
+      '</label>';
+    });
+    html += '</div>';
+  });
+  if (!html) html = '<div style="font-size:12px;color:var(--txt-3);padding:12px">Ничего не найдено</div>';
+  return html;
+}
+
+function _chemWizSelectedHtml() {
+  if (!_chemWiz.selected.length) {
+    return '<div style="font-size:12px;color:var(--txt-3);padding:12px">Пока ничего не выбрано — отметьте параметры слева</div>';
+  }
+  return _chemWiz.selected.map(function(key, idx) {
+    var p = CHEM_PARAM_MAP[key];
+    if (!p) return '';
+    return '<div class="chem-wiz-sel-item">' +
+      '<span class="chem-wiz-sel-no">' + (idx + 1) + '</span>' +
+      '<span class="chem-wiz-sel-name">' + escHTML(p.name) + '<span>' + escHTML(p.unit) + '</span></span>' +
+      '<span class="chem-wiz-sel-btns">' +
+        '<button type="button" title="Выше" onclick="chemWizMoveParam(\'' + key + '\',-1)"' + (idx === 0 ? ' disabled' : '') + '>▲</button>' +
+        '<button type="button" title="Ниже" onclick="chemWizMoveParam(\'' + key + '\',1)"' + (idx === _chemWiz.selected.length - 1 ? ' disabled' : '') + '>▼</button>' +
+        '<button type="button" title="Убрать" onclick="chemWizRemoveParam(\'' + key + '\')">✕</button>' +
+      '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function chemWizNewTemplate() {
+  _chemWiz = { screen: 'editor', editingId: null, lab: '', name: '', baseType: 'sha', selected: [], search: '' };
+  _chemWizRender();
+}
+function chemWizEditTemplate(id) {
+  var t = ChemState.labTemplates.find(function(x) { return x.id === id; });
+  if (!t) return;
+  _chemWiz = { screen: 'editor', editingId: t.id, lab: t.lab_name, name: t.template_name, baseType: t.base_type || 'sha', selected: (t.params || []).slice(), search: '' };
+  _chemWizRender();
+}
+function chemWizDuplicateTemplate(id) {
+  var t = ChemState.labTemplates.find(function(x) { return x.id === id; });
+  if (!t) return;
+  _chemWiz = { screen: 'editor', editingId: null, lab: t.lab_name, name: t.template_name + ' (копия)', baseType: t.base_type || 'sha', selected: (t.params || []).slice(), search: '' };
+  _chemWizRender();
+}
+async function chemWizDeleteTemplate(id) {
+  if (!confirm('Удалить этот шаблон? Уже сохранённые протоколы не изменятся, но при их редактировании форма покажет полный каталог параметров.')) return;
+  var res = await ChemApi.deleteLabTemplate(id);
+  if (res.error) { _chemWizNotify('Ошибка удаления: ' + res.error.message, 'error'); return; }
+  ChemState.labTemplates = ChemState.labTemplates.filter(function(t) { return t.id !== id; });
+  _chemWizRender();
+}
+function chemWizBackToList() {
+  _chemWiz.screen = 'list';
+  _chemWizRender();
+}
+
+function chemWizToggleParam(key) {
+  var idx = _chemWiz.selected.indexOf(key);
+  if (idx >= 0) _chemWiz.selected.splice(idx, 1);
+  else _chemWiz.selected.push(key);
+  _chemWizRefreshPanes();
+}
+function chemWizRemoveParam(key) {
+  var idx = _chemWiz.selected.indexOf(key);
+  if (idx >= 0) _chemWiz.selected.splice(idx, 1);
+  _chemWizRefreshPanes();
+}
+function chemWizMoveParam(key, dir) {
+  var idx = _chemWiz.selected.indexOf(key);
+  if (idx < 0) return;
+  var newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= _chemWiz.selected.length) return;
+  var tmp = _chemWiz.selected[idx];
+  _chemWiz.selected[idx] = _chemWiz.selected[newIdx];
+  _chemWiz.selected[newIdx] = tmp;
+  _chemWizRefreshPanes();
+}
+function chemWizSearchChange(val) {
+  _chemWiz.search = val;
+  var cat = document.getElementById('chem-wiz-catalog');
+  if (cat) cat.innerHTML = _chemWizCatalogHtml();
+}
+function _chemWizRefreshPanes() {
+  var cat = document.getElementById('chem-wiz-catalog');
+  if (cat) cat.innerHTML = _chemWizCatalogHtml();
+  var sel = document.getElementById('chem-wiz-selected');
+  if (sel) sel.innerHTML = _chemWizSelectedHtml();
+  var cnt = document.getElementById('chem-wiz-sel-count');
+  if (cnt) cnt.textContent = _chemWiz.selected.length;
+}
+
+function _chemWizNotify(msg, type) {
+  if (typeof Toast !== 'undefined') Toast.show(msg, type);
+  else alert(msg);
+}
+
+async function chemWizSaveTemplate() {
+  var btn = document.querySelector('.chem-modal-footer .chem-btn-prim');
+  var lab = (document.getElementById('chem-wiz-lab').value || '').trim();
+  var name = (document.getElementById('chem-wiz-name').value || '').trim();
+  var baseType = document.getElementById('chem-wiz-basetype').value || 'sha';
+  if (!lab)  { _chemWizNotify('Укажите лабораторию', 'error'); return; }
+  if (!name) { _chemWizNotify('Укажите название шаблона', 'error'); return; }
+  if (!_chemWiz.selected.length) { _chemWizNotify('Выберите хотя бы один параметр', 'error'); return; }
+
+  var row = {
+    lab_name:      lab,
+    template_name: name,
+    base_type:     baseType,
+    params:        _chemWiz.selected,
+    updated_at:    new Date().toISOString(),
+  };
+  if (_chemWiz.editingId) row.id = _chemWiz.editingId;
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
+  var res;
+  try {
+    res = await ChemApi.upsertLabTemplate(row);
+  } catch (ex) {
+    _chemWizNotify('Ошибка сохранения шаблона: ' + ex.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Сохранить шаблон'; }
+    return;
+  }
+  if (res.error) {
+    var msg = res.error.message || '';
+    if (/duplicate key|unique/i.test(msg)) {
+      _chemWizNotify('У этой лаборатории уже есть шаблон с таким названием — выберите другое.', 'error');
+    } else if (/row-level security/i.test(msg)) {
+      _chemWizNotify('Нет прав на запись в таблицу шаблонов (RLS). Выполните миграцию migrations/chem_lab_templates.sql целиком (включая политики доступа внизу файла) в Supabase SQL Editor.', 'error');
+    } else {
+      _chemWizNotify('Ошибка сохранения шаблона: ' + msg, 'error');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Сохранить шаблон'; }
+    return;
+  }
+  var saved = res.data;
+  var existsIdx = ChemState.labTemplates.findIndex(function(t) { return t.id === saved.id; });
+  if (existsIdx >= 0) ChemState.labTemplates[existsIdx] = saved;
+  else ChemState.labTemplates.push(saved);
+
+  _chemWiz.screen = 'list';
+  _chemWizRender();
+  _chemWizNotify('Шаблон «' + saved.template_name + '» сохранён', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  ФОРМЫ: ПРОТОКОЛ (ручной ввод)
 // ═══════════════════════════════════════════════════════════════
 var _chemFormGroup = 'organo';
+var _chemFormExistingResults = [];
+var _chemFormClearScan = false; // пользователь нажал "Удалить скан"
+
+function _chemScanExistingHtml(proto) {
+  _chemFormClearScan = false;
+  if (!proto || !proto.scan_url) return '';
+  return '<div style="display:flex;align-items:center;gap:8px;font-size:12px">' +
+    '<a href="' + escHTML(proto.scan_url) + '" target="_blank" rel="noopener" style="color:var(--blue)">📎 ' + escHTML(proto.scan_name || 'Открыть скан') + '</a>' +
+    '<button type="button" class="chem-btn chem-btn-ghost" style="padding:2px 8px;font-size:11px" onclick="chemClearScan(this)">🗑 Удалить</button>' +
+  '</div>';
+}
+function chemClearScan(btn) {
+  _chemFormClearScan = true;
+  var wrap = document.getElementById('pf-scan-existing');
+  if (wrap) wrap.innerHTML = '<span style="font-size:11px;color:var(--txt-3)">Скан будет удалён при сохранении</span>';
+}
 
 function showChemProtocolForm(protocolId) {
   _chemFormGroup = 'organo';
   var proto = protocolId ? ChemState.protocols.find(function(p){ return p.id === protocolId; }) : null;
   var existingResults = proto ? (ChemState.results[protocolId] || []) : [];
+  _chemFormExistingResults = existingResults;
 
   var wpOpts = '<option value="">— Выберите водопункт —</option>' + ChemState.waterPoints.map(function(w) {
     return '<option value="' + w.id + '"' + (proto && proto.water_point_id === w.id ? ' selected' : '') + '>' + escHTML(w.name) + '</option>';
   }).join('');
 
   var today = new Date().toISOString().slice(0,10);
+  var initLab = proto ? (proto.lab_name || '') : '';
+  var initTemplateId = proto ? (proto.template_id || '') : '';
 
   // Шапка протокола
+  var initQuarter = proto ? chemQuarterOf(proto) : chemQuarterFromDate(today);
   var headerHtml =
-    '<div class="chem-form-row">' +
+    '<div class="chem-form-row chem-form-row-3">' +
       '<div class="chem-fld"><label>Водопункт *</label>' +
-        '<select class="chem-inp" id="pf-wp">' + wpOpts + '</select></div>' +
+        '<select class="chem-inp" id="pf-wp" onchange="chemFormWpChanged()">' + wpOpts + '</select></div>' +
       '<div class="chem-fld"><label>Дата отбора проб *</label>' +
-        '<input class="chem-inp" type="date" id="pf-date" value="' + (proto ? proto.sampled_at : today) + '"></div>' +
+        '<input class="chem-inp" type="date" id="pf-date" value="' + (proto ? proto.sampled_at : today) + '" onchange="chemFormDateChanged()"></div>' +
+      '<div class="chem-fld"><label title="Автоматически по дате отбора — при необходимости укажите вручную">Квартал</label>' +
+        '<select class="chem-inp" id="pf-quarter">' +
+          [1,2,3,4].map(function(q) {
+            return '<option value="' + q + '"' + (initQuarter === q ? ' selected' : '') + '>' + _chemRomanQ(q) + ' кв.</option>';
+          }).join('') +
+        '</select></div>' +
     '</div>' +
     '<div class="chem-form-row chem-form-row-3">' +
       '<div class="chem-fld"><label>Лаборатория</label>' +
-        '<input class="chem-inp" id="pf-lab" placeholder="EcoExpert" value="' + escHTML(proto ? (proto.lab_name||'') : '') + '"></div>' +
+        _chemLabFieldHtml('pf-lab', initLab, 'chemFormLabChanged()', 'chemFormLabPick') +
+      '</div>' +
       '<div class="chem-fld"><label>№ протокола</label>' +
         '<input class="chem-inp" id="pf-proto-num" placeholder="421/2" value="' + escHTML(proto ? (proto.lab_protocol_number||'') : '') + '"></div>' +
       '<div class="chem-fld"><label>Лаб. номер пробы</label>' +
         '<input class="chem-inp" id="pf-lab-num" placeholder="977" value="' + escHTML(proto ? (proto.lab_number||'') : '') + '"></div>' +
     '</div>' +
-    '<div class="chem-form-row" style="align-items:flex-end">' +
+    '<div class="chem-form-row chem-form-row-3" style="align-items:flex-end">' +
       '<div class="chem-fld"><label>Вид протокола</label>' +
         '<select class="chem-inp" id="pf-proto-type">' +
           Object.keys(CHEM_PROTO_TYPE_META).map(function(k) {
@@ -1136,6 +2020,9 @@ function showChemProtocolForm(protocolId) {
           }).join('') +
         '</select>' +
       '</div>' +
+      '<div class="chem-fld"><label>Шаблон ввода</label>' +
+        '<select class="chem-inp" id="pf-template" onchange="chemFormTemplateChanged()">' + _chemTemplateOptionsHtml(initLab, initTemplateId) + '</select>' +
+      '</div>' +
       '<div class="chem-fld" style="flex:0 0 auto">' +
         '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--txt-2);padding-bottom:6px;user-select:none">' +
           '<input type="checkbox" id="pf-is-control" style="accent-color:#f59e0b;width:15px;height:15px;cursor:pointer"' + (proto && proto.is_control ? ' checked' : '') + '>' +
@@ -1143,37 +2030,15 @@ function showChemProtocolForm(protocolId) {
         '</label>' +
       '</div>' +
     '</div>' +
+    '<div class="chem-form-row-1 chem-form-row">' +
+      '<div class="chem-fld"><label>Скан-копия протокола (PDF или изображение)</label>' +
+        '<input type="file" class="chem-inp" id="pf-scan-file" accept=".pdf,image/*" style="padding:6px">' +
+        '<div id="pf-scan-existing" style="margin-top:6px">' + _chemScanExistingHtml(proto) + '</div>' +
+      '</div>' +
+    '</div>' +
 
-    // Вкладки групп параметров — все группы рендерятся сразу, скрываются через display
-    '<div style="border-top:1px solid var(--line);margin:16px -20px;padding:16px 20px 0">' +
-      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">Результаты анализа</div>' +
-      '<div class="chem-gtabs" id="chem-gtabs">' +
-        Object.keys(CHEM_GROUPS).map(function(g) {
-          var existFilled = existingResults.filter(function(r){
-            var p2 = CHEM_PARAM_MAP[r.param_key];
-            return p2 && p2.group === g && r.value_raw;
-          }).length;
-          var total = CHEM_PARAMS.filter(function(p){ return p.group === g; }).length;
-          var initExceed = existingResults.some(function(r) {
-            var p2 = CHEM_PARAM_MAP[r.param_key];
-            return p2 && p2.group === g && _chemPdkStatus(r.param_key, r.value_raw, r.below_detection) === 'exceed';
-          });
-          var cntTxt = '(' + existFilled + '/' + total + ')' + (initExceed ? ' ⚠' : '');
-          var exceedStyle = initExceed ? 'border-color:rgba(248,113,113,.5);' : '';
-          return '<button class="chem-gtab' + (g === _chemFormGroup ? ' active' : '') + '" data-grp="' + g + '" style="' + exceedStyle + '" onclick="chemSwitchFormGroup(\'' + g + '\')">' +
-            CHEM_GROUPS[g].icon + ' ' + CHEM_GROUPS[g].label +
-            ' <span id="chem-tab-cnt-' + g + '" style="font-size:10px;opacity:.7;margin-left:2px">' + cntTxt + '</span>' +
-          '</button>';
-        }).join('') +
-      '</div>' +
-      // Рендерим все панели сразу — данные в DOM сохраняются при переключении
-      '<div id="chem-param-grid-wrap">' +
-        Object.keys(CHEM_GROUPS).map(function(g) {
-          return '<div id="chem-grp-' + g + '" style="display:' + (g === _chemFormGroup ? 'block' : 'none') + '">' +
-            _chemParamGrid(g, existingResults) +
-          '</div>';
-        }).join('') +
-      '</div>' +
+    '<div style="border-top:1px solid var(--line);margin:16px -20px;padding:16px 20px 0" id="chem-results-section">' +
+      _chemResultsSectionHtml(existingResults, initTemplateId || null) +
     '</div>';
 
   _chemOpenModal(
@@ -1183,6 +2048,7 @@ function showChemProtocolForm(protocolId) {
     '<button class="chem-btn chem-btn-prim" onclick="_chemSaveProtocol(\'' + (proto ? proto.id : '') + '\')">Сохранить протокол</button>',
     'max-width:860px'
   );
+  _chemUpdateIonBalance();
 }
 
 function chemSwitchFormGroup(grp) {
@@ -1196,6 +2062,118 @@ function chemSwitchFormGroup(grp) {
     var panel = document.getElementById('chem-grp-' + g);
     if (panel) panel.style.display = g === grp ? 'block' : 'none';
   });
+}
+
+// ── Шаблон ввода: подстановка списка/порядка полей результатов ──
+function _chemTemplateOptionsHtml(labName, selectedId) {
+  var opts = '<option value="">— Полный каталог (все параметры) —</option>';
+  var lab = (labName || '').trim().toLowerCase();
+  var matches = lab ? ChemState.labTemplates.filter(function(t) { return (t.lab_name || '').trim().toLowerCase() === lab; }) : [];
+  matches.forEach(function(t) {
+    opts += '<option value="' + t.id + '"' + (t.id === selectedId ? ' selected' : '') + '>' + escHTML(t.template_name) + ' (' + (t.params||[]).length + ')</option>';
+  });
+  return opts;
+}
+
+// Квартал подставляется по дате отбора — пользователь может после этого
+// переставить его вручную в самом селекте (последнее изменение побеждает).
+function chemFormDateChanged() {
+  var dateInp = document.getElementById('pf-date');
+  var qSel    = document.getElementById('pf-quarter');
+  if (!dateInp || !qSel) return;
+  var q = chemQuarterFromDate(dateInp.value);
+  if (q) qSel.value = q;
+}
+
+function chemFormLabChanged() {
+  var labInp = document.getElementById('pf-lab');
+  var sel = document.getElementById('pf-template');
+  if (!labInp || !sel) return;
+  sel.innerHTML = _chemTemplateOptionsHtml(labInp.value, null);
+  chemFormTemplateChanged();
+}
+
+// CHEM-04: если у выбранного водопункта задан шаблон лаборатории по
+// умолчанию — подставляем лабораторию и шаблон автоматически (только
+// пока поле "Лаборатория" пустое, чтобы не затирать то, что уже ввели).
+function chemFormWpChanged() {
+  var wpId = document.getElementById('pf-wp').value;
+  var wp = ChemState.waterPoints.find(function(w) { return w.id === wpId; });
+  var labInp = document.getElementById('pf-lab');
+  if (!wp || !wp.default_template_id || !labInp || labInp.value.trim()) return;
+  var tpl = ChemState.labTemplates.find(function(t) { return t.id === wp.default_template_id; });
+  if (!tpl) return;
+  labInp.value = tpl.lab_name;
+  chemFormLabChanged();
+  var tplSel = document.getElementById('pf-template');
+  if (tplSel) { tplSel.value = tpl.id; chemFormTemplateChanged(); }
+}
+
+function chemFormTemplateChanged() {
+  var sel = document.getElementById('pf-template');
+  var section = document.getElementById('chem-results-section');
+  if (!section) return;
+  section.innerHTML = _chemResultsSectionHtml(_chemFormExistingResults, sel ? (sel.value || null) : null);
+  _chemUpdateIonBalance();
+}
+
+function _chemResultsSectionHtml(existingResults, templateId) {
+  var tpl = templateId ? ChemState.labTemplates.find(function(t) { return t.id === templateId; }) : null;
+
+  if (tpl) {
+    return '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">' +
+        'Результаты анализа — шаблон «' + escHTML(tpl.lab_name) + ' / ' + escHTML(tpl.template_name) + '» (' + (tpl.params||[]).length + ' показателей)' +
+      '</div>' +
+      '<div id="chem-ion-balance"></div>' +
+      _chemTemplateParamList(tpl, existingResults);
+  }
+
+  _chemFormGroup = 'organo';
+  return '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:10px">Результаты анализа — полный каталог</div>' +
+    '<div id="chem-ion-balance"></div>' +
+    '<div class="chem-gtabs" id="chem-gtabs">' +
+      Object.keys(CHEM_GROUPS).map(function(g) {
+        var existFilled = existingResults.filter(function(r){
+          var p2 = CHEM_PARAM_MAP[r.param_key];
+          return p2 && p2.group === g && r.value_raw;
+        }).length;
+        var total = CHEM_PARAMS.filter(function(p){ return p.group === g; }).length;
+        var initExceed = existingResults.some(function(r) {
+          var p2 = CHEM_PARAM_MAP[r.param_key];
+          return p2 && p2.group === g && _chemPdkStatus(r.param_key, r.value_raw, r.below_detection) === 'exceed';
+        });
+        var cntTxt = '(' + existFilled + '/' + total + ')' + (initExceed ? ' ⚠' : '');
+        var exceedStyle = initExceed ? 'border-color:rgba(248,113,113,.5);' : '';
+        return '<button class="chem-gtab' + (g === _chemFormGroup ? ' active' : '') + '" data-grp="' + g + '" style="' + exceedStyle + '" onclick="chemSwitchFormGroup(\'' + g + '\')">' +
+          CHEM_GROUPS[g].icon + ' ' + CHEM_GROUPS[g].label +
+          ' <span id="chem-tab-cnt-' + g + '" style="font-size:10px;opacity:.7;margin-left:2px">' + cntTxt + '</span>' +
+        '</button>';
+      }).join('') +
+    '</div>' +
+    '<div id="chem-param-grid-wrap">' +
+      Object.keys(CHEM_GROUPS).map(function(g) {
+        return '<div id="chem-grp-' + g + '" style="display:' + (g === _chemFormGroup ? 'block' : 'none') + '">' +
+          _chemParamGrid(g, existingResults) +
+        '</div>';
+      }).join('') +
+    '</div>';
+}
+
+function _chemTemplateParamList(tpl, existingResults) {
+  var html = '<div class="chem-param-grid">';
+  (tpl.params || []).forEach(function(key) {
+    var p = CHEM_PARAM_MAP[key];
+    if (!p) return; // параметр мог быть удалён из каталога — пропускаем
+    var existing = existingResults.find(function(r){ return r.param_key === key; });
+    var val = existing ? (existing.value_raw || '') : '';
+    var pdkHint = _chemPdkStr(p);
+    html += '<div class="chem-param-fld">' +
+      '<label class="chem-param-lbl">' + p.no + '. ' + escHTML(p.name) + '<span>' + escHTML(p.unit) + (pdkHint ? ' · ПДК: ' + pdkHint : '') + '</span></label>' +
+      '<input class="chem-param-inp" id="pr-' + p.key + '" data-pkey="' + p.key + '" placeholder="например: 7,9 или <0,50" value="' + escHTML(val) + '" oninput="_chemCheckParamInput(this)">' +
+    '</div>';
+  });
+  html += '</div>';
+  return html;
 }
 
 function _chemParamGrid(grp, existingResults) {
@@ -1217,11 +2195,45 @@ function _chemParamGrid(grp, existingResults) {
 function _chemCheckParamInput(inp) {
   var key = inp.dataset.pkey;
   var val = inp.value.trim();
-  if (!val) { inp.classList.remove('exceed'); _chemUpdateTabCounters(); return; }
+  if (!val) { inp.classList.remove('exceed'); _chemUpdateTabCounters(); _chemUpdateIonBalance(); return; }
   var parsed = _chemParseValue(val);
   var status = parsed ? _chemPdkStatus(key, val, parsed.below) : 'no_norm';
   inp.classList.toggle('exceed', status === 'exceed');
   _chemUpdateTabCounters();
+  _chemUpdateIonBalance();
+}
+
+// ── Баланс ионов (контроль качества химического анализа) ────────
+// Стандартная проверка: (Σкатионы − Σанионы) / (Σкатионы + Σанионы) × 100%,
+// суммы в мг-экв/л. Норма — обычно в пределах ±5%; больше — вероятная
+// ошибка ввода/анализа (перепутанные единицы, опечатка и т.п.).
+var CHEM_ION_BALANCE_KEYS = ['ca', 'mg', 'na', 'k', 'hco3', 'co3', 'so4', 'cl'];
+function _chemLiveIonSums() {
+  var catSum = 0, anSum = 0;
+  CHEM_ION_BALANCE_KEYS.forEach(function(key) {
+    var inp = document.getElementById('pr-' + key);
+    if (!inp) return;
+    var raw = inp.value.trim();
+    if (!raw) return;
+    var parsed = _chemParseValue(raw);
+    if (!parsed || parsed.below || parsed.above || !(_CHEM_EW[key] > 0)) return;
+    var meq = parsed.num / _CHEM_EW[key];
+    if (key === 'ca' || key === 'mg' || key === 'na' || key === 'k') catSum += meq;
+    else anSum += meq;
+  });
+  return { catSum: catSum, anSum: anSum };
+}
+function _chemUpdateIonBalance() {
+  var el = document.getElementById('chem-ion-balance');
+  if (!el) return;
+  var s = _chemLiveIonSums();
+  if (s.catSum <= 0 || s.anSum <= 0) { el.innerHTML = ''; return; }
+  var err = (s.catSum - s.anSum) / (s.catSum + s.anSum) * 100;
+  var bad = Math.abs(err) > 5;
+  el.innerHTML = '<div class="chem-ion-balance-badge' + (bad ? ' bad' : ' ok') + '">' +
+    (bad ? '⚠' : '✓') + ' Баланс ионов: ' + (err > 0 ? '+' : '') + err.toFixed(1) + '%' +
+    (bad ? ' — проверьте ввод (норма ±5%)' : ' (норма ±5%)') +
+  '</div>';
 }
 
 function _chemUpdateTabCounters() {
@@ -1249,11 +2261,115 @@ function _chemUpdateTabCounters() {
   });
 }
 
+// Сравнивает введённые (ещё не сохранённые) значения с последними пробами
+// того же водопункта — резкий скачок (в 3+ раза) обычно означает опечатку
+// или перепутанные единицы, а не реальное изменение химсостава.
+async function _chemDetectAnomalies(wpId, draftResults, existingId) {
+  var history = ChemState.protocols
+    .filter(function(p) { return p.water_point_id === wpId && p.id !== existingId; })
+    .sort(function(a, b) { return (b.sampled_at || '').localeCompare(a.sampled_at || ''); })
+    .slice(0, 5);
+  if (!history.length) return [];
+
+  var needIds = history.filter(function(p) { return !ChemState.results[p.id]; }).map(function(p) { return p.id; });
+  if (needIds.length) {
+    var resArr = await Promise.all(needIds.map(function(id) { return ChemApi.getResults(id); }));
+    resArr.forEach(function(res, i) { ChemState.results[needIds[i]] = (!res.error && res.data) ? res.data : []; });
+  }
+
+  var anomalies = [];
+  draftResults.forEach(function(row) {
+    if (row.value_num == null || row.value_num <= 0) return; // "<порог" / ">диапазон" — не с чем сравнивать
+    var param = CHEM_PARAM_MAP[row.param_key];
+    if (!param) return;
+    for (var i = 0; i < history.length; i++) {
+      var hRows = ChemState.results[history[i].id] || [];
+      var hRow = hRows.find(function(r) { return r.param_key === row.param_key; });
+      if (hRow && hRow.value_num != null && hRow.value_num > 0) {
+        var ratio = row.value_num / hRow.value_num;
+        if (ratio >= 3 || ratio <= 1 / 3) {
+          anomalies.push({
+            name: param.name, unit: param.unit,
+            prev: hRow.value_num, prevDate: history[i].sampled_at, next: row.value_num,
+          });
+        }
+        break; // сравниваем с ближайшей предыдущей пробой, где этот показатель вообще измерялся
+      }
+    }
+  });
+  return anomalies;
+}
+
+// ── CHEM-08: журнал изменений протокола ──────────────────────────
+var CHEM_HISTORY_FIELDS = [
+  { key: 'water_point_id',      label: 'Водопункт',          fmt: function(v) { var w = ChemState.waterPoints.find(function(x){ return x.id === v; }); return w ? w.name : (v || '—'); } },
+  { key: 'sampled_at',          label: 'Дата отбора' },
+  { key: 'lab_name',            label: 'Лаборатория' },
+  { key: 'lab_protocol_number', label: '№ протокола' },
+  { key: 'lab_number',          label: 'Лаб. номер пробы' },
+  { key: 'protocol_type',       label: 'Вид протокола',      fmt: function(v) { var m = CHEM_PROTO_TYPE_META[v]; return m ? m.label : (v || '—'); } },
+  { key: 'is_control',          label: 'Контрольная проба',  fmt: function(v) { return v ? 'да' : 'нет'; } },
+];
+function _chemBuildProtoDiff(oldRow, newRow) {
+  var out = [];
+  CHEM_HISTORY_FIELDS.forEach(function(f) {
+    var ov = oldRow ? (oldRow[f.key] == null ? null : oldRow[f.key]) : null;
+    var nv = newRow[f.key] == null ? null : newRow[f.key];
+    if (String(ov) === String(nv)) return;
+    out.push({
+      field: f.key, label: f.label,
+      old: f.fmt ? f.fmt(ov) : (ov == null ? '—' : String(ov)),
+      new: f.fmt ? f.fmt(nv) : (nv == null ? '—' : String(nv)),
+    });
+  });
+  return out;
+}
+function _chemCountResultChanges(oldResults, newResults) {
+  var oldMap = {}; (oldResults || []).forEach(function(r) { oldMap[r.param_key] = r.value_raw || ''; });
+  var newMap = {}; (newResults || []).forEach(function(r) { newMap[r.param_key] = r.value_raw || ''; });
+  var allKeys = {};
+  Object.keys(oldMap).forEach(function(k) { allKeys[k] = true; });
+  Object.keys(newMap).forEach(function(k) { allKeys[k] = true; });
+  var changed = 0;
+  Object.keys(allKeys).forEach(function(k) { if ((oldMap[k] || '') !== (newMap[k] || '')) changed++; });
+  return changed;
+}
+
 async function _chemSaveProtocol(existingId) {
   var wpId  = document.getElementById('pf-wp').value;
   var date  = document.getElementById('pf-date').value;
   if (!wpId)  { alert('Выберите водопункт'); return; }
   if (!date)  { alert('Введите дату отбора проб'); return; }
+
+  // Черновик результатов из формы — нужен и для сохранения, и для проверки
+  // на аномалии (последняя выполняется до записи в базу).
+  var draftResults = [];
+  CHEM_PARAMS.forEach(function(p) {
+    var inp = document.getElementById('pr-' + p.key);
+    if (!inp) return;
+    var raw = inp.value.trim();
+    if (!raw) return;
+    var parsed = _chemParseValue(raw);
+    draftResults.push({
+      param_key:       p.key,
+      value_raw:       raw,
+      value_num:       parsed && !parsed.below && !parsed.above ? parsed.num : null,
+      below_detection: parsed ? parsed.below : false,
+      above_range:     parsed ? parsed.above : false,
+    });
+  });
+
+  var anomalies = await _chemDetectAnomalies(wpId, draftResults, existingId);
+  if (anomalies.length) {
+    var msg = 'Резкое отклонение от предыдущих проб этого водопункта:\n\n' +
+      anomalies.map(function(a) {
+        return '• ' + a.name + ': было ' + a.prev + ' ' + a.unit + ' (' + (a.prevDate || '—') + ') → стало ' + a.next + ' ' + a.unit;
+      }).join('\n') +
+      '\n\nЭто может быть реальное изменение состава, а может — опечатка или перепутанные единицы измерения.\n\nСохранить как есть?';
+    if (!confirm(msg)) return;
+  }
+
+  var oldProto = existingId ? ChemState.protocols.find(function(p) { return p.id === existingId; }) : null;
 
   var protoRow = {
     water_point_id:      wpId,
@@ -1264,29 +2380,37 @@ async function _chemSaveProtocol(existingId) {
     protocol_type:       document.getElementById('pf-proto-type').value || 'sha',
     is_control:          document.getElementById('pf-is-control') ? document.getElementById('pf-is-control').checked : false,
     source:              'manual',
+    template_id:         (document.getElementById('pf-template') && document.getElementById('pf-template').value) || null,
+    quarter:             (document.getElementById('pf-quarter') && parseInt(document.getElementById('pf-quarter').value, 10)) || chemQuarterFromDate(date),
   };
   if (existingId) protoRow.id = existingId;
 
   var pRes = await ChemApi.upsertProtocol(protoRow);
+  if (pRes.error && /template_id/i.test(pRes.error.message || '')) {
+    // Колонка template_id ещё не создана в базе (миграция chem_lab_templates.sql не выполнена) —
+    // сохраняем протокол без неё, чтобы это не блокировало обычную работу.
+    delete protoRow.template_id;
+    pRes = await ChemApi.upsertProtocol(protoRow);
+  }
+  if (pRes.error && /quarter/i.test(pRes.error.message || '')) {
+    // Колонка quarter ещё не создана в базе (миграция chem_protocol_quarter.sql не выполнена) —
+    // сохраняем протокол без неё, чтобы это не блокировало обычную работу.
+    delete protoRow.quarter;
+    pRes = await ChemApi.upsertProtocol(protoRow);
+  }
   if (pRes.error) { alert('Ошибка сохранения протокола: ' + pRes.error.message); return; }
   var savedProto = pRes.data;
 
-  // Собираем все введённые значения
-  var resultRows = [];
-  CHEM_PARAMS.forEach(function(p) {
-    var inp = document.getElementById('pr-' + p.key);
-    if (!inp) return;
-    var raw = inp.value.trim();
-    if (!raw) return;
-    var parsed = _chemParseValue(raw);
-    resultRows.push({
+  // draftResults уже собран выше (для проверки аномалий) — просто добавляем protocol_id
+  var resultRows = draftResults.map(function(r) {
+    return {
       protocol_id:     savedProto.id,
-      param_key:       p.key,
-      value_raw:       raw,
-      value_num:       parsed && !parsed.below && !parsed.above ? parsed.num : null,
-      below_detection: parsed ? parsed.below : false,
-      above_range:     parsed ? parsed.above : false,
-    });
+      param_key:       r.param_key,
+      value_raw:       r.value_raw,
+      value_num:       r.value_num,
+      below_detection: r.below_detection,
+      above_range:     r.above_range,
+    };
   });
 
   if (resultRows.length) {
@@ -1294,6 +2418,26 @@ async function _chemSaveProtocol(existingId) {
     if (existingId) await ChemApi.deleteResults(existingId);
     var rRes = await ChemApi.upsertResults(resultRows);
     if (rRes.error) console.warn('[chem] results save error', rRes.error);
+  }
+
+  // CHEM-07: скан-копия протокола — загружаем/удаляем после того, как известен ID протокола
+  var scanFileInp = document.getElementById('pf-scan-file');
+  var scanFile = scanFileInp && scanFileInp.files ? scanFileInp.files[0] : null;
+  if (scanFile) {
+    var upRes = await ChemApi.uploadProtocolScan(savedProto.id, scanFile);
+    if (upRes.error) {
+      if (typeof Toast !== 'undefined') Toast.show('Протокол сохранён, но скан загрузить не удалось: ' + upRes.error.message, 'error');
+    } else {
+      var scanUpd = await ChemApi.upsertProtocol({ id: savedProto.id, scan_url: upRes.data.url, scan_name: upRes.data.name });
+      if (scanUpd.error && /scan_url|scan_name/i.test(scanUpd.error.message || '')) {
+        if (typeof Toast !== 'undefined') Toast.show('Файл загружен, но для сохранения ссылки выполните миграцию migrations/chem_protocol_scan.sql', 'error');
+      } else if (!scanUpd.error) {
+        savedProto.scan_url = upRes.data.url; savedProto.scan_name = upRes.data.name;
+      }
+    }
+  } else if (_chemFormClearScan) {
+    var clrRes = await ChemApi.upsertProtocol({ id: savedProto.id, scan_url: null, scan_name: null });
+    if (!clrRes.error) { savedProto.scan_url = null; savedProto.scan_name = null; }
   }
 
   // Обновляем локальное состояние
@@ -1304,9 +2448,63 @@ async function _chemSaveProtocol(existingId) {
   }
   ChemState.results[savedProto.id] = resultRows;
 
+  // CHEM-08: журнал изменений — при правке логируем только реально
+  // изменившиеся поля, при создании фиксируем сам факт создания.
+  var histChanges = existingId ? _chemBuildProtoDiff(oldProto, protoRow) : [];
+  var resultChangeCount = existingId ? _chemCountResultChanges(_chemFormExistingResults, draftResults) : 0;
+  if (resultChangeCount > 0) {
+    histChanges.push({ field: 'results', label: 'Результаты анализа', old: '', new: 'изменено значений: ' + resultChangeCount });
+  }
+  if (!existingId || histChanges.length) {
+    var whoName = (typeof AppState !== 'undefined' && AppState.currentUser)
+      ? (AppState.currentUser.displayName || AppState.currentUser.email || null) : null;
+    ChemApi.addProtocolHistory({
+      protocol_id: savedProto.id,
+      changed_by:  whoName,
+      action:      existingId ? 'updated' : 'created',
+      changes:     histChanges,
+    }).catch(function() {}); // таблица могла быть ещё не создана — не блокируем сохранение протокола
+  }
+
+  var exceeded = resultRows.filter(function(r) {
+    return _chemPdkStatus(r.param_key, r.value_raw, r.below_detection) === 'exceed';
+  }).map(function(r) { var p = CHEM_PARAM_MAP[r.param_key]; return p ? p.name : r.param_key; });
+
   _chemCloseModal();
   _chemRenderSection('protocols');
-  if (typeof Toast !== 'undefined') Toast.done('msg', 'Протокол сохранён');
+  if (typeof Toast !== 'undefined') {
+    Toast.done('msg', 'Протокол сохранён');
+    if (exceeded.length) {
+      Toast.show('⚠ Превышение ПДК (' + exceeded.length + '): ' + exceeded.join(', '), 'warning');
+    }
+  }
+}
+
+// CHEM-05: открывает форму НОВОГО протокола с тем же водопунктом, лабораторией
+// и шаблоном ввода, что у протокола-источника — дата и результаты остаются
+// пустыми (это следующая по времени проба, а не копия старых значений).
+function chemDuplicateProtocol(sourceId) {
+  var proto = ChemState.protocols.find(function(p) { return p.id === sourceId; });
+  if (!proto) return;
+
+  showChemProtocolForm();
+
+  var wpSel = document.getElementById('pf-wp');
+  if (wpSel) wpSel.value = proto.water_point_id || '';
+
+  var typeSel = document.getElementById('pf-proto-type');
+  if (typeSel) typeSel.value = proto.protocol_type || 'sha';
+
+  var labInp = document.getElementById('pf-lab');
+  if (labInp && proto.lab_name) {
+    labInp.value = proto.lab_name;
+    chemFormLabChanged();
+    if (proto.template_id) {
+      var tplSel = document.getElementById('pf-template');
+      if (tplSel) { tplSel.value = proto.template_id; chemFormTemplateChanged(); }
+    }
+  }
+  if (typeof Toast !== 'undefined') Toast.show('Скважина и лаборатория подставлены — укажите дату и результаты новой пробы', 'info');
 }
 
 async function chemDeleteProtocol(id) {
@@ -1320,6 +2518,139 @@ async function chemDeleteProtocol(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  CHEM-09: ОТЧЁТ ПО ПРЕВЫШЕНИЯМ ПДК ЗА ПЕРИОД
+// ═══════════════════════════════════════════════════════════════
+function showChemExceedanceReport() {
+  var now = new Date();
+  var yearStart = now.getFullYear() + '-01-01';
+  var todayStr = now.toISOString().slice(0, 10);
+
+  _chemOpenModal(
+    '📊 Отчёт по превышениям ПДК',
+    '<div style="font-size:12px;color:var(--txt-3);margin-bottom:14px;line-height:1.5">' +
+      'Таблица всех результатов, превышающих ПДК (питьевая), по всем водопунктам за выбранный период — в формате, готовом к отправке в контролирующие органы.' +
+    '</div>' +
+    '<div class="chem-form-row">' +
+      '<div class="chem-fld"><label>С даты</label><input class="chem-inp" type="date" id="rep-from" value="' + yearStart + '"></div>' +
+      '<div class="chem-fld"><label>По дату</label><input class="chem-inp" type="date" id="rep-to" value="' + todayStr + '"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">' +
+      '<button class="chem-btn chem-btn-ghost" style="font-size:11px" onclick="chemReportQuickRange(\'quarter\')">Текущий квартал</button>' +
+      '<button class="chem-btn chem-btn-ghost" style="font-size:11px" onclick="chemReportQuickRange(\'prevQuarter\')">Прошлый квартал</button>' +
+      '<button class="chem-btn chem-btn-ghost" style="font-size:11px" onclick="chemReportQuickRange(\'year\')">Текущий год</button>' +
+    '</div>',
+    '<button class="chem-btn chem-btn-ghost" onclick="_chemCloseModal()">Отмена</button>' +
+    '<button class="chem-btn chem-btn-prim" onclick="chemDownloadExceedanceReport()">⬇ Скачать Excel</button>'
+  );
+}
+
+function chemReportQuickRange(kind) {
+  var now = new Date();
+  var y = now.getFullYear();
+  var from, to;
+  if (kind === 'year') {
+    from = y + '-01-01';
+    to = now.toISOString().slice(0, 10);
+  } else if (kind === 'quarter') {
+    var q = Math.floor(now.getMonth() / 3);
+    from = y + '-' + String(q * 3 + 1).padStart(2, '0') + '-01';
+    to = now.toISOString().slice(0, 10);
+  } else if (kind === 'prevQuarter') {
+    var qq = Math.floor(now.getMonth() / 3) - 1;
+    if (qq < 0) { qq = 3; y -= 1; }
+    var startMonth = qq * 3 + 1;
+    var endMonth = startMonth + 2;
+    var lastDay = new Date(y, endMonth, 0).getDate();
+    from = y + '-' + String(startMonth).padStart(2, '0') + '-01';
+    to = y + '-' + String(endMonth).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0');
+  }
+  var fromInp = document.getElementById('rep-from'), toInp = document.getElementById('rep-to');
+  if (fromInp) fromInp.value = from;
+  if (toInp) toInp.value = to;
+}
+
+// Собирает все превышения ПДК среди протоколов с датой отбора в [fromDate, toDate].
+async function _chemCollectExceedances(fromDate, toDate) {
+  var protos = ChemState.protocols.filter(function(p) {
+    return p.sampled_at && p.sampled_at >= fromDate && p.sampled_at <= toDate;
+  });
+  var needIds = protos.filter(function(p) { return !ChemState.results[p.id]; }).map(function(p) { return p.id; });
+  if (needIds.length) {
+    var resArr = await Promise.all(needIds.map(function(id) { return ChemApi.getResults(id); }));
+    resArr.forEach(function(res, i) { ChemState.results[needIds[i]] = (!res.error && res.data) ? res.data : []; });
+  }
+
+  var rows = [];
+  protos.forEach(function(p) {
+    var wp = ChemState.waterPoints.find(function(w) { return w.id === p.water_point_id; });
+    var results = ChemState.results[p.id] || [];
+    results.forEach(function(r) {
+      if (_chemPdkStatus(r.param_key, r.value_raw, r.below_detection) !== 'exceed') return;
+      var param = CHEM_PARAM_MAP[r.param_key];
+      if (!param) return;
+      var ratio = '';
+      var numVal = parseFloat(String(r.value_raw).replace(',', '.').replace(/^[<>]/, ''));
+      if (param.pdk_type === 'max' && param.pdk_drink) ratio = (numVal / param.pdk_drink).toFixed(1) + '×';
+      else if (param.pdk_type === 'min') ratio = 'ниже нормы';
+      else if (param.pdk_type === 'range') ratio = 'вне диапазона';
+      rows.push({
+        date: p.sampled_at,
+        wpName: wp ? wp.name : '—', wpCode: wp ? (wp.code || '') : '',
+        lab: p.lab_name || '', protoNum: p.lab_protocol_number || '',
+        paramName: param.name, unit: param.unit, value: r.value_raw,
+        pdk: _chemPdkStr(param), ratio: ratio,
+      });
+    });
+  });
+  rows.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return rows;
+}
+
+async function chemDownloadExceedanceReport() {
+  var from = document.getElementById('rep-from').value;
+  var to = document.getElementById('rep-to').value;
+  if (!from || !to) { alert('Укажите период'); return; }
+  if (typeof XLSX === 'undefined') { alert('Библиотека SheetJS не загружена. Проверьте соединение.'); return; }
+
+  var rows = await _chemCollectExceedances(from, to);
+  if (!rows.length) {
+    if (typeof Toast !== 'undefined') Toast.show('За выбранный период превышений ПДК не найдено', 'info');
+    return;
+  }
+
+  var header = ['Дата отбора', 'Водопункт', 'Код', 'Лаборатория', '№ протокола', 'Показатель', 'Значение', 'Ед. изм.', 'ПДК (питьевая)', 'Превышение'];
+  var aoa = [
+    ['Отчёт по превышениям ПДК за период ' + _chemFmtDate(from) + ' — ' + _chemFmtDate(to)],
+    ['Сформировано: ' + _chemFmtDate(new Date().toISOString().slice(0,10)) + ' · записей: ' + rows.length],
+    [],
+    header,
+  ].concat(rows.map(function(r) {
+    return [_chemFmtDate(r.date), r.wpName, r.wpCode, r.lab, r.protoNum, r.paramName, r.value, r.unit, r.pdk, r.ratio];
+  }));
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 10 }, { wch: 16 }, { wch: 12 }, { wch: 26 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 12 }];
+  ws['!freeze'] = { xSplit: 0, ySplit: 4, topLeftCell: 'A5', activePane: 'bottomLeft', state: 'frozen' };
+  XLSX.utils.book_append_sheet(wb, ws, 'Превышения ПДК');
+
+  var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  var blob = new Blob([wbOut], { type: 'application/octet-stream' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'exceedance_report_' + from + '_' + to + '.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  _chemCloseModal();
+  if (typeof Toast !== 'undefined') {
+    var n = rows.length;
+    Toast.show('Отчёт сформирован: ' + n + (n % 10 === 1 && n % 100 !== 11 ? ' превышение' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? ' превышения' : ' превышений')), 'success');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  ИМПОРТ EXCEL
 // ═══════════════════════════════════════════════════════════════
 function showChemExcelImport() {
@@ -1327,6 +2658,13 @@ function showChemExcelImport() {
     var t = CHEM_TEMPLATE_TYPES[k];
     return '<option value="' + k + '">' + t.icon + ' ' + t.label + ' — ' + t.desc + '</option>';
   }).join('');
+  var labTplOpts = ChemState.labTemplates.map(function(t) {
+    return '<option value="tpl:' + t.id + '">🧪 ' + escHTML(t.lab_name) + ' — ' + escHTML(t.template_name) + ' (' + (t.params||[]).length + ')</option>';
+  }).join('');
+  var tplSelectHtml = '<select id="chem-tpl-type" class="chem-inp">' +
+    '<optgroup label="Базовые типы">' + typeOpts + '</optgroup>' +
+    (labTplOpts ? '<optgroup label="Шаблоны лабораторий">' + labTplOpts + '</optgroup>' : '') +
+    '</select>';
 
   _chemOpenModal(
     'Шаблоны и импорт протоколов',
@@ -1335,13 +2673,14 @@ function showChemExcelImport() {
       '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3);margin-bottom:10px">① Скачать шаблон Excel</div>' +
       '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">' +
         '<div class="chem-fld" style="margin:0">' +
-          '<label style="font-size:11px;color:var(--txt-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Тип протокола</label>' +
-          '<select id="chem-tpl-type" class="chem-inp">' + typeOpts + '</select>' +
+          '<label style="font-size:11px;color:var(--txt-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Тип протокола / шаблон лаборатории</label>' +
+          tplSelectHtml +
         '</div>' +
         '<button class="chem-btn chem-btn-ghost" style="white-space:nowrap" onclick="_chemDownloadTemplate(document.getElementById(\'chem-tpl-type\').value)">⬇ Скачать .xlsx</button>' +
       '</div>' +
       '<div style="font-size:10px;color:var(--txt-3);margin-top:6px;line-height:1.5">' +
-        'Шаблон содержит строку заголовков с ключами параметров, строку с единицами и нормами ПДК, и строку-пример.' +
+        'Шаблон содержит строку заголовков с ключами параметров, строку с единицами и нормами ПДК, и строку-пример. ' +
+        'Нет нужного шаблона лаборатории? Настройте его в <a href="#" onclick="_chemCloseModal();showChemLabTemplateWizard();return false" style="color:var(--blue)">⚙️ Шаблоны лабораторий</a>.' +
       '</div>' +
     '</div>' +
 
@@ -1370,15 +2709,43 @@ function showChemExcelImport() {
   }, 100);
 }
 
-function _chemDownloadTemplate(typeKey) {
-  var tplType = CHEM_TEMPLATE_TYPES[typeKey] || CHEM_TEMPLATE_TYPES.sha;
-  var params = tplType.params.map(function(k){ return CHEM_PARAM_MAP[k]; }).filter(Boolean);
+// Разбирает значение комбинированного селектора "Тип протокола / шаблон лаборатории":
+// либо ключ базового типа CHEM_TEMPLATE_TYPES (напр. "sha"), либо "tpl:<id>" шаблона лаборатории.
+function _chemResolveTplSource(sourceVal) {
+  if (sourceVal && sourceVal.indexOf('tpl:') === 0) {
+    var tpl = ChemState.labTemplates.find(function(t) { return t.id === sourceVal.slice(4); });
+    if (tpl) return { kind: 'lab', template: tpl, protoType: tpl.base_type || 'sha', templateId: tpl.id };
+  }
+  var typeKey = (CHEM_TEMPLATE_TYPES[sourceVal] ? sourceVal : 'sha');
+  return { kind: 'base', typeKey: typeKey, protoType: typeKey, templateId: null };
+}
+
+function _chemDownloadTemplate(sourceVal) {
+  var resolved = _chemResolveTplSource(sourceVal);
+  var label, desc, icon, paramKeys, labExample, fileTag;
+
+  if (resolved.kind === 'lab') {
+    var tpl = resolved.template;
+    label = tpl.lab_name + ' — ' + tpl.template_name;
+    desc = 'Пользовательский шаблон лаборатории';
+    icon = '🧪';
+    paramKeys = tpl.params || [];
+    labExample = tpl.lab_name;
+    fileTag = 'lab_' + (tpl.lab_name + '_' + tpl.template_name).replace(/[^\wа-яёА-ЯЁ]+/gi, '_');
+  } else {
+    var tplType = CHEM_TEMPLATE_TYPES[resolved.typeKey] || CHEM_TEMPLATE_TYPES.sha;
+    label = tplType.label; desc = tplType.desc; icon = tplType.icon;
+    paramKeys = tplType.params;
+    labExample = 'EcoExpert';
+    fileTag = resolved.typeKey;
+  }
+  var params = paramKeys.map(function(k){ return CHEM_PARAM_MAP[k]; }).filter(Boolean);
 
   // Фиксированные колонки
   var fixedHeaders = ['Код водопункта','Наименование','Дата (ДД.ММ.ГГГГ)','№ протокола','Лаборатория','Лаб. номер пробы','Пробоотборщик','Примечание'];
   var fixedUnits   = ['','','','','','','',''];
   var fixedPdk     = ['','','','','','','',''];
-  var fixedExample = ['ПН-1','Скважина ПН-1','11.06.2026','421/2','EcoExpert','977','Иванов И.И.',''];
+  var fixedExample = ['ПН-1','Скважина ПН-1','11.06.2026','421/2',labExample,'977','Иванов И.И.',''];
 
   var paramHeaders = params.map(function(p){ return p.key; });
   var paramNames   = params.map(function(p){ return p.name; });
@@ -1391,7 +2758,7 @@ function _chemDownloadTemplate(typeKey) {
   // Строки листа
   var rows = [
     // 0: название шаблона
-    [tplType.icon + ' Шаблон протоколов: ' + tplType.label + ' — ' + tplType.desc],
+    [icon + ' Шаблон протоколов: ' + label + ' — ' + desc],
     // 1: ключи (эта строка используется при импорте)
     fixedHeaders.concat(paramHeaders),
     // 2: названия параметров
@@ -1421,14 +2788,14 @@ function _chemDownloadTemplate(typeKey) {
   // Заморозить первые 4 строки и 2 колонки
   ws['!freeze'] = { xSplit: 2, ySplit: 4, topLeftCell: 'C5', activePane: 'bottomRight', state: 'frozen' };
 
-  XLSX.utils.book_append_sheet(wb, ws, tplType.label.substring(0,31));
+  XLSX.utils.book_append_sheet(wb, ws, label.substring(0,31));
 
   var wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   var blob = new Blob([wbOut], { type: 'application/octet-stream' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'chem_template_' + typeKey + '.xlsx';
+  a.download = 'chem_template_' + fileTag + '.xlsx';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
@@ -1473,7 +2840,8 @@ function _chemPreviewUpload() {
     });
 
     var tplTypeKey = document.getElementById('chem-tpl-type') ? document.getElementById('chem-tpl-type').value : 'sha';
-    _chemImportCache = { headers: headers, dataRows: dataRows, protoType: tplTypeKey };
+    var resolved = _chemResolveTplSource(tplTypeKey);
+    _chemImportCache = { headers: headers, dataRows: dataRows, protoType: resolved.protoType, templateId: resolved.templateId };
 
     var html = '';
     if (knownCount > 0) {
@@ -1485,7 +2853,7 @@ function _chemPreviewUpload() {
         '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
           unknown.map(function(u){
             return '<span style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2);border-radius:5px;padding:2px 8px;font-size:11px;font-family:monospace;color:#fbbf24">' +
-              escHTML(u.code || u.name) + '</span>';
+              escHTML(u.name || u.code) + '</span>';
           }).join('') +
         '</div>' +
         '<div style="font-size:10px;color:var(--txt-3);margin-top:6px">Сначала добавьте эти водопункты в реестр, затем повторите импорт</div>' +
@@ -1538,7 +2906,7 @@ async function _chemImportFile() {
 
   // Используем уже разобранные данные из предпросмотра
   if (_chemImportCache && _chemImportCache.headers && _chemImportCache.dataRows) {
-    var result = await _chemImportRows(_chemImportCache.headers, _chemImportCache.dataRows, _chemImportCache.protoType);
+    var result = await _chemImportRows(_chemImportCache.headers, _chemImportCache.dataRows, _chemImportCache.protoType, _chemImportCache.templateId);
     _chemImportDone(result.imported, result.errors, result.skipped);
     _chemImportCache = null;
     return;
@@ -1600,10 +2968,13 @@ async function _chemImportCsv(file) {
 }
 
 /* Общая логика импорта строк. headers — массив строк (первые 8: фиксированные, далее param_key).
-   rows — массив массивов ячеек. protoType — ключ вида протокола (sha, radio, cn, micro, radio_full). */
-async function _chemImportRows(headers, rows, protoType) {
+   rows — массив массивов ячеек. protoType — ключ вида протокола (sha, radio, cn, micro, radio_full).
+   templateId — id шаблона лаборатории (chem_lab_templates), если файл скачан по такому шаблону. */
+async function _chemImportRows(headers, rows, protoType, templateId) {
   var imported = 0, errors = 0, skipped = 0;
   var resolvedProtoType = (protoType && CHEM_PROTO_TYPE_META[protoType]) ? protoType : 'sha';
+  var templateColumnMissing = false;
+  var quarterColumnMissing = false;
 
   for (var ri = 0; ri < rows.length; ri++) {
     var cols = rows[ri];
@@ -1648,8 +3019,23 @@ async function _chemImportRows(headers, rows, protoType) {
       lab_number:          labNum   || null,
       protocol_type:       resolvedProtoType,
       source:              'excel',
+      template_id:         (templateId && !templateColumnMissing) ? templateId : null,
+      quarter:             quarterColumnMissing ? undefined : chemQuarterFromDate(isoDate),
     };
+    if (protoRow.quarter === undefined) delete protoRow.quarter;
     var pRes = await ChemApi.upsertProtocol(protoRow);
+    if (pRes.error && /template_id/i.test(pRes.error.message || '')) {
+      // Колонка template_id ещё не создана в базе — не блокируем импорт остальных строк
+      templateColumnMissing = true;
+      delete protoRow.template_id;
+      pRes = await ChemApi.upsertProtocol(protoRow);
+    }
+    if (pRes.error && /quarter/i.test(pRes.error.message || '')) {
+      // Колонка quarter ещё не создана в базе — не блокируем импорт остальных строк
+      quarterColumnMissing = true;
+      delete protoRow.quarter;
+      pRes = await ChemApi.upsertProtocol(protoRow);
+    }
     if (pRes.error) {
       console.error('[chem import] protocol upsert error row', ri, ':', pRes.error.message, pRes.error);
       errors++;
@@ -2225,20 +3611,42 @@ function _chemRenderProtoBody(protocolId) {
 
   var diagContent = hasMacro
     ? '<div class="chem-diag-tabs" id="chem-diag-tabs-' + protocolId + '">' +
-        '<button class="chem-diag-tab active" onclick="chemSwitchDiag(\'' + protocolId + '\',\'piper\',this)">📐 Диаграмма Пайпера</button>' +
-        '<button class="chem-diag-tab" onclick="chemSwitchDiag(\'' + protocolId + '\',\'stiff\',this)">📊 Стифф · Шоллер</button>' +
-        '<button class="chem-diag-tab" onclick="chemSwitchDiag(\'' + protocolId + '\',\'kurlov\',this)">ƒ Формула Курлова</button>' +
+        '<button class="chem-diag-tab active" title="Диаграмма Пайпера" onclick="chemSwitchDiag(\'' + protocolId + '\',\'piper\',this)">📐</button>' +
+        '<button class="chem-diag-tab" title="Стифф · Шоллер" onclick="chemSwitchDiag(\'' + protocolId + '\',\'stiff\',this)">📊</button>' +
+        '<button class="chem-diag-tab" title="Квадрат Толстихина" onclick="chemSwitchDiag(\'' + protocolId + '\',\'tolst\',this)">▦</button>' +
       '</div>' +
       '<div class="chem-diag-body">' +
-        '<div class="chem-diag-pane active" id="chem-dpane-' + protocolId + '-piper">' +
-          '<canvas id="chem-cv-piper-' + protocolId + '" width="580" height="520" style="max-width:100%"></canvas>' +
+        '<div class="chem-diag-pane active chem-diag-pane-piper" id="chem-dpane-' + protocolId + '-piper">' +
+          '<canvas id="chem-cv-piper-' + protocolId + '" style="max-width:100%"></canvas>' +
+          '<div class="chem-piper-info">' +
+            '<div class="chem-piper-info-title">Тип воды по Пайперу</div>' +
+            '<div class="chem-piper-info-type" id="chem-wtype-' + protocolId + '">—</div>' +
+            '<div class="chem-kurlov-box" id="chem-kurlov-' + protocolId + '" style="padding:8px 0 0;text-align:left;max-width:none;line-height:2.2"></div>' +
+            '<div class="chem-piper-info-hint">' +
+              'ⓘ Показаны и другие пробы этого же водопункта (приглушены) — цвет точки = дата, см. легенду; кликните по любой, чтобы раскрыть её проценты. ' +
+              'Треугольники слева/справа — доли катионов и анионов пробы в %мг-экв. ' +
+              'Ромб в центре — итоговый гидрохимический тип воды (пересечение проекций из обоих треугольников): ' +
+              'низ — Ca,Mg–HCO₃ (гидрокарбонатные кальциево-магниевые), право — Na–HCO₃, ' +
+              'лево — Ca,Mg–Cl,SO₄, верх — Na–Cl,SO₄ (наиболее минерализованные воды).' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="chem-diag-pane" id="chem-dpane-' + protocolId + '-stiff">' +
-          '<canvas id="chem-cv-stiff-' + protocolId + '" width="500" height="220" style="max-width:100%"></canvas>' +
-          '<canvas id="chem-cv-scho-' + protocolId + '" width="560" height="280" style="max-width:100%"></canvas>' +
+          '<canvas id="chem-cv-stiff-' + protocolId + '" style="max-width:100%"></canvas>' +
+          '<canvas id="chem-cv-scho-' + protocolId + '" style="max-width:100%"></canvas>' +
         '</div>' +
-        '<div class="chem-diag-pane" id="chem-dpane-' + protocolId + '-kurlov">' +
-          '<div class="chem-kurlov-box" id="chem-kurlov-' + protocolId + '"></div>' +
+        '<div class="chem-diag-pane chem-diag-pane-piper" id="chem-dpane-' + protocolId + '-tolst">' +
+          '<canvas id="chem-cv-tolst-' + protocolId + '" style="max-width:100%"></canvas>' +
+          '<div class="chem-piper-info">' +
+            '<div class="chem-piper-info-title">Квадрат Толстихина — выбранная проба</div>' +
+            '<div class="chem-piper-info-type" id="chem-tolst-cell-' + protocolId + '">—</div>' +
+            '<div class="chem-piper-info-hint">' +
+              'ⓘ По горизонтали — доля Cl+SO₄ среди анионов (0% слева, 100% справа). По вертикали — доля Ca+Mg среди катионов ' +
+              '(0% внизу = чистые Na+K, 100% вверху). Сетка 10×10 — как в оригинальной методике Толстихина/Джикия; номер ' +
+              'ячейки здесь — просто её позиция (столбец-строка), точную историческую таблицу генетических классов по номерам ' +
+              'проверенным источником подтвердить не удалось.' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>'
     : '<div class="chem-no-macro">Нет данных макрокомпонентного состава для построения диаграмм</div>';
@@ -2251,7 +3659,7 @@ function _chemRenderProtoBody(protocolId) {
 
 function chemSwitchDiag(protocolId, tab, btn) {
   var tabs  = document.getElementById('chem-diag-tabs-' + protocolId);
-  var body  = document.querySelector('#cpb-' + protocolId + ' .chem-diag-body');
+  var body  = document.querySelector('#chem-pm-body-' + protocolId + ' .chem-diag-body');
   if (!tabs || !body) return;
   tabs.querySelectorAll('.chem-diag-tab').forEach(function(b){ b.classList.remove('active'); });
   btn.classList.add('active');
@@ -2276,49 +3684,256 @@ function _chemInitDiagrams(protocolId) {
   }
   if (!allMeqs.length) allMeqs = [{ meq: meq, id: protocolId, date: '' }];
 
-  // Draw Piper
-  var cvP = document.getElementById('chem-cv-piper-' + protocolId);
-  if (cvP) _chemDrawPiper(cvP, allMeqs, protocolId);
+  // Redraws all three diagrams sized to whatever space is actually available right
+  // now — returns false once the modal has been closed, so the resize listener
+  // below knows to remove itself instead of drawing into detached canvases.
+  function redraw() {
+    var body = document.getElementById('chem-pm-body-' + protocolId);
+    if (!body) return false;
 
-  // Draw Stiff
-  var cvS = document.getElementById('chem-cv-stiff-' + protocolId);
-  if (cvS) _chemDrawStiff(cvS, meq);
+    var cvP = document.getElementById('chem-cv-piper-' + protocolId);
+    if (cvP) {
+      var paneP = cvP.closest('.chem-diag-pane-piper');
+      var piperW = _chemLayoutDiagPane(paneP, 420, 560);
+      _chemDrawPiper(cvP, allMeqs, protocolId, piperW); // height is self-computed from geometry
+    }
 
-  // Draw Schoeller
-  var cvSc = document.getElementById('chem-cv-scho-' + protocolId);
-  if (cvSc) _chemDrawSchoeller(cvSc, allMeqs, protocolId);
+    var cvS = document.getElementById('chem-cv-stiff-' + protocolId);
+    if (cvS) {
+      var availS = cvS.parentElement ? cvS.parentElement.clientWidth : 500;
+      _chemDrawStiff(cvS, meq, Math.max(320, availS), 220);
+    }
 
-  // Build Kurlov
+    var cvSc = document.getElementById('chem-cv-scho-' + protocolId);
+    if (cvSc) {
+      var availSc = cvSc.parentElement ? cvSc.parentElement.clientWidth : 560;
+      _chemDrawSchoeller(cvSc, allMeqs, protocolId, Math.max(320, availSc), 280);
+    }
+
+    var cvT = document.getElementById('chem-cv-tolst-' + protocolId);
+    if (cvT) {
+      var paneT = cvT.closest('.chem-diag-pane-piper');
+      var tolstW = _chemLayoutDiagPane(paneT, 420, 560);
+      _chemDrawTolstikhin(cvT, allMeqs, protocolId, tolstW, function(id) {
+        _chemUpdateTolstCellInfo(protocolId, allMeqs, id);
+      });
+    }
+    return true;
+  }
+  redraw();
+
+  // Build Kurlov + plain-language water type
   var kurEl = document.getElementById('chem-kurlov-' + protocolId);
   if (kurEl) kurEl.innerHTML = _chemBuildKurlov(meq);
+  var wtypeEl = document.getElementById('chem-wtype-' + protocolId);
+  if (wtypeEl) wtypeEl.innerHTML = _chemWtypeHtml(meq);
+  _chemUpdateTolstCellInfo(protocolId, allMeqs, protocolId);
+
+  // Keep the diagrams sized correctly if the window/modal is resized while open.
+  // Self-removing: once chem-pm-body-<id> is gone (modal closed), redraw() returns
+  // false and we stop listening instead of leaking a handler forever.
+  var _resizeTimer = null;
+  function _onResize() {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(function() {
+      if (!redraw()) window.removeEventListener('resize', _onResize);
+    }, 120);
+  }
+  window.addEventListener('resize', _onResize);
+}
+
+// ── Общие утилиты canvas / классификация воды ──────────────────
+// Готовит canvas к отрисовке в логических (CSS) пикселях cssW×cssH, сама
+// подстраиваясь под devicePixelRatio — вызывается заново при каждой
+// перерисовке (в т.ч. по resize), поэтому не нужен флаг "уже отмасштабировано".
+function _chemPrepCanvas(canvas, cssW, cssH) {
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+// Ионы >10%мг-экв, отсортированные по убыванию — общая логика для формулы
+// Курлова и для словесного названия типа воды.
+// HCO₃ и CO₃ считаются вместе одной статьёй — так же, как на самой анионной
+// вершине треугольника диаграммы и в _chemClassifyWaterType (короткий
+// бейдж). Раньше здесь CO₃ шёл отдельной строкой, и при заметной его доле
+// словесное название могло называть преобладающим не тот анион, что бейдж
+// (расхождение). При обычном для этих проб нулевом/малом CO₃ разницы не
+// видно, но для гарантии считаем одинаково везде.
+function _chemMeqIons(meq) {
+  var anions = [
+    { sym:'HCO₃', pct: (meq.hco3_pct||0) + (meq.co3_pct||0) },
+    { sym:'SO₄',  pct: meq.so4_pct||0 },
+    { sym:'Cl',   pct: meq.cl_pct||0 },
+  ].filter(function(x){ return x.pct > 10; }).sort(function(a,b){ return b.pct-a.pct; });
+
+  var cations = [
+    { sym:'Ca',   pct: meq.ca_pct||0 },
+    { sym:'Mg',   pct: meq.mg_pct||0 },
+    { sym:'Na+K', pct: meq.nak_pct||0 },
+  ].filter(function(x){ return x.pct > 10; }).sort(function(a,b){ return b.pct-a.pct; });
+
+  return { anions: anions, cations: cations };
+}
+
+var _CHEM_ION_ADJ = {
+  'HCO₃': { pre:'гидрокарбонатно', full:'гидрокарбонатная' },
+  'SO₄':  { pre:'сульфатно',       full:'сульфатная' },
+  'Cl':   { pre:'хлоридно',        full:'хлоридная' },
+  'Ca':   { pre:'кальциево',       full:'кальциевая' },
+  'Mg':   { pre:'магниево',        full:'магниевая' },
+  'Na+K': { pre:'натриево',        full:'натриевая' },
+};
+// html=true оборачивает преобладающий (последний, полная форма) ион в
+// <strong> — иначе связь с коротким бейджем ("Na-Cl" и т.п.) не считывается
+// с первого взгляда: интуитивно кажется, что "главное" — это первое слово,
+// а на деле по правилам русской номенклатуры главное — последнее.
+function _chemIonPhrase(sortedDesc, html) {
+  if (!sortedDesc.length) return '';
+  // Название по Курлову называет ионы в порядке возрастания доли, замыкая
+  // словом на полное прилагательное (последний = преобладающий).
+  var asc = sortedDesc.slice().reverse();
+  return asc.map(function(x, i) {
+    var adj = _CHEM_ION_ADJ[x.sym];
+    if (!adj) return x.sym;
+    var isLast = i === asc.length - 1;
+    var word = isLast ? adj.full : adj.pre + '-';
+    return (html && isLast) ? '<strong>' + word + '</strong>' : word;
+  }).join('');
+}
+function _chemWaterTypeName(meq, html) {
+  var ions = _chemMeqIons(meq);
+  if (!ions.anions.length && !ions.cations.length) return 'Недостаточно данных для классификации';
+  var name = (_chemIonPhrase(ions.anions, html) + ' ' + _chemIonPhrase(ions.cations, html) + ' вода').replace(/\s+/g, ' ').trim();
+  // Капитализируем первую видимую букву — не первый символ строки, который
+  // при html=true может оказаться символом открывающего тега <strong>.
+  return name.replace(/^(<strong>)?([а-яё])/i, function(_, tag, ch) { return (tag || '') + ch.toUpperCase(); });
+}
+
+// Классификация по преобладающему катиону/аниону — короткий facies-ярлык
+// (Ca-HCO3, Na-Cl и т.п.), тот что виден бейджиком рядом с полным названием.
+//
+// Раньше требовался порог >50% на один ион — это правило американской
+// системы Пайпера (USGS, "8 типов + Mixed"), где строгая планка в половину
+// действительно часто даёт "Mixed" для обычной, не экстремальной воды.
+// Но для тройного деления (Ca/Mg/Na и HCO3/SO4/Cl, как здесь) принятая
+// в русскоязычной гидрогеологии классификация О.А. Алёкина использует
+// порог 25%мг-экв — а при трёх категориях, суммирующихся в 100%, самая
+// крупная из них математически ВСЕГДА ≥33%, то есть порог 25% проходит
+// всегда. Поэтому здесь просто берём наибольший катион и наибольший анион
+// (без искусственного барьера в 50%) — "Mixed" по факту больше не нужен:
+// с реальными лабораторными числами точной ничьей не бывает.
+var _CHEM_WTYPE_COLORS = {
+  'Ca-HCO3': '#4a9fe8', 'Ca-SO4': '#1e3a8a', 'Ca-Cl': '#0ea5b0',
+  'Mg-HCO3': '#22c55e', 'Mg-SO4': '#f97316', 'Mg-Cl': '#84cc16',
+  'Na-HCO3': '#a78bfa', 'Na-SO4': '#eab308', 'Na-Cl': '#ec4899',
+};
+function _chemClassifyWaterType(meq) {
+  var cats = [
+    { sym: 'Ca', pct: meq.ca_pct||0 },
+    { sym: 'Mg', pct: meq.mg_pct||0 },
+    { sym: 'Na', pct: meq.nak_pct||0 },
+  ];
+  var ans = [
+    { sym: 'HCO3', pct: (meq.hco3_pct||0) + (meq.co3_pct||0) },
+    { sym: 'SO4',  pct: meq.so4_pct||0 },
+    { sym: 'Cl',   pct: meq.cl_pct||0 },
+  ];
+  var cat = cats.reduce(function(a, b) { return b.pct > a.pct ? b : a; });
+  var an  = ans.reduce(function(a, b) { return b.pct > a.pct ? b : a; });
+  var key = cat.sym + '-' + an.sym;
+  var label = key.replace('HCO3', 'HCO₃').replace('SO4', 'SO₄');
+  return { key: key, label: label, color: _CHEM_WTYPE_COLORS[key] || '#94a3b8' };
+}
+
+// Полное название типа (словами) + короткий бейдж-классификация (Ca-HCO₃ и
+// т.п.) рядом — бейдж больше не красит точки на диаграмме (это теперь дата,
+// см. CHEM_DATE_COLORS), но сама классификация всё ещё полезна как краткая
+// подпись, поэтому не выбрасываем, а просто переносим её сюда.
+function _chemWtypeHtml(meq) {
+  var wt = _chemClassifyWaterType(meq);
+  // _chemWaterTypeName(meq, true) сама вставляет <strong> вокруг преобладающих
+  // слов (составлена только из фиксированных, не пользовательских строк —
+  // экранировать нечего, поэтому не через escHTML, как обычный текст).
+  return _chemWaterTypeName(meq, true) +
+    ' <span class="chem-badge" style="background:' + wt.color + '18;color:' + wt.color + '">' + wt.label + '</span>';
+}
+
+// Палитра "один цвет = один протокол/дата" — используется и точками на
+// Пайпере, и линиями Шоллера, и чипами дат в "Хим. аналитике", так что один
+// и тот же протокол всегда одного цвета во всех трёх местах. Цикличная —
+// при очень длинной истории (>12 проб одного водопункта) цвета начнут
+// повторяться, это ожидаемо и не страшно (какая проба выбрана — всегда
+// видно по крупной непрозрачной точке/подписям, не только по цвету).
+var CHEM_DATE_COLORS = ['#22d3ee','#f59e0b','#10b981','#f87171','#a78bfa','#fb923c',
+                         '#38bdf8','#34d399','#f472b6','#fbbf24','#818cf8','#fb7185'];
+
+// ── Общая геометрия для подписей осей ───────────────────────────
+// Точка пересечения двух прямых (p1+t*d1) и (p2+s*d2).
+function _chemLineIntersect(p1, d1, p2, d2) {
+  var det = d1.x*d2.y - d1.y*d2.x;
+  if (Math.abs(det) < 1e-9) return null;
+  var t = ((p2.x-p1.x)*d2.y - (p2.y-p1.y)*d2.x) / det;
+  return { x: p1.x + t*d1.x, y: p1.y + t*d1.y };
+}
+// Единичная нормаль к отрезку p0-p1, направленная НАРУЖУ фигуры (в сторону,
+// противоположную opp) — используется, чтобы подписи процентов уходили
+// наружу от треугольника/ромба, а не внутрь на сетку.
+function _chemOutwardNormal(p0, p1, opp) {
+  var d = { x:p1.x-p0.x, y:p1.y-p0.y };
+  var n = { x:-d.y, y:d.x };
+  var len = Math.hypot(n.x, n.y) || 1;
+  n.x /= len; n.y /= len;
+  var mid = { x:(p0.x+p1.x)/2, y:(p0.y+p1.y)/2 };
+  var toOpp = { x:opp.x-mid.x, y:opp.y-mid.y };
+  if (n.x*toOpp.x + n.y*toOpp.y > 0) { n.x = -n.x; n.y = -n.y; }
+  return n;
 }
 
 // ── Диаграмма Пайпера ──────────────────────────────────────────
-function _chemDrawPiper(canvas, allMeqs, currentId) {
-  var W = canvas.width, H = canvas.height;
-  var ctx = canvas.getContext('2d');
-  var dpr = window.devicePixelRatio || 1;
-  if (dpr > 1 && canvas.dataset.scaled !== '1') {
-    canvas.dataset.scaled = '1';
-    canvas.width  = W * dpr; canvas.height = H * dpr;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    ctx.scale(dpr, dpr);
-  }
-  ctx.clearRect(0, 0, W, H);
+// Стиль и поведение — по образцу референса пользователя: подписи % вдоль
+// каждой оси, точки раскрашены по дате протокола (см. CHEM_DATE_COLORS) с
+// легендой дат, клик по точке показывает проценты по всем трём осям и
+// приглушает остальные точки.
+// onSelect(id) — необязательный колбэк, вызывается после клика по точке (уже
+// после того, как canvas._piperSelectedId обновлён и сама диаграмма
+// перерисована) — используется разделом "Хим. аналитика", чтобы синхронно
+// перерисовать Стифф/Шоллер и панель деталей выбранного протокола.
+function _chemDrawPiper(canvas, allMeqs, currentId, cssW, onSelect) {
+  var W = cssW || 580;
 
   var isDark = !document.documentElement.getAttribute('data-theme') ||
                document.documentElement.getAttribute('data-theme') === 'dark';
   var COL_LINE = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
-  var COL_TXT  = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+  var COL_TXT  = isDark ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.62)';
   var COL_AXIS = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)';
   var COL_FILL = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-  var GOLD = '#22d3ee';
+  var HALO = isDark ? 'rgba(13,17,26,0.85)' : 'rgba(255,255,255,0.85)';
 
-  var S  = 200;   // triangle side
+  // Side margin reserved for the rotated axis tick/title/value labels, which
+  // hang up to ~50px past the edge — without this reserve they clip off the
+  // canvas edge on narrow (resized) canvases.
+  var MARGIN = 56;
+  var S  = Math.max(95, Math.min(190, (W - MARGIN*2) * 0.28));   // triangle side — scales with canvas width
   var H3 = S * Math.sqrt(3) / 2;
-  var GAP = 36;   // gap between triangles
+  // Gap between the two triangles. A too-small gap here is what used to make
+  // the "Na⁺+K⁺"/"HCO₃⁻" vertex labels overlap into unreadable mush.
+  var GAP = Math.max(90, S * 0.55);
   var OX = W / 2; // center x
-  var BY = H - 36; // base y
+
+  // Canvas height is derived from the geometry itself (not guessed by the
+  // caller) — the diamond now stands a full triangle-height taller than
+  // before (see D_BOT below), so a fixed aspect ratio no longer fits it.
+  var TOP_PAD = 30, BOTTOM_PAD = 50;
+  var H = Math.round(TOP_PAD + 3*H3 + BOTTOM_PAD);
+  var ctx = _chemPrepCanvas(canvas, W, H);
+  ctx.clearRect(0, 0, W, H);
+  var BY = H - BOTTOM_PAD; // base y
 
   // Left triangle (cations): Ca=BL, Mg=TOP, NaK=BR
   var LBL = { x: OX - GAP/2 - S,   y: BY };
@@ -2330,12 +3945,19 @@ function _chemDrawPiper(canvas, allMeqs, currentId) {
   var RBR = { x: OX + GAP/2 + S,    y: BY };
   var RBT = { x: OX + GAP/2 + S/2,  y: BY - H3 };
 
-  // Diamond vertices
-  var D_BOT   = { x: OX, y: BY };
-  var DH      = H3 * 1.55;
-  var D_TOP   = { x: OX,         y: BY - DH };
-  var D_LEFT  = { x: OX - S/2,   y: BY - DH/2 };
-  var D_RIGHT = { x: OX + S/2,   y: BY - DH/2 };
+  // Diamond vertices. Its bottom two edges must run exactly parallel to the
+  // two inner triangle edges they sit above (LBT→LBR and RBL→RBT) — that
+  // only holds when the diamond's height (top vertex to bottom vertex) is
+  // exactly TWICE the triangle height H3 (matches slope H3/(S/2) on both).
+  // The whole diamond is then raised so its bottom vertex sits a further H3
+  // above the triangle baseline — i.e. 50% of the diamond's own (new,
+  // doubled) height — so it floats level with the triangle tops instead of
+  // resting in the gap between them.
+  var DH      = H3 * 2;
+  var D_BOT   = { x: OX,         y: BY - H3 };
+  var D_TOP   = { x: OX,         y: D_BOT.y - DH };
+  var D_LEFT  = { x: OX - S/2,   y: D_BOT.y - DH/2 };
+  var D_RIGHT = { x: OX + S/2,   y: D_BOT.y - DH/2 };
 
   function tri(v0, v1, v2) {
     ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath();
@@ -2364,7 +3986,7 @@ function _chemDrawPiper(canvas, allMeqs, currentId) {
     ctx.restore();
   }
 
-  // Draw triangles
+  // Draw triangles + rhombus
   ctx.fillStyle = COL_FILL; ctx.strokeStyle = COL_AXIS; ctx.lineWidth = 1.2;
   tri(LBL, LBR, LBT); ctx.fill(); ctx.stroke();
   tri(RBL, RBR, RBT); ctx.fill(); ctx.stroke();
@@ -2373,30 +3995,57 @@ function _chemDrawPiper(canvas, allMeqs, currentId) {
   gridLines(LBL, LBR, LBT, 5);
   gridLines(RBL, RBR, RBT, 5);
 
-  // Diamond grid
+  // Diamond grid (two families of lines, parallel to each pair of edges)
   ctx.save(); ctx.strokeStyle = COL_LINE; ctx.lineWidth = 0.8;
-  for (var i = 1; i < 5; i++) {
-    var t = i/5;
-    // Parallel to D_BOT→D_RIGHT / D_LEFT→D_TOP
-    var p1 = { x: D_BOT.x + t*(D_RIGHT.x-D_BOT.x) + 0*(D_LEFT.x-D_BOT.x), y: D_BOT.y + t*(D_RIGHT.y-D_BOT.y) };
-    var p2 = { x: D_BOT.x + t*(D_RIGHT.x-D_BOT.x) + 1*(D_LEFT.x-D_BOT.x), y: D_BOT.y + t*(D_RIGHT.y-D_BOT.y) + 1*(D_LEFT.y-D_BOT.y) };
+  for (var gi = 1; gi < 5; gi++) {
+    var gt = gi/5;
+    var p1 = { x: D_BOT.x + gt*(D_RIGHT.x-D_BOT.x), y: D_BOT.y + gt*(D_RIGHT.y-D_BOT.y) };
+    var p2 = { x: p1.x + (D_LEFT.x-D_BOT.x), y: p1.y + (D_LEFT.y-D_BOT.y) };
     ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-    // Parallel to D_BOT→D_LEFT
-    var q1 = { x: D_BOT.x + 0*(D_RIGHT.x-D_BOT.x) + t*(D_LEFT.x-D_BOT.x), y: D_BOT.y + t*(D_LEFT.y-D_BOT.y) };
-    var q2 = { x: D_BOT.x + 1*(D_RIGHT.x-D_BOT.x) + t*(D_LEFT.x-D_BOT.x), y: D_BOT.y + 1*(D_RIGHT.y-D_BOT.y) + t*(D_LEFT.y-D_BOT.y) };
+    var q1 = { x: D_BOT.x + gt*(D_LEFT.x-D_BOT.x), y: D_BOT.y + gt*(D_LEFT.y-D_BOT.y) };
+    var q2 = { x: q1.x + (D_RIGHT.x-D_BOT.x), y: q1.y + (D_RIGHT.y-D_BOT.y) };
     ctx.beginPath(); ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y); ctx.stroke();
   }
   ctx.restore();
 
-  // Labels
-  ctx.font = 'bold 11px Inter,sans-serif'; ctx.fillStyle = COL_TXT; ctx.textAlign = 'center';
-  ctx.fillText('Ca²⁺', LBL.x - 10, LBL.y + 14);
-  ctx.fillText('Mg²⁺', LBT.x, LBT.y - 8);
-  ctx.fillText('Na⁺+K⁺', LBR.x + 10, LBR.y + 14);
-  ctx.fillText('HCO₃⁻', RBL.x - 10, RBL.y + 14);
-  ctx.fillText('SO₄²⁻', RBT.x, RBT.y - 8);
-  ctx.fillText('Cl⁻', RBR.x + 10, RBR.y + 14);
-  ctx.fillText('%мг-экв', D_TOP.x, D_TOP.y - 8);
+  // ── Подписи осей: тики 20/40/60/80% + название оси, вдоль ребра, с
+  // поворотом по углу ребра — так же, как в референсе пользователя.
+  function drawAxisTicks(vFrom, vTo, vOpp, label) {
+    var n = _chemOutwardNormal(vFrom, vTo, vOpp);
+    var angle = Math.atan2(vTo.y-vFrom.y, vTo.x-vFrom.x);
+    if (angle > Math.PI/2) angle -= Math.PI;
+    if (angle < -Math.PI/2) angle += Math.PI;
+    ctx.save(); ctx.fillStyle = COL_TXT;
+    for (var pct = 20; pct <= 80; pct += 20) {
+      var t = pct/100;
+      var px = vFrom.x+(vTo.x-vFrom.x)*t, py = vFrom.y+(vTo.y-vFrom.y)*t;
+      ctx.save();
+      ctx.translate(px+n.x*9, py+n.y*9); ctx.rotate(angle);
+      ctx.font = '7px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(pct+'%', 0, 0);
+      ctx.restore();
+    }
+    var mid = { x:(vFrom.x+vTo.x)/2, y:(vFrom.y+vTo.y)/2 };
+    ctx.save();
+    ctx.translate(mid.x+n.x*22, mid.y+n.y*22); ctx.rotate(angle);
+    ctx.font = 'bold 10px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+    ctx.restore();
+  }
+  // Cation triangle: Mg вдоль левого ребра (Ca→Mg), Ca вдоль нижнего (NaK→Ca),
+  // Na+K вдоль правого (Mg→NaK) — направление 0%→100% выбрано так, чтобы 100%
+  // каждой оси приходилось точно на её собственную вершину.
+  drawAxisTicks(LBL, LBT, LBR, 'Mg');
+  drawAxisTicks(LBR, LBL, LBT, 'Ca');
+  drawAxisTicks(LBT, LBR, LBL, 'Na+K');
+  // Anion triangle: аналогично — SO4 вдоль левого, HCO3+CO3 вдоль нижнего, Cl вдоль правого
+  drawAxisTicks(RBL, RBT, RBR, 'SO₄');
+  drawAxisTicks(RBR, RBL, RBT, 'HCO₃+CO₃');
+  drawAxisTicks(RBT, RBR, RBL, 'Cl');
+  // Ромб: Na+K вдоль нижне-правого ребра, SO₄+Cl вдоль нижне-левого
+  drawAxisTicks(D_BOT, D_RIGHT, D_LEFT, 'Na+K');
+  drawAxisTicks(D_BOT, D_LEFT, D_RIGHT, 'SO₄+Cl');
 
   // Barycentric to pixel (triangle)
   function bary(v0, v1, v2, b0, b1, b2) {
@@ -2413,90 +4062,279 @@ function _chemDrawPiper(canvas, allMeqs, currentId) {
     };
   }
 
-  var COLORS = ['#22d3ee','#f59e0b','#10b981','#f87171','#a78bfa','#fb923c'];
+  // ── Легенда дат: один цвет = один протокол (см. CHEM_DATE_COLORS) — тот
+  // же цвет у этой пробы будет и в Шоллере, и (в "Хим. аналитике") у чипа
+  // даты, чтобы её было видно везде одинаково. Верхний правый угол.
+  var legX = W - 8, legY = 10;
+  ctx.save();
+  ctx.font = 'bold 9.5px Inter,sans-serif'; ctx.fillStyle = COL_TXT; ctx.textAlign = 'right';
+  ctx.fillText('Дата пробы', legX, legY);
+  legY += 14;
+  ctx.font = '9px Inter,sans-serif';
+  allMeqs.forEach(function(item, idx) {
+    var col = CHEM_DATE_COLORS[idx % CHEM_DATE_COLORS.length];
+    ctx.fillStyle = COL_TXT; ctx.textAlign = 'right';
+    ctx.fillText(item.date ? _chemFmtDate(item.date) : '—', legX - 10, legY);
+    ctx.beginPath(); ctx.arc(legX - 3, legY - 3, 3.5, 0, Math.PI*2);
+    ctx.fillStyle = col; ctx.fill();
+    legY += 13;
+  });
+  ctx.restore();
+
+  // ── Точки. Выбранная (клик или текущий протокол по умолчанию) — крупнее,
+  // непрозрачная; остальные пробы того же водопункта — приглушены, как в
+  // референсе (нужно кликнуть, чтобы разглядеть проценты именно этой точки).
+  if (canvas._piperSelectedId === undefined || !allMeqs.some(function(a){ return a.id === canvas._piperSelectedId; })) {
+    canvas._piperSelectedId = currentId;
+  }
+  var selectedId = canvas._piperSelectedId;
+  var hitPoints = [];
 
   allMeqs.forEach(function(item, idx) {
-    var m   = item.meq;
-    var isCurrent = item.id === currentId;
-    var col = isCurrent ? GOLD : COLORS[(idx + 1) % COLORS.length];
-    var r   = isCurrent ? 6 : 4;
+    var m = item.meq;
+    var col = CHEM_DATE_COLORS[idx % CHEM_DATE_COLORS.length];
+    var isSel = item.id === selectedId;
+    var r = isSel ? 6.5 : 4.5;
 
-    // Cation triangle point: Ca=LBL, Mg=LBT, NaK=LBR
     var cp = bary(LBL, LBT, LBR, m.ca, m.mg, m.nak);
-    // Anion triangle point: HCO3=RBL, SO4=RBT, Cl=RBR
     var ap = bary(RBL, RBT, RBR, m.hco3, m.so4, m.cl);
     var dp = diamondPt(m);
 
     [cp, ap, dp].forEach(function(pt) {
+      ctx.save();
+      ctx.globalAlpha = isSel ? 1 : 0.32;
       ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, Math.PI*2);
       ctx.fillStyle = col;
-      if (isCurrent) { ctx.shadowColor = col; ctx.shadowBlur = 10; }
+      if (isSel) { ctx.shadowColor = col; ctx.shadowBlur = 9; }
       ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+      hitPoints.push({ x: pt.x, y: pt.y, id: item.id });
     });
   });
 
-  // Guide lines for current point
-  var cur = allMeqs.find(function(a){ return a.id === currentId; });
-  if (cur) {
-    var m = cur.meq;
+  // ── Проценты по трём осям для выбранной точки — пунктирная линия до её
+  // "собственного" ребра (того же, что подписано тиками выше) + подпись
+  // значения прямо там, как "7.7%"/"15.4%"/"76.9%" в референсе.
+  var selIdx = allMeqs.findIndex(function(a){ return a.id === selectedId; });
+  var sel = selIdx !== -1 ? allMeqs[selIdx] : null;
+  if (sel) {
+    var m = sel.meq;
+    var selColor = CHEM_DATE_COLORS[selIdx % CHEM_DATE_COLORS.length];
     var cp = bary(LBL, LBT, LBR, m.ca, m.mg, m.nak);
     var ap = bary(RBL, RBT, RBR, m.hco3, m.so4, m.cl);
     var dp = diamondPt(m);
 
-    ctx.save(); ctx.setLineDash([4,3]); ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(34,211,238,0.5)';
-
-    function drawGuides3(pt, v0, v1, v2) {
-      function lineIntersect(p1,d1,p2,d2) {
-        var dx=p2.x-p1.x, dy=p2.y-p1.y;
-        var det=d1.x*d2.y-d1.y*d2.x; if (Math.abs(det)<1e-9) return null;
-        var t=(dx*d2.y-dy*d2.x)/det;
-        return { x:p1.x+t*d1.x, y:p1.y+t*d1.y };
-      }
-      var sides = [[v0,v1],[v1,v2],[v2,v0]];
-      sides.forEach(function(s) {
-        var d = { x:s[1].x-s[0].x, y:s[1].y-s[0].y };
-        var perp = { x:-d.y, y:d.x };
-        var A = lineIntersect(pt, d, s[0], { x:s[1].x-s[0].x, y:s[1].y-s[0].y });
-        // foot from pt to side
-        var len = Math.sqrt(d.x*d.x+d.y*d.y); if (len===0) return;
-        var t = ((pt.x-s[0].x)*d.x+(pt.y-s[0].y)*d.y)/(len*len);
-        var foot = { x:s[0].x+t*d.x, y:s[0].y+t*d.y };
-        ctx.beginPath(); ctx.moveTo(pt.x,pt.y); ctx.lineTo(foot.x,foot.y); ctx.stroke();
-      });
+    function axisValue(pt, vFrom, vTo, vOpp, otherDir, pctVal) {
+      var hit = _chemLineIntersect(pt, otherDir, vFrom, { x: vTo.x-vFrom.x, y: vTo.y-vFrom.y });
+      if (!hit) return;
+      ctx.save();
+      ctx.setLineDash([4,3]); ctx.lineWidth = 1; ctx.strokeStyle = selColor;
+      ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(hit.x, hit.y); ctx.stroke();
+      ctx.restore();
+      // Pushed out past both the tick marks (9px) and the axis title (22px)
+      // so the value readout has its own clear band instead of landing on
+      // top of the static scale — that overlap was the "kasha" before.
+      var n = _chemOutwardNormal(vFrom, vTo, vOpp);
+      var lx = hit.x + n.x*34, ly = hit.y + n.y*34;
+      ctx.save();
+      ctx.font = 'bold 9px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = HALO; ctx.strokeText(pctVal.toFixed(1)+'%', lx, ly);
+      ctx.fillStyle = selColor; ctx.fillText(pctVal.toFixed(1)+'%', lx, ly);
+      ctx.restore();
     }
-    drawGuides3(cp, LBL, LBT, LBR);
-    drawGuides3(ap, RBL, RBT, RBR);
 
-    // Diamond guides
-    function drawDiamondGuides(pt) {
-      var dR = { x:D_RIGHT.x-D_BOT.x, y:D_RIGHT.y-D_BOT.y };
-      var dL = { x:D_LEFT.x-D_BOT.x,  y:D_LEFT.y-D_BOT.y  };
-      // Line through pt parallel to dR: extend to D_LEFT side
-      var len = Math.sqrt(dL.x*dL.x+dL.y*dL.y);
-      var t1 = ((pt.x-D_BOT.x)*dL.x+(pt.y-D_BOT.y)*dL.y)/(len*len);
-      var t2 = ((pt.x-D_RIGHT.x)*dL.x+(pt.y-D_RIGHT.y)*dL.y)/(len*len);
-      var p1 = { x:D_BOT.x+t1*dL.x, y:D_BOT.y+t1*dL.y };
-      var p2 = { x:D_RIGHT.x+t2*dL.x, y:D_RIGHT.y+t2*dL.y };
-      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
-      // Line through pt parallel to dL: extend to D_RIGHT side
-      var lenR = Math.sqrt(dR.x*dR.x+dR.y*dR.y);
-      var s1 = ((pt.x-D_BOT.x)*dR.x+(pt.y-D_BOT.y)*dR.y)/(lenR*lenR);
-      var s2 = ((pt.x-D_LEFT.x)*dR.x+(pt.y-D_LEFT.y)*dR.y)/(lenR*lenR);
-      var q1 = { x:D_BOT.x+s1*dR.x, y:D_BOT.y+s1*dR.y };
-      var q2 = { x:D_LEFT.x+s2*dR.x, y:D_LEFT.y+s2*dR.y };
-      ctx.beginPath(); ctx.moveTo(q1.x,q1.y); ctx.lineTo(q2.x,q2.y); ctx.stroke();
+    axisValue(cp, LBL, LBT, LBR, { x: LBR.x-LBL.x, y: LBR.y-LBL.y }, m.mg_pct||0);
+    axisValue(cp, LBR, LBL, LBT, { x: LBR.x-LBT.x, y: LBR.y-LBT.y }, m.ca_pct||0);
+    axisValue(cp, LBT, LBR, LBL, { x: LBT.x-LBL.x, y: LBT.y-LBL.y }, m.nak_pct||0);
+
+    var hco3Total = (m.hco3_pct||0) + (m.co3_pct||0);
+    axisValue(ap, RBL, RBT, RBR, { x: RBR.x-RBL.x, y: RBR.y-RBL.y }, m.so4_pct||0);
+    axisValue(ap, RBR, RBL, RBT, { x: RBT.x-RBR.x, y: RBT.y-RBR.y }, hco3Total);
+    axisValue(ap, RBT, RBR, RBL, { x: RBL.x-RBT.x, y: RBL.y-RBT.y }, m.cl_pct||0);
+
+    var so4ClTotal = (m.so4_pct||0) + (m.cl_pct||0);
+    axisValue(dp, D_BOT, D_RIGHT, D_LEFT, { x: D_LEFT.x-D_BOT.x, y: D_LEFT.y-D_BOT.y }, m.nak_pct||0);
+    axisValue(dp, D_BOT, D_LEFT, D_RIGHT, { x: D_RIGHT.x-D_BOT.x, y: D_RIGHT.y-D_BOT.y }, so4ClTotal);
+  }
+
+  // ── Клик по точке — выбрать её (перерисовывает с новым выделением).
+  // Назначаем через .onclick (не addEventListener), чтобы повторные
+  // перерисовки (resize) не копили дублирующиеся обработчики.
+  canvas.style.cursor = 'pointer';
+  canvas.onclick = function(e) {
+    var mx = e.offsetX, my = e.offsetY;
+    var best = null, bestD2 = 14*14;
+    hitPoints.forEach(function(hp) {
+      var dx = mx-hp.x, dy = my-hp.y, d2 = dx*dx+dy*dy;
+      if (d2 < bestD2) { bestD2 = d2; best = hp; }
+    });
+    if (best) {
+      canvas._piperSelectedId = best.id;
+      _chemDrawPiper(canvas, allMeqs, currentId, cssW, onSelect);
+      if (onSelect) onSelect(best.id);
     }
-    drawDiamondGuides(dp);
+  };
+}
+
+// ── Квадрат Толстихина ─────────────────────────────────────────
+// Векторный квадрат-график (модификация О.С. Джикия, 1967, по методике
+// Н.И. Толстихина) — сетка 10×10 (100 ячеек по 10%-экв). Оси подтверждены
+// источником: верх = Ca²⁺+Mg²⁺ 100%, низ = Na⁺+K⁺ 100% (катионы, вертикаль);
+// право = Cl⁻+SO₄²⁻ 100%, лево = HCO₃⁻+CO₃²⁻ 100% (анионы, горизонталь).
+// Номер ячейки здесь — её позиция (столбец-строка) в этой сетке; настоящую
+// историческую таблицу генетических классов по номерам подтверждённым
+// источником найти не удалось (см. предупреждение в интерфейсе), поэтому
+// не выдаём её за окончательную — только проверяемая часть методики.
+function _chemDrawTolstikhin(canvas, allMeqs, currentId, cssW, onSelect) {
+  var W = cssW || 560;
+
+  var isDark = !document.documentElement.getAttribute('data-theme') ||
+               document.documentElement.getAttribute('data-theme') === 'dark';
+  var COL_LINE  = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.14)';
+  var COL_LINE2 = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  var COL_TXT   = isDark ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.62)';
+  var COL_AXIS  = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+  var HALO = isDark ? 'rgba(13,17,26,0.85)' : 'rgba(255,255,255,0.85)';
+
+  var MARGIN_X = 60, MARGIN_TOP = 34, MARGIN_BOT = 46;
+  var SIZE = Math.max(220, Math.min(420, W - MARGIN_X*2));
+  var H = MARGIN_TOP + SIZE + MARGIN_BOT;
+  var ctx = _chemPrepCanvas(canvas, W, H);
+  ctx.clearRect(0, 0, W, H);
+
+  var OX = Math.round((W - SIZE) / 2); // left edge of square
+  var OY = MARGIN_TOP;                 // top edge of square
+
+  // Сетка 10×10
+  ctx.strokeStyle = COL_AXIS; ctx.lineWidth = 1.4;
+  ctx.strokeRect(OX, OY, SIZE, SIZE);
+  ctx.strokeStyle = COL_LINE2; ctx.lineWidth = 0.7;
+  for (var i = 1; i < 10; i++) {
+    var gx = OX + SIZE * i / 10, gy = OY + SIZE * i / 10;
+    ctx.beginPath(); ctx.moveTo(gx, OY); ctx.lineTo(gx, OY + SIZE); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(OX, gy); ctx.lineTo(OX + SIZE, gy); ctx.stroke();
+  }
+  // Каждая 5-я линия чуть заметнее — ориентир на 50%
+  ctx.strokeStyle = COL_LINE; ctx.lineWidth = 0.9;
+  ctx.beginPath(); ctx.moveTo(OX + SIZE/2, OY); ctx.lineTo(OX + SIZE/2, OY + SIZE); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(OX, OY + SIZE/2); ctx.lineTo(OX + SIZE, OY + SIZE/2); ctx.stroke();
+
+  // Подписи осей: тики 10..90% по обеим осям
+  ctx.font = '7px Inter,sans-serif'; ctx.fillStyle = COL_TXT;
+  for (var pct = 10; pct <= 90; pct += 10) {
+    var tx = OX + SIZE * pct / 100;
+    ctx.textAlign = 'center';
+    ctx.fillText(pct, tx, OY + SIZE + 12);
+    var ty = OY + SIZE - SIZE * pct / 100; // снизу вверх = 0..100
+    ctx.textAlign = 'right';
+    ctx.fillText(pct, OX - 6, ty + 3);
+  }
+
+  // Заголовки сторон — как в методике: верх/низ = катионы, право/лево = анионы
+  ctx.font = 'bold 10px Inter,sans-serif'; ctx.fillStyle = COL_TXT;
+  ctx.textAlign = 'center';
+  ctx.fillText('Ca²⁺+Mg²⁺ 100%', OX + SIZE/2, OY - 18);
+  ctx.fillText('Na⁺+K⁺ 100%', OX + SIZE/2, OY + SIZE + 30);
+  ctx.save();
+  ctx.translate(OX - 42, OY + SIZE/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('HCO₃⁻+CO₃²⁻ 100%', 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(OX + SIZE + 42, OY + SIZE/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('Cl⁻+SO₄²⁻ 100%', 0, 0);
+  ctx.restore();
+
+  // x = доля Cl+SO4 среди анионов (0 слева, 100 справа)
+  // y = доля Ca+Mg среди катионов (0 внизу, 100 вверху)
+  function coords(m) {
+    var x = (m.so4_pct||0) + (m.cl_pct||0);
+    var y = (m.ca_pct||0) + (m.mg_pct||0);
+    return { px: OX + SIZE * x/100, py: OY + SIZE - SIZE * y/100, x: x, y: y };
+  }
+
+  if (canvas._tolstSelectedId === undefined || !allMeqs.some(function(a){ return a.id === canvas._tolstSelectedId; })) {
+    canvas._tolstSelectedId = currentId;
+  }
+  var selectedId = canvas._tolstSelectedId;
+  var hitPoints = [];
+
+  allMeqs.forEach(function(item, idx) {
+    var col = CHEM_DATE_COLORS[idx % CHEM_DATE_COLORS.length];
+    var isSel = item.id === selectedId;
+    var r = isSel ? 6.5 : 4.5;
+    var pt = coords(item.meq);
+
+    ctx.save();
+    ctx.globalAlpha = isSel ? 1 : 0.32;
+    ctx.beginPath(); ctx.arc(pt.px, pt.py, r, 0, Math.PI*2);
+    ctx.fillStyle = col;
+    if (isSel) { ctx.shadowColor = col; ctx.shadowBlur = 9; }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+    hitPoints.push({ x: pt.px, y: pt.py, id: item.id });
+  });
+
+  var sel = allMeqs.find(function(a){ return a.id === selectedId; });
+  if (sel) {
+    var spt = coords(sel.meq);
+    var selIdx = allMeqs.indexOf(sel);
+    var selColor = CHEM_DATE_COLORS[selIdx % CHEM_DATE_COLORS.length];
+    ctx.save();
+    ctx.setLineDash([4,3]); ctx.lineWidth = 0.9; ctx.strokeStyle = selColor;
+    ctx.beginPath(); ctx.moveTo(OX, spt.py); ctx.lineTo(OX + SIZE, spt.py); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(spt.px, OY); ctx.lineTo(spt.px, OY + SIZE); ctx.stroke();
+    ctx.restore();
+
+    var label = spt.x.toFixed(0) + '% / ' + spt.y.toFixed(0) + '%';
+    ctx.save();
+    ctx.font = 'bold 9px Inter,sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    var lx = Math.min(spt.px + 10, OX + SIZE - 4), ly = spt.py - 10;
+    ctx.lineWidth = 3; ctx.strokeStyle = HALO; ctx.strokeText(label, lx, ly);
+    ctx.fillStyle = selColor; ctx.fillText(label, lx, ly);
     ctx.restore();
   }
+
+  canvas.style.cursor = 'pointer';
+  canvas.onclick = function(e) {
+    var mx = e.offsetX, my = e.offsetY;
+    var best = null, bestD2 = 14*14;
+    hitPoints.forEach(function(hp) {
+      var dx = mx-hp.x, dy = my-hp.y, d2 = dx*dx+dy*dy;
+      if (d2 < bestD2) { bestD2 = d2; best = hp; }
+    });
+    if (best) {
+      canvas._tolstSelectedId = best.id;
+      _chemDrawTolstikhin(canvas, allMeqs, currentId, cssW, onSelect);
+      if (onSelect) onSelect(best.id);
+    }
+  };
+}
+
+// Текст под квадратом Толстихина: позиционный номер ячейки (столбец-строка
+// в сетке 10×10) + сами проценты выбранной пробы.
+function _chemUpdateTolstCellInfo(nsId, allMeqs, selectedId) {
+  var el = document.getElementById('chem-tolst-cell-' + nsId);
+  if (!el) return;
+  var sel = allMeqs.find(function(a){ return a.id === selectedId; }) || allMeqs[0];
+  if (!sel) { el.textContent = '—'; return; }
+  var m = sel.meq;
+  var x = (m.so4_pct||0) + (m.cl_pct||0);
+  var y = (m.ca_pct||0) + (m.mg_pct||0);
+  var col = Math.min(10, Math.max(1, Math.ceil(x/10) || 1));
+  var row = Math.min(10, Math.max(1, Math.ceil(y/10) || 1));
+  el.innerHTML = 'Ячейка ' + col + '-' + row +
+    ' <span style="font-weight:400;color:var(--txt-3)">· Ca+Mg ' + y.toFixed(0) + '% · Cl+SO₄ ' + x.toFixed(0) + '%' +
+    (sel.date ? ' · ' + escHTML(_chemFmtDate(sel.date)) : '') + '</span>';
 }
 
 // ── Диаграмма Стиффа ───────────────────────────────────────────
-function _chemDrawStiff(canvas, meq) {
-  var W = canvas.width, H = canvas.height;
-  var ctx = canvas.getContext('2d');
+function _chemDrawStiff(canvas, meq, cssW, cssH) {
+  var W = cssW || 500, H = cssH || 220;
+  var ctx = _chemPrepCanvas(canvas, W, H);
   ctx.clearRect(0,0,W,H);
   var isDark = !document.documentElement.getAttribute('data-theme') ||
                document.documentElement.getAttribute('data-theme') === 'dark';
@@ -2605,15 +4443,14 @@ function _chemDrawStiff(canvas, meq) {
 }
 
 // ── График Шоллера ─────────────────────────────────────────────
-function _chemDrawSchoeller(canvas, allMeqs, currentId) {
-  var W = canvas.width, H = canvas.height;
-  var ctx = canvas.getContext('2d');
+function _chemDrawSchoeller(canvas, allMeqs, currentId, cssW, cssH) {
+  var W = cssW || 560, H = cssH || 280;
+  var ctx = _chemPrepCanvas(canvas, W, H);
   ctx.clearRect(0,0,W,H);
   var isDark = !document.documentElement.getAttribute('data-theme') ||
                document.documentElement.getAttribute('data-theme') === 'dark';
   var COL_TXT  = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
   var COL_GRID = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-  var GOLD = '#22d3ee';
 
   var ions = ['ca','mg','nak','hco3','so4','cl'];
   var ionLbl = ['Ca²⁺','Mg²⁺','Na⁺+K⁺','HCO₃⁻','SO₄²⁻','Cl⁻'];
@@ -2639,11 +4476,12 @@ function _chemDrawSchoeller(canvas, allMeqs, currentId) {
   ctx.fillStyle = COL_TXT; ctx.font = '10px Inter,sans-serif'; ctx.textAlign = 'center';
   ionLbl.forEach(function(l, i){ ctx.fillText(l, xOf(i), H - 6); });
 
-  var COLORS = ['#22d3ee','#f59e0b','#10b981','#f87171','#a78bfa','#fb923c'];
+  // Тот же цвет на пробу, что и на диаграмме Пайпера/в чипах дат (CHEM_DATE_COLORS) —
+  // одна проба узнаётся с первого взгляда в любом из трёх видов.
   allMeqs.forEach(function(item, idx) {
     var m = item.meq;
     var isCurrent = item.id === currentId;
-    var col = isCurrent ? GOLD : COLORS[(idx+1) % COLORS.length];
+    var col = CHEM_DATE_COLORS[idx % CHEM_DATE_COLORS.length];
     ctx.beginPath();
     ions.forEach(function(k, i) {
       var y = yOf(m[k] || 0.05);
@@ -2674,21 +4512,8 @@ function _chemBuildKurlov(meq) {
   function fmt1(v){ return v < 10 ? v.toFixed(1) : Math.round(v).toString(); }
 
   // Cations and anions > 10% meq, sorted descending
-  var cats = [
-    { sym:'HCO₃', pct: meq.hco3_pct||0 },  // these go to anion — keeping variable naming for clarity
-  ];
-  var anions = [
-    { sym:'HCO₃', pct: meq.hco3_pct||0 },
-    { sym:'SO₄',  pct: meq.so4_pct||0 },
-    { sym:'Cl',   pct: meq.cl_pct||0 },
-    { sym:'CO₃',  pct: meq.co3_pct||0 },
-  ].filter(function(x){ return x.pct > 10; }).sort(function(a,b){ return b.pct-a.pct; });
-
-  var cations = [
-    { sym:'Ca',   pct: meq.ca_pct||0 },
-    { sym:'Mg',   pct: meq.mg_pct||0 },
-    { sym:'Na+K', pct: meq.nak_pct||0 },
-  ].filter(function(x){ return x.pct > 10; }).sort(function(a,b){ return b.pct-a.pct; });
+  var ions = _chemMeqIons(meq);
+  var anions = ions.anions, cations = ions.cations;
 
   function makeFrac(num, den) {
     return '<span class="chem-kurlov-frac">' +
@@ -2717,9 +4542,13 @@ window.chemToggleProto     = chemToggleProto;
 window.showChemWpForm      = showChemWpForm;
 window.chemDeleteWp        = chemDeleteWp;
 window.showChemProtocolForm= showChemProtocolForm;
+window.chemClearScan       = chemClearScan;
 window.chemSwitchFormGroup = chemSwitchFormGroup;
 window.chemDeleteProtocol  = chemDeleteProtocol;
 window.showChemExcelImport = showChemExcelImport;
+window.showChemExceedanceReport   = showChemExceedanceReport;
+window.chemReportQuickRange       = chemReportQuickRange;
+window.chemDownloadExceedanceReport = chemDownloadExceedanceReport;
 window.chemRenderAnlChart  = chemRenderAnlChart;
 window._chemCloseModal     = _chemCloseModal;
 window._chemSaveWp         = _chemSaveWp;
@@ -2736,7 +4565,29 @@ window.showChemCompare     = showChemCompare;
 window.showChemWpPassport  = showChemWpPassport;
 window._chemExportCsv      = _chemExportCsv;
 window.chemOpenProtoModal  = chemOpenProtoModal;
+window.chemToggleHistory   = chemToggleHistory;
+window.chemDuplicateProtocol = chemDuplicateProtocol;
 window.chemToggleProto     = chemToggleProto;
+window.chemWpaSelectWp     = chemWpaSelectWp;
+window.chemWpaSelectProto  = chemWpaSelectProto;
+
+// Мастер шаблонов лабораторий
+window.showChemLabTemplateWizard = showChemLabTemplateWizard;
+window.chemWizNewTemplate       = chemWizNewTemplate;
+window.chemWizEditTemplate      = chemWizEditTemplate;
+window.chemWizDuplicateTemplate = chemWizDuplicateTemplate;
+window.chemWizDeleteTemplate    = chemWizDeleteTemplate;
+window.chemWizBackToList        = chemWizBackToList;
+window.chemWizToggleParam       = chemWizToggleParam;
+window.chemWizRemoveParam       = chemWizRemoveParam;
+window.chemWizMoveParam         = chemWizMoveParam;
+window.chemWizSearchChange      = chemWizSearchChange;
+window.chemWizSaveTemplate      = chemWizSaveTemplate;
+window.chemFormLabChanged       = chemFormLabChanged;
+window.chemFormWpChanged        = chemFormWpChanged;
+window.chemFormTemplateChanged  = chemFormTemplateChanged;
+window.chemFormLabPick          = chemFormLabPick;
+window.chemWizLabPick           = chemWizLabPick;
 
 // Close protocol modal on Escape
 document.addEventListener('keydown', function(e) {

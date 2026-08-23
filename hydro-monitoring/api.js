@@ -107,6 +107,17 @@ function rowToDewDest(r) {
   return { id: r.id, name: r.name || '', type: r.type || '', targetSumpId: r.target_sump_id || null, color: r.color || '' };
 }
 
+function dewDiagTemplateToRow(t) {
+  return { id: t.id, name: t.name || '', positions: t.positions || {}, edges: t.edges || {} };
+}
+function rowToDewDiagTemplate(r) {
+  return {
+    id: r.id, name: r.name || '',
+    positions: (r.positions && typeof r.positions === 'object') ? r.positions : {},
+    edges: (r.edges && typeof r.edges === 'object') ? r.edges : {},
+  };
+}
+
 function dewReadingToRow(r) {
   return {
     id: r.id, pump_id: r.pumpId, date: r.date,
@@ -930,6 +941,10 @@ var Api = (function() {
     getDewSumpCurveVersions: async function() { return client().from('dew_sump_curve_versions').select('*').order('valid_from', { ascending: true }); },
     upsertDewSumpCurveVer:   async function(row) { return client().from('dew_sump_curve_versions').upsert(row); },
     deleteDewSumpCurveVer:   async function(id) { return client().from('dew_sump_curve_versions').delete().eq('id', id); },
+
+    getDewDiagTemplates:   async function() { return client().from('dew_diagram_templates').select('*').order('name'); },
+    upsertDewDiagTemplate: async function(row) { return client().from('dew_diagram_templates').upsert(row); },
+    deleteDewDiagTemplate: async function(id) { return client().from('dew_diagram_templates').delete().eq('id', id); },
 
     // ── Dust suppression ──────────────────────────────────────
     getDustOrgs:        async function() { return client().from('dust_orgs').select('*').order('name'); },
