@@ -2780,15 +2780,50 @@ function _dewDownloadLevelsTemplate() {
   URL.revokeObjectURL(url);
 }
 
-function _dewParseImportDate(s) {
-  if (!s) return null;
-  var str = String(s).trim();
+function _dewPad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+// Принимает то, что реально приходит из XLSX.read(..., {cellDates:true}) +
+// sheet_to_json(..., {raw:true}): чаще всего JS Date (Excel сам распознал
+// введённую дату), реже — голое число (серийная дата) или строка (если
+// ячейку явно ввели как текст). Даты сравниваются геттерами локального
+// времени (getFullYear/Month/Date), а не UTC — SheetJS строит Date из
+// серийного номера как локальную полночь, так что UTC-геттеры на день
+// ошибались бы для любого часового пояса восточнее UTC.
+function _dewParseImportDate(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return null;
+    return v.getFullYear() + '-' + _dewPad2(v.getMonth() + 1) + '-' + _dewPad2(v.getDate());
+  }
+  if (typeof v === 'number') {
+    // Серийная дата Excel не была распознана как дата (не должно случаться
+    // при cellDates:true, но на всякий случай) — 25569 = разница в днях
+    // между эпохой Excel (1899-12-30) и Unix-эпохой.
+    var d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return d.getUTCFullYear() + '-' + _dewPad2(d.getUTCMonth() + 1) + '-' + _dewPad2(d.getUTCDate());
+  }
+  var str = String(v).trim();
   if (/^\d{2}\.\d{2}\.\d{4}$/.test(str)) {
     var p = str.split('.');
     return p[2] + '-' + p[1] + '-' + p[0];
   }
   var m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? (m[1] + '-' + m[2] + '-' + m[3]) : null;
+}
+
+// Время могло тоже попасть под авто-распознавание Excel и прийти как доля
+// суток (число) или как Date — приводим оба случая к "ЧЧ:ММ".
+function _dewParseImportTime(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return '';
+    return _dewPad2(v.getHours()) + ':' + _dewPad2(v.getMinutes());
+  }
+  if (typeof v === 'number') {
+    var totalMin = Math.round(v * 24 * 60);
+    return _dewPad2(Math.floor(totalMin / 60) % 24) + ':' + _dewPad2(totalMin % 60);
+  }
+  return String(v).trim();
 }
 
 function _dewImportLevelsFile() {
@@ -2803,14 +2838,22 @@ function _dewImportLevelsFile() {
   var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      // cellDates:true + raw:true — дата, которую Excel хранит как число со
+      // стилем формата (а не как текст), придёт уже как объект Date, а не
+      // как "7/31/26" в стиле ячейки (dateNF в sheet_to_json тут не помогает:
+      // он уступает собственному числовому формату ячейки). Заодно raw:true
+      // отдаёт значения зумпфов настоящими числами, а не форматированной строкой.
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
       var ws = wb.Sheets[wb.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
       if (rows.length < 4) { status.innerHTML = '<span style="color:var(--bad)">Файл пустой или не похож на шаблон</span>'; return; }
 
-      // Строка 2 (индекс 2) — заголовки-ключи, строка 3 — пример (#ПРИМЕР), 4+ — данные
+      // Строка 2 (индекс 2) — заголовки-ключи, строка 3 (индекс 3) обычно
+      // пример (#ПРИМЕР), но если пользователь начал вводить данные прямо в
+      // неё (не добавляя строку ниже) — это тоже настоящая строка данных,
+      // отбрасываем по маркеру "#", а не по фиксированному номеру строки.
       var headers = rows[2].map(function(h) { return String(h).trim(); });
-      var dataRows = rows.slice(4).filter(function(r) {
+      var dataRows = rows.slice(3).filter(function(r) {
         return r[0] && String(r[0]).trim() && String(r[0]).trim().charAt(0) !== '#';
       });
 
@@ -2833,15 +2876,14 @@ function _dewImportLevelsFile() {
       dataRows.forEach(function(row) {
         var isoDate = _dewParseImportDate(row[0]);
         if (!isoDate) { errors++; return; }
-        var time       = String(row[1] || '').trim();
-        var measuredBy = String(row[2] || '').trim();
+        var time       = _dewParseImportTime(row[1]);
+        var measuredBy = row[2] == null ? '' : String(row[2]).trim();
 
         sumpCols.forEach(function(sc) {
           var raw = row[sc.col];
-          var str = (raw === undefined || raw === null) ? '' : String(raw).trim();
-          if (!str) return; // пустая ячейка — не трогаем существующие данные
+          if (raw === undefined || raw === null || raw === '') return; // пустая ячейка — не трогаем существующие данные
 
-          var val = parseFloat(str.replace(',', '.'));
+          var val = (typeof raw === 'number') ? raw : parseFloat(String(raw).trim().replace(',', '.'));
           if (isNaN(val)) { errors++; return; }
 
           var existing = DewateringState.waterLevelFor(sc.sumpId, isoDate);
