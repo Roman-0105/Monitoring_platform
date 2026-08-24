@@ -413,6 +413,9 @@ function switchTab(name) {
   if (name === 'sump-forecast' && typeof initSumpForecastTab === 'function') {
     initSumpForecastTab();
   }
+  if (name === 'pit3d' && typeof initPit3DTab === 'function') {
+    initPit3DTab();
+  }
   if (name === 'registry' && typeof initRegistryTab === 'function') {
     initRegistryTab();
   }

@@ -444,6 +444,7 @@ function _regFormBody(item) {
 
   var isWell = t === 'well_obs' || t === 'well_exp';
   var isExp  = t === 'well_exp';
+  var isElevType = isWell || t === 'seep';
 
   var html =
     // Основные данные
@@ -473,6 +474,17 @@ function _regFormBody(item) {
       '</div>' +
     '</div>';
 
+  // Абс. отметка — для скважин и водопроявлений
+  if (isElevType) {
+    html +=
+      '<div class="reg-section">' +
+        '<div class="reg-section-title">Абсолютная отметка</div>' +
+        '<div class="reg-row reg-row-2">' +
+          _regFld('Абс. отметка (Z)', 'rf-elev-z', 'text', v.elev_z || '', '245.60', 'м') +
+        '</div>' +
+      '</div>';
+  }
+
   // Доп. поля для скважин
   if (isWell) {
     var filterRows  = Array.isArray(v.filter_intervals)  ? v.filter_intervals  : [];
@@ -480,12 +492,11 @@ function _regFormBody(item) {
     var casingRows  = Array.isArray(v.casing_intervals)  ? v.casing_intervals  : [];
 
     html +=
-      // Общие параметры + абс. отметка
+      // Общие параметры скважины
       '<div class="reg-section">' +
         '<div class="reg-section-title">Общие параметры скважины</div>' +
-        '<div class="reg-row reg-row-3">' +
+        '<div class="reg-row reg-row-2">' +
           _regFld('Глубина скв.', 'rf-depth',  'text', v.depth  || '', '120.0', 'м') +
-          _regFld('Абс. отметка (Z)', 'rf-elev-z', 'text', v.elev_z || '', '245.60', 'м') +
           _regFld('Водоносный горизонт', 'rf-aquifer', 'text', v.aquifer || '', 'Юрский в/г') +
         '</div>' +
       '</div>' +
@@ -646,6 +657,7 @@ async function _regSave(existingId) {
   var t = _regFormType;
   var isWell = t === 'well_obs' || t === 'well_exp';
   var isExp  = t === 'well_exp';
+  var isElevType = isWell || t === 'seep';
 
   function fv(id) {
     var el = document.getElementById(id);
@@ -668,9 +680,11 @@ async function _regSave(existingId) {
     active:   true,
   };
 
+  if (isElevType) {
+    row.elev_z = fn('rf-elev-z');
+  }
   if (isWell) {
     row.depth            = fn('rf-depth');
-    row.elev_z           = fn('rf-elev-z');
     row.aquifer          = fv('rf-aquifer') || null;
     row.drill_company    = fv('rf-drill-co') || null;
     row.drill_date_start = fv('rf-drill-start') || null;

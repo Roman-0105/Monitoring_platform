@@ -1714,7 +1714,7 @@ function openAddFormFromPoi(p) {
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
       '<div class="form-group" style="margin:0"><label class="form-label">Горизонт</label>',
-        '<input id="pm-horizon" type="text" class="form-control" value="' + escAttr(p.horizon || '') + '"',
+        '<input id="pm-horizon" type="number" step="0.01" class="form-control" value="' + escAttr(p.horizon || '') + '"',
           ' list="horizons-datalist" style="' + CS + '"></div>',
       '<div class="form-group" style="margin:0"><label class="form-label">Цвет воды</label>',
         '<select id="pm-color" class="form-control" style="' + CS + '">' + cloneOpts('e-color') + '</select></div>',
