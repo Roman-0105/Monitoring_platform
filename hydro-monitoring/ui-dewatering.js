@@ -500,6 +500,14 @@ var _dewLChartCfg       = { yAuto: true, yMin: null, yMax: null };
 var _dewAFilter         = { quarry: '', sumpId: '', days: 30, dateFrom: '', dateTo: '' };
 // null = all; array of IDs = only these included in analytics
 var _dewAnlSettings     = { includedSumpIds: null, includedPumpIds: null };
+// Пороги глубины воды для рейтинга риска и прогноза (те же значения, что уже
+// используются как цветовая граница на "Уровнях воды" — не выдумываем новых).
+var DEW_DEPTH_WARN      = 1.5;
+var DEW_DEPTH_CRIT      = 3.0;
+var _dewAnlShowMA       = true;    // показывать скользящее среднее за 7 дней на графике объёма откачки
+var _dewAnlDestMode     = 'total'; // 'total' | 'dynamics' — донат или график динамики по направлениям
+var _dewAnlHeatMode     = 'hours'; // 'hours' | 'pct' — часы или % от паспортной производительности
+var _dewAnlPumpSort     = { col: 'vol', dir: 'desc' };
 (function() {
   try { var s = localStorage.getItem('dew_anl_settings'); if (s) _dewAnlSettings = JSON.parse(s); } catch(e) {}
 })();
@@ -999,6 +1007,11 @@ function _dewRenderPumpRegistry() {
 }
 
 function _dewGoToLevels(sumpId) {
+  var sump = sumpId ? DewateringState.sumpById(sumpId) : null;
+  // Синхронизируем карьер вместе с зумпфом — иначе если фильтр карьера на
+  // "Уровнях" остался от прошлого раза, список зумпфов там не будет
+  // содержать нужный sumpId и переход окажется "в никуда".
+  _dewLFilter.quarry = sump ? (sump.quarry || '') : '';
   _dewLFilter.sumpId = sumpId || '';
   _dewSwitch('levels');
 }
@@ -3355,23 +3368,20 @@ function _dewRenderAnalytics() {
       '<button id="dew-af-settings" title="Настройка аналитики" style="margin-left:auto;padding:4px 10px;border-radius:5px;border:1px solid var(--line);font-size:12px;cursor:pointer;background:' + (_dewAnlSettings.includedSumpIds || _dewAnlSettings.includedPumpIds ? 'var(--accent,#3b82f6)' : 'var(--bg-3,var(--bg-2))') + ';color:' + (_dewAnlSettings.includedSumpIds || _dewAnlSettings.includedPumpIds ? '#fff' : 'var(--txt-2)') + '">⚙ Настройка</button>' +
     '</div>' +
     '<div id="dew-anl-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px"></div>' +
-    '<div class="card" style="padding:14px;margin-bottom:14px">' +
-      '<div class="card-title" id="dew-anl-trend-title">Объём откачки по насосам</div>' +
-      '<div style="position:relative;height:200px"><canvas id="dew-canvas-anltrend" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>' +
+    '<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px;align-items:start">' +
+      '<div class="card" style="padding:14px" id="dew-anl-balance-card"></div>' +
+      '<div class="card" style="padding:14px">' +
+        '<div class="card-title">Зумпфы в риске</div>' +
+        '<div id="dew-anl-risk" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto"></div>' +
+      '</div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">' +
-      '<div class="card" style="padding:14px">' +
-        '<div class="card-title">Статус насосов</div>' +
-        '<div id="dew-anl-pumpcards" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto"></div>' +
-      '</div>' +
-      '<div class="card" style="padding:14px">' +
-        '<div class="card-title">Направления откачки</div>' +
-        '<div id="dew-anl-dest-wrap" style="position:relative;height:260px"><canvas id="dew-canvas-anldest" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>' +
-      '</div>' +
-      '<div class="card" style="padding:14px">' +
-        '<div class="card-title" id="dew-anl-heat-title">Часы работы</div>' +
-        '<div id="dew-anl-heatmap" style="overflow-x:auto"></div>' +
-      '</div>' +
+    '<div class="card" style="padding:14px;margin-bottom:14px">' +
+      '<div class="card-title">Флот насосов</div>' +
+      '<div id="dew-anl-pumptable" style="overflow-x:auto"></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
+      '<div class="card" style="padding:14px" id="dew-anl-dest-card"></div>' +
+      '<div class="card" style="padding:14px" id="dew-anl-heat-card"></div>' +
     '</div>';
 
   document.getElementById('dew-af-quarry').addEventListener('change', function() {
@@ -3430,10 +3440,11 @@ function _dewRenderAnalytics() {
 
 function _dewAnlRefreshAll() {
   _dewAnlKpis();
-  _dewAnlTrend();
-  _dewAnlPumpCards();
-  _dewAnlDest();
-  _dewAnlHeatmap();
+  _dewAnlRenderBalanceCard();
+  _dewAnlRiskRanking();
+  _dewAnlPumpTable();
+  _dewAnlRenderDestCard();
+  _dewAnlRenderHeatCard();
 }
 
 // Возвращает объём записи, идущий ТОЛЬКО в финальные направления (не intermediate_sump).
@@ -3664,6 +3675,77 @@ function _dewAnlPeriodLabel() {
   return '· ' + days.length + ' дней';
 }
 
+// ── Водный баланс: уровень/глубина воды для графиков и рейтинга риска ──
+// Аналитика раньше вообще не знала об уровне воды и отметке дна — вся эта
+// секция сшивает их с существующей отчётностью по объёму откачки.
+
+// Последний известный замер уровня на дату `date` или раньше — замеры
+// не обязательно берутся каждый день, поэтому переносим последнее известное
+// значение вперёд, так же, как это уже сделано для отметки дна.
+function _dewAnlLevelAsOf(sumpId, date) {
+  var hist = DewateringState.waterLevels
+    .filter(function(w) { return w.sumpId === sumpId && w.date <= date; })
+    .sort(function(a, b) { return b.date.localeCompare(a.date); });
+  return hist.length ? parseFloat(hist[0].elevation) : null;
+}
+
+// Глубина воды (уровень минус дно) на дату `date`, либо null, если нет
+// известных данных по уровню или дну на эту дату.
+function _dewAnlSumpDepthOn(sumpId, date) {
+  var level = _dewAnlLevelAsOf(sumpId, date);
+  if (level == null) return null;
+  var bottom = DewateringState.sumpElevationAsOf(sumpId, date);
+  if (bottom == null) return null;
+  return level - bottom;
+}
+
+function _dewAnlSumpDepthNow(sumpId) {
+  return _dewAnlSumpDepthOn(sumpId, new Date().toISOString().slice(0, 10));
+}
+
+// Зумпфы, попадающие в текущий фильтр аналитики (карьер/зумпф/настройка
+// "какие зумпфы включены") — общая логика для рейтинга риска, KPI-плашек
+// и линии водного баланса, чтобы все они считали по одному и тому же набору.
+function _dewAnlFilteredSumps() {
+  var sumps = DewateringState.sumps;
+  if (_dewAFilter.sumpId) sumps = sumps.filter(function(s) { return s.id === _dewAFilter.sumpId; });
+  else if (_dewAFilter.quarry) sumps = sumps.filter(function(s) { return (s.quarry || '') === _dewAFilter.quarry; });
+  if (_dewAnlSettings.includedSumpIds) {
+    sumps = sumps.filter(function(s) { return _dewAnlSettings.includedSumpIds.indexOf(s.id) >= 0; });
+  }
+  return sumps;
+}
+
+// Рейтинг риска: текущая глубина по каждому зумпфу с данными + тренд за
+// последние 14 дней, отсортировано от самой глубокой воды к минимальной.
+function _dewAnlRiskRows() {
+  var pastStr = (function() { var d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().slice(0, 10); })();
+  return _dewAnlFilteredSumps().map(function(s) {
+    var depth = _dewAnlSumpDepthNow(s.id);
+    var depthPast = _dewAnlSumpDepthOn(s.id, pastStr);
+    var trend = (depth != null && depthPast != null) ? (depth - depthPast) : null;
+    return { sump: s, depth: depth, trend: trend };
+  }).filter(function(r) { return r.depth != null; })
+    .sort(function(a, b) { return b.depth - a.depth; });
+}
+
+// Оценочный прогноз "через сколько дней глубина достигнет критической
+// отметки" по линейной экстраполяции тренда за последние 14 дней. Возвращает
+// null, если уровень не растёт заметно, или горизонт больше года (чтобы не
+// шуметь прогнозами, в которые нет смысла всматриваться).
+function _dewAnlForecast(sumpId) {
+  var pastStr = (function() { var d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().slice(0, 10); })();
+  var depthNow = _dewAnlSumpDepthNow(sumpId);
+  var depthPast = _dewAnlSumpDepthOn(sumpId, pastStr);
+  if (depthNow == null || depthPast == null) return null;
+  var slopePerDay = (depthNow - depthPast) / 14;
+  if (slopePerDay <= 0.005) return null;
+  if (depthNow >= DEW_DEPTH_CRIT) return { days: 0, slope: slopePerDay };
+  var daysToCrit = Math.round((DEW_DEPTH_CRIT - depthNow) / slopePerDay);
+  if (daysToCrit > 365) return null;
+  return { days: daysToCrit, slope: slopePerDay };
+}
+
 function _dewSparkSvg(values, color) {
   var n = values.length;
   if (n < 2) return '';
@@ -3681,13 +3763,29 @@ function _dewSparkSvg(values, color) {
     '</svg>';
 }
 
+function _dewAnlScrollTo(id) {
+  var el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// Среднее изменение глубины воды (конец периода минус начало) по зумпфам,
+// попадающим в текущий фильтр аналитики — простой, честный прокси "водного
+// баланса" без полноценной кривой объёма зумпфа (её в системе пока нет).
+function _dewAnlLevelDeltaAvg() {
+  var days = _dewAnlDays();
+  if (days.length < 2) return null;
+  var deltas = _dewAnlFilteredSumps().map(function(s) {
+    var start = _dewAnlSumpDepthOn(s.id, days[0]);
+    var end = _dewAnlSumpDepthOn(s.id, days[days.length - 1]);
+    return (start != null && end != null) ? (end - start) : null;
+  }).filter(function(v) { return v != null; });
+  if (!deltas.length) return null;
+  return { avg: deltas.reduce(function(a, v) { return a + v; }, 0) / deltas.length, n: deltas.length };
+}
+
 function _dewAnlKpis() {
   var wrap = document.getElementById('dew-anl-kpis');
   if (!wrap) return;
-
-  // Update trend chart title
-  var titleEl = document.getElementById('dew-anl-trend-title');
-  if (titleEl) titleEl.textContent = 'Объём откачки по зумпфам ' + _dewAnlPeriodLabel();
 
   var pids = _dewAnlEffectivePumpIds();
   var days = _dewAnlDays();
@@ -3709,7 +3807,6 @@ function _dewAnlKpis() {
   var allPumps = pids
     ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
     : DewateringState.pumps;
-  var activePumps = allPumps.filter(function(p) { return p.status === 'working'; }).length;
 
   var totalHours = 0;
   DewateringState.meterReadings.forEach(function(r) {
@@ -3747,8 +3844,10 @@ function _dewAnlKpis() {
   var sparkVals = dailyVols.slice(-sparkN);
 
   var periodLabel = _dewAnlPeriodLabel();
+  var levelDelta = _dewAnlLevelDeltaAvg();
+  var riskCount = _dewAnlRiskRows().filter(function(r) { return r.depth >= DEW_DEPTH_WARN; }).length;
 
-  function kpiTile(label, value, sub, color, sparkVals, deltaVal) {
+  function kpiTile(label, value, sub, color, sparkVals, deltaVal, onclick) {
     var sparkHtml = sparkVals ? _dewSparkSvg(sparkVals, color) : '';
     var deltaHtml = '';
     if (deltaVal !== null && deltaVal !== undefined) {
@@ -3757,7 +3856,8 @@ function _dewAnlKpis() {
       var fg = deltaVal >= 0 ? '#34d399' : '#f87171';
       deltaHtml = '<div style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:12px;margin-top:5px;background:' + bg + ';color:' + fg + '">' + sign + deltaVal + '% пред. период</div>';
     }
-    return '<div style="background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;border-top:3px solid ' + color + '">' +
+    return '<div' + (onclick ? ' onclick="' + onclick + '" title="Нажмите для подробностей"' : '') +
+      ' style="background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;border-top:3px solid ' + color + (onclick ? ';cursor:pointer' : '') + '">' +
       '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3);margin-bottom:6px">' + label + '</div>' +
       '<div style="font-size:22px;font-weight:800;color:var(--txt-1);font-variant-numeric:tabular-nums;line-height:1.15">' + value + '</div>' +
       (sub ? '<div style="font-size:10px;color:var(--txt-3);margin-top:3px">' + sub + '</div>' : '') +
@@ -3766,12 +3866,16 @@ function _dewAnlKpis() {
     '</div>';
   }
 
+  var levelValue = levelDelta == null ? '—' : (levelDelta.avg >= 0 ? '+' : '') + levelDelta.avg.toFixed(2) + ' м';
+  var levelColor = levelDelta == null ? '#64748b' : (levelDelta.avg > 0.02 ? '#ef4444' : (levelDelta.avg < -0.02 ? '#10b981' : '#f59e0b'));
+  var levelSub = levelDelta == null ? 'нет данных по уровню' : ('Ø глубина, ' + levelDelta.n + ' зумпф.' + periodLabel);
+
   wrap.innerHTML =
-    kpiTile('Объём ' + periodLabel, (vol30 >= 1000 ? (vol30/1000).toFixed(1)+' тыс.' : vol30.toFixed(0)) + ' м³', 'суммарно', '#3b82f6', sparkVals, volDelta) +
-    kpiTile('Среднесуточно', avgDaily.toFixed(0) + ' м³/сут', 'дней с данными: ' + daysWithData, '#06b6d4', null, null) +
-    kpiTile('Активных насосов', activePumps + ' / ' + allPumps.length, 'статус «работает»', '#10b981', null, null) +
-    kpiTile('КИО', kio + '%', 'коэф. использования', kio >= 70 ? '#10b981' : kio >= 40 ? '#f59e0b' : '#ef4444', null, null) +
-    kpiTile('Простоев', downtimeCount + '', 'насос-дней за период', downtimeCount === 0 ? '#10b981' : downtimeCount <= 5 ? '#f59e0b' : '#ef4444', null, null);
+    kpiTile('Объём ' + periodLabel, (vol30 >= 1000 ? (vol30/1000).toFixed(1)+' тыс.' : vol30.toFixed(0)) + ' м³', 'суммарно · Ø ' + avgDaily.toFixed(0) + ' м³/сут', '#3b82f6', sparkVals, volDelta) +
+    kpiTile('Изменение уровня', levelValue, levelSub, levelColor, null, null) +
+    kpiTile('КИО', kio + '%', 'коэф. использования — к таблице насосов', kio >= 70 ? '#10b981' : kio >= 40 ? '#f59e0b' : '#ef4444', null, null, '_dewAnlSortPumpsBy(\'kio\'); _dewAnlScrollTo(\'dew-anl-pumptable\')') +
+    kpiTile('Зумпфы в риске', riskCount + '', 'глубина ≥ ' + DEW_DEPTH_WARN.toFixed(1) + ' м', riskCount === 0 ? '#10b981' : '#ef4444', null, null, '_dewAnlScrollTo(\'dew-anl-risk\')') +
+    kpiTile('Простоев', downtimeCount + '', 'насос-дней за период', downtimeCount === 0 ? '#10b981' : downtimeCount <= 5 ? '#f59e0b' : '#ef4444', null, null, downtimeCount ? '_dewAnlShowDowntimeDetail()' : '');
 }
 
 function _dewAFilteredPumpIds() {
@@ -3787,7 +3891,133 @@ function _dewAFilteredPumpIds() {
   return null; // null = all pumps
 }
 
-function _dewAnlTrend() {
+// ── Настраиваемость графиков: какие серии видны на КОНКРЕТНОМ графике ──
+// Это не то же самое, что общая "⚙ Настройка" аналитики (_dewAnlSettings) —
+// та решает, что вообще участвует в подсчётах (KPI, все графики разом), а
+// это — что просто отображается на одном графике, для остальных не влияет.
+// Состояние — локально на устройстве, отдельно по каждому графику (widgetKey).
+var _dewAnlSeriesHidden = { balance: [], dest: [] };
+(function() {
+  try { var s = localStorage.getItem('dew_anl_series_hidden'); if (s) _dewAnlSeriesHidden = JSON.parse(s); } catch(e) {}
+})();
+function _dewAnlSaveSeriesHidden() {
+  try { localStorage.setItem('dew_anl_series_hidden', JSON.stringify(_dewAnlSeriesHidden)); } catch(e) {}
+}
+
+// Универсальный попап выбора серий — список чекбоксов, при желании
+// сгруппированный (groups: [{label, items:[{id,name}]}]). Переиспользуется
+// и графиком "Водный баланс" (серии — зумпфы), и "Направлениями откачки"
+// (серии — направления, сгруппированные по типу).
+function _dewAnlOpenSeriesPicker(anchorEl, widgetKey, groups, onChange) {
+  var existing = document.getElementById('dew-series-picker');
+  var wasOpenForSameWidget = existing && existing.dataset.widget === widgetKey;
+  if (existing) existing.remove();
+  if (wasOpenForSameWidget) return; // повторный клик по той же кнопке — просто закрыть
+
+  var rect = anchorEl.getBoundingClientRect();
+  var pop = document.createElement('div');
+  pop.id = 'dew-series-picker';
+  pop.dataset.widget = widgetKey;
+  pop.style.cssText = 'position:fixed;z-index:9200;top:' + (rect.bottom + 6) + 'px;left:' + Math.max(8, rect.right - 260) + 'px;width:260px;max-height:360px;overflow-y:auto;background:var(--bg-1,#111827);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6);padding:10px';
+
+  var hidden = _dewAnlSeriesHidden[widgetKey] || (_dewAnlSeriesHidden[widgetKey] = []);
+
+  function render() {
+    pop.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+        '<span style="font-size:11px;font-weight:700;color:var(--txt-1)">Серии на графике</span>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button id="dsp-all" style="font-size:10px;background:none;border:none;color:var(--accent,#3b82f6);cursor:pointer;padding:0">все</button>' +
+          '<button id="dsp-none" style="font-size:10px;background:none;border:none;color:var(--txt-3);cursor:pointer;padding:0">ничего</button>' +
+        '</div>' +
+      '</div>' +
+      groups.map(function(g) {
+        if (!g.items.length) return '';
+        return (g.label ? '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);margin:8px 0 3px">' + escHTML(g.label) + '</div>' : '') +
+          g.items.map(function(it) {
+            var checked = hidden.indexOf(it.id) < 0;
+            return '<label style="display:flex;align-items:center;gap:7px;padding:3px 2px;font-size:12px;color:var(--txt-2);cursor:pointer">' +
+              '<input type="checkbox" data-id="' + escAttr(it.id) + '"' + (checked ? ' checked' : '') + '> ' + escHTML(it.name) +
+            '</label>';
+          }).join('');
+      }).join('');
+
+    pop.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        var id = this.dataset.id;
+        var idx = hidden.indexOf(id);
+        if (this.checked) { if (idx >= 0) hidden.splice(idx, 1); }
+        else if (idx < 0) hidden.push(id);
+        _dewAnlSaveSeriesHidden();
+        onChange();
+      });
+    });
+    // pop.querySelector, а не document.getElementById — при первом вызове
+    // render() поп-ап ещё не вставлен в document (appendChild ниже, после
+    // render()), так что document.getElementById его не найдёт.
+    pop.querySelector('#dsp-all').addEventListener('click', function() {
+      hidden.length = 0;
+      _dewAnlSaveSeriesHidden();
+      render();
+      onChange();
+    });
+    pop.querySelector('#dsp-none').addEventListener('click', function() {
+      groups.forEach(function(g) { g.items.forEach(function(it) { if (hidden.indexOf(it.id) < 0) hidden.push(it.id); }); });
+      _dewAnlSaveSeriesHidden();
+      render();
+      onChange();
+    });
+  }
+  render();
+
+  document.body.appendChild(pop);
+  setTimeout(function() {
+    document.addEventListener('click', function closePop(e) {
+      if (!document.getElementById('dew-series-picker')) { document.removeEventListener('click', closePop); return; }
+      // composedPath(), не pop.contains(e.target): чекбоксы/кнопки внутри
+      // попапа вызывают render(), который тут же меняет pop.innerHTML —
+      // сам e.target (старая, уже отсоединённая кнопка) к этому моменту
+      // больше не .contains()-ится в pop, хотя клик был точно внутри.
+      // composedPath() фиксируется в момент диспетчеризации события и не
+      // зависит от того, что DOM успел поменяться во время его обработки.
+      if (e.composedPath().indexOf(pop) === -1 && e.target !== anchorEl) { pop.remove(); document.removeEventListener('click', closePop); }
+    });
+  }, 0);
+}
+
+// Карточка "Объём откачки по зумпфам" — заголовок + переключатель среднего
+// за 7 дней + сам график. Про уровень/глубину воды здесь больше нет — это
+// отдельная картина на блок-схеме "Обзора", здесь только объёмы откачки.
+function _dewAnlRenderBalanceCard() {
+  var card = document.getElementById('dew-anl-balance-card');
+  if (!card) return;
+
+  card.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px">' +
+      '<div class="card-title" id="dew-anl-trend-title" style="margin:0">Объём откачки по зумпфам ' + escHTML(_dewAnlPeriodLabel()) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--txt-3);cursor:pointer;user-select:none" title="Скользящее среднее за 7 дней — сглаживает суточные скачки, чтобы был виден тренд">' +
+          '<input type="checkbox" id="dew-anl-ma"' + (_dewAnlShowMA ? ' checked' : '') + '> среднее за 7 дней' +
+        '</label>' +
+        '<button id="dew-anl-balance-series-btn" class="btn btn-sm btn-outline" style="font-size:10px;padding:3px 8px" title="Выбрать, какие зумпфы показывать на этом графике">⚙ Серии' + (_dewAnlSeriesHidden.balance.length ? ' (' + _dewAnlSeriesHidden.balance.length + ' скрыто)' : '') + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="position:relative;height:220px;margin-top:8px"><canvas id="dew-canvas-anltrend" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>';
+
+  var maCb = document.getElementById('dew-anl-ma');
+  if (maCb) maCb.addEventListener('change', function() { _dewAnlShowMA = this.checked; _dewAnlWaterBalance(); });
+  document.getElementById('dew-anl-balance-series-btn').addEventListener('click', function(e) {
+    var allSumps = DewateringState.sumps.slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+    _dewAnlOpenSeriesPicker(e.currentTarget, 'balance',
+      [{ label: '', items: allSumps.map(function(s) { return { id: s.id, name: s.name }; }) }],
+      function() { _dewAnlRenderBalanceCard(); }
+    );
+  });
+
+  _dewAnlWaterBalance();
+}
+
+function _dewAnlWaterBalance() {
   _dewDestroyChart('anltrend');
   var canvas = document.getElementById('dew-canvas-anltrend');
   if (!canvas) return;
@@ -3797,20 +4027,25 @@ function _dewAnlTrend() {
   var daySet = {};
   days.forEach(function(d) { daySet[d] = true; });
 
-  // Группируем по зумпфам (финальный объём — без перекачки между зумпфами)
-  var filteredSumps = DewateringState.sumps.filter(function(s) {
-    if (_dewAFilter.sumpId && s.id !== _dewAFilter.sumpId) return false;
-    if (_dewAFilter.quarry && (s.quarry || '') !== _dewAFilter.quarry) return false;
-    if (_dewAnlSettings.includedSumpIds && _dewAnlSettings.includedSumpIds.indexOf(s.id) < 0) return false;
-    return true;
+  // Помимо общего фильтра/настройки аналитики — локальный выбор серий именно
+  // для этого графика (кнопка "⚙ Серии"), никак не влияет на KPI и другие графики.
+  var filteredSumps = _dewAnlFilteredSumps().filter(function(s) {
+    return _dewAnlSeriesHidden.balance.indexOf(s.id) < 0;
   });
 
+  // Сырой объём каждого насоса (computedVolume), а не "финальный"
+  // (_dewAnlFinalVolume, как на "Направлениях откачки"), который обнуляет
+  // всё, что уходит в промежуточный зумпф. На этом карьере в промежуточный
+  // зумпф ("60 тыс. накопитель") идёт бОльшая часть откачки — с финальным
+  // объёмом график показывал пустые дни там, где насосы на самом деле
+  // вовсю качали, просто не в конечное направление. Здесь график про то,
+  // сколько откачал каждый зумпф, а не про то, куда в итоге делась вода.
   var sumpVols = filteredSumps.map(function(s) {
     var pumpIds = DewateringState.pumpsOfSump(s.id).map(function(p) { return p.id; });
     if (pids) pumpIds = pumpIds.filter(function(id) { return pids.indexOf(id) >= 0; });
     var vol = DewateringState.meterReadings
       .filter(function(r) { return pumpIds.indexOf(r.pumpId) >= 0 && daySet[r.date]; })
-      .reduce(function(acc, r) { return acc + _dewAnlFinalVolume(r); }, 0);
+      .reduce(function(acc, r) { return acc + (DewateringState.computedVolume(r) || 0); }, 0);
     return { sump: s, pumpIds: pumpIds, vol: vol };
   }).sort(function(a, b) { return b.vol - a.vol; });
 
@@ -3824,7 +4059,7 @@ function _dewAnlTrend() {
     var data = days.map(function(day) {
       return DewateringState.meterReadings
         .filter(function(r) { return pumpIds.indexOf(r.pumpId) >= 0 && r.date === day; })
-        .reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
+        .reduce(function(a, r) { return a + (DewateringState.computedVolume(r) || 0); }, 0);
     });
     var col = SUMP_COLORS[si % SUMP_COLORS.length];
     return {
@@ -3834,21 +4069,22 @@ function _dewAnlTrend() {
     };
   });
 
-  // MA7 overlay
-  var totalPerDay = days.map(function(_, di) {
-    return datasets.reduce(function(acc, ds) { return acc + (ds.data ? ds.data[di] : 0); }, 0);
-  });
-  var ma7 = totalPerDay.map(function(_, i) {
-    var start = Math.max(0, i - 6);
-    var slice = totalPerDay.slice(start, i + 1);
-    return slice.reduce(function(a, v) { return a + v; }, 0) / slice.length;
-  });
-  datasets.push({
-    type: 'line', label: 'MA7', data: ma7,
-    borderColor: 'rgba(251,191,36,0.9)', backgroundColor: 'transparent',
-    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
-    tension: 0.35, order: -1
-  });
+  if (_dewAnlShowMA) {
+    var totalPerDay = days.map(function(_, di) {
+      return datasets.reduce(function(acc, ds) { return acc + (ds.data ? ds.data[di] : 0); }, 0);
+    });
+    var ma7 = totalPerDay.map(function(_, i) {
+      var start = Math.max(0, i - 6);
+      var slice = totalPerDay.slice(start, i + 1);
+      return slice.reduce(function(a, v) { return a + v; }, 0) / slice.length;
+    });
+    datasets.push({
+      type: 'line', label: 'Среднее за 7 дней', data: ma7,
+      borderColor: 'rgba(251,191,36,0.9)', backgroundColor: 'transparent',
+      borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
+      tension: 0.35, order: -1
+    });
+  }
 
   var labels = days.map(function(d) {
     var dt = new Date(d + 'T00:00:00');
@@ -3860,6 +4096,7 @@ function _dewAnlTrend() {
     data: { labels: labels, datasets: datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: true, position: 'top', labels: { font: { size: 11 }, boxWidth: 12, color: '#b0b8c8', padding: 8 } },
         tooltip: {
@@ -3868,7 +4105,7 @@ function _dewAnlTrend() {
             title: function(items) { return days[items[0].dataIndex]; },
             label: function(item) {
               if (!item.raw) return null;
-              var v = item.dataset.label === 'MA7' ? item.raw.toFixed(0) : item.raw.toLocaleString('ru-RU');
+              var v = item.dataset.label === 'Среднее за 7 дней' ? item.raw.toFixed(0) : item.raw.toLocaleString('ru-RU');
               return ' ' + item.dataset.label + ': ' + v + ' м³';
             }
           }
@@ -3882,62 +4119,202 @@ function _dewAnlTrend() {
   });
 }
 
-function _dewAnlPumpCards() {
-  var wrap = document.getElementById('dew-anl-pumpcards');
+// Список зумпфов от самой глубокой воды к минимальной — раньше, чтобы
+// понять, где копится вода, приходилось вручную обходить каждый зумпф на
+// "Уровнях воды"; теперь это видно сразу и одним кликом ведёт туда же.
+function _dewAnlRiskRanking() {
+  var wrap = document.getElementById('dew-anl-risk');
   if (!wrap) return;
 
-  var pids = _dewAnlEffectivePumpIds();
-  var pumps = (pids
-    ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; })
-    : DewateringState.pumps
-  ).slice().sort(function(a, b) {
-    var o = { working: 0, standby: 1, repair: 2, off: 3 };
-    return (o[a.status] || 3) - (o[b.status] || 3);
-  });
+  var rows = _dewAnlRiskRows();
+  if (!rows.length) { wrap.innerHTML = '<p class="dew-no-data">Нет данных по уровню воды</p>'; return; }
 
-  if (!pumps.length) { wrap.innerHTML = '<p class="dew-no-data">Нет насосов</p>'; return; }
-
-  var days = _dewAnlDays();
-  var daySet = {};
-  days.forEach(function(d) { daySet[d] = true; });
-  // Спарклайн: последние 14 дней периода (или меньше)
-  var sparkDays = days.slice(-14);
-
-  var SC = { working: '#10b981', standby: '#3b82f6', repair: '#f59e0b', off: '#64748b' };
-  var SL = { working: 'Работает', standby: 'Резерв', repair: 'Ремонт', off: 'Выкл' };
-
-  wrap.innerHTML = pumps.map(function(p) {
-    var sc = SC[p.status] || '#64748b';
-    var sl = SL[p.status] || p.status || '—';
-    // Объём за выбранный период
-    var volTotal = DewateringState.meterReadings
-      .filter(function(r) { return r.pumpId === p.id && daySet[r.date]; })
-      .reduce(function(acc, r) { return acc + _dewAnlFinalVolume(r); }, 0);
-    var sump = DewateringState.sumps.find(function(s) { return s.id === p.sumpId; });
-    var sumpName = sump ? sump.name : '—';
-    var sparkVals = sparkDays.map(function(day) {
-      return DewateringState.meterReadings
-        .filter(function(r) { return r.date === day && r.pumpId === p.id; })
-        .reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
-    });
-    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-3,var(--bg-2));border-radius:6px;border-left:3px solid ' + sc + '">' +
+  wrap.innerHTML = rows.map(function(r) {
+    var sevColor = r.depth >= DEW_DEPTH_CRIT ? '#ef4444' : (r.depth >= DEW_DEPTH_WARN ? '#f59e0b' : '#10b981');
+    var trendHtml = '';
+    if (r.trend != null && Math.abs(r.trend) > 0.02) {
+      var trendColor = r.trend > 0 ? '#f87171' : '#34d399';
+      trendHtml = '<span style="font-size:10px;color:' + trendColor + '">' + (r.trend >= 0 ? '↑' : '↓') + ' ' + Math.abs(r.trend).toFixed(2) + ' м / 14д</span>';
+    }
+    var forecast = r.depth >= DEW_DEPTH_WARN ? _dewAnlForecast(r.sump.id) : null;
+    var forecastHtml = forecast
+      ? '<div style="font-size:10px;color:#f87171;margin-top:2px" title="Оценочно, по линейной экстраполяции последних 14 дней — не инженерный расчёт притока">' +
+          (forecast.days <= 0 ? '⚠ уже критично' : '⚠ достигнет критической отметки через ~' + forecast.days + ' дн.') +
+        '</div>'
+      : '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-3,var(--bg-2));border-radius:6px;border-left:3px solid ' + sevColor + ';cursor:pointer" onclick="_dewGoToLevels(\'' + r.sump.id + '\')" title="Открыть на «Уровнях воды»">' +
       '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:12px;font-weight:600;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHTML(p.name) + '</div>' +
-        '<div style="font-size:10px;color:var(--txt-3);margin-top:1px">' + escHTML(sumpName) + (p.model ? ' · ' + escHTML(p.model) : '') + '</div>' +
-        '<div style="font-size:10px;color:var(--txt-2);margin-top:2px;font-variant-numeric:tabular-nums">' + volTotal.toLocaleString('ru-RU') + ' м³ за период</div>' +
+        '<div style="font-size:12px;font-weight:600;color:var(--txt-1)">' + escHTML(r.sump.name) + '</div>' +
+        '<div style="font-size:10px;color:var(--txt-3)">' + escHTML(r.sump.quarry || '') + '</div>' +
+        forecastHtml +
       '</div>' +
-      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
-        '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:' + sc + '22;color:' + sc + '">' + sl + '</span>' +
-        _dewSparkSvg(sparkVals, sc) +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">' +
+        '<span style="font-size:13px;font-weight:700;color:' + sevColor + '">' + r.depth.toFixed(2) + ' м</span>' +
+        trendHtml +
       '</div>' +
     '</div>';
   }).join('');
 }
 
-function _dewAnlDest() {
+function _dewAnlSortPumpsBy(col) {
+  if (_dewAnlPumpSort.col === col) {
+    _dewAnlPumpSort.dir = _dewAnlPumpSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    _dewAnlPumpSort.col = col;
+    _dewAnlPumpSort.dir = (col === 'name' || col === 'sump' || col === 'status') ? 'asc' : 'desc';
+  }
+  _dewAnlPumpTable();
+}
+
+// Таблица вместо карточек — по объёму/часам/КИО можно сортировать, аномалии
+// (статус «работает», но 0 м³ за период) подсвечены прямо в строке, а не
+// спрятаны в отдельном месте, куда надо специально идти смотреть.
+function _dewAnlPumpTable() {
+  var wrap = document.getElementById('dew-anl-pumptable');
+  if (!wrap) return;
+
+  var pids = _dewAnlEffectivePumpIds();
+  var pumps = pids ? DewateringState.pumps.filter(function(p) { return pids.indexOf(p.id) >= 0; }) : DewateringState.pumps;
+  if (!pumps.length) { wrap.innerHTML = '<p class="dew-no-data">Нет насосов</p>'; return; }
+
+  var days = _dewAnlDays();
+  var N = days.length || 1;
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
+  var sparkDays = days.slice(-14);
+
+  var SC = { working: '#10b981', standby: '#3b82f6', repair: '#f59e0b', off: '#64748b' };
+  var SL = { working: 'Работает', standby: 'Резерв', repair: 'Ремонт', off: 'Выкл' };
+
+  var rows = pumps.map(function(p) {
+    var recs = DewateringState.meterReadings.filter(function(r) { return r.pumpId === p.id && daySet[r.date]; });
+    var vol = recs.reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
+    var hours = recs.reduce(function(a, r) { return a + (r.hoursWorked || 0); }, 0);
+    var kio = Math.round(hours / (N * 24) * 100);
+    var sump = DewateringState.sumpById(p.sumpId);
+    var sparkVals = sparkDays.map(function(day) {
+      return DewateringState.meterReadings
+        .filter(function(r) { return r.date === day && r.pumpId === p.id; })
+        .reduce(function(a, r) { return a + _dewAnlFinalVolume(r); }, 0);
+    });
+    var anomaly = p.status === 'working' && recs.length > 0 && vol === 0;
+    return { pump: p, sump: sump, vol: vol, hours: hours, kio: kio, sparkVals: sparkVals, anomaly: anomaly };
+  });
+
+  var col = _dewAnlPumpSort.col, dir = _dewAnlPumpSort.dir;
+  rows.sort(function(a, b) {
+    var av, bv;
+    if (col === 'name') { av = a.pump.name || ''; bv = b.pump.name || ''; }
+    else if (col === 'sump') { av = a.sump ? a.sump.name : ''; bv = b.sump ? b.sump.name : ''; }
+    else if (col === 'status') { av = a.pump.status || ''; bv = b.pump.status || ''; }
+    else if (col === 'hours') { av = a.hours; bv = b.hours; }
+    else if (col === 'kio') { av = a.kio; bv = b.kio; }
+    else { av = a.vol; bv = b.vol; }
+    if (typeof av === 'string') { var c = av.localeCompare(bv); return dir === 'asc' ? c : -c; }
+    return dir === 'asc' ? (av - bv) : (bv - av);
+  });
+
+  function th(label, key, align) {
+    var active = _dewAnlPumpSort.col === key;
+    var arrow = active ? (_dewAnlPumpSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+    return '<th style="padding:6px 8px;text-align:' + (align || 'left') + ';font-weight:500;cursor:pointer;white-space:nowrap;user-select:none;color:' + (active ? 'var(--txt-1)' : 'var(--txt-3)') + '" onclick="_dewAnlSortPumpsBy(\'' + key + '\')">' + label + arrow + '</th>';
+  }
+
+  wrap.innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:11px">' +
+    '<thead><tr style="border-bottom:1px solid var(--line);font-size:10px;text-transform:uppercase">' +
+      th('Насос', 'name') + th('Зумпф', 'sump') + th('Статус', 'status') +
+      '<th style="padding:6px 8px;text-align:right;font-weight:500">Тренд</th>' +
+      th('Объём, м³', 'vol', 'right') + th('Часы', 'hours', 'right') + th('КИО, %', 'kio', 'right') +
+    '</tr></thead><tbody>' +
+    rows.map(function(r) {
+      var sc = SC[r.pump.status] || '#64748b';
+      var sl = SL[r.pump.status] || r.pump.status || '—';
+      return '<tr style="border-bottom:1px solid var(--line-2);cursor:pointer' + (r.anomaly ? ';background:rgba(248,113,113,.08)' : '') + '" onclick="_dewAnlPumpDrilldown(\'' + r.pump.id + '\')" title="Нажмите — распределение по направлениям откачки">' +
+        '<td style="padding:5px 8px;font-weight:600;color:var(--txt-1);white-space:nowrap">' + escHTML(r.pump.name) + (r.anomaly ? ' <span title="Статус «Работает», но 0 м³ за период" style="color:#f87171">⚠</span>' : '') + '</td>' +
+        '<td style="padding:5px 8px;color:var(--txt-2);white-space:nowrap">' + (r.sump ? escHTML(r.sump.name) : '—') + '</td>' +
+        '<td style="padding:5px 8px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:' + sc + '22;color:' + sc + '">' + sl + '</span></td>' +
+        '<td style="padding:5px 8px;text-align:right">' + _dewSparkSvg(r.sparkVals, sc) + '</td>' +
+        '<td style="padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums;color:var(--txt-1)">' + r.vol.toLocaleString('ru-RU') + '</td>' +
+        '<td style="padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums;color:var(--txt-2)">' + r.hours.toFixed(0) + '</td>' +
+        '<td style="padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums;color:' + (r.kio >= 70 ? '#10b981' : r.kio >= 40 ? '#f59e0b' : '#ef4444') + '">' + r.kio + '%</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table>';
+}
+
+// Разбивка объёма одного насоса по направлениям откачки за период —
+// зеркало донат-детализации по направлению, только с другой стороны.
+function _dewAnlPumpDrilldown(pumpId) {
+  var pump = DewateringState.pumpById(pumpId);
+  if (!pump) return;
+  var days = _dewAnlDays();
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
+  var byDest = {};
+  DewateringState.meterReadings.forEach(function(r) {
+    if (r.pumpId !== pumpId || !daySet[r.date]) return;
+    var vol = DewateringState.computedVolume(r) || 0;
+    if (!vol) return;
+    DewateringState.getDistributions(r).forEach(function(d) {
+      if (!d.destinationId) return;
+      var dest = DewateringState.destById(d.destinationId);
+      if (dest && dest.type === 'intermediate_sump') return;
+      byDest[d.destinationId] = (byDest[d.destinationId] || 0) + vol * d.pct / 100;
+    });
+  });
+  var rows = Object.keys(byDest).map(function(id) {
+    var dest = DewateringState.destById(id);
+    return { name: dest ? dest.name : 'Не указано', sub: '', vol: byDest[id] };
+  }).sort(function(a, b) { return b.vol - a.vol; });
+  if (!rows.length) { Toast.show('Нет распределения по направлениям у этого насоса за период', 'warning'); return; }
+  _dewAnlShowBreakdown(pump.name, rows, '#3b82f6');
+}
+
+var DEW_DEST_COLORS = ['rgba(34,211,238,0.85)', 'rgba(52,211,153,0.85)', 'rgba(251,146,60,0.85)',
+              'rgba(248,113,113,0.85)', 'rgba(188,140,255,0.85)', 'rgba(88,166,255,0.85)'];
+
+function _dewAnlRenderDestCard() {
+  var card = document.getElementById('dew-anl-dest-card');
+  if (!card) return;
+  card.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap">' +
+      '<div class="card-title" style="margin:0">Направления откачки</div>' +
+      '<div style="display:flex;gap:4px;align-items:center">' +
+        '<button id="dew-anl-dest-total-btn" class="btn btn-sm' + (_dewAnlDestMode === 'total' ? '' : ' btn-outline') + '" style="font-size:10px;padding:3px 8px">Итого</button>' +
+        '<button id="dew-anl-dest-dyn-btn" class="btn btn-sm' + (_dewAnlDestMode === 'dynamics' ? '' : ' btn-outline') + '" style="font-size:10px;padding:3px 8px">Динамика</button>' +
+        '<button id="dew-anl-dest-series-btn" class="btn btn-sm btn-outline" style="font-size:10px;padding:3px 8px" title="Выбрать, какие направления показывать">⚙ Серии' + (_dewAnlSeriesHidden.dest.length ? ' (' + _dewAnlSeriesHidden.dest.length + ' скрыто)' : '') + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="dew-anl-dest-wrap" style="position:relative;height:260px"></div>';
+  document.getElementById('dew-anl-dest-total-btn').addEventListener('click', function() { _dewAnlDestMode = 'total'; _dewAnlRenderDestCard(); });
+  document.getElementById('dew-anl-dest-dyn-btn').addEventListener('click', function() { _dewAnlDestMode = 'dynamics'; _dewAnlRenderDestCard(); });
+  document.getElementById('dew-anl-dest-series-btn').addEventListener('click', function(e) {
+    // Группируем по типу направления (ЗИФ/Отстойник/Накопитель/...) — тип
+    // уже есть в данных сегодня, не нужно ждать роль-тега зумпфов (Фаза 2).
+    var byType = {};
+    var typeOrder = [];
+    DewateringState.destinations.forEach(function(d) {
+      var t = d.type || 'other';
+      if (!byType[t]) { byType[t] = []; typeOrder.push(t); }
+      byType[t].push({ id: d.id, name: d.name });
+    });
+    var groups = typeOrder.map(function(t) {
+      return { label: (DEW_DEST_TYPE[t] ? DEW_DEST_TYPE[t].icon + ' ' + DEW_DEST_TYPE[t].label : 'Без типа'), items: byType[t] };
+    });
+    _dewAnlOpenSeriesPicker(e.currentTarget, 'dest', groups, function() { _dewAnlRenderDestCard(); });
+  });
+
+  if (_dewAnlDestMode === 'dynamics') _dewAnlDestDynamics();
+  else _dewAnlDestTotal();
+}
+
+function _dewAnlDestTotal() {
   _dewDestroyChart('anldest');
+  var wrap = document.getElementById('dew-anl-dest-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<canvas id="dew-canvas-anldest" style="position:absolute;inset:0;width:100%;height:100%"></canvas>';
   var canvas = document.getElementById('dew-canvas-anldest');
-  if (!canvas) return;
 
   var pids = _dewAnlEffectivePumpIds();
   var days = _dewAnlDays();
@@ -3953,12 +4330,13 @@ function _dewAnlDest() {
       if (!d.destinationId) return;
       var dest = DewateringState.destById(d.destinationId);
       if (dest && dest.type === 'intermediate_sump') return; // не показываем перекачку
+      if (_dewAnlSeriesHidden.dest.indexOf(d.destinationId) >= 0) return; // скрыто через "⚙ Серии"
       byDest[d.destinationId] = (byDest[d.destinationId] || 0) + vol * d.pct / 100;
     });
   });
 
   var total = Object.keys(byDest).reduce(function(a, k) { return a + byDest[k]; }, 0);
-  if (!total) { canvas.parentElement.innerHTML = '<p class="dew-no-data">Нет данных</p>'; return; }
+  if (!total) { wrap.innerHTML = '<p class="dew-no-data">Нет данных' + (_dewAnlSeriesHidden.dest.length ? ' (проверьте «⚙ Серии» — часть направлений скрыта)' : '') + '</p>'; return; }
 
   // Собираем детализацию: для каждого направления — объём по насосам
   var byDestPump = {}; // destId → { pumpId → vol }
@@ -3971,6 +4349,7 @@ function _dewAnlDest() {
       if (!d.destinationId) return;
       var dest = DewateringState.destById(d.destinationId);
       if (dest && dest.type === 'intermediate_sump') return;
+      if (_dewAnlSeriesHidden.dest.indexOf(d.destinationId) >= 0) return;
       if (!byDestPump[d.destinationId]) byDestPump[d.destinationId] = {};
       byDestPump[d.destinationId][r.pumpId] = (byDestPump[d.destinationId][r.pumpId] || 0) + vol * d.pct / 100;
     });
@@ -3981,8 +4360,7 @@ function _dewAnlDest() {
     return { id: k, name: d ? d.name : 'Не указано', vol: byDest[k] };
   }).sort(function(a, b) { return b.vol - a.vol; });
 
-  var COLORS = ['rgba(34,211,238,0.85)', 'rgba(52,211,153,0.85)', 'rgba(251,146,60,0.85)',
-                'rgba(248,113,113,0.85)', 'rgba(188,140,255,0.85)', 'rgba(88,166,255,0.85)'];
+  var COLORS = DEW_DEST_COLORS;
 
   _dewCharts['anldest'] = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -4001,7 +4379,14 @@ function _dewAnlDest() {
         var idx = elements[0].index;
         var entry = entries[idx];
         if (!entry) return;
-        _dewAnlDestDrilldown(entry, byDestPump[entry.id] || {}, COLORS[idx % COLORS.length]);
+        var pumpVolMap = byDestPump[entry.id] || {};
+        var rows = Object.keys(pumpVolMap).map(function(pid) {
+          var pump = DewateringState.pumpById(pid);
+          if (!pump) return null;
+          var sump = DewateringState.sumpById(pump.sumpId);
+          return { name: pump.name || '(без имени)', sub: sump ? sump.name : '—', vol: pumpVolMap[pid] };
+        }).filter(Boolean).sort(function(a, b) { return b.vol - a.vol; });
+        _dewAnlShowBreakdown(entry.name, rows, COLORS[idx % COLORS.length]);
       },
       plugins: {
         legend: {
@@ -4025,25 +4410,98 @@ function _dewAnlDest() {
   });
 }
 
-// Всплывающая детализация по направлению: список насосов с объёмами
-function _dewAnlDestDrilldown(entry, pumpVolMap, color) {
+// Режим "Динамика": та же разбивка по направлениям, но во времени —
+// показывает, растёт ли со временем доля какого-то направления (например,
+// "за карьер"), а не только итог за весь период одним числом.
+function _dewAnlDestDynamics() {
+  _dewDestroyChart('anldest');
+  var wrap = document.getElementById('dew-anl-dest-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<canvas id="dew-canvas-anldest" style="position:absolute;inset:0;width:100%;height:100%"></canvas>';
+  var canvas = document.getElementById('dew-canvas-anldest');
+
+  var pids = _dewAnlEffectivePumpIds();
+  var days = _dewAnlDays();
+  var dayIndex = {};
+  days.forEach(function(d, i) { dayIndex[d] = i; });
+
+  var totalByDest = {};
+  DewateringState.meterReadings.forEach(function(r) {
+    if (pids && pids.indexOf(r.pumpId) < 0) return;
+    if (dayIndex[r.date] === undefined) return;
+    var vol = DewateringState.computedVolume(r) || 0;
+    if (!vol) return;
+    DewateringState.getDistributions(r).forEach(function(d) {
+      if (!d.destinationId) return;
+      var dest = DewateringState.destById(d.destinationId);
+      if (dest && dest.type === 'intermediate_sump') return;
+      if (_dewAnlSeriesHidden.dest.indexOf(d.destinationId) >= 0) return;
+      totalByDest[d.destinationId] = (totalByDest[d.destinationId] || 0) + vol * d.pct / 100;
+    });
+  });
+  var destIds = Object.keys(totalByDest).sort(function(a, b) { return totalByDest[b] - totalByDest[a]; });
+  if (!destIds.length) { wrap.innerHTML = '<p class="dew-no-data">Нет данных' + (_dewAnlSeriesHidden.dest.length ? ' (проверьте «⚙ Серии»)' : '') + '</p>'; return; }
+
+  var perDayByDest = {};
+  destIds.forEach(function(id) { perDayByDest[id] = days.map(function() { return 0; }); });
+  DewateringState.meterReadings.forEach(function(r) {
+    if (pids && pids.indexOf(r.pumpId) < 0) return;
+    var di = dayIndex[r.date];
+    if (di === undefined) return;
+    var vol = DewateringState.computedVolume(r) || 0;
+    if (!vol) return;
+    DewateringState.getDistributions(r).forEach(function(d) {
+      if (!d.destinationId || !perDayByDest[d.destinationId]) return;
+      perDayByDest[d.destinationId][di] += vol * d.pct / 100;
+    });
+  });
+
+  var datasets = destIds.map(function(id, i) {
+    var dest = DewateringState.destById(id);
+    var col = DEW_DEST_COLORS[i % DEW_DEST_COLORS.length];
+    return {
+      label: dest ? dest.name : 'Не указано', data: perDayByDest[id],
+      backgroundColor: col.replace('0.85', '0.35'), borderColor: col.replace('0.85', '1'),
+      borderWidth: 1.5, fill: true, stack: 'dest', tension: 0.2, pointRadius: 0,
+    };
+  });
+
+  var labels = days.map(function(d) { var dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }); });
+
+  _dewCharts['anldest'] = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, color: '#b0b8c8', padding: 6 } },
+        tooltip: {
+          mode: 'index', intersect: false,
+          callbacks: {
+            title: function(items) { return days[items[0].dataIndex]; },
+            label: function(item) { return item.raw ? (' ' + item.dataset.label + ': ' + item.raw.toLocaleString('ru-RU') + ' м³') : null; }
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { font: { size: 10 }, maxTicksLimit: 8, maxRotation: 45 } },
+        y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { font: { size: 10 }, callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } } }
+      }
+    }
+  });
+}
+
+// Общая всплывающая детализация: список {name, sub, vol} с барами и %.
+// Используется и разбивкой донат-графика по насосам, и разбивкой насоса по
+// направлениям (block 4) — форма одна и та же, разница только в оси.
+function _dewAnlShowBreakdown(title, rows, color) {
   var existing = document.getElementById('dew-anl-dest-drill');
   if (existing) existing.remove();
+  if (!rows.length) return;
 
-  var pumpRows = Object.keys(pumpVolMap).map(function(pid) {
-    var pump = DewateringState.pumps.find(function(p) { return p.id === pid; });
-    var sump = pump ? DewateringState.sumps.find(function(s) { return s.id === pump.sumpId; }) : null;
-    return {
-      name: pump ? (pump.name || '(без имени)') : '(насос удалён)',
-      sumpName: sump ? sump.name : '—',
-      vol: pumpVolMap[pid],
-      deleted: !pump
-    };
-  }).filter(function(r) { return !r.deleted; }) // скрываем удалённые насосы
-    .sort(function(a, b) { return b.vol - a.vol; });
-
-  var total = pumpRows.reduce(function(acc, r) { return acc + r.vol; }, 0);
-  var maxVol = pumpRows.length ? pumpRows[0].vol : 1;
+  var total = rows.reduce(function(acc, r) { return acc + r.vol; }, 0);
+  var maxVol = rows.length ? rows[0].vol : 1;
 
   var modal = document.createElement('div');
   modal.id = 'dew-anl-dest-drill';
@@ -4052,14 +4510,14 @@ function _dewAnlDestDrilldown(entry, pumpVolMap, color) {
   var box = document.createElement('div');
   box.style.cssText = 'background:var(--bg-1,#111827);border:1px solid var(--line);border-radius:10px;width:460px;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)';
 
-  var rows = pumpRows.map(function(r) {
+  var rowsHtml = rows.map(function(r) {
     var pct = total > 0 ? Math.round(r.vol / total * 100) : 0;
     var barW = maxVol > 0 ? Math.round(r.vol / maxVol * 100) : 0;
     return '<div style="padding:8px 16px;border-bottom:1px solid var(--line)">' +
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
         '<div>' +
           '<span style="font-size:12px;font-weight:600;color:var(--txt-1)">' + escHTML(r.name) + '</span>' +
-          '<span style="font-size:10px;color:var(--txt-3);margin-left:8px">' + escHTML(r.sumpName) + '</span>' +
+          (r.sub ? '<span style="font-size:10px;color:var(--txt-3);margin-left:8px">' + escHTML(r.sub) + '</span>' : '') +
         '</div>' +
         '<div style="font-size:12px;font-variant-numeric:tabular-nums;color:var(--txt-1)">' +
           r.vol.toLocaleString('ru-RU') + ' м³ <span style="color:var(--txt-3);font-size:10px">(' + pct + '%)</span>' +
@@ -4074,15 +4532,11 @@ function _dewAnlDestDrilldown(entry, pumpVolMap, color) {
   box.innerHTML =
     '<div style="padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">' +
       '<span style="width:12px;height:12px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
-      '<span style="font-size:13px;font-weight:700;color:var(--txt-1)">' + escHTML(entry.name) + '</span>' +
-      '<span style="font-size:11px;color:var(--txt-3);margin-left:4px">' + entry.vol.toLocaleString('ru-RU') + ' м³ всего</span>' +
+      '<span style="font-size:13px;font-weight:700;color:var(--txt-1)">' + escHTML(title) + '</span>' +
+      '<span style="font-size:11px;color:var(--txt-3);margin-left:4px">' + total.toLocaleString('ru-RU') + ' м³ всего</span>' +
       '<button id="dew-drill-close" style="margin-left:auto;background:none;border:none;color:var(--txt-3);font-size:18px;cursor:pointer">✕</button>' +
     '</div>' +
-    '<div style="padding:8px 0;border-bottom:1px solid var(--line)">' +
-      '<div style="padding:4px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3)">Насос · Зумпф</div>' +
-    '</div>' +
-    rows +
-    '<div style="padding:10px 16px;font-size:11px;color:var(--txt-3);text-align:center">Показаны все насосы, качавшие в это направление</div>';
+    rowsHtml;
 
   modal.appendChild(box);
   document.body.appendChild(modal);
@@ -4090,6 +4544,75 @@ function _dewAnlDestDrilldown(entry, pumpVolMap, color) {
   modal.addEventListener('click', function(e) {
     if (e.target === modal || e.target.id === 'dew-drill-close') modal.remove();
   });
+}
+
+// Простой список без баров — для детализации простоев.
+function _dewAnlShowSimpleList(title, items) {
+  var existing = document.getElementById('dew-anl-dest-drill');
+  if (existing) existing.remove();
+  if (!items.length) return;
+
+  var modal = document.createElement('div');
+  modal.id = 'dew-anl-dest-drill';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-1,#111827);border:1px solid var(--line);border-radius:10px;width:420px;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)';
+
+  var rowsHtml = items.map(function(it) {
+    return '<div style="padding:8px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px">' +
+      '<div><span style="font-size:12px;font-weight:600;color:var(--txt-1)">' + escHTML(it.primary) + '</span>' +
+      (it.secondary ? '<span style="font-size:10px;color:var(--txt-3);margin-left:8px">' + escHTML(it.secondary) + '</span>' : '') + '</div>' +
+      (it.tag ? '<span style="font-size:10px;color:var(--txt-3);white-space:nowrap">' + escHTML(it.tag) + '</span>' : '') +
+    '</div>';
+  }).join('');
+
+  box.innerHTML =
+    '<div style="padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">' +
+      '<span style="font-size:13px;font-weight:700;color:var(--txt-1)">' + escHTML(title) + '</span>' +
+      '<span style="font-size:11px;color:var(--txt-3);margin-left:4px">' + items.length + '</span>' +
+      '<button id="dew-drill-close" style="margin-left:auto;background:none;border:none;color:var(--txt-3);font-size:18px;cursor:pointer">✕</button>' +
+    '</div>' +
+    rowsHtml;
+
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal || e.target.id === 'dew-drill-close') modal.remove();
+  });
+}
+
+function _dewAnlShowDowntimeDetail() {
+  var pids = _dewAnlEffectivePumpIds();
+  var days = _dewAnlDays();
+  var daySet = {};
+  days.forEach(function(d) { daySet[d] = true; });
+  var items = [];
+  DewateringState.meterReadings.forEach(function(r) {
+    if (!daySet[r.date] || !r.isStopped) return;
+    if (pids && pids.indexOf(r.pumpId) < 0) return;
+    var pump = DewateringState.pumpById(r.pumpId);
+    items.push({ primary: pump ? pump.name : '(насос удалён)', secondary: r.date, tag: r.downtimeReason || '' });
+  });
+  items.sort(function(a, b) { return b.secondary.localeCompare(a.secondary); });
+  _dewAnlShowSimpleList('Простои за период (' + items.length + ')', items);
+}
+
+function _dewAnlRenderHeatCard() {
+  var card = document.getElementById('dew-anl-heat-card');
+  if (!card) return;
+  card.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">' +
+      '<div class="card-title" id="dew-anl-heat-title" style="margin:0">Часы работы</div>' +
+      '<div style="display:flex;gap:4px">' +
+        '<button id="dew-anl-heat-hours-btn" class="btn btn-sm' + (_dewAnlHeatMode === 'hours' ? '' : ' btn-outline') + '" style="font-size:10px;padding:3px 8px">Часы</button>' +
+        '<button id="dew-anl-heat-pct-btn" class="btn btn-sm' + (_dewAnlHeatMode === 'pct' ? '' : ' btn-outline') + '" style="font-size:10px;padding:3px 8px" title="Объём за сутки к тому, что насос способен выдать за 24ч на паспортной производительности">% произв.</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="dew-anl-heatmap" style="overflow-x:auto"></div>';
+  document.getElementById('dew-anl-heat-hours-btn').addEventListener('click', function() { _dewAnlHeatMode = 'hours'; _dewAnlRenderHeatCard(); });
+  document.getElementById('dew-anl-heat-pct-btn').addEventListener('click', function() { _dewAnlHeatMode = 'pct'; _dewAnlRenderHeatCard(); });
+  _dewAnlHeatmap();
 }
 
 function _dewAnlHeatmap() {
@@ -4107,15 +4630,24 @@ function _dewAnlHeatmap() {
   var allDays = _dewAnlDays();
   // Heatmap shows at most 30 days; take the last N days of the selected period
   var days = allDays.length > 30 ? allDays.slice(-30) : allDays;
+  var isPct = _dewAnlHeatMode === 'pct';
   var heatTitle = document.getElementById('dew-anl-heat-title');
-  if (heatTitle) heatTitle.textContent = 'Часы работы · ' + days.length + ' дней';
+  if (heatTitle) heatTitle.textContent = (isPct ? '% от производительности' : 'Часы работы') + ' · ' + days.length + ' дней';
 
-  function heatColor(h) {
+  function heatColorHours(h) {
     if (h === null || h === undefined) return 'rgba(255,255,255,0.04)';
     if (h === 0)  return 'rgba(239,68,68,0.30)';
     if (h < 8)   return 'rgba(245,158,11,0.40)';
     if (h < 16)  return 'rgba(251,191,36,0.50)';
     if (h < 22)  return 'rgba(16,185,129,0.55)';
+    return 'rgba(52,211,153,0.75)';
+  }
+  function heatColorPct(p) {
+    if (p === null || p === undefined) return 'rgba(255,255,255,0.04)';
+    if (p === 0)  return 'rgba(239,68,68,0.30)';
+    if (p < 33)  return 'rgba(245,158,11,0.40)';
+    if (p < 66)  return 'rgba(251,191,36,0.50)';
+    if (p < 90)  return 'rgba(16,185,129,0.55)';
     return 'rgba(52,211,153,0.75)';
   }
 
@@ -4124,6 +4656,7 @@ function _dewAnlHeatmap() {
     return dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
   });
 
+  var anyMissingCapacity = false;
   var html = '<table style="border-collapse:separate;border-spacing:2px;width:100%;font-size:10px">' +
     '<tr><th style="text-align:left;padding:2px 4px;color:var(--txt-3);font-weight:400"></th>' +
     dayLabels.map(function(l) {
@@ -4134,26 +4667,64 @@ function _dewAnlHeatmap() {
     html += '<tr><td style="padding:2px 4px;color:var(--txt-2);white-space:nowrap;font-weight:500;font-size:10px;max-width:70px;overflow:hidden;text-overflow:ellipsis" title="' + escHTML(p.name) + '">' + escHTML(p.name) + '</td>';
     days.forEach(function(day) {
       var rec = DewateringState.meterReadings.find(function(r) { return r.pumpId === p.id && r.date === day; });
-      var h = rec
-        ? (rec.isStopped ? 0 : (rec.hoursWorked !== undefined && rec.hoursWorked !== null ? rec.hoursWorked : null))
-        : null;
-      var bg = heatColor(h);
-      var title = h !== null ? h + ' ч' : 'нет данных';
-      html += '<td style="width:20px;height:20px;background:' + bg + ';border-radius:3px;text-align:center;cursor:default" title="' + escHTML(p.name) + ' · ' + day + ' · ' + title + '"></td>';
+      var bg, title;
+      if (isPct) {
+        var value = null;
+        if (rec) {
+          if (rec.isStopped) value = 0;
+          else if (!p.capacity) { value = null; anyMissingCapacity = true; }
+          else {
+            var vol = DewateringState.computedVolume(rec);
+            value = vol != null ? Math.round(vol / (p.capacity * 24) * 100) : null;
+          }
+        }
+        bg = heatColorPct(value);
+        title = value != null ? value + '%' : (rec && !p.capacity ? 'нет паспортной производительности в реестре' : 'нет данных');
+      } else {
+        var h = rec
+          ? (rec.isStopped ? 0 : (rec.hoursWorked !== undefined && rec.hoursWorked !== null ? rec.hoursWorked : null))
+          : null;
+        bg = heatColorHours(h);
+        title = h !== null ? h + ' ч' : 'нет данных';
+      }
+      // Клик по клетке с данными — открыть этот день в Журнале для правки
+      // (раньше клетка была чисто декоративная, только для просмотра).
+      html += '<td style="width:20px;height:20px;background:' + bg + ';border-radius:3px;text-align:center;' + (rec ? 'cursor:pointer' : 'cursor:default') + '"' +
+        (rec ? ' onclick="_dewAnlHeatCellClick(\'' + p.id + '\',\'' + day + '\')"' : '') +
+        ' title="' + escHTML(p.name) + ' · ' + day + ' · ' + title + (rec ? ' · клик — открыть в Журнале' : '') + '"></td>';
     });
     html += '</tr>';
   });
 
+  var legend = isPct
+    ? [['rgba(255,255,255,0.04)','нет данных'],['rgba(239,68,68,0.30)','0%'],
+       ['rgba(245,158,11,0.40)','< 33%'],['rgba(251,191,36,0.50)','33–66%'],
+       ['rgba(16,185,129,0.55)','66–90%'],['rgba(52,211,153,0.75)','90%+']]
+    : [['rgba(255,255,255,0.04)','нет данных'],['rgba(239,68,68,0.30)','0 ч'],
+       ['rgba(245,158,11,0.40)','< 8 ч'],['rgba(251,191,36,0.50)','8–16 ч'],
+       ['rgba(16,185,129,0.55)','16–22 ч'],['rgba(52,211,153,0.75)','22–24 ч']];
+
   html += '</table><div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">' +
-    [['rgba(255,255,255,0.04)','нет данных'],['rgba(239,68,68,0.30)','0 ч'],
-     ['rgba(245,158,11,0.40)','< 8 ч'],['rgba(251,191,36,0.50)','8–16 ч'],
-     ['rgba(16,185,129,0.55)','16–22 ч'],['rgba(52,211,153,0.75)','22–24 ч']].map(function(pair) {
+    legend.map(function(pair) {
       return '<span style="display:flex;align-items:center;gap:4px">' +
         '<span style="display:inline-block;width:10px;height:10px;background:' + pair[0] + ';border-radius:2px"></span>' +
         '<span style="color:var(--txt-3);font-size:10px">' + pair[1] + '</span></span>';
     }).join('') + '</div>';
 
+  if (isPct && anyMissingCapacity) {
+    html += '<div style="font-size:10px;color:var(--txt-3);margin-top:6px">Для насосов без паспортной производительности в реестре (м³/ч) ячейки остаются пустыми.</div>';
+  }
+
   wrap.innerHTML = html;
+}
+
+function _dewAnlHeatCellClick(pumpId, day) {
+  var pump = DewateringState.pumpById(pumpId);
+  if (!pump) return;
+  _dewJFilter.quarry = pump.quarry || '';
+  _dewJFilter.sumpId = pump.sumpId || '';
+  _dewJFilter.date = day;
+  _dewSwitch('journal');
 }
 
 

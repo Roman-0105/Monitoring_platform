@@ -47,6 +47,10 @@
           <button class="tab-btn" data-tab="sump-forecast"><span class="tab-icon">◎</span><span class="tab-label"> Прогноз зумпфов</span></button>
         </div>
         <div class="sidebar-section">
+          <span class="sidebar-section-label">3D-модель</span>
+          <button class="tab-btn" data-tab="pit3d"><span class="tab-icon">⛰</span><span class="tab-label"> Модель карьера</span></button>
+        </div>
+        <div class="sidebar-section">
           <span class="sidebar-section-label">Качество воды</span>
           <button class="tab-btn" data-tab="chem"><span class="tab-icon">🔬</span><span class="tab-label"> Хим. мониторинг</span></button>
         </div>
@@ -483,6 +487,11 @@
     <div id="sf-content" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0"></div>
   </div>
 
+  <!-- 3D-модель карьера -->
+  <div class="page" id="page-pit3d">
+    <div id="pit3d-content" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0"></div>
+  </div>
+
   <!-- Диагностика -->
   <div class="page" id="page-diag">
     <div class="card">
@@ -886,8 +895,8 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label" for="e-horizon">Горизонт / уступ</label>
-            <input class="form-input" id="e-horizon" type="text" list="horizons-datalist" placeholder="напр. +240">
+            <label class="form-label" for="e-horizon">Горизонт / уступ (абс. отметка, м)</label>
+            <input class="form-input" id="e-horizon" type="number" step="0.01" list="horizons-datalist" placeholder="напр. 240">
           </div>
         </div>
         <div class="form-group">
@@ -965,6 +974,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="ui-wpmap.js"></script>
+<script src="ui-pit3d.js"></script>
 <script src="app.js"></script>
 
 
