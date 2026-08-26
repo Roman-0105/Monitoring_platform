@@ -55,7 +55,46 @@ var RegistryState = {
   loaded:  false,
   filterType: '',
   filterQ:    '',
+  wellLevels: {}, // { [wellId]: [{id,well_id,date,depth_to_water,measured_by,notes}] }, новые первыми
+  wellLevelsLatest: {},       // { [wellId]: {elevation,date,depth} } — сводка для изогипс
+  wellLevelsLatestLoaded: false,
 };
+
+// Один запрос по всем скважинам сразу (вместо N запросов на скважину) — нужен только
+// последний замер по каждой, для наложения на 3D-модель/изогипсы
+async function _regLoadAllWellLevelsLatest() {
+  if (RegistryState.wellLevelsLatestLoaded) return;
+  RegistryState.wellLevelsLatestLoaded = true;
+  try {
+    var res = await RegistryApi.getAllWellLevels();
+    if (res.error) return;
+    var firstByWell = {};
+    (res.data || []).forEach(function(row) {
+      if (!firstByWell[row.well_id]) firstByWell[row.well_id] = row; // отсортировано по date desc — первая встреченная и есть последняя
+    });
+    var latest = {};
+    Object.keys(firstByWell).forEach(function(wellId) {
+      var well = RegistryState.items.find(function(w) { return w.id === wellId; });
+      if (!well || well.elev_z == null) return;
+      var depth = parseFloat(firstByWell[wellId].depth_to_water);
+      if (isNaN(depth)) return;
+      latest[wellId] = { elevation: well.elev_z - depth, date: firstByWell[wellId].date, depth: depth };
+    });
+    RegistryState.wellLevelsLatest = latest;
+  } catch (e) { console.warn('[registry] well levels load failed', e); }
+}
+
+// Последний замер УПВ по скважине → абс. отметка воды (elev_z устья минус глубина до воды).
+// Кэш замеров грузится лениво через _regLoadWellLevels(wellId).
+function _regLatestWellWaterLevel(wellId) {
+  var well = RegistryState.items.find(function(w) { return w.id === wellId; });
+  var levels = RegistryState.wellLevels[wellId];
+  if (!well || well.elev_z == null || !levels || !levels.length) return null;
+  var latest = levels[0]; // getWellLevels сортирует по date desc
+  var depth = parseFloat(latest.depth_to_water);
+  if (isNaN(depth)) return null;
+  return { elevation: well.elev_z - depth, date: latest.date, depth: depth };
+}
 
 /* ── API ────────────────────────────────────────────────────────*/
 var RegistryApi = {
@@ -67,6 +106,21 @@ var RegistryApi = {
   },
   delete: async function(id) {
     return Api.client().from('wp_registry').delete().eq('id', id);
+  },
+
+  // История замеров УПВ (глубина до воды от устья) по скважинам
+  getWellLevels: async function(wellId) {
+    return Api.client().from('wp_well_levels').select('*').eq('well_id', wellId).order('date', { ascending: false });
+  },
+  // Все замеры по всем скважинам разом — для изогипс (нужен только последний по каждой)
+  getAllWellLevels: async function() {
+    return Api.client().from('wp_well_levels').select('*').order('date', { ascending: false });
+  },
+  upsertWellLevel: async function(row) {
+    return Api.client().from('wp_well_levels').upsert(row).select().single();
+  },
+  deleteWellLevel: async function(id) {
+    return Api.client().from('wp_well_levels').delete().eq('id', id);
   },
 };
 
@@ -347,6 +401,7 @@ function _regTable(items) {
         '<td><span style="font-size:11px;color:var(--txt-2);line-height:1.6">' + params + '</span></td>' +
         '<td></td>' +
         '<td><div class="reg-actions">' +
+          ((w.wp_type==='well_obs'||w.wp_type==='well_exp') ? '<button class="reg-act-btn" onclick="_regOpenWellLevels(\'' + w.id + '\')">📜 УПВ</button>' : '') +
           '<button class="reg-act-btn" onclick="showRegForm(\'' + w.id + '\')">Изменить</button>' +
           '<button class="reg-act-btn reg-act-del" onclick="regDelete(\'' + w.id + '\')">Удалить</button>' +
         '</div></td>' +
@@ -725,6 +780,100 @@ async function regDelete(id) {
   RegistryState.items = RegistryState.items.filter(function(w){ return w.id !== id; });
   _regRender();
   if (typeof Toast !== 'undefined') Toast.show('Водопункт удалён', 'success');
+}
+
+/* ── История замеров УПВ (уровня подземных вод) по скважине ─────*/
+function _regOpenWellLevels(wellId) {
+  var well = RegistryState.items.find(function(w){ return w.id === wellId; });
+  if (!well) return;
+  var existing = document.getElementById('reg-levels-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'reg-levels-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML =
+    '<div class="reg-modal" style="max-width:560px">' +
+      '<div class="reg-modal-hdr"><span class="reg-modal-title">История замеров УПВ — ' + escHTML(well.name) + '</span>' +
+        '<button class="reg-modal-close" id="reg-lv-close">✕</button></div>' +
+      '<div class="reg-modal-body" id="reg-lv-body"></div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  document.getElementById('reg-lv-close').onclick = function(){ overlay.remove(); };
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+
+  _regRenderWellLevelsBody(wellId);
+}
+
+async function _regRenderWellLevelsBody(wellId) {
+  var body = document.getElementById('reg-lv-body');
+  if (!body) return;
+  var well = RegistryState.items.find(function(w){ return w.id === wellId; });
+  if (!well) return;
+
+  if (!RegistryState.wellLevels[wellId]) {
+    body.innerHTML = '<div style="color:var(--txt-3);font-size:13px">Загрузка…</div>';
+    var res = await RegistryApi.getWellLevels(wellId);
+    RegistryState.wellLevels[wellId] = res.error ? [] : (res.data || []);
+    var recheck = document.getElementById('reg-lv-body');
+    if (!recheck) return; // окно уже закрыли, пока грузилось
+  }
+  var levels = RegistryState.wellLevels[wellId];
+  var today = new Date().toISOString().slice(0, 10);
+
+  var html = '';
+  if (well.elev_z == null) {
+    html += '<div style="font-size:12px;color:var(--txt-1);background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.3);border-radius:6px;padding:8px 10px;margin-bottom:10px">' +
+      'Сначала укажите абс. отметку устья (Z) в карточке скважины — без неё глубину до воды не перевести в абсолютную отметку.</div>';
+  }
+  html += '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">' +
+    _regFld('Дата замера', 'reg-lv-date', 'date', today, '') +
+    _regFld('Глубина до воды, м', 'reg-lv-depth', 'text', '', '12.45') +
+    '<div style="flex:1;min-width:110px"><button class="reg-btn reg-btn-prim" style="width:100%" onclick="_regAddWellLevel(\'' + wellId + '\')">+ Добавить</button></div>' +
+  '</div>';
+
+  if (!levels.length) {
+    html += '<div style="font-size:12px;color:var(--txt-3);text-align:center;padding:14px 0">Замеров пока нет</div>';
+  } else {
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<thead><tr style="color:var(--txt-3);font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--line)">' +
+        '<th style="padding:4px 6px;text-align:left;font-weight:500">Дата</th>' +
+        '<th style="padding:4px 6px;text-align:right;font-weight:500">Глубина, м</th>' +
+        '<th style="padding:4px 6px;text-align:right;font-weight:500">Абс. отметка, м</th>' +
+        '<th></th></tr></thead><tbody>' +
+      levels.map(function(l, idx) {
+        var depth = parseFloat(l.depth_to_water);
+        var elev = well.elev_z != null && !isNaN(depth) ? (well.elev_z - depth).toFixed(2) : '—';
+        return '<tr style="border-bottom:1px solid var(--line-2)">' +
+          '<td style="padding:5px 6px;color:var(--txt-1)">' + l.date + (idx===0 ? ' <span style="font-size:9px;color:var(--gold)">последний</span>' : '') + '</td>' +
+          '<td style="padding:5px 6px;text-align:right;font-weight:600;color:var(--txt-1)">' + (isNaN(depth)?'—':depth.toFixed(2)) + '</td>' +
+          '<td style="padding:5px 6px;text-align:right;font-weight:600;color:var(--blue)">' + elev + '</td>' +
+          '<td style="padding:5px 6px;text-align:right"><button class="reg-act-btn reg-act-del" style="font-size:10px" onclick="_regDeleteWellLevel(\'' + l.id + '\',\'' + wellId + '\')">✕</button></td>' +
+        '</tr>';
+      }).join('') +
+    '</tbody></table>';
+  }
+  body.innerHTML = html;
+}
+
+async function _regAddWellLevel(wellId) {
+  var dateEl = document.getElementById('reg-lv-date'), depthEl = document.getElementById('reg-lv-depth');
+  var date = dateEl.value, depth = parseFloat(depthEl.value.replace(',', '.'));
+  if (!date || isNaN(depth)) { alert('Укажите дату и глубину до воды'); return; }
+  var res = await RegistryApi.upsertWellLevel({ well_id: wellId, date: date, depth_to_water: depth });
+  if (res.error) { alert('Ошибка сохранения: ' + res.error.message); return; }
+  RegistryState.wellLevels[wellId] = null;
+  RegistryState.wellLevelsLatestLoaded = false; // сброс сводки для изогипс — пересчитается при следующем визите на 3D-модель
+  await _regRenderWellLevelsBody(wellId);
+  if (typeof Toast !== 'undefined') Toast.show('Замер добавлен', 'success');
+}
+
+async function _regDeleteWellLevel(id, wellId) {
+  if (!confirm('Удалить этот замер?')) return;
+  await RegistryApi.deleteWellLevel(id);
+  RegistryState.wellLevels[wellId] = (RegistryState.wellLevels[wellId] || []).filter(function(l){ return l.id !== id; });
+  RegistryState.wellLevelsLatestLoaded = false;
+  await _regRenderWellLevelsBody(wellId);
 }
 
 /* ── Модальное окно ─────────────────────────────────────────────*/

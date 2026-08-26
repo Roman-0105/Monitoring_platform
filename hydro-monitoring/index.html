@@ -38,6 +38,7 @@
           <button class="tab-btn" data-tab="report"><span class="tab-icon">◈</span><span class="tab-label"> Отчёт</span></button>
           <button class="tab-btn" data-tab="wells"><span class="tab-icon">⊛</span><span class="tab-label"> Гор. скважины</span></button>
           <button class="tab-btn" data-tab="registry"><span class="tab-icon">◫</span><span class="tab-label"> Реестр водопунктов</span></button>
+          <button class="tab-btn" data-tab="well-levels"><span class="tab-icon">📜</span><span class="tab-label"> Замеры УПВ</span></button>
           <button class="tab-btn" data-tab="wpmap"><span class="tab-icon">🗺</span><span class="tab-label"> Карта водопунктов</span></button>
         </div>
         <div class="sidebar-section">
@@ -764,6 +765,11 @@
   <!-- Реестр водопунктов -->
   <div class="page" id="page-registry" style="padding:0;overflow:hidden"></div>
 
+  <!-- Замеры УПВ (потурово) -->
+  <div class="page" id="page-well-levels" style="padding:0;overflow:hidden">
+    <div id="wlv-content" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0"></div>
+  </div>
+
   <!-- Химический мониторинг воды -->
   <div class="page" id="page-chem" style="padding:0;overflow:hidden"></div>
 
@@ -969,6 +975,7 @@
 <script src="ui-dustsuppression.js"></script>
 <script src="ui-sump-forecast.js"></script>
 <script src="ui-registry.js"></script>
+<script src="ui-well-levels.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="ui-chem.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>

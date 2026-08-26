@@ -1,0 +1,111 @@
+/* ── Дизайн-токены: светлая enterprise-тема на основе фирменных цветов ZiJin | RG Gold ── */
+
+:root {
+  /* Нейтральная шкала — тёплый камень (не холодный серый), гармонирует с золотом бренда */
+  --stone-25:  #FCFBFA;
+  --stone-50:  #FAF9F7;
+  --stone-100: #F4F2EF;
+  --stone-150: #ECE9E4;
+  --stone-200: #E3DFD9;
+  --stone-300: #CFC9C0;
+  --stone-400: #A79E90;
+  --stone-500: #857A6B;
+  --stone-600: #665D51;
+  --stone-700: #4C453B;
+  --stone-800: #332E27;
+  --stone-900: #211E19;
+
+  /* Бренд-золото (из логотипа) — основной акцент */
+  --gold-50:  #FCF6E8;
+  --gold-100: #F7E8C4;
+  --gold-200: #EFD187;
+  --gold-300: #E2B54F;
+  --gold-400: #CF9E2D;
+  --gold-500: #B5851C;
+  --gold-600: #946B16;
+  --gold-700: #705112;
+
+  /* Бренд-красный (точка в логотипе) — только для критичных статусов */
+  --red-50:  #FDEDEC;
+  --red-100: #FAD1CE;
+  --red-400: #D3462F;
+  --red-500: #B5301B;
+  --red-600: #8F2415;
+
+  /* Семантика */
+  --green-100: #DEEFE0; --green-500: #2F8F52; --green-600: #206B3C;
+  --amber-100: #FBEBD2; --amber-500: #C08420; --amber-600: #93650F;
+  --blue-100:  #DEEAF7; --blue-500:  #2E6DAE; --blue-600:  #205183;
+
+  /* Роли поверхности/текста — light theme */
+  --bg-canvas:   var(--stone-50);
+  --bg-surface:  #FFFFFF;
+  --bg-surface-2:var(--stone-25);
+  --bg-sunken:   var(--stone-100);
+  --bg-hover:    var(--stone-100);
+  --bg-active:   var(--gold-50);
+
+  --border-subtle: var(--stone-150);
+  --border:        var(--stone-200);
+  --border-strong: var(--stone-300);
+
+  --text-primary:   var(--stone-900);
+  --text-secondary: var(--stone-600);
+  --text-tertiary:  var(--stone-400);
+  --text-inverse:   #FFFFFF;
+  --text-accent:    var(--gold-600);
+  --text-danger:    var(--red-500);
+
+  --accent:         var(--gold-400);
+  --accent-strong:  var(--gold-500);
+  --accent-hover:   var(--gold-600);
+  --accent-contrast:#FFFFFF;
+  --focus-ring:      var(--gold-300);
+
+  --shadow-xs: 0 1px 2px rgba(33, 30, 25, 0.04);
+  --shadow-sm: 0 1px 3px rgba(33, 30, 25, 0.06), 0 1px 2px rgba(33, 30, 25, 0.04);
+  --shadow-md: 0 4px 12px rgba(33, 30, 25, 0.08), 0 2px 4px rgba(33, 30, 25, 0.04);
+  --shadow-lg: 0 12px 32px rgba(33, 30, 25, 0.12), 0 4px 8px rgba(33, 30, 25, 0.04);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --font-ui:   'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --sidebar-w: 264px;
+  --sidebar-w-collapsed: 68px;
+  --topbar-h: 60px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+#root { height: 100%; }
+h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+p { margin: 0; }
+button { font-family: inherit; }
+input, select, textarea { font-family: inherit; font-size: inherit; }
+::selection { background: var(--gold-200); }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--stone-300); border-radius: 8px; border: 2px solid var(--bg-canvas); }
+::-webkit-scrollbar-thumb:hover { background: var(--stone-400); }
+
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
