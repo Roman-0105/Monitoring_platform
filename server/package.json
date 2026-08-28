@@ -1,0 +1,19 @@
+{
+  "name": "geoadmin-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node/Express REST API поверх MS SQL Server (GeoLocation) для web-next и risk-inspection. Заменяет Supabase на локальной инфраструктуре (IIS + RAYWEBV04).",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate-data": "node scripts/migrate-data.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mssql": "^11.0.1",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.4.5"
+  }
+}
