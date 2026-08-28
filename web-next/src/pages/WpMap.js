@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Settings, RefreshCw, Tag, Ruler, X, MapPin, Satellite, Map as MapIcon, Mountain, AlertTriangle,
-  FlaskConical, Pencil, Trash2, ListChecks,
+  FlaskConical, Pencil, Trash2, ListChecks, Download,
 } from 'lucide-react';
 import { html } from '../lib/html.js';
 import { supabase } from '../lib/supabase.js';
@@ -11,7 +11,7 @@ import { makeWpIcon, makeClusterLayer } from '../lib/wpmap-markers.js';
 import { wgsToAll, sk42ToWgs, ddToDms, CALC_ZONE, CALC_OFF } from '../lib/coord-calc.js';
 import { CHEM_PARAMS, CHEM_PARAM_MAP, CHEM_GROUPS } from '../lib/chem-params.js';
 import {
-  calcMeq, classifyWaterType, buildKurlovHtml, idw, buildChemRaster,
+  calcMeq, classifyWaterType, buildKurlovHtml, idw, buildChemRaster, exportChemMapPng,
   getRamp, ALEKIN_FACIES, PALETTES, STEP_PRESETS, DIVISION_PRESETS,
 } from '../lib/chem-map-core.js';
 import { Button, Select, Input, Badge, EmptyState } from '../components/ui.js';
@@ -249,7 +249,7 @@ function ChemMenu({ chemMode, chemParamKey, chemSmooth, chemAsOfDate, chemFilter
 }
 
 // ── Легенда слоя химии (низ-лево) ────────────────────────────────────────
-function ChemLegend({ chemMode, chemParamKey, built, palette, step, divisions, chemSmooth, hasBoundary, excludedCount, chemPointsN, onSetStep, onSetDivisions, onSetPalette, onOpenPoints }) {
+function ChemLegend({ chemMode, chemParamKey, built, palette, step, divisions, chemSmooth, hasBoundary, excludedCount, chemPointsN, onSetStep, onSetDivisions, onSetPalette, onOpenPoints, onExportPng, pngBusy, pngMsg }) {
   if (!chemMode) return null;
   const paramDef = chemParamKey ? CHEM_PARAM_MAP[chemParamKey] : null;
   const n = built ? built.n : chemPointsN;
@@ -315,6 +315,14 @@ function ChemLegend({ chemMode, chemParamKey, built, palette, step, divisions, c
             <//>
           `;
         })()}
+      `}
+      ${built && html`
+        <div style=${{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+          <button onClick=${onExportPng} disabled=${pngBusy} style=${{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 9px', color: 'var(--text-secondary)', fontSize: '10.5px', cursor: pngBusy ? 'default' : 'pointer' }}>
+            <${Download} size=${11} /> ${pngBusy ? 'Формирование…' : 'Экспорт PNG'}
+          <//>
+          ${pngMsg && html`<div style=${{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '5px' }}>${pngMsg}<//>`}
+        </div>
       `}
     </div>
   `;
@@ -427,6 +435,8 @@ export function WpMapPage({ onNavigate }) {
   const [protocols, setProtocols] = useState(null);
   const [resultsByProto, setResultsByProto] = useState({});
   const [boundaryEdit, setBoundaryEdit] = useState(null);
+  const [pngBusy, setPngBusy] = useState(false);
+  const [pngMsg, setPngMsg] = useState('');
 
   useEffect(() => {
     loadWpTypeSettings();
@@ -723,6 +733,30 @@ export function WpMapPage({ onNavigate }) {
     setChemExcluded((prev) => { const next = { ...prev, [id]: !prev[id] }; if (!next[id]) delete next[id]; saveChemExcluded(next); return next; });
   }
 
+  // MAP-05: экспорт текущего слоя химии (подложка + растр + изолинии + точки + легенда) в PNG.
+  async function handleExportPng() {
+    if (!chemMode || !chemBuilt) { setPngMsg('Сначала включите слой химии на карте'); return; }
+    setPngBusy(true); setPngMsg('');
+    try {
+      const paramDef = chemParamKey ? CHEM_PARAM_MAP[chemParamKey] : null;
+      const title = chemMode === 'mineral' ? 'Минерализация подземных вод (IDW)' : chemMode === 'ph' ? 'Водородный показатель pH (IDW)' :
+        chemMode === 'param' ? (paramDef ? paramDef.name : chemParamKey) + ' (IDW)' : 'Тип воды по классификации Алёкина (Вороной)';
+      const asOfLabel = chemAsOfDate ? ('срез на ' + fmtDate(chemAsOfDate)) : 'по последним пробам';
+      const { blob, tileStats } = await exportChemMapPng(chemBuilt, { layerConfig: TILE_LAYERS[activeLayer], title, asOfLabel, palette: chemPalette });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'химия_' + chemMode + (chemAsOfDate ? '_' + chemAsOfDate : '') + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      if (tileStats.attempted > 0 && tileStats.loaded === 0) setPngMsg('PNG сохранён, но подложка карты не загрузилась — сохранены только данные химии');
+      else if (tileStats.loaded < tileStats.attempted) setPngMsg(`PNG сохранён (часть подложки не загрузилась: ${tileStats.loaded}/${tileStats.attempted})`);
+      else setPngMsg('PNG сохранён');
+    } catch (e) {
+      setPngMsg('Ошибка экспорта: ' + e.message);
+    }
+    setPngBusy(false);
+  }
+
   function startBoundaryDraw(item) {
     if (st.current.map) st.current.map.closePopup();
     setSettingsOpen(false); setCalcOpen(false); setChemMenuOpen(false); setChemPointsOpen(false);
@@ -808,6 +842,7 @@ export function WpMapPage({ onNavigate }) {
           hasBoundary=${hasAnyBoundary} excludedCount=${Object.keys(chemExcluded).length} chemPointsN=${chemPoints.length}
           onSetStep=${(v) => setChemStepFor(chemMode, v)} onSetDivisions=${(v) => setChemDivisions(parseInt(v, 10))}
           onSetPalette=${setPalette} onOpenPoints=${() => setChemPointsOpen(true)}
+          onExportPng=${handleExportPng} pngBusy=${pngBusy} pngMsg=${pngMsg}
         />
       `}
 

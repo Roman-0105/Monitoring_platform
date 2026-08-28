@@ -9,6 +9,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Роли, которые эта функция разрешает назначать через API. 'super_admin'
+// намеренно исключён — Главный Админ только один, назначается напрямую в БД.
+const ASSIGNABLE_ROLES = ['admin', 'senior_engineer', 'engineer', 'guest']
+
+function normalizeRole(role: unknown): string {
+  return ASSIGNABLE_ROLES.includes(role as string) ? (role as string) : 'guest'
+}
+
+function genTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const bytes = new Uint8Array(12)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('')
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -25,22 +40,23 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await callerClient.auth.getUser()
     if (userErr || !user) return new Response('Unauthorized', { status: 401, headers: corsHeaders })
 
-    // Check admin role
+    // Управлять пользователями и ролями может только Главный Админ.
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
     const { data: profile } = await adminClient.from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role !== 'admin') return new Response('Forbidden', { status: 403, headers: corsHeaders })
+    if (profile?.role !== 'super_admin') return new Response('Forbidden', { status: 403, headers: corsHeaders })
 
     const body = await req.json()
 
     // ── Create user ───────────────────────────────────────
     if (body.action === 'create') {
-      const { email, password, displayName, role } = body
-      if (!email || !password || !displayName) {
-        return new Response(JSON.stringify({ error: 'email, password, displayName обязательны' }),
+      const { email, displayName, role } = body
+      if (!email || !displayName) {
+        return new Response(JSON.stringify({ error: 'email и displayName обязательны' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
+      const tempPassword = genTempPassword()
       const { data, error } = await adminClient.auth.admin.createUser({
-        email, password, email_confirm: true,
+        email, password: tempPassword, email_confirm: true,
       })
       if (error) return new Response(JSON.stringify({ error: error.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -48,9 +64,9 @@ Deno.serve(async (req) => {
       await adminClient.from('profiles').insert({
         id: data.user.id,
         display_name: displayName,
-        role: role === 'admin' ? 'admin' : 'user',
+        role: normalizeRole(role),
       })
-      return new Response(JSON.stringify({ id: data.user.id, email: data.user.email }),
+      return new Response(JSON.stringify({ id: data.user.id, email: data.user.email, tempPassword }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
@@ -58,6 +74,11 @@ Deno.serve(async (req) => {
     if (body.action === 'delete') {
       if (body.userId === user.id) {
         return new Response(JSON.stringify({ error: 'Нельзя удалить себя' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      const { data: targetProfile } = await adminClient.from('profiles').select('role').eq('id', body.userId).single()
+      if (targetProfile?.role === 'super_admin') {
+        return new Response(JSON.stringify({ error: 'Нельзя удалить Главного Админа' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
       const { error } = await adminClient.auth.admin.deleteUser(body.userId)
@@ -81,7 +102,7 @@ Deno.serve(async (req) => {
         id:          u.id,
         email:       u.email,
         displayName: pm[u.id]?.display_name || '',
-        role:        pm[u.id]?.role || 'user',
+        role:        pm[u.id]?.role || 'guest',
         active:      pm[u.id]?.active !== false,
         createdAt:   u.created_at,
       }))
@@ -91,28 +112,39 @@ Deno.serve(async (req) => {
 
     // ── Update user ───────────────────────────────────────
     if (body.action === 'update') {
-      const { userId, displayName, role, password } = body
+      const { userId, displayName, role, active } = body
       if (!userId || !displayName) {
         return new Response(JSON.stringify({ error: 'userId и displayName обязательны' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
-
-      const updateData: Record<string, unknown> = {}
-      if (password) updateData.password = password
-
-      if (Object.keys(updateData).length > 0) {
-        const { error: authErr } = await adminClient.auth.admin.updateUserById(userId, updateData)
-        if (authErr) return new Response(JSON.stringify({ error: authErr.message }),
+      const { data: targetProfile } = await adminClient.from('profiles').select('role').eq('id', userId).single()
+      if (targetProfile?.role === 'super_admin') {
+        return new Response(JSON.stringify({ error: 'Роль Главного Админа нельзя изменить здесь' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
       const { error: profileErr } = await adminClient.from('profiles')
-        .update({ display_name: displayName, role: role === 'admin' ? 'admin' : 'user' })
+        .update({ display_name: displayName, role: normalizeRole(role), active: active !== false })
         .eq('id', userId)
       if (profileErr) return new Response(JSON.stringify({ error: profileErr.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
       return new Response(JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // ── Reset password ──────────────────────────────────────
+    if (body.action === 'reset_password') {
+      const { userId } = body
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'userId обязателен' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      const tempPassword = genTempPassword()
+      const { error } = await adminClient.auth.admin.updateUserById(userId, { password: tempPassword })
+      if (error) return new Response(JSON.stringify({ error: error.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ tempPassword }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 

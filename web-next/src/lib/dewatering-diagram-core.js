@@ -3,6 +3,7 @@
 // computeFlows). React-компонент (components/DewateringDiagram.js) только монтирует контейнер,
 // толкает тулбар и дёргает методы DiagramEngine — как pit3d-core.js/PitScene для 3D-модели.
 import { computedVolume, getDistributions, computeFlows, destTypeInfo, PUMP_STATUS } from './dewatering-core.js';
+import { loadPdfJs } from './pdfjs-loader.js';
 
 export const DEWD_POS_KEY = 'dew_diagram_pos_v2';
 export const DEWD_EDGES_KEY = 'dew_diagram_edges_v2';
@@ -236,6 +237,9 @@ function nozzleHtml(d) {
       <div class="dewd-nozzle-vol">${fmt(d.volDate)} м³</div>
     </div>`;
 }
+function bgHtml(d) {
+  return `<div class="dewd-bg${d.movable ? ' dewd-bg-movable' : ''}" style="opacity:${d.opacity}"><img src="${esc(d.url)}" draggable="false" /></div>`;
+}
 
 // ── CSS (инжектится один раз) ──────────────────────────────────────────────────
 let _cssInjected = false;
@@ -271,6 +275,9 @@ export function injectDiagramCss() {
 .dewd-nozzle-vol { font-size:10px; font-weight:700; color:var(--accent-hover); }
 .dewd-quarry-box { border:1.5px dashed; border-radius:16px; opacity:.55; pointer-events:none; }
 .dewd-quarry-label { position:absolute; top:4px; left:10px; font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; pointer-events:none; }
+.dewd-bg { width:100%; height:100%; }
+.dewd-bg img { width:100%; height:100%; object-fit:fill; user-select:none; pointer-events:none; display:block; }
+.dewd-bg-movable img { outline:2px dashed var(--accent-strong); }
 `;
   const style = document.createElement('style');
   style.id = 'dewd-css';
@@ -284,8 +291,13 @@ export async function fetchDiagramTemplates(supabase) {
   if (error) throw error;
   return (data || []).map((r) => ({ id: r.id, name: r.name, positions: r.positions || {}, edges: r.edges || {} }));
 }
+// Конфликт разрешаем по name (там есть UNIQUE), а не по id (PRIMARY KEY по умолчанию для
+// .upsert()) — иначе сохранение под уже занятым именем не находит "старую" строку по id
+// (id всегда свежесгенерированный) и падает в INSERT, который Postgres отклоняет из-за
+// UNIQUE(name), а клиент не видит из-за какого именно конфликта. По name upsert всегда
+// корректно обновляет существующую запись, даже если локальный список шаблонов устарел.
 export async function upsertDiagramTemplate(supabase, row) {
-  const { error } = await supabase.from('dew_diagram_templates').upsert(row);
+  const { error } = await supabase.from('dew_diagram_templates').upsert(row, { onConflict: 'name' });
   if (error) throw error;
 }
 export async function deleteDiagramTemplate(supabase, id) {
@@ -294,20 +306,157 @@ export async function deleteDiagramTemplate(supabase, id) {
 }
 export function genTemplateId() { return 'dgt' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-// ── X6-движок ──────────────────────────────────────────────────────────────────
-const PORT_GROUPS = {
-  top: { position: 'top', attrs: { circle: { r: 4, magnet: true, stroke: '#B5851C', strokeWidth: 1, fill: '#fff' } } },
-  right: { position: 'right', attrs: { circle: { r: 4, magnet: true, stroke: '#B5851C', strokeWidth: 1, fill: '#fff' } } },
-  bottom: { position: 'bottom', attrs: { circle: { r: 4, magnet: true, stroke: '#B5851C', strokeWidth: 1, fill: '#fff' } } },
-  left: { position: 'left', attrs: { circle: { r: 4, magnet: true, stroke: '#B5851C', strokeWidth: 1, fill: '#fff' } } },
-};
-function portsConfig(visible) {
-  const groups = {};
-  Object.keys(PORT_GROUPS).forEach((side) => {
-    groups[side] = { position: PORT_GROUPS[side].position, attrs: { circle: { ...PORT_GROUPS[side].attrs.circle, opacity: visible ? 1 : 0 } } };
-  });
-  return { groups, items: Object.keys(PORT_GROUPS).map((side) => ({ id: side, group: side })) };
+// ── Схема (план) участка — фон под диаграммой (Supabase) ──────────────────────
+// Переиспользуем bucket 'schemes' (уже публичный, уже используется для еженедельных
+// схем карьеров в старом приложении) — файлы плана кладём под отдельным префиксом,
+// чтобы не пересекаться с существующими данными. Метаданные (путь, прозрачность,
+// смещение, масштаб) — в отдельной таблице dew_diagram_background, одна строка id='default'.
+const BG_BUCKET = 'schemes';
+const BG_PREFIX = 'diagram-bg/';
+
+export async function fetchBackground(supabase) {
+  const { data, error } = await supabase.from('dew_diagram_background').select('*').eq('id', 'default').maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const { data: urlData } = supabase.storage.from(BG_BUCKET).getPublicUrl(data.storage_path);
+  return {
+    storagePath: data.storage_path,
+    url: urlData ? urlData.publicUrl : '',
+    opacity: data.opacity ?? 0.55,
+    offsetX: data.offset_x ?? 0,
+    offsetY: data.offset_y ?? 0,
+    naturalWidth: data.natural_width || 800,
+    naturalHeight: data.natural_height || 600,
+    scale: data.scale ?? 1,
+  };
 }
+
+// Сжимает изображение до разумного размера перед загрузкой (площадка/скан могут быть
+// огромными) — canvas resize + JPEG, аналогично _dewCompressImage в старом приложении.
+// 3600px/0.92 — компромисс между резкостью при зуме схемы (до x3) и весом файла;
+// растр всё равно размажется на очень сильном приближении, это не векторная картинка.
+export function resizeImageFile(file, maxDim = 3600, quality = 0.92) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const scale = Math.min(1, maxDim / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(url);
+        if (!blob) { reject(new Error('Не удалось обработать изображение')); return; }
+        resolve({ blob, mimeType: 'image/jpeg', width, height });
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось прочитать файл изображения')); };
+    img.src = url;
+  });
+}
+
+// Растеризует первую страницу PDF в картинку (сам PDF на схеме не показывается —
+// только рендер страницы), тем же canvas-конвейером, что и обычные изображения.
+export async function rasterizePdfFile(file, maxDim = 3600, quality = 0.92) {
+  const pdfjsLib = await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(1);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.min(4, maxDim / Math.max(base.width, base.height));
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error('Не удалось обработать PDF')); return; }
+      resolve({ blob, mimeType: 'image/jpeg', width: canvas.width, height: canvas.height });
+    }, 'image/jpeg', quality);
+  });
+}
+
+function isPdfFile(file) {
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+}
+
+export async function uploadBackground(supabase, file, prevStoragePath) {
+  const resized = isPdfFile(file) ? await rasterizePdfFile(file) : await resizeImageFile(file);
+  const path = BG_PREFIX + 'bg_' + Date.now() + '.jpg';
+  if (prevStoragePath) await supabase.storage.from(BG_BUCKET).remove([prevStoragePath]).catch(() => {});
+  const { error: upErr } = await supabase.storage.from(BG_BUCKET).upload(path, resized.blob, { upsert: true, contentType: resized.mimeType });
+  if (upErr) throw upErr;
+  const row = {
+    id: 'default', storage_path: path, opacity: 0.55, offset_x: 0, offset_y: 0, scale: 1,
+    natural_width: resized.width, natural_height: resized.height, updated_at: new Date().toISOString(),
+  };
+  const { error: dbErr } = await supabase.from('dew_diagram_background').upsert(row);
+  if (dbErr) throw dbErr;
+  return fetchBackground(supabase);
+}
+
+export async function updateBackgroundSettings(supabase, patch) {
+  const row = { id: 'default', updated_at: new Date().toISOString() };
+  if (patch.opacity != null) row.opacity = patch.opacity;
+  if (patch.offsetX != null) row.offset_x = patch.offsetX;
+  if (patch.offsetY != null) row.offset_y = patch.offsetY;
+  if (patch.scale != null) row.scale = patch.scale;
+  const { error } = await supabase.from('dew_diagram_background').update(row).eq('id', 'default');
+  if (error) throw error;
+}
+
+export async function deleteBackground(supabase, storagePath) {
+  if (storagePath) await supabase.storage.from(BG_BUCKET).remove([storagePath]).catch(() => {});
+  const { error } = await supabase.from('dew_diagram_background').delete().eq('id', 'default');
+  if (error) throw error;
+}
+
+// ── X6-движок ──────────────────────────────────────────────────────────────────
+// Несколько точек связи на каждой стороне блока (не одна) — распределены равномерно
+// по периметру через position:'absolute' (координаты в системе самого узла, 0..w/0..h).
+// Индекс средней точки (для порта по умолчанию) — Math.floor(PORTS_PER_SIDE/2).
+export const PORTS_PER_SIDE = 3;
+export const DEFAULT_PORT_INDEX = Math.floor(PORTS_PER_SIDE / 2);
+
+export function perimeterPorts(w, h, visible) {
+  const items = [];
+  for (let i = 0; i < PORTS_PER_SIDE; i++) {
+    const t = (i + 1) / (PORTS_PER_SIDE + 1);
+    items.push({ id: 'top' + i, group: 'p', args: { x: w * t, y: 0 } });
+    items.push({ id: 'bottom' + i, group: 'p', args: { x: w * t, y: h } });
+    items.push({ id: 'left' + i, group: 'p', args: { x: 0, y: h * t } });
+    items.push({ id: 'right' + i, group: 'p', args: { x: w, y: h * t } });
+  }
+  return {
+    groups: {
+      p: {
+        position: 'absolute',
+        attrs: { circle: { r: 3.5, magnet: true, stroke: '#B5851C', strokeWidth: 1, fill: '#fff', opacity: visible ? 1 : 0, cursor: 'crosshair' } },
+      },
+    },
+    items,
+  };
+}
+const DEFAULT_SOURCE_PORT = 'right' + DEFAULT_PORT_INDEX;
+const DEFAULT_TARGET_PORT = 'left' + DEFAULT_PORT_INDEX;
+
+// 'vertices' — точки изгиба на самой линии; 'source-arrowhead'/'target-arrowhead' — те самые
+// перетаскиваемые кружки НА КОНЦАХ линии, которыми меняют точку подключения (без них клик по
+// концу линии просто пытается завести новую связь от порта-магнита и гаснет, а сама линия
+// остаётся на месте — порт сам по себе не является ручкой для переноса уже существующего ребра).
+const EDGE_EDIT_TOOLS = [
+  'vertices',
+  { name: 'source-arrowhead', args: { attrs: { fill: '#B5851C', stroke: '#fff', 'stroke-width': 1.5 } } },
+  { name: 'target-arrowhead', args: { attrs: { fill: '#B5851C', stroke: '#fff', 'stroke-width': 1.5 } } },
+];
 
 let _shapesRegistered = false;
 function registerShapes(X6) {
@@ -322,6 +471,7 @@ function registerShapes(X6) {
   reg('dewd-pump', pumpHtml);
   reg('dewd-dest', destHtml);
   reg('dewd-nozzle', nozzleHtml);
+  reg('dewd-bg', bgHtml);
 }
 
 export class DiagramEngine {
@@ -352,10 +502,14 @@ export class DiagramEngine {
       mousewheel: { enabled: true, modifiers: [], minScale: 0.2, maxScale: 3, factor: 1.1 },
       interacting: (cellView) => {
         const cell = cellView.cell;
-        if (cell.isNode()) return { nodeMovable: cell.shape !== 'dewd-quarry' };
+        if (cell.isNode()) {
+          if (cell.shape === 'rect') return { nodeMovable: false };
+          if (cell.shape === 'dewd-bg') return { nodeMovable: !!(opts.background && opts.background.moveMode) };
+          return { nodeMovable: true };
+        }
         return this.editMode ? { edgeMovable: true, vertexMovable: true, vertexAddable: true, vertexDeletable: true } : {};
       },
-      connecting: { allowBlank: false, allowNode: false, allowEdge: false, allowPort: true, router: { name: 'manhattan', args: { padding: 12 } }, connector: { name: 'rounded', args: { radius: 8 } } },
+      connecting: { allowBlank: false, allowNode: false, allowEdge: false, allowPort: true, router: { name: 'normal' }, connector: { name: 'normal' } },
       validateConnection: ({ edge, type, cell }) => {
         if (!edge || !cell) return false;
         const data = edge.getData() || {};
@@ -363,6 +517,17 @@ export class DiagramEngine {
       },
     });
     this.graph = graph;
+
+    // План участка — фоновая картинка, ниже всего остального
+    if (opts.background && opts.background.url && opts.background.visible !== false) {
+      const bg = opts.background;
+      const w = Math.max(10, bg.naturalWidth * (bg.scale || 1));
+      const h = Math.max(10, bg.naturalHeight * (bg.scale || 1));
+      graph.addNode({
+        id: 'dewd-bg', shape: 'dewd-bg', x: bg.offsetX || 0, y: bg.offsetY || 0, width: w, height: h, zIndex: -10,
+        data: { url: bg.url, opacity: bg.opacity ?? 0.55, movable: !!bg.moveMode },
+      });
+    }
 
     // Фон-боксы карьеров — behind everything, не интерактивны
     Object.entries(quarryBoxes).forEach(([q, box]) => {
@@ -379,12 +544,12 @@ export class DiagramEngine {
     model.sumps.forEach((s) => {
       const pos = positions[nodeId('smp', s.id)] || { x: 0, y: 0 };
       const sz = sumpSize(model, s.id);
-      graph.addNode({ id: nodeId('smp', s.id), shape: 'dewd-sump', x: pos.x, y: pos.y, width: sz.w, height: sz.h, zIndex: 10, data: sumpNodeData(model, s), ports: portsConfig(this.editMode) });
+      graph.addNode({ id: nodeId('smp', s.id), shape: 'dewd-sump', x: pos.x, y: pos.y, width: sz.w, height: sz.h, zIndex: 10, data: sumpNodeData(model, s), ports: perimeterPorts(sz.w, sz.h, this.editMode) });
     });
     // Насосы + структурное ребро зумпф→насос
     model.pumps.forEach((p) => {
       const pos = positions[nodeId('pmp', p.id)] || { x: 0, y: 0 };
-      graph.addNode({ id: nodeId('pmp', p.id), shape: 'dewd-pump', x: pos.x, y: pos.y, width: SIZE.pump.w, height: SIZE.pump.h, zIndex: 10, data: pumpNodeData(model, p), ports: portsConfig(this.editMode) });
+      graph.addNode({ id: nodeId('pmp', p.id), shape: 'dewd-pump', x: pos.x, y: pos.y, width: SIZE.pump.w, height: SIZE.pump.h, zIndex: 10, data: pumpNodeData(model, p), ports: perimeterPorts(SIZE.pump.w, SIZE.pump.h, this.editMode) });
       if (p.sump_id && positions[nodeId('smp', p.sump_id)]) {
         this._addStructEdge(graph, nodeId('smp', p.sump_id), nodeId('pmp', p.id), edgeOverrides);
       }
@@ -392,32 +557,45 @@ export class DiagramEngine {
     // Направления откачки
     model.termDests.forEach((d) => {
       const pos = positions[nodeId('dst', d.id)] || { x: 0, y: 0 };
-      graph.addNode({ id: nodeId('dst', d.id), shape: 'dewd-dest', x: pos.x, y: pos.y, width: SIZE.dest.w, height: SIZE.dest.h, zIndex: 10, data: destNodeData(model, d), ports: portsConfig(this.editMode) });
+      graph.addNode({ id: nodeId('dst', d.id), shape: 'dewd-dest', x: pos.x, y: pos.y, width: SIZE.dest.w, height: SIZE.dest.h, zIndex: 10, data: destNodeData(model, d), ports: perimeterPorts(SIZE.dest.w, SIZE.dest.h, this.editMode) });
     });
     // Форсунки пылеподавления
     model.nozzles.forEach((n) => {
       const pos = positions[nodeId('nzl', n.id)] || { x: 0, y: 0 };
-      graph.addNode({ id: nodeId('nzl', n.id), shape: 'dewd-nozzle', x: pos.x, y: pos.y, width: SIZE.nozzle.w, height: SIZE.nozzle.h, zIndex: 10, data: nozzleNodeData(n, model.nozzleVolumes), ports: portsConfig(this.editMode) });
+      graph.addNode({ id: nodeId('nzl', n.id), shape: 'dewd-nozzle', x: pos.x, y: pos.y, width: SIZE.nozzle.w, height: SIZE.nozzle.h, zIndex: 10, data: nozzleNodeData(n, model.nozzleVolumes), ports: perimeterPorts(SIZE.nozzle.w, SIZE.nozzle.h, this.editMode) });
       if (n.source_id && positions[nodeId('smp', n.source_id)]) {
         this._addStructEdge(graph, nodeId('smp', n.source_id), nodeId('nzl', n.id), edgeOverrides);
       }
     });
 
-    // Потоки насос → направление/зумпф
+    // Потоки насос → направление/зумпф — связи, ведущие на "Рельеф", подсвечиваются красным.
+    // Тип направления 'relief' в справочнике почти не используется — на практике такие
+    // направления заводят с типом 'outside' и названием вроде "Рельеф СРГ", поэтому здесь
+    // проверяем и тип, и вхождение слова "рельеф" в название.
+    const isReliefDest = (id) => {
+      const dest = model.termDests.find((d) => d.id === id);
+      if (!dest) return false;
+      return dest.type === 'relief' || /рельеф/i.test(dest.name || '');
+    };
+    const reliefByNodeId = {};
+    model.termDests.forEach((d) => { reliefByNodeId[nodeId('dst', d.id)] = isReliefDest(d.id); });
+
     const animatedEdges = [];
     Object.entries(model.flows).forEach(([key, f]) => {
       const source = nodeId('pmp', f.pumpId);
       if (!positions[source] || !positions[f.targetNodeId]) return;
+      const isRelief = !!reliefByNodeId[f.targetNodeId];
+      const stroke = isRelief ? 'var(--red-500)' : 'var(--accent-strong)';
       const sw = 1.5 + (f.volTotal / maxVolTotal) * 3.5;
       const animated = animEnabled && f.volDate > 0;
       const dur = Math.max(0.6, 2.2 - (f.volTotal / maxVolTotal) * 1.6);
       const edge = this._addFlowEdge(graph, key, source, f.targetNodeId, edgeOverrides, {
-        stroke: 'var(--accent-strong)', strokeWidth: sw,
+        stroke, strokeWidth: sw,
         dash: animated ? 6 : 0, animDur: animated ? dur : 0,
       });
       if (animated) {
         const speed = Math.max(1.2, 4 - (f.volTotal / maxVolTotal) * 2.6);
-        animatedEdges.push({ edge, speed, dropCount: speed < 2 ? 2 : 1 });
+        animatedEdges.push({ edge, speed, dropCount: speed < 2 ? 2 : 1, color: isRelief ? '#B5301B' : '#2E6DAE' });
       }
     });
 
@@ -425,6 +603,11 @@ export class DiagramEngine {
     let dragStart = null;
     graph.on('node:mousedown', ({ node }) => { dragStart = node.position(); });
     graph.on('node:moved', ({ node }) => {
+      if (node.shape === 'dewd-bg') {
+        const { x, y } = node.position();
+        this.callbacks.onBackgroundMoved && this.callbacks.onBackgroundMoved({ x: Math.round(x), y: Math.round(y) });
+        return;
+      }
       if (node.shape === 'rect') return;
       const { x, y } = node.position();
       const next = { ...(this.callbacks.getPositions ? this.callbacks.getPositions() : {}) };
@@ -460,21 +643,21 @@ export class DiagramEngine {
     const id = source + '→' + target;
     const ov = overrides[id];
     graph.addEdge({
-      id, source: { cell: source, port: ov?.sourcePort || 'right' }, target: { cell: target, port: ov?.targetPort || 'left' },
+      id, source: { cell: source, port: ov?.sourcePort || DEFAULT_SOURCE_PORT }, target: { cell: target, port: ov?.targetPort || DEFAULT_TARGET_PORT },
       vertices: ov?.vertices || [], zIndex: 3,
-      router: { name: 'manhattan', args: { padding: 10, step: 10 } }, connector: { name: 'rounded', args: { radius: 6 } },
+      router: { name: 'normal' }, connector: { name: 'normal' },
       attrs: { line: { stroke: 'var(--border-strong)', strokeWidth: 1.5, targetMarker: null } },
       data: { origSource: source, origTarget: target },
-      tools: this.editMode ? ['vertices'] : [],
+      tools: this.editMode ? EDGE_EDIT_TOOLS : [],
     });
   }
 
   _addFlowEdge(graph, id, source, target, overrides, style) {
     const ov = overrides[id];
     const edge = graph.addEdge({
-      id, source: { cell: source, port: ov?.sourcePort || 'right' }, target: { cell: target, port: ov?.targetPort || 'left' },
+      id, source: { cell: source, port: ov?.sourcePort || DEFAULT_SOURCE_PORT }, target: { cell: target, port: ov?.targetPort || DEFAULT_TARGET_PORT },
       vertices: ov?.vertices || [], zIndex: 5,
-      router: { name: 'manhattan', args: { padding: 14, step: 10 } }, connector: { name: 'rounded', args: { radius: 8 } },
+      router: { name: 'normal' }, connector: { name: 'normal' },
       attrs: {
         line: {
           stroke: style.stroke, strokeWidth: style.strokeWidth, targetMarker: null,
@@ -483,7 +666,7 @@ export class DiagramEngine {
         },
       },
       data: { origSource: source, origTarget: target },
-      tools: this.editMode ? ['vertices'] : [],
+      tools: this.editMode ? EDGE_EDIT_TOOLS : [],
     });
     return edge;
   }
@@ -503,7 +686,7 @@ export class DiagramEngine {
     const viewport = svg && (svg.querySelector('.x6-graph-svg-viewport') || svg);
     if (!viewport) return;
     const ns = 'http://www.w3.org/2000/svg';
-    animatedEdges.forEach(({ edge, speed, dropCount }) => {
+    animatedEdges.forEach(({ edge, speed, dropCount, color }) => {
       const view = graph.findViewByCell(edge);
       const path = view && view.container && view.container.querySelector('path.x6-edge-connection, path.x6-edge');
       if (!path) return;
@@ -512,7 +695,7 @@ export class DiagramEngine {
       for (let i = 0; i < dropCount; i++) {
         const circle = document.createElementNS(ns, 'circle');
         circle.setAttribute('r', '3');
-        circle.setAttribute('fill', '#2E6DAE');
+        circle.setAttribute('fill', color || '#2E6DAE');
         circle.setAttribute('opacity', '0.85');
         const anim = document.createElementNS(ns, 'animateMotion');
         anim.setAttribute('dur', speed + 's');

@@ -56,6 +56,9 @@ export const NAV_SECTIONS = [
     items: [
       { key: 'settings', label: 'Настройки', icon: 'Settings', pilot: true },
       { key: 'diag', label: 'Диагностика', icon: 'Activity', pilot: true },
+      // Не участвует в role_permissions — видимость решается жёсткой проверкой
+      // role === 'super_admin' в App.js, а не матрицей доступа.
+      { key: 'roles', label: 'Роли и доступ', icon: 'ShieldCheck', pilot: true, superAdminOnly: true },
     ],
   },
 ];

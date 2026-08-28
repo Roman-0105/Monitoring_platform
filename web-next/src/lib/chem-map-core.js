@@ -333,3 +333,210 @@ export function buildChemRaster(mode, pts, opts) {
     mode, proj, getV, boundaries, cosLat, paramDef,
   };
 }
+
+// ── Экспорт слоя химии в PNG (MAP-05) ────────────────────────────────────
+// Печатный вид: подложка (та же, что на экране) + растр химии (полупрозрачный,
+// как в приложении) + изолинии + точки проб + легенда. Порт wpmExportChemPng/
+// _wpmDrawChemPng из hydro-monitoring/ui-wpmap.js.
+function tileXY(lat, lng, z) {
+  const n = Math.pow(2, z);
+  const x = Math.floor((lng + 180) / 360 * n);
+  const latRad = lat * Math.PI / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+  return { x, y };
+}
+function tileLng(x, z) { return x / Math.pow(2, z) * 360 - 180; }
+function tileLat(y, z) { const n = Math.PI - 2 * Math.PI * y / Math.pow(2, z); return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); }
+function tileUrl(layerConfig, z, x, y) {
+  if (!layerConfig) return null;
+  return layerConfig.url.replace('{s}', 'a').replace('{z}', z).replace('{y}', y).replace('{x}', x);
+}
+function loadTileImg(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+// Рисует мозаику тайлов basemap, покрывающую bounds, в прямоугольник [dx,dy,dw,dh] на ctx.
+async function drawBasemap(ctx, bounds, dx, dy, dw, dh, layerConfig) {
+  const TILE = 256;
+  if (!layerConfig) return { attempted: 0, loaded: 0 };
+
+  const lngSpan = bounds[1][1] - bounds[0][1];
+  let z = Math.min(19, layerConfig.maxZoom || 19);
+  while (z > 1) {
+    const tilesAcross = lngSpan / 360 * Math.pow(2, z);
+    if (tilesAcross * TILE <= dw * 1.3) break;
+    z--;
+  }
+
+  let tl = tileXY(bounds[1][0], bounds[0][1], z), br = tileXY(bounds[0][0], bounds[1][1], z);
+  let x0 = tl.x, y0 = Math.min(tl.y, br.y), x1 = br.x, y1 = Math.max(tl.y, br.y);
+  while ((x1 - x0 + 1) * (y1 - y0 + 1) > 400 && z > 1) {
+    z--;
+    tl = tileXY(bounds[1][0], bounds[0][1], z); br = tileXY(bounds[0][0], bounds[1][1], z);
+    x0 = tl.x; y0 = Math.min(tl.y, br.y); x1 = br.x; y1 = Math.max(tl.y, br.y);
+  }
+
+  const mosaic = document.createElement('canvas');
+  mosaic.width = (x1 - x0 + 1) * TILE; mosaic.height = (y1 - y0 + 1) * TILE;
+  const mctx = mosaic.getContext('2d');
+
+  let attempted = 0, loaded = 0;
+  const jobs = [];
+  for (let ty = y0; ty <= y1; ty++) {
+    for (let tx = x0; tx <= x1; tx++) {
+      attempted++;
+      jobs.push(loadTileImg(tileUrl(layerConfig, z, tx, ty)).then((img) => { if (img) { mctx.drawImage(img, (tx - x0) * TILE, (ty - y0) * TILE, TILE, TILE); loaded++; } }));
+    }
+  }
+  await Promise.all(jobs);
+  if (!loaded) return { attempted, loaded: 0 };
+
+  const mosaicWestLng = tileLng(x0, z), mosaicEastLng = tileLng(x1 + 1, z);
+  const mosaicNorthLat = tileLat(y0, z), mosaicSouthLat = tileLat(y1 + 1, z);
+  const srcX = (bounds[0][1] - mosaicWestLng) / (mosaicEastLng - mosaicWestLng) * mosaic.width;
+  const srcXEnd = (bounds[1][1] - mosaicWestLng) / (mosaicEastLng - mosaicWestLng) * mosaic.width;
+  const srcYTop = (mosaicNorthLat - bounds[1][0]) / (mosaicNorthLat - mosaicSouthLat) * mosaic.height;
+  const srcYBot = (mosaicNorthLat - bounds[0][0]) / (mosaicNorthLat - mosaicSouthLat) * mosaic.height;
+  ctx.drawImage(mosaic, srcX, srcYTop, srcXEnd - srcX, srcYBot - srcYTop, dx, dy, dw, dh);
+  return { attempted, loaded };
+}
+
+// built — результат buildChemRaster(). layerConfig — {url,maxZoom} текущей подложки карты
+// (или null — тогда фон нейтральный). title/asOfLabel/paletteName — подписи для заголовка/легенды.
+export async function exportChemMapPng(built, { layerConfig, title, asOfLabel, palette } = {}) {
+  const PAD = 30, TITLE_H = 74, W = 1300;
+  const latSpan = built.bounds[1][0] - built.bounds[0][0];
+  const lngSpan = built.bounds[1][1] - built.bounds[0][1];
+  const aspect = (lngSpan * built.cosLat) / latSpan;
+  const mapW = W - PAD * 2;
+  const mapH = Math.round(mapW / aspect);
+  const LEGEND_H = 90;
+  const H = TITLE_H + mapH + LEGEND_H + PAD;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#eef2f7';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '700 22px Segoe UI, Arial, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Карьер ЮРГ — ' + (title || 'Химический слой'), PAD, 16);
+
+  ctx.font = '400 13px Segoe UI, Arial, sans-serif';
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('Проб: ' + built.n + ' · ' + (asOfLabel || 'по последним пробам') + ' · сформировано ' + new Date().toLocaleDateString('ru-RU'), PAD, 44);
+
+  const mapX = PAD, mapY = TITLE_H;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(mapX, mapY, mapW, mapH); ctx.clip();
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(mapX, mapY, mapW, mapH);
+  let tileStats = { attempted: 0, loaded: 0 };
+  try { tileStats = await drawBasemap(ctx, built.bounds, mapX, mapY, mapW, mapH, layerConfig); } catch (e) { /* подложка недоступна — нейтральная заливка */ }
+
+  const rasterImg = await new Promise((resolve) => { const img = new Image(); img.onload = () => resolve(img); img.src = built.dataUrl; });
+  ctx.drawImage(rasterImg, mapX, mapY, mapW, mapH);
+
+  function toPx(lat, lng) {
+    const tx = (lng - built.bounds[0][1]) / lngSpan;
+    const ty = 1 - (lat - built.bounds[0][0]) / latSpan;
+    return [mapX + tx * mapW, mapY + ty * mapH];
+  }
+
+  if (built.isoLevels && built.isoLevels.length) {
+    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.lineWidth = 1;
+    built.isoLevels.forEach((level) => {
+      level.segs.forEach((seg) => {
+        const p1 = toPx(seg[0][1], seg[0][0]), p2 = toPx(seg[1][1], seg[1][0]);
+        ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
+      });
+    });
+  }
+
+  built.proj.forEach((p) => {
+    const pt = toPx(p.lat, p.lng);
+    ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fillStyle = '#0f172a'; ctx.fill();
+    ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+
+    const name = p.item.name.length > 12 ? p.item.name.slice(0, 11) + '…' : p.item.name;
+    ctx.font = '600 10px Segoe UI, Arial, sans-serif';
+    const tw = ctx.measureText(name).width;
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.fillRect(pt[0] - tw / 2 - 3, pt[1] + 6, tw + 6, 13);
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.fillText(name, pt[0], pt[1] + 8);
+    ctx.textAlign = 'left';
+  });
+
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(15,23,42,.15)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mapX, mapY, mapW, mapH);
+
+  const legY = TITLE_H + mapH + 16;
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '700 13px Segoe UI, Arial, sans-serif';
+  ctx.fillText(title || '', PAD, legY);
+
+  if (built.mode === 'wtype') {
+    const seenKeys = {};
+    built.proj.forEach((p) => { seenKeys[p.wtype.key] = true; });
+    let lx = PAD;
+    ALEKIN_FACIES.forEach((f) => {
+      const present = !!seenKeys[f.key];
+      const color = CHEM_WTYPE_COLORS[f.key] || '#94a3b8';
+      ctx.globalAlpha = present ? 1 : 0.35;
+      ctx.fillStyle = color;
+      ctx.fillRect(lx, legY + 22, 12, 12);
+      ctx.fillStyle = '#334155';
+      ctx.font = '400 12px Segoe UI, Arial, sans-serif';
+      ctx.fillText(f.label, lx + 16, legY + 22);
+      ctx.globalAlpha = 1;
+      lx += 18 + ctx.measureText(f.label).width + 20;
+    });
+  } else {
+    const ramp = getRamp(built.mode, palette);
+    const pd = built.paramDef;
+    const unit = built.mode === 'mineral' ? ' г/л' : built.mode === 'param' ? ' ' + (pd ? pd.unit : '') : '';
+    const domain = built.domain;
+    const decimals = built.mode === 'param'
+      ? (domain && (domain.max - domain.min) < 1 ? 4 : (domain && (domain.max - domain.min) < 10 ? 3 : 2))
+      : (built.step < 0.1 ? 2 : (built.step < 1 ? 1 : 2));
+    const barW = 400, barX = PAD, barY = legY + 18, barH = 14;
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    ramp.forEach((s) => grad.addColorStop(s.stop, s.color));
+    ctx.fillStyle = grad;
+    ctx.fillRect(barX, barY, barW, barH);
+    ctx.strokeStyle = 'rgba(15,23,42,.2)';
+    ctx.strokeRect(barX, barY, barW, barH);
+    if (built.mode === 'param' && pd && pd.pdk_type === 'max' && pd.pdk_drink != null && domain && domain.max > domain.min) {
+      const pdkT = Math.max(0, Math.min(1, (pd.pdk_drink - domain.min) / (domain.max - domain.min)));
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(barX + pdkT * barW - 1, barY - 3, 2, barH + 6);
+      ctx.font = '600 10px Segoe UI, Arial, sans-serif';
+      ctx.fillText('ПДК', barX + pdkT * barW - 10, barY - 15);
+    }
+    if (domain) {
+      ctx.fillStyle = '#334155';
+      ctx.font = '600 11px Segoe UI, Arial, sans-serif';
+      ctx.fillText(domain.min.toFixed(decimals) + unit, barX, barY + barH + 4);
+      ctx.textAlign = 'right';
+      ctx.fillText(domain.max.toFixed(decimals) + unit, barX + barW, barY + barH + 4);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  return { blob, tileStats };
+}

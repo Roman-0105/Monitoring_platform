@@ -115,6 +115,21 @@ export function Table({ columns, rows, rowKey, emptyIcon, emptyTitle, emptyDescr
   `;
 }
 
+// Оборачивает содержимое страницы: если canEdit=false, блокирует все клики/ввод
+// внутри и показывает плашку «Только просмотр» — не требует правок внутри самих
+// страниц, работает как общий генерик-гейт для ролей с правом просмотра без записи.
+export function ReadOnlyGate({ active, children }) {
+  if (!active) return children;
+  return html`
+    <div style=${{ position: 'relative' }}>
+      <div style=${{ position: 'absolute', top: '10px', right: '10px', zIndex: 50, display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '999px', background: 'var(--amber-100)', color: 'var(--amber-600)', fontSize: '11.5px', fontWeight: 700, boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
+        👁 Только просмотр
+      </div>
+      <div style=${{ pointerEvents: 'none', opacity: 0.75 }}>${children}</div>
+    </div>
+  `;
+}
+
 export function Dialog({ open, onClose, title, children, footer, width }) {
   if (!open) return null;
   return html`

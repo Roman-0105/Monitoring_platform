@@ -3,7 +3,7 @@
 // для модели/раскладки/движка). Компонент лишь монтирует контейнер и управляет состоянием
 // тулбара (период, зум, анимация, редактирование связей, шаблоны, полный экран).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, Maximize2, Minimize2, Pencil, LayoutGrid, Play, Pause, ZoomIn, ZoomOut, Scan, X, Save } from 'lucide-react';
+import { RotateCcw, Maximize2, Minimize2, Pencil, LayoutGrid, Play, Pause, ZoomIn, ZoomOut, Scan, X, Save, Image as ImageIcon, Move, Trash2, Upload } from 'lucide-react';
 import { html } from '../lib/html.js';
 import { supabase } from '../lib/supabase.js';
 import { loadX6 } from '../lib/x6-loader.js';
@@ -13,7 +13,10 @@ import {
   DiagramEngine, buildDiagramModel, resolveDateRange, periodLabel,
   loadPositions, savePositions, loadEdgeOverrides, saveEdgeOverrides,
   fetchDiagramTemplates, upsertDiagramTemplate, deleteDiagramTemplate, genTemplateId,
+  fetchBackground, uploadBackground, updateBackgroundSettings, deleteBackground,
 } from '../lib/dewatering-diagram-core.js';
+
+const BG_VISIBLE_KEY = 'dew_diagram_bg_visible';
 
 const PRESETS = [
   { value: 'yesterday', label: 'Вчера' },
@@ -62,8 +65,18 @@ export function DewateringDiagram({ data, onSumpClick }) {
   const [templates, setTemplates] = useState([]);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [saveDraft, setSaveDraft] = useState(null); // null = скрыта форма; строка = имя, которое печатают
+  const [saveError, setSaveError] = useState('');
+
+  const [bg, setBg] = useState(null);
+  const [bgPanelOpen, setBgPanelOpen] = useState(false);
+  const [bgMoveMode, setBgMoveMode] = useState(false);
+  const [bgVisible, setBgVisible] = useState(() => { try { return localStorage.getItem(BG_VISIBLE_KEY) !== '0'; } catch { return true; } });
+  const [bgBusy, setBgBusy] = useState(false);
+  const bgFileRef = useRef(null);
 
   useEffect(() => { loadX6().then(() => setX6Ready(true)).catch((e) => console.error(e)); }, []);
+  useEffect(() => { fetchBackground(supabase).then(setBg).catch((e) => console.error(e)); }, []);
 
   const range = useMemo(() => resolveDateRange(preset, customFrom, customTo), [preset, customFrom, customTo]);
 
@@ -75,6 +88,10 @@ export function DewateringDiagram({ data, onSumpClick }) {
 
   function persistPositions(next) { setPositions(next); savePositions(next); }
   function persistEdges(next) { setEdgeOverrides(next); saveEdgeOverrides(next); }
+  async function handleBgMoved({ x, y }) {
+    setBg((prev) => (prev ? { ...prev, offsetX: x, offsetY: y } : prev));
+    try { await updateBackgroundSettings(supabase, { offsetX: x, offsetY: y }); } catch (e) { console.error(e); }
+  }
 
   useEffect(() => {
     if (!x6Ready || !containerRef.current) return;
@@ -86,11 +103,13 @@ export function DewateringDiagram({ data, onSumpClick }) {
         onEdgesChange: persistEdges,
         onZoomChange: (z) => setZoomPct(Math.round(z * 100)),
         onSumpClick: onSumpClick,
+        onBackgroundMoved: handleBgMoved,
       });
     }
-    engineRef.current.render(model, { positions, edgeOverrides, editMode, animEnabled });
+    const background = bg ? { ...bg, moveMode: bgMoveMode, visible: bgVisible } : null;
+    engineRef.current.render(model, { positions, edgeOverrides, editMode, animEnabled, background });
     return undefined;
-  }, [x6Ready, model, editMode, animEnabled, fullscreen]);
+  }, [x6Ready, model, editMode, animEnabled, fullscreen, bg, bgMoveMode, bgVisible]);
 
   useEffect(() => () => { if (engineRef.current) engineRef.current.dispose(); }, []);
 
@@ -113,17 +132,18 @@ export function DewateringDiagram({ data, onSumpClick }) {
       catch (e) { console.error(e); }
     }
   }
-  async function saveAsTemplate() {
-    const name = prompt('Название шаблона:');
-    if (!name || !name.trim()) return;
-    const existing = templates.find((t) => t.name === name.trim());
-    if (existing && !confirm(`Шаблон «${name.trim()}» уже существует. Перезаписать?`)) return;
+  async function confirmSaveTemplate() {
+    const name = (saveDraft || '').trim();
+    if (!name) { setSaveError('Укажите название'); return; }
     setTemplateBusy(true);
+    setSaveError('');
     try {
-      const row = { id: existing ? existing.id : genTemplateId(), name: name.trim(), positions: positionsRef.current, edges: edgeOverridesRef.current };
+      const existing = templates.find((t) => t.name === name);
+      const row = { id: existing ? existing.id : genTemplateId(), name, positions: positionsRef.current, edges: edgeOverridesRef.current };
       await upsertDiagramTemplate(supabase, row);
       setTemplates(await fetchDiagramTemplates(supabase));
-    } catch (e) { alert('Ошибка сохранения шаблона: ' + e.message); } finally { setTemplateBusy(false); }
+      setSaveDraft(null);
+    } catch (e) { setSaveError('Ошибка сохранения: ' + e.message); } finally { setTemplateBusy(false); }
   }
   function applyTemplate(t) {
     persistPositions({ ...t.positions });
@@ -133,6 +153,36 @@ export function DewateringDiagram({ data, onSumpClick }) {
     if (!confirm(`Удалить шаблон «${t.name}»?`)) return;
     try { await deleteDiagramTemplate(supabase, t.id); setTemplates(await fetchDiagramTemplates(supabase)); }
     catch (e) { alert('Ошибка: ' + e.message); }
+  }
+
+  function toggleBgVisible() {
+    setBgVisible((v) => { const next = !v; try { localStorage.setItem(BG_VISIBLE_KEY, next ? '1' : '0'); } catch {} return next; });
+  }
+  async function handleBgFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setBgBusy(true);
+    try {
+      const next = await uploadBackground(supabase, file, bg?.storagePath);
+      setBg(next);
+      setBgMoveMode(false);
+      if (!bgVisible) toggleBgVisible();
+    } catch (err) { alert('Ошибка загрузки плана: ' + err.message); } finally { setBgBusy(false); }
+  }
+  async function handleBgOpacity(v) {
+    setBg((prev) => (prev ? { ...prev, opacity: v } : prev));
+    try { await updateBackgroundSettings(supabase, { opacity: v }); } catch (e) { console.error(e); }
+  }
+  async function handleBgScale(v) {
+    setBg((prev) => (prev ? { ...prev, scale: v } : prev));
+    try { await updateBackgroundSettings(supabase, { scale: v }); } catch (e) { console.error(e); }
+  }
+  async function handleBgDelete() {
+    if (!bg || !confirm('Удалить план участка?')) return;
+    setBgBusy(true);
+    try { await deleteBackground(supabase, bg.storagePath); setBg(null); setBgMoveMode(false); }
+    catch (e) { alert('Ошибка: ' + e.message); } finally { setBgBusy(false); }
   }
 
   const legendTypes = useMemo(() => {
@@ -165,6 +215,7 @@ export function DewateringDiagram({ data, onSumpClick }) {
         <${Button} variant=${animEnabled ? 'outline' : 'ghost'} size="sm" onClick=${() => setAnimEnabled((v) => !v)}>${animEnabled ? html`<${Pause} size=${14} />` : html`<${Play} size=${14} />`} Анимация<//>
         <${Button} variant="ghost" size="sm" onClick=${resetLayout} title="Сбросить позиции узлов к авто-раскладке"><${RotateCcw} size=${14} /> Авто-раскладка<//>
         <${Button} variant=${templatesOpen ? 'outline' : 'ghost'} size="sm" onClick=${openTemplates}><${LayoutGrid} size=${14} /> Шаблоны<//>
+        <${Button} variant=${bgPanelOpen ? 'outline' : 'ghost'} size="sm" onClick=${() => setBgPanelOpen((v) => !v)}><${ImageIcon} size=${14} /> План участка<//>
 
         <${Button} variant=${editMode ? 'outline' : 'ghost'} size="sm" onClick=${() => setEditMode((v) => !v)}><${Pencil} size=${14} /> Редактировать связи<//>
         ${editMode && html`<${Button} variant="ghost" size="sm" onClick=${resetEdges}><${RotateCcw} size=${14} /> Сбросить связи<//>`}
@@ -200,7 +251,68 @@ export function DewateringDiagram({ data, onSumpClick }) {
                 </div>
               `)}
             </div>
-            <${Button} size="sm" onClick=${saveAsTemplate} disabled=${templateBusy}><${Save} size=${13} /> Сохранить текущую как шаблон…<//>
+            ${saveDraft === null ? html`
+              <${Button} size="sm" onClick=${() => { setSaveDraft(''); setSaveError(''); }}><${Save} size=${13} /> Сохранить текущую как шаблон…<//>
+            ` : html`
+              <div style=${{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <${Input} value=${saveDraft} onChange=${(e) => setSaveDraft(e.target.value)} placeholder="Название шаблона" autoFocus
+                  onKeyDown=${(e) => { if (e.key === 'Enter') confirmSaveTemplate(); if (e.key === 'Escape') setSaveDraft(null); }} />
+                ${saveError && html`<div style=${{ fontSize: '11px', color: 'var(--red-500)' }}>${saveError}<//>`}
+                <div style=${{ display: 'flex', gap: '6px' }}>
+                  <${Button} size="sm" onClick=${confirmSaveTemplate} disabled=${templateBusy} style=${{ flex: 1 }}>${templateBusy ? 'Сохранение…' : 'Сохранить'}<//>
+                  <${Button} variant="ghost" size="sm" onClick=${() => { setSaveDraft(null); setSaveError(''); }}>Отмена<//>
+                </div>
+              </div>
+            `}
+          </div>
+        `}
+
+        ${bgPanelOpen && html`
+          <div style=${{ position: 'absolute', top: '10px', left: '10px', width: '280px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style=${{ fontSize: '12.5px', fontWeight: 700 }}>План участка</span>
+              <${Button} variant="ghost" size="sm" icon onClick=${() => setBgPanelOpen(false)}><${X} size=${13} /><//>
+            </div>
+
+            ${!bg ? html`
+              <div style=${{ fontSize: '11.5px', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+                Загрузите изображение или PDF ситуационного плана — он ляжет фоном под схему, чтобы можно было расставить зумпфы, насосы и связи по факту. Из PDF берётся первая страница.
+              </div>
+              <label class="btn btn-sm btn-outline" style=${{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: bgBusy ? 'not-allowed' : 'pointer' }}>
+                <${Upload} size=${13} /> ${bgBusy ? 'Загрузка…' : 'Загрузить план'}
+                <input type="file" accept="image/*,.pdf,application/pdf" onChange=${handleBgFile} disabled=${bgBusy} style=${{ display: 'none' }} />
+              </label>
+            ` : html`
+              <div style=${{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style=${{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  <span>Прозрачность</span><span>${Math.round(bg.opacity * 100)}%</span>
+                </div>
+                <input type="range" min="0.1" max="1" step="0.05" value=${bg.opacity} onChange=${(e) => handleBgOpacity(parseFloat(e.target.value))} />
+              </div>
+              <div style=${{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style=${{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  <span>Масштаб</span><span>${Math.round(bg.scale * 100)}%</span>
+                </div>
+                <input type="range" min="0.2" max="3" step="0.05" value=${bg.scale} onChange=${(e) => handleBgScale(parseFloat(e.target.value))} />
+              </div>
+
+              <label style=${{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <input type="checkbox" checked=${bgVisible} onChange=${toggleBgVisible} /> Показывать план
+              </label>
+
+              <${Button} variant=${bgMoveMode ? 'outline' : 'ghost'} size="sm" onClick=${() => setBgMoveMode((v) => !v)} disabled=${!bgVisible}>
+                <${Move} size=${13} /> ${bgMoveMode ? 'Готово — план закреплён' : 'Переместить план'}
+              <//>
+              ${bgMoveMode && html`<div style=${{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Перетащите план мышью, чтобы совместить его с узлами схемы.</div>`}
+
+              <div style=${{ display: 'flex', gap: '6px' }}>
+                <label class="btn btn-sm btn-outline" style=${{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: bgBusy ? 'not-allowed' : 'pointer' }}>
+                  <${Upload} size=${13} /> Заменить
+                  <input type="file" accept="image/*,.pdf,application/pdf" onChange=${handleBgFile} disabled=${bgBusy} style=${{ display: 'none' }} />
+                </label>
+                <${Button} variant="ghost" size="sm" onClick=${handleBgDelete} disabled=${bgBusy}><${Trash2} size=${13} style=${{ color: 'var(--red-500)' }} /><//>
+              </div>
+            `}
           </div>
         `}
       </div>
