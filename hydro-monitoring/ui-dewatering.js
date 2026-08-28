@@ -256,6 +256,14 @@ var DewateringState = {
     return this.waterLevels.find(function(w) { return w.sumpId === sumpId && w.date === date; }) || null;
   },
 
+  // Последний по дате замер уровня ВОДЫ (не отметки дна) — для наложения на 3D-модель/изогипсы
+  latestWaterLevel: function(sumpId) {
+    var hist = this.waterLevels
+      .filter(function(w) { return w.sumpId === sumpId && w.elevation != null; })
+      .sort(function(a, b) { return b.date.localeCompare(a.date) || (b.time||'').localeCompare(a.time||''); });
+    return hist.length ? { elevation: parseFloat(hist[0].elevation), date: hist[0].date } : null;
+  },
+
   prevReading: function(pumpId, date) {
     var candidates = this.meterReadings
       .filter(function(r) { return r.pumpId === pumpId && r.date < date; })
@@ -1066,8 +1074,12 @@ function _dewOpenSumpForm(id) {
     _dewFld('Название', 'text', 'dew-sf-name', s ? s.name : '', 'Зумпф №1') +
     _dewFld('Карьер / участок', 'text', 'dew-sf-quarry', s ? s.quarry || '' : '', 'ЮРГ') +
     '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+    _dewFld('X, местная сетка карьера', 'number', 'dew-sf-x', s && s.coordX != null ? s.coordX : '', '46500.0') +
+    _dewFld('Y, местная сетка карьера', 'number', 'dew-sf-y', s && s.coordY != null ? s.coordY : '', '16700.0') +
+    '</div>' +
     _dewFld('Примечание', 'text', 'dew-sf-notes', s ? s.notes || '' : '', '') +
-    '<p style="font-size:10px;color:var(--txt-3);margin:4px 0 8px">Отметку дна зумпфа вводите через «История отметок» — это позволяет отслеживать изменения при углублении карьера</p>' +
+    '<p style="font-size:10px;color:var(--txt-3);margin:4px 0 8px">Координаты нужны, чтобы зумпф отобразился на 3D-модели карьера и участвовал в построении изогипс (по последнему замеру из «Уровни воды»). Отметку дна вводите через «История отметок» — это позволяет отслеживать изменения при углублении карьера</p>' +
     '<div style="display:flex;gap:8px;margin-top:6px">' +
     '<button class="btn btn-sm" style="background:var(--gold);color:#000" id="dew-sf-save">Сохранить</button>' +
     '<button class="btn btn-sm btn-outline" id="dew-sf-cancel">Отмена</button>' +
@@ -1077,7 +1089,12 @@ function _dewOpenSumpForm(id) {
   document.getElementById('dew-sf-save').onclick = function() {
     var name = document.getElementById('dew-sf-name').value.trim();
     if (!name) { Toast.show('Введите название зумпфа', 'warning'); return; }
-    var data = { name: name, quarry: document.getElementById('dew-sf-quarry').value.trim() || '', notes: document.getElementById('dew-sf-notes').value.trim() || '' };
+    var xVal = document.getElementById('dew-sf-x').value.trim();
+    var yVal = document.getElementById('dew-sf-y').value.trim();
+    var data = {
+      name: name, quarry: document.getElementById('dew-sf-quarry').value.trim() || '', notes: document.getElementById('dew-sf-notes').value.trim() || '',
+      coordX: xVal ? parseFloat(xVal) : null, coordY: yVal ? parseFloat(yVal) : null,
+    };
     if (id) DewateringState.updateSump(id, data);
     else    DewateringState.addSump(data);
     formEl.innerHTML = '';

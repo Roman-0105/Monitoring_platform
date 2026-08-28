@@ -336,6 +336,8 @@ body {
 }
 #page-map { padding: 0; overflow: hidden; height: 100%; }
 #page-map.active { display: flex; flex-direction: column; }
+#page-well-levels { padding: 0; overflow: hidden; height: 100%; }
+#page-well-levels.active { display: flex; flex-direction: column; }
 
 /* ── Заголовки секций ─────────────────────────────────────── */
 .section-title {

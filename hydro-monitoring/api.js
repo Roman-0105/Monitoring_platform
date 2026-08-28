@@ -41,7 +41,11 @@ function rowToDewSumpCurveVer(r) {
 }
 
 function dewSumpToRow(s) {
-  return { id: s.id, name: s.name || '', quarry: s.quarry || '', notes: s.notes || '' };
+  return {
+    id: s.id, name: s.name || '', quarry: s.quarry || '', notes: s.notes || '',
+    coord_x: s.coordX != null ? Number(s.coordX) : null,
+    coord_y: s.coordY != null ? Number(s.coordY) : null,
+  };
 }
 function rowToDewSump(r) {
   return {
@@ -52,6 +56,8 @@ function rowToDewSump(r) {
     zMax:          r.z_max          != null ? Number(r.z_max)          : null,
     criticalLevel: r.critical_level != null ? Number(r.critical_level) : null,
     volumeCurve:   Array.isArray(r.volume_curve) ? r.volume_curve : null,
+    coordX:        r.coord_x != null ? Number(r.coord_x) : null,
+    coordY:        r.coord_y != null ? Number(r.coord_y) : null,
   };
 }
 
@@ -864,6 +870,37 @@ var Api = (function() {
     return { status: 'deleted', id: id };
   }
 
+  // ── VWP sensor readings (пьезометрические скважины) ────────
+
+  async function getWellSensorReadings(wellId) {
+    var { data, error } = await client()
+      .from('well_sensor_readings').select('*')
+      .eq('well_id', wellId)
+      .order('date', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  async function upsertWellSensorReading(row) {
+    var { error } = await client().from('well_sensor_readings').upsert(row);
+    if (error) throw new Error(error.message);
+    return { status: 'ok', id: row.id };
+  }
+
+  async function getAllWellSensorReadings() {
+    var { data, error } = await client()
+      .from('well_sensor_readings').select('*')
+      .order('date', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  async function deleteWellSensorReading(id) {
+    var { error } = await client().from('well_sensor_readings').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { status: 'deleted', id: id };
+  }
+
   return {
     client:              client,
     getQuarries:         getQuarries,
@@ -907,6 +944,10 @@ var Api = (function() {
     createMeasurement:   createMeasurement,
     updateMeasurement:   updateMeasurement,
     deleteMeasurement:   deleteMeasurement,
+    getWellSensorReadings:    getWellSensorReadings,
+    getAllWellSensorReadings: getAllWellSensorReadings,
+    upsertWellSensorReading:  upsertWellSensorReading,
+    deleteWellSensorReading:  deleteWellSensorReading,
 
     // ── Dewatering ────────────────────────────────────────────
     getDewSumps:        async function() { return client().from('dew_sumps').select('*').order('name'); },

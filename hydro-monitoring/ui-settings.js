@@ -36,8 +36,10 @@ function initSettingsTabs() {
   var tabs = document.querySelectorAll('[data-settings-tab]');
   if (!tabs || !tabs.length) return;
 
-  // Show/hide users tab based on role
-  var isAdmin = AppState.currentUser && AppState.currentUser.role === 'admin';
+  // Show/hide users tab based on role (панель пользователей теперь официально
+  // живёт в web-next → «Роли и доступ»; здесь только не даём потерять доступ
+  // прежним 'admin'-аккаунтам после расширения ролевой модели до 5 ролей)
+  var isAdmin = AppState.currentUser && (AppState.currentUser.role === 'admin' || AppState.currentUser.role === 'super_admin');
   var usersTabBtn = document.getElementById('btn-settings-tab-users');
   if (usersTabBtn) {
     usersTabBtn.style.display = isAdmin ? '' : 'none';

@@ -3,6 +3,9 @@
 var WellsState = {
   list:         [],
   measurements: {},
+  sensorReadings: {}, // { [wellId]: { [sensorId]: [{id,well_id,sensor_id,date,level_above_sensor,notes}] } }, новые первыми
+  sensorReadingsLatest: {}, // { [sensorId]: {level_above_sensor,date} } — сводка для изогипс, один общий запрос
+  sensorReadingsLatestLoaded: false,
   selectedId:   null,
   editingWell:  null,
   editingMeas:  null,
@@ -1658,6 +1661,17 @@ function _refreshDataCard() {
   var color      = isPiezo ? '#7c4dff' : (WELL_STATUS_COLORS[w.status] || '#9aa0a6');
   var statusColor = WELL_STATUS_COLORS[w.status] || '#9aa0a6';
 
+  if (isPiezo && w.sensors && w.sensors.length && !WellsState.sensorReadings[w.id]) {
+    WellsState.sensorReadings[w.id] = {}; // заглушка — не дублируем запрос, пока грузится
+    Api.getWellSensorReadings(w.id).then(function(list) {
+      var bySensor = {};
+      list.forEach(function(r) { (bySensor[r.sensor_id] = bySensor[r.sensor_id] || []).push(r); });
+      Object.keys(bySensor).forEach(function(sid) { bySensor[sid].sort(function(a,b){ return b.date.localeCompare(a.date); }); });
+      WellsState.sensorReadings[w.id] = bySensor;
+      if (WellsState.selectedId === w.id) _refreshDataCard();
+    }).catch(function() {});
+  }
+
   if (!card) {
     body.style.position = 'relative';
     card = document.createElement('div');
@@ -1743,9 +1757,11 @@ function _refreshDataCard() {
       html += '<div style="font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#6e7681;margin-bottom:5px">Датчики VWP</div>';
       w.sensors.forEach(function(s) {
         var sc = s.connectedToLogger ? '#4caf7d' : '#9aa0a6';
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-top:4px">' +
-          '<span style="color:' + sc + ';display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:' + sc + ';display:inline-block"></span>' + escHTML(s.name || '—') + '</span>' +
-          '<span style="color:#6e7681">' + (s.depth != null ? s.depth + ' м' : '') + (s.connectedToLogger ? ' · <span style="color:#4caf7d">лог.</span>' : ' · нет') + '</span>' +
+        var lastR = _getLastSensorReading(w.id, s.id);
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-top:4px;gap:6px">' +
+          '<span style="color:' + sc + ';display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:' + sc + ';display:inline-block;flex-shrink:0"></span>' + escHTML(s.name || '—') + '</span>' +
+          '<span style="color:#6e7681;white-space:nowrap;flex-shrink:0">' + (s.depth != null ? s.depth + ' м' : '') + (lastR ? ' · <span style="color:#7cc3ff">' + lastR.level_above_sensor + ' м над</span>' : '') + '</span>' +
+          '<button onclick="openAddSensorReadingForm(\'' + w.id + '\',\'' + s.id + '\')" title="Внести показание" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#9aa0a6;border-radius:4px;padding:0 5px;font-size:10px;cursor:pointer;flex-shrink:0;line-height:1.5">+</button>' +
         '</div>';
       });
       html += '</div>';
@@ -2495,6 +2511,96 @@ function _getLastMeasurement(wellId) {
     return (m.measurementDate || '') > (best.measurementDate || '') ? m : best;
   });
   return latest.flowRate != null ? latest : null;
+}
+
+// ── Показания датчиков VWP (пьезометрические скважины) ─────
+// Уровень воды НАД датчиком → абс. отметка воды = (Z устья − глубина датчика) + это значение
+
+// Один запрос по всем датчикам сразу (для наложения на 3D-модель/изогипсы) — нужен только
+// последний замер по каждому датчику
+async function _wellsLoadAllSensorReadingsLatest() {
+  if (WellsState.sensorReadingsLatestLoaded) return;
+  WellsState.sensorReadingsLatestLoaded = true;
+  try {
+    var list = await Api.getAllWellSensorReadings();
+    var latest = {};
+    list.forEach(function(r) { if (!latest[r.sensor_id]) latest[r.sensor_id] = r; }); // отсортировано по date desc
+    WellsState.sensorReadingsLatest = latest;
+  } catch (e) { console.warn('[wells] sensor readings load failed', e); }
+}
+
+function _getLastSensorReading(wellId, sensorId) {
+  var byWell = WellsState.sensorReadings[wellId];
+  var list = byWell && byWell[sensorId];
+  if (!list || !list.length) return null;
+  return list[0]; // отсортировано по date desc при загрузке
+}
+
+function openAddSensorReadingForm(wellId, sensorId) {
+  var well = WellsState.list.find(function(w) { return w.id === wellId; });
+  var sensor = well && (well.sensors || []).find(function(s) { return s.id === sensorId; });
+  if (!well || !sensor) return;
+
+  var ex = document.getElementById('wells-sensor-modal');
+  if (ex) ex.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'wells-sensor-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9500;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = [
+    '<div style="background:var(--card-bg,#1e2530);border-radius:14px;padding:24px;width:min(420px,94vw);border:1px solid rgba(255,255,255,.08)">',
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">',
+        '<span style="font-size:15px;font-weight:600">Показание — ' + escHTML(sensor.name || 'датчик') + '</span>',
+        '<button id="wells-sr-close" style="background:none;border:none;color:var(--txt-2);font-size:22px;cursor:pointer">✕</button>',
+      '</div>',
+      (well.zLocal == null || sensor.depth == null)
+        ? '<p style="color:var(--red,#ea4335);font-size:12px;margin-bottom:12px">Не задана Z устья скважины или глубина датчика — абс. отметку воды посчитать не получится, но показание можно сохранить.</p>'
+        : '<p style="color:var(--txt-3);font-size:11px;margin-bottom:12px">Отметка датчика: ' + (well.zLocal - sensor.depth).toFixed(2) + ' м абс.</p>',
+      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Дата</label>' +
+        '<input id="wells-sr-date" type="date" class="form-control" value="' + todayISO() + '" style="width:100%;box-sizing:border-box"></div>',
+      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Уровень воды над датчиком, м</label>' +
+        '<input id="wells-sr-level" type="number" step="any" class="form-control" style="width:100%;box-sizing:border-box"></div>',
+      '<div class="form-group" style="margin-bottom:16px"><label class="form-label">Примечание</label>' +
+        '<input id="wells-sr-notes" type="text" class="form-control" style="width:100%;box-sizing:border-box"></div>',
+      '<p id="wells-sr-err" style="color:var(--red,#ea4335);font-size:13px;margin-bottom:10px;display:none"></p>',
+      '<button id="wells-sr-save" class="btn btn-primary btn-full">Сохранить</button>',
+    '</div>',
+  ].join('');
+  document.body.appendChild(modal);
+  document.getElementById('wells-sr-close').addEventListener('click', function() { modal.remove(); });
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  document.getElementById('wells-sr-save').addEventListener('click', function() { _saveSensorReading(wellId, sensorId); });
+}
+
+function _saveSensorReading(wellId, sensorId) {
+  var errEl = document.getElementById('wells-sr-err');
+  var date  = document.getElementById('wells-sr-date').value;
+  var level = parseFloat(document.getElementById('wells-sr-level').value);
+  if (!date || isNaN(level)) { errEl.textContent = 'Укажите дату и уровень над датчиком'; errEl.style.display = ''; return; }
+
+  var row = {
+    id: 'sr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    well_id: wellId, sensor_id: sensorId, date: date,
+    level_above_sensor: level,
+    notes: (document.getElementById('wells-sr-notes').value || '').trim(),
+  };
+
+  Api.upsertWellSensorReading(row).then(function() {
+    var modal = document.getElementById('wells-sensor-modal');
+    if (modal) modal.remove();
+    Toast.show('Показание сохранено', 'success');
+    return Api.getWellSensorReadings(wellId);
+  }).then(function(list) {
+    var bySensor = {};
+    list.forEach(function(r) { (bySensor[r.sensor_id] = bySensor[r.sensor_id] || []).push(r); });
+    Object.keys(bySensor).forEach(function(sid) { bySensor[sid].sort(function(a,b){ return b.date.localeCompare(a.date); }); });
+    WellsState.sensorReadings[wellId] = bySensor;
+    var well = WellsState.list.find(function(w) { return w.id === wellId; });
+    if (well) renderWellInfoCard(well);
+    if (typeof _refreshDataCard === 'function') _refreshDataCard();
+  }).catch(function(err) {
+    errEl.textContent = err.message; errEl.style.display = '';
+  });
 }
 
 // ════════════════════════════════════════════════════════════

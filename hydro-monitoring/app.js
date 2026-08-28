@@ -419,6 +419,9 @@ function switchTab(name) {
   if (name === 'registry' && typeof initRegistryTab === 'function') {
     initRegistryTab();
   }
+  if (name === 'well-levels' && typeof initWellLevelsTab === 'function') {
+    initWellLevelsTab();
+  }
   if (name === 'chem' && typeof initChemTab === 'function') {
     initChemTab();
   }
