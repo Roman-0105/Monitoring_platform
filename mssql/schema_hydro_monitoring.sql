@@ -16,8 +16,11 @@
 --   - now() -> SYSUTCDATETIME()
 --   - Таблица water_points не создаётся: в проекте она уже заменена на
 --     wp_registry (см. hydro-monitoring/migrations/unify_water_points.sql).
---   - Вместо profiles + is_admin() — таблица APP_USERS(login, role),
---     которую backend использует для проверки "администратор / обычный".
+--   - Вместо profiles + is_super_admin() — APP_USERS(login, role) с 5 ролями
+--     (super_admin/admin/senior_engineer/engineer/guest) + role_permissions
+--     (матрица «роль × вкладка»), которые backend использует для проверки
+--     прав. login — Windows-логин, personality приходит из IIS Windows Auth,
+--     не из отдельного экрана входа.
 --
 --  Запуск: выполнить целиком один раз на базе GeoLocation
 --  (например через SSMS или sqlcmd). Скрипт идемпотентный —
@@ -28,17 +31,46 @@ USE GeoLocation;
 GO
 
 -- ────────────────────────────────────────────────────────────
--- Пользователи приложения (замена Supabase profiles + is_admin())
+-- Пользователи приложения (замена Supabase profiles + is_super_admin()).
 -- login — Windows-логин вида DOMAIN\username, который IIS передаёт backend'у
+-- после проверки через AD-группу; отдельного входа в приложение нет.
+-- 5 ролей (было 2: admin/user) — та же модель, что в web-next/role_permissions,
+-- источник личности сменился с Supabase Auth (email) на Windows-логин.
 -- ────────────────────────────────────────────────────────────
 IF OBJECT_ID('dbo.APP_USERS', 'U') IS NULL
 BEGIN
   CREATE TABLE dbo.APP_USERS (
     login        NVARCHAR(100) NOT NULL PRIMARY KEY,
     display_name NVARCHAR(200) NOT NULL DEFAULT '',
-    role         NVARCHAR(20)  NOT NULL DEFAULT 'user' CHECK (role IN ('admin','user')),
+    role         NVARCHAR(20)  NOT NULL DEFAULT 'guest'
+                   CHECK (role IN ('super_admin','admin','senior_engineer','engineer','guest')),
     active       BIT           NOT NULL DEFAULT 1,
     created_at   DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
+
+-- Гарантия «только один Главный Админ» — как partial unique index в Postgres-версии
+-- (mssql/../role_permissions_system.sql), T-SQL поддерживает filtered index так же.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'app_users_one_super_admin')
+BEGIN
+  CREATE UNIQUE INDEX app_users_one_super_admin ON dbo.APP_USERS(role) WHERE role = 'super_admin';
+END
+GO
+
+-- ────────────────────────────────────────────────────────────
+-- Матрица доступа «роль × вкладка → нет/просмотр/редактирование».
+-- Перенос web-next/../roles_permissions_system.sql: role_permissions
+-- не использует uuid/jsonb, переносится один в один.
+-- ────────────────────────────────────────────────────────────
+IF OBJECT_ID('dbo.role_permissions', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.role_permissions (
+    role     NVARCHAR(20) NOT NULL CHECK (role IN ('admin','senior_engineer','engineer','guest')),
+    nav_key  NVARCHAR(50) NOT NULL,
+    can_view BIT NOT NULL DEFAULT 0,
+    can_edit BIT NOT NULL DEFAULT 0,
+    PRIMARY KEY (role, nav_key)
   );
 END
 GO
@@ -542,8 +574,125 @@ BEGIN
 END
 GO
 
+-- ────────────────────────────────────────────────────────────
+-- 22. chem_lab_templates — шаблоны ввода протоколов по лабораториям
+-- (перенос hydro-monitoring/migrations/chem_lab_templates.sql)
+-- ────────────────────────────────────────────────────────────
+IF OBJECT_ID('dbo.chem_lab_templates', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.chem_lab_templates (
+    id            UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+    lab_name      NVARCHAR(400) NOT NULL,
+    template_name NVARCHAR(400) NOT NULL,
+    base_type     NVARCHAR(50)  NOT NULL DEFAULT 'sha',
+    params        NVARCHAR(MAX) NOT NULL DEFAULT '[]',  -- JSON-массив ключей параметров
+    created_at    DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at    DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UQ_chem_lab_templates_lab_name UNIQUE (lab_name, template_name)
+  );
+END
+GO
+
+-- ────────────────────────────────────────────────────────────
+-- 23. chem_protocol_history — журнал изменений протокола (CHEM-08)
+-- ────────────────────────────────────────────────────────────
+IF OBJECT_ID('dbo.chem_protocol_history', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.chem_protocol_history (
+    id          UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+    protocol_id UNIQUEIDENTIFIER NOT NULL,
+    changed_at  DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    changed_by  NVARCHAR(400) NULL,
+    action      NVARCHAR(50)  NOT NULL,        -- 'created' | 'updated'
+    changes     NVARCHAR(MAX) NOT NULL DEFAULT '[]',  -- JSON [{field,label,old,new}, ...]
+    CONSTRAINT FK_chem_protocol_history_proto FOREIGN KEY (protocol_id)
+      REFERENCES dbo.chem_protocols(id) ON DELETE CASCADE
+  );
+  CREATE INDEX idx_chem_protocol_history_proto ON dbo.chem_protocol_history(protocol_id, changed_at DESC);
+END
+GO
+
+-- ────────────────────────────────────────────────────────────
+-- 24. dew_diagram_templates — именованные шаблоны раскладки схемы водного баланса
+-- ────────────────────────────────────────────────────────────
+IF OBJECT_ID('dbo.dew_diagram_templates', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.dew_diagram_templates (
+    id         NVARCHAR(100) NOT NULL PRIMARY KEY,
+    name       NVARCHAR(400) NOT NULL,
+    positions  NVARCHAR(MAX) NOT NULL DEFAULT '{}',  -- JSON {nodeId:{x,y}}
+    edges      NVARCHAR(MAX) NOT NULL DEFAULT '{}',  -- JSON {edgeId:{vertices,sourcePort,targetPort}}
+    created_at DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UQ_dew_diagram_templates_name UNIQUE (name)
+  );
+END
+GO
+
+-- ────────────────────────────────────────────────────────────
+-- 25. dew_diagram_background — план участка (фон) под схемой водного баланса
+-- Файл лежит на диске (см. примечание в конце файла), здесь — метаданные.
+-- ────────────────────────────────────────────────────────────
+IF OBJECT_ID('dbo.dew_diagram_background', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.dew_diagram_background (
+    id             NVARCHAR(50)  NOT NULL PRIMARY KEY,  -- всегда 'default'
+    storage_path   NVARCHAR(1000) NOT NULL,
+    opacity        DECIMAL(4,3)  NOT NULL DEFAULT 0.55,
+    offset_x       DECIMAL(18,3) NOT NULL DEFAULT 0,
+    offset_y       DECIMAL(18,3) NOT NULL DEFAULT 0,
+    scale          DECIMAL(9,4)  NOT NULL DEFAULT 1,
+    natural_width  DECIMAL(18,3) NULL,
+    natural_height DECIMAL(18,3) NULL,
+    updated_at     DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
+
+-- ────────────────────────────────────────────────────────────
+-- 26. quarries — калибровка координат карьеров (ЮРГ/СРГ) для схематичных карт
+-- ────────────────────────────────────────────────────────────
+IF OBJECT_ID('dbo.quarries', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.quarries (
+    id    NVARCHAR(50)  NOT NULL PRIMARY KEY,
+    name  NVARCHAR(200) NOT NULL,
+    x_min FLOAT NULL,
+    x_max FLOAT NULL,
+    y_min FLOAT NULL,
+    y_max FLOAT NULL
+  );
+END
+GO
+
+-- ────────────────────────────────────────────────────────────
+-- Доп. колонки на уже созданных таблицах (перенос более поздних миграций,
+-- добавленных поверх исходной схемы — chem_core_protocols.sql):
+--   chem_protocols: шаблон ввода (CHEM-04), скан-копия (CHEM-07), квартал пробы
+--   wp_registry: шаблон лаборатории по умолчанию для водопункта (CHEM-04)
+-- ────────────────────────────────────────────────────────────
+IF COL_LENGTH('dbo.chem_protocols', 'template_id') IS NULL
+  ALTER TABLE dbo.chem_protocols ADD template_id UNIQUEIDENTIFIER NULL
+    CONSTRAINT FK_chem_protocols_template FOREIGN KEY REFERENCES dbo.chem_lab_templates(id);
+GO
+IF COL_LENGTH('dbo.chem_protocols', 'scan_url') IS NULL
+  ALTER TABLE dbo.chem_protocols ADD scan_url NVARCHAR(1000) NULL;
+GO
+IF COL_LENGTH('dbo.chem_protocols', 'scan_name') IS NULL
+  ALTER TABLE dbo.chem_protocols ADD scan_name NVARCHAR(400) NULL;
+GO
+IF COL_LENGTH('dbo.chem_protocols', 'quarter') IS NULL
+  ALTER TABLE dbo.chem_protocols ADD quarter SMALLINT NULL CHECK (quarter BETWEEN 1 AND 4);
+GO
+IF COL_LENGTH('dbo.wp_registry', 'default_template_id') IS NULL
+  ALTER TABLE dbo.wp_registry ADD default_template_id UNIQUEIDENTIFIER NULL
+    CONSTRAINT FK_wp_registry_default_template FOREIGN KEY REFERENCES dbo.chem_lab_templates(id);
+GO
+
 -- ============================================================
 -- Готово. Дальше (фото/схемы/3D-модели зумпфов) хранятся не в
 -- этой базе, а как файлы в D:\JAM\Prod\GeoAdmin\static\files —
 -- таблицы выше хранят только относительные пути/URL к ним.
+-- Бакеты Supabase Storage -> подпапки на диске с тем же именем:
+-- photos/, schemes/, sump-models/, chem-scans/, pit3d-models/.
 -- ============================================================
